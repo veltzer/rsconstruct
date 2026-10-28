@@ -56,7 +56,7 @@ show is decided in this order:
 4. Otherwise the default: every column except the hidden ones, which
    `--verbose` adds back.
 
-`--all` goes before the command name on `tool install` and
+`--all` goes before the command name on `tool install machine` and
 `tool list-configured`, which have an `--all` of their own
 (`rsconstruct --all tool list-configured`). JSON output is not affected by
 any of this: `--json` always carries every field.
@@ -611,8 +611,8 @@ List or check external tools required by declared processors. `list` reads only 
 |------------|-----------------|
 | `check` | Yes |
 | `graph` | Uses config if available |
-| `install` | Uses config if available |
-| `install-deps` | Uses config if available |
+| `install machine` | Uses config if available |
+| `install project` | Yes |
 | `list` | No |
 | `list-configured` | Uses config if available |
 | `lock` | Yes |
@@ -627,14 +627,14 @@ rsconstruct tool check             # Verify rsconstruct.lock covers the project 
 rsconstruct tool lock              # Write rsconstruct.lock: add missing entries, drop unused ones, keep the rest
 rsconstruct tool lock --upgrade    # Re-resolve every rsconstruct.lock entry to its latest release
 rsconstruct tool lock --upgrade ruff cargo-deny   # Re-resolve only these entries
-rsconstruct tool install           # Bring .rsconstruct/tools to the lock, then install the enabled processors' other tools
-rsconstruct tool install ruff      # Install a specific tool by name, onto the machine
-rsconstruct tool install --all     # Install every tool in the registry onto the machine, ignoring the config (no config needed)
-rsconstruct tool install -i        # Ask for confirmation first (default: install without asking)
-rsconstruct tool install --no-eatmydata        # Don't wrap apt/dnf/pacman with eatmydata
-rsconstruct tool install-deps      # Install declared [dependencies] (pip set from uv.lock, npm set from package-lock.json by default) in fixed order: system → pip → npm → .rsconstruct/tools (cargo, npm and gem entries)
-rsconstruct tool install-deps -i   # Ask for confirmation first (default: install without asking)
-rsconstruct tool install-deps --no-eatmydata   # Don't wrap apt/dnf/pacman with eatmydata
+rsconstruct tool install           # List the two targets: machine and project
+rsconstruct tool install machine   # Install what this project needs on the machine: [dependencies] system packages, machine-preferred tools, uv/npm
+rsconstruct tool install machine shellcheck   # Install one tool through its machine install
+rsconstruct tool install machine --all        # Install every tool in the registry onto the machine, ignoring the config (no config needed)
+rsconstruct tool install machine --no-eatmydata   # Don't wrap apt/dnf/pacman with eatmydata
+rsconstruct tool install project   # Install everything into the project from its lockfiles: uv sync (.venv), npm ci (node_modules), .rsconstruct/tools
+rsconstruct tool install project rumdl        # Install one tool through its project install
+rsconstruct tool install project -i           # Ask for confirmation first (default: install without asking)
 rsconstruct tool stats             # Show tool availability and language runtime breakdown
 rsconstruct tool stats --json      # Show tool stats in JSON format
 rsconstruct tool graph             # Show tool-to-processor dependency graph (DOT format)
@@ -642,26 +642,52 @@ rsconstruct tool graph --format mermaid  # Mermaid format
 rsconstruct tool graph --view      # Open tool graph in browser
 ```
 
-In a project, `install`, `install-deps`, `check` and `lock` work from
-`rsconstruct.lock`: installs request each tool at its locked version, and in CI
-a lock that does not match the project is an error. Crates, npm packages, gems
-and release binaries are installed into the project's own `.rsconstruct/tools`,
-hard-linked from a machine-wide store, and that directory's `bin/` is first on
-`PATH` for everything rsconstruct runs, so each project runs exactly its
-locked versions. Both `install` and `install-deps` bring the whole directory
-in line with the lock. See [Tool Lock](tool-lock.md#where-tools-are-installed).
+`install` names where the install goes, and each of its two subcommands
+touches only its own target:
+
+- **`install project`** installs into the project, every package from a
+  lockfile: `uv sync` builds the repo's `.venv` from `uv.lock` (the code's
+  Python dependencies and the Python tools its processors run, together),
+  `npm ci` fills `node_modules` from `package-lock.json`, and the crates, npm
+  packages, gems and release binaries `rsconstruct.lock` pins are linked into
+  `.rsconstruct/tools` from a machine-wide store. It never touches the
+  machine: a missing `uv` or `npm` is an error naming `install machine`.
+- **`install machine`** installs onto the machine: the `[dependencies]
+  system` packages, the tools of the enabled processors whose preferred
+  target is the machine (compilers, runtimes, apt-only tools, `.deb`s), and
+  the installers `install project` runs (`uv` for a Python project, `npm`
+  for a Node one). A pip install here must not land in the project's own
+  `.venv`, which is uv's; it is an error when `pip` on PATH is the
+  project's.
+
+A fresh checkout is set up with `install machine` followed by `install
+project`. Both work from `rsconstruct.lock` in a project, together with
+`check` and `lock`: installs request each tool at its locked version, and in
+CI a lock that does not match the project is an error. `install project`
+brings the whole tool directory in line with the lock. Every rsconstruct
+invocation puts `.rsconstruct/tools/bin`, the repo's `.venv/bin` and
+`node_modules/.bin` first on `PATH`, so each project runs exactly its locked
+versions with nothing activated. See [Tool
+Lock](tool-lock.md#where-tools-are-installed).
+
+A Python tool a processor runs (ruff, pytest, pyrefly) must be pinned by
+`uv.lock`: the repo's `.venv` is uv's, so `pyproject.toml`'s dev dependency
+group (`uv add --dev ruff`) is the one place to declare it. One that is not
+is an error naming that command.
 
 The project's tools are those of its enabled processors. A stanza with
 `enabled = false` is kept precisely so its tool need not be installed, so
 `list-configured`, `install`, `lock`, `check`, `stats` and `graph` leave its
 tools out; `list-configured --all` is the one way to see them.
 
-`install --all` walks the tool registry instead of the project config, so it
-needs no `rsconstruct.toml`. It never skips: a tool with no automatable install
-method is a hard error, not a warning. This makes it the intended way to
-provision CI — one command covers the whole matrix, and a registry entry that
-loses its install method fails the provisioning step instead of quietly
-shrinking the matrix. `--all` cannot be combined with a tool name.
+`install machine --all` walks the tool registry instead of the project
+config, so it needs no `rsconstruct.toml`. It never skips: a tool with no
+machine install is a hard error, not a warning. This makes it the intended
+way to provision a machine for every processor at once (rsconstruct's own
+CI does, for its tests), and a registry entry that loses its machine install
+fails the provisioning step instead of quietly shrinking the matrix. `--all`
+cannot be combined with a tool name, and `install project` has none: a
+project installs only what it uses.
 
 ### Install targets
 
@@ -679,10 +705,14 @@ Each tool in the registry names up to three preferences:
   there is one;
 - its **machine install**: the method that installs it onto the machine;
 - its **preferred target** overall: the project when the tool has a project
-  install, otherwise the machine. A tool can override this, but none does
-  today.
+  install, otherwise the machine. A tool can override this; `uv` does, since
+  it builds the project's `.venv` and so cannot live in it.
 
-`install` uses the method of the preferred target. Any other methods a tool
+The preferred target decides which of `install project` and `install
+machine` installs a tool the project needs; naming a tool (`install project
+NAME`, `install machine NAME`) picks the slot directly. For pip the project
+install means the repo's `.venv` through `uv sync`, never `pip install`.
+Any other methods a tool
 lists are alternatives (brew for macOS, a crate where a release binary is
 preferred): shown by `list -M`, never chosen by an install. `list` shows the
 preferred target in its Target column; `list -M` labels each method with the
@@ -705,10 +735,18 @@ without any workflow- or shell-level `GEM_HOME`/`PATH` setup.
 ### Node.js packages from the project's `node_modules`
 
 The same startup step prepends the project's `node_modules/.bin`, when it
-exists, so the packages `install-deps` put there from `package.json` (with
-`npm ci`, see `[dependencies]` in the configuration reference) resolve ahead
-of any global copy. `tool install` therefore finds a locked tool already
-installed and does not add a global one on top.
+exists, so the packages `install project` put there from `package.json`
+(with `npm ci`, see `[dependencies]` in the configuration reference) resolve
+ahead of any global copy. `install machine` therefore finds a locked tool
+already installed and does not add a global one on top.
+
+### Python packages from the repo's `.venv`
+
+In a project directory the startup step also prepends the repo's
+`.venv/bin`, where `install project` (`uv sync`) puts the code's
+dependencies and the Python tools its processors run. `python3`, `ruff` and
+`pytest` therefore resolve to the locked copies with no venv activated, in a
+shell and on a CI runner alike.
 
 ## `rsconstruct tag`
 

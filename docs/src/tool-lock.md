@@ -16,7 +16,6 @@ hand.
 | Section | Installed by | Into | Pinned as |
 |---------|--------------|------|-----------|
 | `[cargo]` | `cargo install --locked --root` | the project ([below](#where-tools-are-installed)) | `name@version` |
-| `[pip]` | `pip` / `uv pip install` | the active Python environment | `name==version` (PEP 503-normalized keys) |
 | `[npm]` | `npm install --global --prefix` | the project | `name@version` |
 | `[gem]` | `gem install --install-dir` | the project | `name:version` |
 | `[binary.<name>]` | the `binary` install method | the project; a `.deb` onto the machine | exact asset URL plus SHA-256 |
@@ -29,19 +28,22 @@ Entries come from two places:
   `enabled = false` contributes nothing: it exists to keep its config while
   its tool is absent, so `tool lock` drops its tool from the lock and `tool
   install`, `tool check` and `doctor` do not ask for it.
-- **`[dependencies]`** entries for `cargo`, `pip`, `npm` and `gem`. An entry
-  that already carries its own constraint (`ruff>=0.5`, `pkg@1.0`) is left as
+- **`[dependencies]`** entries for `cargo`, `npm` and `gem`. An entry that
+  already carries its own constraint (`pkg@1.0`, `rake:13.0`) is left as
   written and not locked.
 
 These are not locked:
 
-- **Packages a project lockfile already pins.** A processor tool that `uv.lock`
-  or `package-lock.json` pins is installed from that file by `install-deps`,
-  and a second pin here could only disagree with it. This holds only while
-  that file is the configured source (`pip_source = "uv-lock"`, `npm_source =
-  "package-lock"`, the defaults): with `pip_source = "pyproject"` or
-  `npm_source = "package-json"` a lockfile on disk pins nothing, so the tool is
-  locked here.
+- **Python packages.** A project's Python packages, the Python tools its
+  processors run included, are pinned by `uv.lock` and installed by `uv sync`
+  into the repo's `.venv` (see [Python packages live in the repo's
+  `.venv`](configuration.md#python-packages-live-in-the-repos-venv-owned-by-uv)).
+  A Python tool `uv.lock` does not pin is an error, not an entry here.
+- **Packages `package-lock.json` already pins.** A processor tool it pins is
+  installed from that file by `tool install project`, and a second pin here
+  could only disagree with it. This holds only while that file is the
+  configured source (`npm_source = "package-lock"`, the default): with
+  `npm_source = "package-json"` it pins nothing, so the tool is locked here.
 - **System packages** (`apt`, `dnf`, `pacman`, `brew`, `snap`) come with the OS
   image.
 - **The Chrome `.deb`.** Its vendor URL always serves the current build, so
@@ -61,7 +63,7 @@ rsconstruct's source (zola, checkpatch.pl, …) are recorded at that URL.
 | `tool lock` | add missing entries, drop unused ones, keep the rest | same (but run it outside CI) |
 | `tool lock --upgrade` | re-resolve every entry to its latest release | same |
 | `tool lock --upgrade <name>...` | like `tool lock`, plus re-resolve only the named tools; an unknown name is an error | same |
-| `tool install`, `tool install-deps` | fill in missing entries, then bring the project's tools to their locked versions | the lock must match exactly, then the same |
+| `tool install project`, `tool install machine` | fill in missing entries, then bring the project's tools to their locked versions | the lock must match exactly, then the same |
 | `tool check` | the lock must match and every locked tool must be installed at its version | same |
 | `build` | not consulted (`--verify-tool-versions` runs the build check) | runs the build check before building |
 
@@ -84,13 +86,11 @@ build.
 Crates, npm packages, gems and release binaries are installed into the project
 itself (see [below](#where-tools-are-installed)), so a project at one version
 of a tool and a project at another never get in each other's way, and an
-install can always bring a project to exactly its lock. Python packages follow
-the same rule inside the project's own virtualenv: when `python3` is a venv
-under the project directory (or in CI), one at another version is reinstalled
-at the locked one. A Python environment shared with other work, and `.deb`
-binaries, which belong to the machine, are replaced only in CI; outside it a
-mismatch there is reported as a warning naming both versions, and `tool check`
-fails on it.
+install can always bring a project to exactly its lock. Python packages
+follow the same rule inside the repo's `.venv`, which `uv sync` brings to
+exactly `uv.lock`. `.deb` binaries, which belong to the machine, are replaced
+only in CI; outside it a mismatch there is reported as a warning naming both
+versions, and `tool check` fails on it.
 
 **In CI a lock problem is an error, never a rewrite.** A lock written on a
 runner would never be committed, so each runner would resolve its own versions,
@@ -126,8 +126,7 @@ because cargo itself looks in `$CARGO_HOME/bin` before `PATH`. A gem's entry in
 only its own package, because rubygems activates the newest version of a gem
 found anywhere on its path.
 
-`tool install` and `tool install-deps` keep the directory in step with the
-lock: they add what is missing, replace what moved, remove what the lock no
+`tool install project` keeps the directory in step with the lock: they add what is missing, replace what moved, remove what the lock no
 longer names, and print each package with `✓` (in place), `+` (added) or `-`
 (removed). `cache clear` and `clean all` leave `.rsconstruct/tools` alone; it
 holds tools, not build state.
@@ -141,11 +140,11 @@ copied. Store files are read-only, since a hard link shares the file with every
 other project.
 
 What stays on the machine: system packages (`apt` and friends) and the `.deb`
-binary recipes, which the OS package manager owns, and Python packages, which
-go into the active environment — the project's virtualenv, set up before
-rsconstruct runs. `tool install <name>` and `tool install --all` are machine
-installs too: they install a named tool, or the whole registry, for the
-machine, and do not touch any project's tool directory.
+binary recipes, which the OS package manager owns, plus the installers the
+project install runs (`uv`, `npm`). All of these come from `tool install
+machine`, which never touches any project's tool directory; `tool install
+machine <name>` and `tool install machine --all` install a named tool, or the
+whole registry, for the machine.
 
 ## rsconstruct itself is not locked
 
@@ -161,5 +160,5 @@ lock` drops it (and says so).
 
 `rsconstruct.lock` replaces `.tools.versions`. The old file recorded
 machine-local tool paths and `--version` output, so it cannot be converted.
-While one exists, `tool lock`, `tool install`, `tool install-deps`, `tool check`
+While one exists, `tool lock`, `tool install`, `tool check`
 and CI builds refuse to run: delete it and run `rsconstruct tool lock`.

@@ -1157,7 +1157,7 @@ fn required_tools_defaults_to_empty() {
     assert!(cfg.required_tools.is_empty(), "{:?}", cfg.required_tools);
 }
 
-// Tests for pyproject.toml dependency reading (effective_pip and friends)
+// Tests for pyproject.toml dependency reading (python_deps and friends)
 
 #[test]
 fn normalized_distribution_name_strips_specifiers_extras_markers() {
@@ -1339,41 +1339,30 @@ fn node_deps_requires_lock_in_package_lock_mode() {
     assert_eq!(deps.node_deps(tmp.path()).unwrap(), vec!["stylelint"]);
 }
 
+/// No pyproject.toml and no uv.lock: no Python environment, and no error.
 #[test]
-fn effective_pip_pyproject_mode_merges_and_dedupes_by_normalized_name() {
+fn python_deps_without_pyproject_is_empty() {
     let tmp = tempfile::TempDir::new().unwrap();
-    std::fs::write(
-        tmp.path().join("pyproject.toml"),
-        r#"
-[project]
-name = "demo"
-dependencies = ["Flask", "gunicorn"]
-"#,
-    )
-    .unwrap();
-    let deps = crate::config::DependenciesConfig {
-        pip: vec!["flask==2.0".to_string(), "types-requests".to_string()],
-        pip_source: crate::config::PipSource::Pyproject,
-        ..Default::default()
-    };
-    let merged = deps.effective_pip(tmp.path()).expect("should merge");
-    // [dependencies].pip first and its pinned flask wins over pyproject's Flask
-    assert_eq!(merged, vec!["flask==2.0", "types-requests", "gunicorn"]);
+    assert!(!crate::config::has_python_deps(tmp.path()).unwrap());
+    assert_eq!(
+        crate::config::python_deps(tmp.path()).unwrap(),
+        Vec::<String>::new()
+    );
 }
 
+/// Python packages live in pyproject.toml and uv.lock only: the
+/// `[dependencies]` Python knobs are gone, and naming one is a config error
+/// rather than a setting silently ignored.
 #[test]
-fn effective_pip_without_pyproject_is_pip_list() {
-    let tmp = tempfile::TempDir::new().unwrap();
-    let deps = crate::config::DependenciesConfig {
-        pip: vec!["termcolor".to_string()],
-        ..Default::default()
-    };
-    // No pyproject and no lock: nothing to install beyond the pip list, in
-    // either mode — the default uv-lock mode must not error here.
-    let merged = deps
-        .effective_pip(tmp.path())
-        .expect("no pyproject is fine");
-    assert_eq!(merged, vec!["termcolor"]);
+fn dependencies_python_knobs_are_rejected() {
+    for knob in [
+        "pip = [\"ruff\"]\n",
+        "pip_source = \"pyproject\"\n",
+        "python_installer = \"pip\"\n",
+    ] {
+        let parsed: Result<crate::config::DependenciesConfig, _> = toml::from_str(knob);
+        assert!(parsed.is_err(), "{knob} should be rejected");
+    }
 }
 
 #[test]
@@ -1427,7 +1416,7 @@ source = { git = "https://example.com/somelib.git" }
 }
 
 #[test]
-fn effective_pip_default_mode_installs_the_lock_closure() {
+fn python_deps_is_the_lock_closure() {
     let tmp = tempfile::TempDir::new().unwrap();
     std::fs::write(
         tmp.path().join("pyproject.toml"),
@@ -1460,18 +1449,14 @@ source = { registry = "https://pypi.org/simple" }
 "#,
     )
     .unwrap();
-    let deps = crate::config::DependenciesConfig {
-        pip: vec!["flask==2.0".to_string()],
-        ..Default::default()
-    };
-    let merged = deps.effective_pip(tmp.path()).expect("should merge");
-    // The pip-list entry wins over the lock pin; the transitive closure
-    // (werkzeug) is installed even though pyproject never names it.
-    assert_eq!(merged, vec!["flask==2.0", "werkzeug==3.1.3"]);
+    // The transitive closure (werkzeug) is there even though pyproject
+    // never names it; the project itself is not.
+    let deps = crate::config::python_deps(tmp.path()).expect("should read");
+    assert_eq!(deps, vec!["flask==3.1.0", "werkzeug==3.1.3"]);
 }
 
 #[test]
-fn effective_pip_default_mode_errors_without_a_lock() {
+fn python_deps_errors_without_a_lock() {
     let tmp = tempfile::TempDir::new().unwrap();
     std::fs::write(
         tmp.path().join("pyproject.toml"),
@@ -1482,129 +1467,7 @@ dependencies = ["flask"]
 "#,
     )
     .unwrap();
-    let deps = crate::config::DependenciesConfig::default();
-    let err = deps.effective_pip(tmp.path()).unwrap_err().to_string();
-    assert!(
-        err.contains("uv lock"),
-        "error should point at uv lock: {err}"
-    );
-    assert!(
-        err.contains("pip_source"),
-        "error should mention the escape hatch: {err}"
-    );
-}
-
-#[test]
-fn requirement_extras_parses_and_normalizes() {
-    use crate::config::requirement_extras as ex;
-    assert_eq!(ex("manim-voiceover[gtts]"), "gtts");
-    assert_eq!(
-        ex("uvicorn[standard,Watchfiles]>=0.30"),
-        "standard,watchfiles"
-    );
-    assert_eq!(ex("uvicorn[watchfiles, standard]"), "standard,watchfiles");
-    assert_eq!(ex("flask"), "");
-}
-
-#[test]
-fn effective_pip_keeps_extras_variant_distinct_from_bare_name() {
-    let tmp = tempfile::TempDir::new().unwrap();
-    std::fs::write(
-        tmp.path().join("pyproject.toml"),
-        r#"
-[project]
-name = "demo"
-dependencies = ["manim_voiceover", "manim-voiceover[gtts]"]
-"#,
-    )
-    .unwrap();
-    let deps = crate::config::DependenciesConfig {
-        pip_source: crate::config::PipSource::Pyproject,
-        ..Default::default()
-    };
-    let merged = deps.effective_pip(tmp.path()).expect("should merge");
-    assert_eq!(merged, vec!["manim_voiceover", "manim-voiceover[gtts]"]);
-}
-
-#[test]
-fn python_installer_defaults_to_uv_and_parses_pip() {
-    let deps: crate::config::DependenciesConfig = toml::from_str("").expect("empty is valid");
-    assert_eq!(deps.python_installer, crate::config::PythonInstaller::Uv);
-    let deps: crate::config::DependenciesConfig =
-        toml::from_str("python_installer = \"pip\"\n").expect("pip is a valid installer");
-    assert_eq!(deps.python_installer, crate::config::PythonInstaller::Pip);
-}
-
-#[test]
-fn parse_uv_export_keeps_requirements_with_markers_drops_noise() {
-    let out = "\
-# This file was autogenerated by uv.
--e .
-flask==3.1.0
-pywin32==312 ; sys_platform == 'win32'
-
---index-url https://pypi.org/simple
-werkzeug==3.1.3
-";
-    assert_eq!(
-        crate::config::parse_uv_export(out),
-        vec![
-            "flask==3.1.0",
-            "pywin32==312 ; sys_platform == 'win32'",
-            "werkzeug==3.1.3",
-        ]
-    );
-}
-
-#[test]
-fn effective_pip_uv_merges_export_with_pip_overriding() {
-    let tmp = tempfile::TempDir::new().unwrap();
-    std::fs::write(
-        tmp.path().join("pyproject.toml"),
-        r#"
-[project]
-name = "demo"
-dependencies = ["flask"]
-"#,
-    )
-    .unwrap();
-    // Content is irrelevant — the uv installer takes the pins from the
-    // export closure, not from parsing the lock; the file only has to exist.
-    std::fs::write(tmp.path().join("uv.lock"), "version = 1\n").unwrap();
-    let deps = crate::config::DependenciesConfig {
-        pip: vec!["flask==2.0".to_string()],
-        ..Default::default()
-    };
-    let merged = deps
-        .effective_pip_uv(tmp.path(), || {
-            Ok(vec![
-                "flask==3.1.0".to_string(),
-                "pywin32==312 ; sys_platform == 'win32'".to_string(),
-            ])
-        })
-        .expect("should merge");
-    // The pip-list entry wins over the exported pin; markers survive.
-    assert_eq!(
-        merged,
-        vec!["flask==2.0", "pywin32==312 ; sys_platform == 'win32'"]
-    );
-}
-
-#[test]
-fn effective_pip_uv_errors_without_a_lock() {
-    let tmp = tempfile::TempDir::new().unwrap();
-    std::fs::write(
-        tmp.path().join("pyproject.toml"),
-        r#"
-[project]
-name = "demo"
-dependencies = ["flask"]
-"#,
-    )
-    .unwrap();
-    let deps = crate::config::DependenciesConfig::default();
-    let err = deps
-        .effective_pip_uv(tmp.path(), || panic!("export must not run without a lock"))
+    let err = crate::config::python_deps(tmp.path())
         .unwrap_err()
         .to_string();
     assert!(

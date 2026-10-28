@@ -583,34 +583,10 @@ pub enum ToolAction {
         #[arg(long)]
         view: bool,
     },
-    /// Install missing external tools; in a project, bring .rsconstruct/tools to the lock (uses config if available)
+    /// Install external tools into the project or onto the machine
     Install {
-        /// Tool name to install (omit to install missing tools for enabled processors)
-        name: Option<String>,
-        /// Install every tool in the registry, ignoring the config (no config
-        /// needed). Nothing is skipped: a tool with no automatable install
-        /// method is a hard error.
-        #[arg(short, long, conflicts_with = "name")]
-        all: bool,
-        /// Prompt for confirmation before installing (default: install
-        /// without asking, so CI and scripts work with no extra flags)
-        #[arg(short, long)]
-        interactive: bool,
-        /// Don't wrap apt/dnf/pacman calls with `eatmydata` (faster but
-        /// safer; the wrap is on by default when eatmydata is installed)
-        #[arg(long)]
-        no_eatmydata: bool,
-    },
-    /// Install declared dependencies from the [dependencies] config section plus pyproject.toml's Python deps (uses config if available)
-    InstallDeps {
-        /// Prompt for confirmation before installing (default: install
-        /// without asking, so CI and scripts work with no extra flags)
-        #[arg(short, long)]
-        interactive: bool,
-        /// Don't wrap apt/dnf/pacman calls with `eatmydata` (faster but
-        /// safer; the wrap is on by default when eatmydata is installed)
-        #[arg(long)]
-        no_eatmydata: bool,
+        #[command(subcommand)]
+        target: InstallAction,
     },
     /// List all tools known to rsconstruct, from the tool registry (no config needed)
     List {
@@ -636,6 +612,39 @@ pub enum ToolAction {
     },
     /// Show tool availability statistics (uses config if available)
     Stats,
+}
+
+#[derive(Subcommand)]
+pub enum InstallAction {
+    /// Install onto the machine: [dependencies] system packages and the tools whose preferred target is the machine (uses config if available)
+    Machine {
+        /// Tool name to install through its machine install (omit to
+        /// install what this project needs on the machine)
+        name: Option<String>,
+        /// Install every tool in the registry through its machine install,
+        /// ignoring the config (no config needed). Nothing is skipped: a
+        /// tool with no machine install is a hard error.
+        #[arg(short, long, conflicts_with = "name")]
+        all: bool,
+        /// Prompt for confirmation before installing (default: install
+        /// without asking, so CI and scripts work with no extra flags)
+        #[arg(short, long)]
+        interactive: bool,
+        /// Don't wrap apt/dnf/pacman calls with `eatmydata` (faster but
+        /// safer; the wrap is on by default when eatmydata is installed)
+        #[arg(long)]
+        no_eatmydata: bool,
+    },
+    /// Install into the project from its lockfiles: `.rsconstruct/tools`, the repo's `.venv` (uv sync) and `node_modules` (requires config)
+    Project {
+        /// Tool name to install through its project install (omit to
+        /// install everything the project needs in it)
+        name: Option<String>,
+        /// Prompt for confirmation before installing (default: install
+        /// without asking, so CI and scripts work with no extra flags)
+        #[arg(short, long)]
+        interactive: bool,
+    },
 }
 
 #[derive(Subcommand)]

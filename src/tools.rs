@@ -67,8 +67,8 @@ impl InstallMethod {
         const BOTH: &[InstallTarget] = &[InstallTarget::Project, InstallTarget::Machine];
         match self.method {
             "apt" | "dnf" | "pacman" | "brew" | "snap" => MACHINE,
-            "pip" | "uv" | "npm" | "cargo" | "gem" => BOTH,
-            "npm-ci" | "npm-install" => &[InstallTarget::Project],
+            "pip" | "npm" | "cargo" | "gem" => BOTH,
+            "uv-sync" | "npm-ci" | "npm-install" => &[InstallTarget::Project],
             "binary" => match binary_recipe(self.package) {
                 Some(BinaryRecipe {
                     archive: ArchiveKind::Deb { .. },
@@ -204,20 +204,16 @@ pub fn describe(
             a.extend(packages.iter().map(|s| (*s).to_string()));
             a
         }],
-        "uv" => vec![{
-            let mut a = uv_pip_install_argv();
-            a.extend(packages.iter().map(|s| (*s).to_string()));
-            a
-        }],
         "npm" => vec![{
             let mut a = strs(&["npm", "install", "-g"]);
             a.extend(packages.iter().map(|s| (*s).to_string()));
             a
         }],
-        // The project's own package set: the command takes no package
-        // names, it reads package.json (and, for `ci`, package-lock.json)
-        // in the working directory. `packages` is the declared list, kept
-        // for the skip/preview display only.
+        // The project's own package sets: these commands take no package
+        // names, they read the manifest (and lockfile) in the working
+        // directory. `packages` is the declared list, kept for the
+        // skip/preview display only.
+        "uv-sync" => vec![uv_sync_argv()],
         "npm-ci" => vec![strs(&["npm", "ci"])],
         "npm-install" => vec![strs(&["npm", "install"])],
         "cargo" => vec![{
@@ -333,11 +329,6 @@ pub fn run(method: &str, packages: &[&str], ctx: &InstallCtx) -> anyhow::Result<
             argv.extend(packages.iter().map(|s| (*s).to_string()));
             exec(&argv)
         }
-        "uv" => {
-            let mut argv = uv_pip_install_argv();
-            argv.extend(packages.iter().map(|s| (*s).to_string()));
-            exec(&argv)
-        }
         "npm" => {
             let mut argv = vec!["npm".to_string(), "install".to_string(), "-g".to_string()];
             argv.extend(packages.iter().map(|s| (*s).to_string()));
@@ -346,6 +337,7 @@ pub fn run(method: &str, packages: &[&str], ctx: &InstallCtx) -> anyhow::Result<
         // See `describe`: these read the project's manifest and lock, so
         // the declared names are not passed (to `npm install` they would
         // mean "add these to package.json").
+        "uv-sync" => exec(&uv_sync_argv()),
         "npm-ci" => exec(&["npm".to_string(), "ci".to_string()]),
         "npm-install" => exec(&["npm".to_string(), "install".to_string()]),
         "cargo" => {
@@ -498,7 +490,7 @@ fn sudo_argv() -> &'static [&'static str] {
 /// cache holding a prebuilt nextest tarball produced once the crate list
 /// took over. It never causes extra work: only tools absent from PATH reach
 /// this command, so the build was going to happen anyway. This is the
-/// machine install of `tool install <name>` and `--all`; a project's crates
+/// machine install of `tool install machine`; a project's crates
 /// go into its tool directory instead (see [`install_into_prefix`]). Used by
 /// both `describe` and `run` so the printed plan matches what executes.
 fn cargo_install_argv() -> Vec<String> {
@@ -523,125 +515,16 @@ fn gem_install_argv() -> Vec<String> {
     argv
 }
 
-/// The argv prefix for installing Python packages with uv. `--python
-/// python3` targets whichever interpreter `python3` on PATH resolves to —
-/// the same environment a bare `pip install` would touch (the active venv
-/// when one is on PATH, the system interpreter on a CI runner).
-///
-/// `--system` is passed only for a non-venv interpreter, where uv needs it
-/// (without it uv refuses with "No virtual environment found" even when
-/// `--python` names the interpreter). It is NOT harmless for a venv target:
-/// uv documents `--system` as "do not consider virtual environments", and
-/// with `--python` resolving to a venv's python it installs into that
-/// venv's *base* interpreter instead — on a Debian/Ubuntu image that base
-/// is PEP 668 externally-managed, and the install fails with "the
-/// interpreter at /usr is externally managed ... Virtual environments were
-/// not considered due to the --system flag". Omitting `--system` makes uv
-/// install into the venv the interpreter belongs to, which is what a bare
-/// `pip install` does there.
-///
-/// When the target is a non-venv interpreter whose site-packages is
-/// unwritable (a CI runner's apt python), pip would silently fall back to a
-/// user install; uv has no user scheme, so `--prefix <user base>`
-/// reproduces that fallback's exact layout
-/// (`~/.local/lib/pythonX.Y/site-packages` + `~/.local/bin` on Linux).
-/// PEP 668 externally-managed markers are still respected — no
-/// `--break-system-packages` — matching what a bare `pip install` refuses.
-/// Used by both `describe` and `run` so the printed plan matches what
-/// executes.
-fn uv_pip_install_argv() -> Vec<String> {
-    let probe = python_probe();
-    uv_pip_install_argv_for(probe.in_venv, probe.user_prefix.as_deref())
-}
-
-/// The argv `uv_pip_install_argv` builds, with the machine probe factored
-/// out so both branches are unit-testable regardless of the host's python3.
-fn uv_pip_install_argv_for(in_venv: bool, user_prefix: Option<&str>) -> Vec<String> {
-    let mut argv: Vec<String> = ["uv", "pip", "install", "--python", "python3"]
+/// The project install of the repo's Python packages: `uv sync` builds the
+/// repo's `.venv` from uv.lock, the code's dependencies and the Python
+/// tools its processors run together. `--locked` fails when uv.lock is out
+/// of date with pyproject.toml instead of quietly re-resolving it. Used by
+/// both `describe` and `run` so the printed plan matches what executes.
+fn uv_sync_argv() -> Vec<String> {
+    ["uv", "sync", "--locked"]
         .iter()
         .map(|s| (*s).to_string())
-        .collect();
-    if !in_venv {
-        argv.push("--system".to_string());
-    }
-    if let Some(user_base) = user_prefix {
-        argv.push("--prefix".to_string());
-        argv.push(user_base.to_string());
-    }
-    argv
-}
-
-/// What `python3` on PATH is: whether it is a venv interpreter, and the
-/// `--prefix` a uv install must use to emulate pip's user-install fallback
-/// (None when uv can write the target directly: a venv is active,
-/// site-packages is writable, or `python3` is missing or broken — the
-/// install then fails with uv's own message, like the gem probe below).
-/// Asks `python3` once per process for its venv-ness, purelib, and user base.
-#[derive(Clone, Default)]
-struct PythonProbe {
-    in_venv: bool,
-    user_prefix: Option<String>,
-    /// `sys.prefix`: for a venv interpreter, the venv's directory.
-    prefix: Option<std::path::PathBuf>,
-}
-
-/// Whether `python3` on PATH belongs to a virtualenv inside `root` — the
-/// project's own environment, which (unlike a shared or system one) can be
-/// brought to the project's locked versions without touching anyone else.
-pub fn python_env_is_inside(root: &std::path::Path) -> bool {
-    let probe = python_probe();
-    let (Some(prefix), Ok(root)) = (probe.prefix, root.canonicalize()) else {
-        return false;
-    };
-    probe.in_venv && prefix.canonicalize().is_ok_and(|p| p.starts_with(&root))
-}
-
-fn python_probe() -> PythonProbe {
-    static PROBE: std::sync::OnceLock<PythonProbe> = std::sync::OnceLock::new();
-    PROBE
-        .get_or_init(|| {
-            let Ok(out) = std::process::Command::new("python3")
-                .args([
-                    "-c",
-                    "import sys, sysconfig, site; \
-                    print(int(sys.prefix != sys.base_prefix)); \
-                    print(sysconfig.get_path('purelib')); \
-                    print(site.getuserbase()); \
-                    print(sys.prefix)",
-                ])
-                .output()
-            else {
-                return PythonProbe::default();
-            };
-            if !out.status.success() {
-                return PythonProbe::default();
-            }
-            let stdout = String::from_utf8_lossy(&out.stdout);
-            let mut lines = stdout.lines();
-            let in_venv = lines.next().is_some_and(|l| l == "1");
-            let purelib = lines.next().map_or("", str::trim);
-            let user_base = lines.next().map_or("", str::trim);
-            let prefix = lines
-                .next()
-                .map(str::trim)
-                .filter(|p| !p.is_empty())
-                .map(std::path::PathBuf::from);
-            let user_prefix = if in_venv
-                || purelib.is_empty()
-                || user_base.is_empty()
-                || nearest_existing_ancestor_is_writable(std::path::Path::new(purelib))
-            {
-                None
-            } else {
-                Some(user_base.to_string())
-            };
-            PythonProbe {
-                in_venv,
-                user_prefix,
-                prefix,
-            }
-        })
-        .clone()
+        .collect()
 }
 
 /// Whether the default gem dir is unwritable for the current user (never
@@ -691,7 +574,8 @@ fn nearest_existing_ancestor_is_writable(path: &std::path::Path) -> bool {
 /// Make the project's own Node.js executables resolvable: prepend
 /// `./node_modules/.bin`, when it exists, to this process's PATH, so
 /// `which`-based tool probes and every spawned child (tools, processor
-/// scripts) see the packages `install-deps` put there from package.json.
+/// scripts) see the packages `tool install project` put there from
+/// package.json.
 /// Prepended, not appended: the version the project's lock pins must win
 /// over a global install of the same tool, which is the whole point of
 /// installing from the lock. This is what `npm run` does for scripts.
@@ -706,6 +590,33 @@ pub fn augment_path_with_node_modules_bin() {
     if !bin.is_dir() {
         return;
     }
+    let path = std::env::var_os("PATH").unwrap_or_default();
+    if let Some(new_path) = path_with_prepended_dir(&path, &bin) {
+        crate::platform::set_env("PATH", &new_path);
+    }
+}
+
+/// Make the repo's Python environment the one everything runs in: prepend
+/// `./.venv/bin` to this process's PATH. That is where `tool install
+/// project` (`uv sync`) puts the code's dependencies and the Python tools
+/// its processors run, and with it first, `python3`, `ruff` and `pytest`
+/// resolve to the locked copies with no venv activated, in a shell or on a
+/// CI runner alike.
+///
+/// Only in a project directory (one with rsconstruct.toml), and like the
+/// tool directory's `bin/`, even before `.venv` exists, so the environment
+/// `uv sync` creates in this very invocation is found by what it runs next.
+///
+/// Called once at the top of `main()`, before any thread exists — the
+/// safety condition of `platform::set_env`.
+pub fn augment_path_with_repo_venv() {
+    let Ok(cwd) = std::env::current_dir() else {
+        return;
+    };
+    if !cwd.join(crate::config::CONFIG_FILE).exists() {
+        return;
+    }
+    let bin = cwd.join(".venv").join("bin");
     let path = std::env::var_os("PATH").unwrap_or_default();
     if let Some(new_path) = path_with_prepended_dir(&path, &bin) {
         crate::platform::set_env("PATH", &new_path);
@@ -1429,7 +1340,7 @@ fn binary_recipe(pkg: &str) -> Option<BinaryRecipe> {
         // artifact and no distro package. Fetching the single script from
         // torvalds/linux master is the automatable equivalent of "copy it out
         // of a kernel checkout", and keeps the tool out of the manual-only
-        // bucket that `tool install --all` rejects.
+        // bucket that `tool install machine --all` rejects.
         //
         // Pinned to one kernel commit, not master: icheckpatch is a port of
         // this exact script and its tests compare the two line for line, so
@@ -1521,13 +1432,16 @@ pub struct ToolInfo {
 /// `central_registry_holds_only_unowned_tools` keeps the split honest.
 pub static TOOLS: &[ToolInfo] = &[
     // Python
+    // uv builds the project's .venv (`tool install project` runs `uv
+    // sync`), so it cannot come from that venv: it is installed onto the
+    // machine.
     ToolInfo {
         name: "uv",
         runtime: "python",
         project: Some(InstallMethod::new("pip", "uv")),
         machine: Some(InstallMethod::new("pip", "uv")),
         alternatives: &[],
-        prefer: None,
+        prefer: Some(InstallTarget::Machine),
     },
     ToolInfo {
         name: "python3",
@@ -1558,7 +1472,7 @@ pub static TOOLS: &[ToolInfo] = &[
     // Rust
     // rustup is the canonical route, but `apt install cargo` is a real,
     // automatable install and is what makes cargo reachable from
-    // `tool install --all` on a bare machine. A host that already has a
+    // `tool install machine --all` on a bare machine. A host that already has a
     // rustup toolchain never reaches the install path: `which` finds cargo
     // first.
     ToolInfo {
@@ -2084,73 +1998,15 @@ mod tests {
         assert!(!argv.contains(&"sudo".to_string()));
     }
 
-    /// `uv` describe targets `python3` from PATH (the environment a bare
-    /// `pip install` would touch), with `--system` only when that is a
-    /// non-venv interpreter, passes requirements — markers included — as single argv
-    /// elements at the end, and never uses sudo. `--prefix <user base>` may
-    /// appear between flags and requirements depending on the machine's
-    /// python3 (venv-ness, site-packages writability), so the middle is not
-    /// pinned here.
+    /// `uv-sync` is one `uv sync --locked`, whatever names it is handed:
+    /// it reads pyproject.toml and uv.lock, and never uses sudo.
     #[test]
-    fn uv_describe_targets_path_python3_without_sudo() {
-        let steps = describe(
-            "uv",
-            &["flask==3.1.0", "pywin32==312 ; sys_platform == 'win32'"],
-            &no_pins(),
-        );
-        assert_eq!(steps.len(), 1);
-        let argv = &steps[0];
+    fn uv_sync_describe_is_a_locked_sync() {
+        let steps = describe("uv-sync", &["ruff", "pytest"], &no_pins());
         assert_eq!(
-            argv[..5],
-            ["uv", "pip", "install", "--python", "python3"].map(String::from)
+            steps,
+            vec![["uv", "sync", "--locked"].map(String::from).to_vec()]
         );
-        // --system exactly when python3 on this machine is not a venv interpreter
-        assert_eq!(
-            argv.contains(&"--system".to_string()),
-            !python_probe().in_venv
-        );
-        assert_eq!(
-            &argv[argv.len() - 2..],
-            &["flask==3.1.0", "pywin32==312 ; sys_platform == 'win32'"]
-        );
-        assert!(!argv.contains(&"sudo".to_string()));
-    }
-
-    /// A non-venv interpreter gets `--system` (uv refuses without it), plus
-    /// `--prefix` when pip would have fallen back to a user install.
-    #[test]
-    fn uv_argv_non_venv_uses_system_and_optional_prefix() {
-        assert_eq!(
-            uv_pip_install_argv_for(false, None),
-            ["uv", "pip", "install", "--python", "python3", "--system"].map(String::from)
-        );
-        assert_eq!(
-            uv_pip_install_argv_for(false, Some("/home/u/.local")),
-            [
-                "uv",
-                "pip",
-                "install",
-                "--python",
-                "python3",
-                "--system",
-                "--prefix",
-                "/home/u/.local"
-            ]
-            .map(String::from)
-        );
-    }
-
-    /// A venv interpreter must NOT get `--system`: uv would ignore the venv
-    /// and install into its base interpreter, which on Debian/Ubuntu is
-    /// externally managed and refuses (seen in the demos-os-linux image).
-    #[test]
-    fn uv_argv_venv_omits_system() {
-        let argv = uv_pip_install_argv_for(true, None);
-        assert_eq!(
-            argv,
-            ["uv", "pip", "install", "--python", "python3"].map(String::from)
-        );
-        assert!(!argv.contains(&"--system".to_string()));
     }
 
     /// `binary` describe yields a multi-step plan (download, extract,

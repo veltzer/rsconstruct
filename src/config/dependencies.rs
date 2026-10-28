@@ -1,56 +1,26 @@
 //! `[dependencies]`: the packages a project declares by package manager, and
 //! the readers for the manifests and lockfiles (`pyproject.toml`, `uv.lock`,
-//! `package.json`, `package-lock.json`) that `install-deps` and `doctor`
-//! take the rest of the package set from.
+//! `package.json`, `package-lock.json`) that `tool install project` and
+//! `doctor` take the rest of the package set from.
+//!
+//! There is no Python list here. A project's Python packages, the Python
+//! tools its processors run included, are declared in pyproject.toml,
+//! pinned by uv.lock, and installed by `uv sync` into the repo's `.venv`:
+//! one environment, owned by uv.
 
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::Path;
 
-/// Where `install-deps` and `doctor` take the Python package set from.
-#[derive(Debug, Deserialize, Serialize, Clone, Copy, PartialEq, Eq, Default)]
-#[serde(rename_all = "kebab-case")]
-pub enum PipSource {
-    /// Install the exact pinned closure from `uv.lock` (plus any
-    /// `[dependencies].pip` extras). A project that declares Python
-    /// dependencies in pyproject.toml but has no `uv.lock` is an error:
-    /// run `uv lock`, or set `pip_source = "pyproject"`.
-    #[default]
-    UvLock,
-    /// Resolve `[dependencies].pip` plus pyproject.toml's declared
-    /// dependency names at install time (the pre-lockfile behavior;
-    /// versions float to whatever pip resolves that day).
-    Pyproject,
-}
-
-/// Which tool `install-deps` hands the Python package set to.
-#[derive(Debug, Deserialize, Serialize, Clone, Copy, PartialEq, Eq, Default)]
-#[serde(rename_all = "kebab-case")]
-pub enum PythonInstaller {
-    /// Install with `uv pip install` (the default). uv applies uv's own
-    /// resolution policy to the lock it produced, so a pin whose
-    /// Requires-Python upper bound excludes the running interpreter (which
-    /// uv deliberately ignores but pip enforces) still installs, and in
-    /// uv-lock mode the pins come from `uv export`, whose environment
-    /// markers make uv skip other platforms' packages instead of failing
-    /// on them.
-    #[default]
-    Uv,
-    /// Install with `pip install` (the pre-uv behavior). pip enforces
-    /// Requires-Python bounds that uv ignored when locking, so a uv.lock
-    /// pin can be uninstallable for pip even though uv itself would
-    /// install it.
-    Pip,
-}
-
-/// Where `install-deps` takes the project's Node.js package set from.
+/// Where `tool install project` takes the project's Node.js package set
+/// from.
 ///
-/// The Node analog of `PipSource`: package.json declares the names,
-/// package-lock.json pins the closure, and `npm ci` installs exactly the
-/// lock into the project's `node_modules/`. Every rsconstruct invocation
-/// prepends that `node_modules/.bin` to its PATH at startup, so the
-/// installed executables are what processors and tool probes see.
+/// package.json declares the names, package-lock.json pins the closure, and
+/// `npm ci` installs exactly the lock into the project's `node_modules/`.
+/// Every rsconstruct invocation prepends that `node_modules/.bin` to its
+/// PATH at startup, so the installed executables are what processors and
+/// tool probes see.
 #[derive(Debug, Deserialize, Serialize, Clone, Copy, PartialEq, Eq, Default)]
 #[serde(rename_all = "kebab-case")]
 pub enum NpmSource {
@@ -66,23 +36,10 @@ pub enum NpmSource {
 }
 
 /// Declared project dependencies by package manager.
-/// Used by `rsconstruct doctor` to verify and `rsconstruct tool install-deps` to install.
+/// Used by `rsconstruct doctor` to verify and `rsconstruct tool install` to install.
 #[derive(Debug, Deserialize, Serialize, Clone, Default)]
 #[serde(deny_unknown_fields)]
 pub struct DependenciesConfig {
-    /// Python packages (installed via pip)
-    #[serde(default)]
-    pub pip: Vec<String>,
-    /// Source of the Python package set: `"uv-lock"` (default) installs the
-    /// pinned closure from `uv.lock`; `"pyproject"` resolves the declared
-    /// names at install time.
-    #[serde(default)]
-    pub pip_source: PipSource,
-    /// Which tool installs the Python package set: `"uv"` (default) or
-    /// `"pip"`. See `PythonInstaller` for why the two differ on the same
-    /// lock.
-    #[serde(default)]
-    pub python_installer: PythonInstaller,
     /// Node.js command-line packages installed into the project's tool
     /// directory (`.rsconstruct/tools`, see `tool_store`), on top of
     /// whatever the project's own package.json declares. The manifest is
@@ -108,7 +65,8 @@ pub struct DependenciesConfig {
     /// handled the same.
     #[serde(default)]
     pub cargo: Vec<String>,
-    /// System packages (checked via `which`, not auto-installed)
+    /// System packages, installed onto the machine by `tool install
+    /// machine` with the system package manager.
     #[serde(default)]
     pub system: Vec<String>,
     /// Wrap apt/dnf/pacman invocations with `eatmydata` to skip fsync calls
@@ -118,7 +76,7 @@ pub struct DependenciesConfig {
     /// `eatmydata_ci_default` flips this to `true` when `CI=true` is in
     /// the environment. To turn the wrap off in CI, unset `CI` (or set
     /// it to a non-`true` value); to turn it on outside CI, run with
-    /// `CI=true rsconstruct tool install-deps`. The CLI flag
+    /// `CI=true rsconstruct tool install machine`. The CLI flag
     /// `--no-eatmydata` always wins.
     ///
     /// This is not a normal user-facing config field — it's set by the
@@ -131,98 +89,10 @@ pub struct DependenciesConfig {
 
 impl DependenciesConfig {
     pub const fn is_empty(&self) -> bool {
-        self.pip.is_empty()
-            && self.npm.is_empty()
+        self.npm.is_empty()
             && self.gem.is_empty()
             && self.cargo.is_empty()
             && self.system.is_empty()
-    }
-
-    /// The full pip requirement list for the project rooted at
-    /// `project_root`, according to `pip_source`.
-    ///
-    /// In `uv-lock` mode (the default) the list is the `[dependencies].pip`
-    /// entries followed by the exact pinned closure from `uv.lock` (see
-    /// `uv_lock_pinned_deps`). A project that declares Python dependencies
-    /// in pyproject.toml but has no `uv.lock` is an error — the lockfile is
-    /// what makes CI installs reproducible.
-    ///
-    /// In `pyproject` mode the list is the `[dependencies].pip` entries
-    /// followed by the dependency names pyproject.toml declares (see
-    /// `pyproject_python_deps`), resolved by pip at install time.
-    ///
-    /// Both modes deduplicate by distribution name plus extras — the first
-    /// occurrence wins, so a `[dependencies].pip` entry overrides a
-    /// pyproject or lock one. Extras are part of the key because
-    /// `pkg[extra]` pulls in dependencies that plain `pkg` does not, so the
-    /// two are different install requests.
-    pub fn effective_pip(&self, project_root: &Path) -> Result<Vec<String>> {
-        let from_project = self.project_python_reqs(project_root, uv_lock_pinned_deps)?;
-        Ok(self.merge_with_pip(from_project))
-    }
-
-    /// Like `effective_pip`, but for the uv installer: in uv-lock mode the
-    /// pinned closure comes from `uv export` (run by `export`, since
-    /// subprocess execution belongs to the caller's context) rather than
-    /// from flattening the lock. The export carries environment markers, so
-    /// uv skips another platform's pin (`pywin32 ; sys_platform == 'win32'`
-    /// on Linux) where the flattened list would try to install it and fail.
-    pub fn effective_pip_uv(
-        &self,
-        project_root: &Path,
-        export: impl FnOnce() -> Result<Vec<String>>,
-    ) -> Result<Vec<String>> {
-        let from_project = self.project_python_reqs(project_root, |_lock| export())?;
-        Ok(self.merge_with_pip(from_project))
-    }
-
-    /// The project-declared part of the Python set: `pinned` on the lock in
-    /// uv-lock mode, pyproject's declared names in pyproject mode. Owns the
-    /// "declared dependencies but no lock" error both modes' callers rely on.
-    fn project_python_reqs(
-        &self,
-        project_root: &Path,
-        pinned: impl FnOnce(&Path) -> Result<Vec<String>>,
-    ) -> Result<Vec<String>> {
-        let pyproject = project_root.join("pyproject.toml");
-        match self.pip_source {
-            PipSource::UvLock => {
-                let lock = project_root.join("uv.lock");
-                if lock.exists() {
-                    pinned(&lock)
-                } else if pyproject_python_deps(&pyproject)?.is_empty() {
-                    Ok(Vec::new())
-                } else {
-                    anyhow::bail!(
-                        "{} declares Python dependencies but {} does not exist; \
-                         run `uv lock` to create it, or set `pip_source = \"pyproject\"` \
-                         under [dependencies] to resolve the declared names at install time",
-                        pyproject.display(),
-                        lock.display(),
-                    );
-                }
-            }
-            PipSource::Pyproject => pyproject_python_deps(&pyproject),
-        }
-    }
-
-    /// `[dependencies].pip` entries followed by `from_project`, deduplicated
-    /// by distribution name plus extras — first occurrence wins, so a
-    /// `[dependencies].pip` entry overrides a pyproject or lock one.
-    fn merge_with_pip(&self, from_project: Vec<String>) -> Vec<String> {
-        let mut seen: std::collections::HashSet<String> = std::collections::HashSet::new();
-        let mut merged: Vec<String> = Vec::new();
-        for req in self.pip.iter().cloned().chain(from_project) {
-            let key = format!(
-                "{}[{}]",
-                normalized_distribution_name(&req),
-                requirement_extras(&req)
-            );
-            if seen.insert(key) {
-                merged.push(req);
-            }
-        }
-        merged
     }
 
     /// The Node.js package names the project rooted at `project_root`
@@ -249,6 +119,37 @@ impl DependenciesConfig {
             );
         }
         Ok(names)
+    }
+}
+
+/// Whether the project rooted at `project_root` has a Python environment to
+/// set up: a `uv.lock`, or a pyproject.toml that declares dependencies. A
+/// pyproject that declares dependencies without a `uv.lock` beside it is an
+/// error, the lockfile being what makes the install reproducible.
+pub fn has_python_deps(project_root: &Path) -> Result<bool> {
+    let lock = project_root.join("uv.lock");
+    if lock.exists() {
+        return Ok(true);
+    }
+    let pyproject = project_root.join("pyproject.toml");
+    if pyproject_python_deps(&pyproject)?.is_empty() {
+        return Ok(false);
+    }
+    anyhow::bail!(
+        "{} declares Python dependencies but {} does not exist; run `uv lock` to create it",
+        pyproject.display(),
+        lock.display(),
+    );
+}
+
+/// The project's pinned Python closure, as `name==version` requirements:
+/// what `uv sync` installs into the repo's `.venv`. Empty when the project
+/// has no Python environment (see [`has_python_deps`]).
+pub fn python_deps(project_root: &Path) -> Result<Vec<String>> {
+    if has_python_deps(project_root)? {
+        uv_lock_pinned_deps(&project_root.join("uv.lock"))
+    } else {
+        Ok(Vec::new())
     }
 }
 
@@ -323,18 +224,6 @@ pub fn installed_node_package_version(project_root: &Path, name: &str) -> Option
         .map(str::to_string)
 }
 
-/// Parse the stdout of `uv export --format requirements.txt` into requirement
-/// strings, one per line, environment markers included. Comment lines, blank
-/// lines, and option lines (`-e .`, `--index-url ...`) are not requirements
-/// and are dropped.
-pub fn parse_uv_export(text: &str) -> Vec<String> {
-    text.lines()
-        .map(str::trim)
-        .filter(|line| !line.is_empty() && !line.starts_with('#') && !line.starts_with('-'))
-        .map(str::to_string)
-        .collect()
-}
-
 /// Python dependencies declared in a `pyproject.toml`, or an empty list when
 /// the file does not exist. Collects, in order: `[project].dependencies`,
 /// every list in `[project.optional-dependencies]`, and every PEP 735
@@ -391,8 +280,7 @@ pub fn pyproject_python_deps(pyproject: &Path) -> Result<Vec<String>> {
 /// `name==version` requirement strings in the lock's order.
 ///
 /// The project itself (`source = { editable = "." }` or
-/// `{ virtual = "." }`) is skipped — it is not something install-deps
-/// installs. Every other entry must be a registry package; a source kind
+/// `{ virtual = "." }`) is skipped — it is not a dependency of itself. Every other entry must be a registry package; a source kind
 /// this function does not understand (git, path, url) is an error rather
 /// than a silently dropped dependency.
 pub fn uv_lock_pinned_deps(lock: &Path) -> Result<Vec<String>> {
@@ -420,7 +308,7 @@ pub fn uv_lock_pinned_deps(lock: &Path) -> Result<Vec<String>> {
         let is_registry = source.is_some_and(|s| s.contains_key("registry"));
         if !is_registry {
             anyhow::bail!(
-                "{}: package {name} has a source kind install-deps does not support \
+                "{}: package {name} has a source kind rsconstruct does not read \
                  (only registry packages and the project itself are understood)",
                 lock.display(),
             );
@@ -432,25 +320,6 @@ pub fn uv_lock_pinned_deps(lock: &Path) -> Result<Vec<String>> {
         pins.push(format!("{name}=={version}"));
     }
     Ok(pins)
-}
-
-/// The normalized extras of a requirement string (`"gtts"` for
-/// `"manim-voiceover[gtts]"`), sorted and comma-joined so equivalent extras
-/// lists compare equal; empty when the requirement names no extras.
-pub fn requirement_extras(requirement: &str) -> String {
-    let Some(open) = requirement.find('[') else {
-        return String::new();
-    };
-    let Some(close) = requirement[open..].find(']') else {
-        return String::new();
-    };
-    let mut extras: Vec<String> = requirement[open + 1..open + close]
-        .split(',')
-        .map(|e| e.trim().to_lowercase())
-        .filter(|e| !e.is_empty())
-        .collect();
-    extras.sort();
-    extras.join(",")
 }
 
 /// The PEP 503-normalized distribution name of a requirement string: the

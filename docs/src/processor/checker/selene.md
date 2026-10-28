@@ -73,8 +73,9 @@ dep_inputs = []
 
 ## Installation
 
-`rsconstruct tool install` downloads the Linux binary from the selene GitHub
-release (a zip, extracted with `unzip`). The crate is the fallback.
+`rsconstruct tool install project` downloads the Linux binary from the
+selene GitHub release (a zip, extracted with `unzip`) into
+`.rsconstruct/tools`. The crate is listed as an alternative.
 
 ## Batch support
 

@@ -426,7 +426,7 @@ fn legacy_rsconstruct_table_is_accepted_and_dropped_on_rewrite() {
     std::fs::write(project_path.join("rsconstruct.lock"), lock).unwrap();
 
     for args in [
-        &["tool", "install-deps"][..],
+        &["tool", "install", "project"][..],
         &["tool", "check"],
         &["build"],
     ] {
@@ -465,12 +465,12 @@ fn ci_rejects_a_lock_that_does_not_match() {
 
     let output = run_rsconstruct_with_env(
         project_path,
-        &["tool", "install-deps"],
+        &["tool", "install", "project"],
         &[("NO_COLOR", "1"), ("CI", "true")],
     );
     assert!(
         !output.status.success(),
-        "install-deps accepted a stale lock in CI"
+        "tool install project accepted a stale lock in CI"
     );
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(stderr.contains("cargo cargo-unused"), "{stderr}");
@@ -760,11 +760,11 @@ fn tools_list_names_are_bare_binaries_not_paths() {
     }
 }
 
-/// `tool install --all` must be able to install every registry entry.
-/// A manual-only entry makes `--all` a hard error, which would break CI
-/// provisioning, so the registry must not contain one.
+/// `tool install machine --all` must be able to install every registry
+/// entry. A tool with no machine install makes `--all` a hard error, which
+/// would break CI provisioning, so every tool must have one.
 #[test]
-fn tools_install_all_has_no_manual_only_entries() {
+fn tools_install_machine_all_covers_every_entry() {
     let temp_dir = setup_test_project();
     let project_path = temp_dir.path();
 
@@ -781,21 +781,70 @@ fn tools_install_all_has_no_manual_only_entries() {
 
     let parsed: Value =
         serde_json::from_slice(&output.stdout).expect("tool list --json should emit valid JSON");
-    let manual_only: Vec<&str> = parsed
+    let no_machine: Vec<&str> = parsed
         .as_array()
         .expect("array")
         .iter()
         .filter(|tool| {
-            tool["install_methods"].as_array().is_some_and(|ms| {
-                !ms.is_empty() && ms.iter().all(|m| m["method"].as_str() == Some("manual"))
+            !tool["install_methods"].as_array().is_some_and(|ms| {
+                ms.iter().any(|m| {
+                    m["slots"]
+                        .as_array()
+                        .is_some_and(|s| s.iter().any(|t| t == "machine"))
+                })
             })
         })
         .map(|tool| tool["tool"].as_str().unwrap_or("<unnamed>"))
         .collect();
 
     assert!(
-        manual_only.is_empty(),
-        "these tools have only a manual install method, so `tool install --all` cannot provision them: {manual_only:?}",
+        no_machine.is_empty(),
+        "these tools have no machine install, so `tool install machine --all` cannot provision them: {no_machine:?}",
+    );
+}
+
+/// `tool install` names where the install goes; invoked bare it lists the
+/// two choices instead of failing on a missing argument.
+#[test]
+fn tools_install_bare_lists_its_targets() {
+    let temp_dir = setup_test_project();
+    let output =
+        run_rsconstruct_with_env(temp_dir.path(), &["tool", "install"], &[("NO_COLOR", "1")]);
+    assert!(
+        !output.status.success(),
+        "bare `tool install` should not install"
+    );
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("machine"), "{stderr}");
+    assert!(stderr.contains("project"), "{stderr}");
+    assert!(
+        !stderr.contains("--interactive"),
+        "flags belong to --help: {stderr}"
+    );
+}
+
+/// A project install of a tool goes through its project slot: a tool with
+/// none (a `.deb`) is pointed at the machine, and a Python tool is the
+/// repo's .venv's, so it must be pinned by uv.lock first.
+#[test]
+fn tools_install_project_name_follows_the_project_slot() {
+    let temp_dir = setup_test_project();
+    let root = temp_dir.path();
+
+    let output = run_rsconstruct_with_env(root, &["tool", "install", "project", "drawio"], &[]);
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("tool install machine drawio"),
+        "a tool with no project install should point at the machine: {stderr}"
+    );
+
+    let output = run_rsconstruct_with_env(root, &["tool", "install", "project", "ruff"], &[]);
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("uv add --dev ruff"),
+        "a Python tool uv.lock does not pin should say how to pin it: {stderr}"
     );
 }
 
@@ -808,12 +857,12 @@ fn tools_install_all_conflicts_with_tool_name() {
 
     let output = run_rsconstruct_with_env(
         project_path,
-        &["tool", "install", "--all", "ruff"],
+        &["tool", "install", "machine", "--all", "ruff"],
         &[("NO_COLOR", "1")],
     );
     assert!(
         !output.status.success(),
-        "`tool install --all ruff` should be rejected"
+        "`tool install machine --all ruff` should be rejected"
     );
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
@@ -870,8 +919,8 @@ fn locked_tools_are_installed_into_the_project_from_the_store() {
         );
     };
 
-    let out = run(&["tool", "install"], false);
-    ok(&out, "tool install");
+    let out = run(&["tool", "install", "project"], false);
+    ok(&out, "tool install project");
     let stdout = String::from_utf8_lossy(&out.stdout);
     assert!(
         stdout.contains("binary rumdl sha256-feed (linked from the tool store)"),

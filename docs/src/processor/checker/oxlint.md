@@ -56,8 +56,9 @@ dep_inputs = []
 
 ## Installation
 
-`rsconstruct tool install` downloads the static Linux binary from the oxc
-GitHub release. The npm package and the crate are the fallbacks.
+`rsconstruct tool install project` downloads the static Linux binary from
+the oxc GitHub release into `.rsconstruct/tools`. The npm package and the
+crate are listed as alternatives.
 
 ## Batch support
 

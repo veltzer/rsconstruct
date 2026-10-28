@@ -33,17 +33,17 @@ cp target/debug/rsconstruct "${CARGO_HOME:-${HOME}/.cargo}/bin/rsconstruct"
 # the tests exercise comes from its own registry entry, so adding a
 # processor never requires touching CI.
 #
-# Nothing is skipped and nothing is filtered — `--all` treats a tool it
-# cannot install automatically as a hard error rather than a warning, so a
-# registry entry that loses its install method fails this step instead of
-# quietly shrinking the matrix. It is a superset of the `tool install` the
-# shared script runs next, which then finds everything in place.
+# Nothing is skipped and nothing is filtered — `--all` treats a tool with no
+# machine install as a hard error rather than a warning, so a registry entry
+# that loses its machine install fails this step instead of quietly shrinking
+# the matrix. It is a superset of the `tool install machine` the shared
+# script runs next, which then finds everything in place.
 #
 # drawio's .deb URL is resolved from the GitHub releases API at install time,
 # so this inherits GITHUB_TOKEN from the workflow step to stay under the
 # authenticated rate limit (see the comment on that step in ci.yml). Unset
 # locally, where one machine never approaches the anonymous 60/hour.
-rsconstruct tool install --all
+rsconstruct tool install machine --all
 
 # drawio is an Electron app with no headless mode: `drawio --export` exits
 # with "Missing X server or $DISPLAY" on a runner, which has no display

@@ -5,7 +5,7 @@
 //! `[dependencies]` lists — and a bare name alone would let every CI runner
 //! install whatever release was newest that day. This file records which
 //! release the project builds with. It is written by `rsconstruct tool
-//! lock`, read by `tool install`, `tool install-deps` and `tool check`, and
+//! lock`, read by `tool install` and `tool check`, and
 //! checked by `build` in CI (for the processors that build; see
 //! [`Coverage`]). rsconstruct itself is not locked: the fleet's
 //! `scripts/ci-install-tools.sh` downloads the latest release (only the last
@@ -15,11 +15,13 @@
 //! keep parsing, ignored, and left out of the next rewrite.
 //!
 //! What is locked is what rsconstruct itself installs from a registry:
-//! crates (`cargo`), `PyPI` packages (`pip`), global npm packages, gems, and
-//! the release assets of the `binary` install method (by URL and SHA-256).
-//! Packages a project lockfile already pins (uv.lock, package-lock.json)
-//! belong to that file; system packages (apt and friends) come with the OS
-//! image and are not locked.
+//! crates (`cargo`), npm packages, gems, and the release assets of the
+//! `binary` install method (by URL and SHA-256). Packages a project
+//! lockfile already pins (uv.lock, package-lock.json) belong to that file:
+//! a project's Python packages, the Python tools its processors run
+//! included, are all pinned by uv.lock, so this file never pins one.
+//! System packages (apt and friends) come with the OS image and are not
+//! locked.
 //!
 //! Outside CI a missing or incomplete lock is filled in (only the missing
 //! entries are resolved; nothing already locked moves). In CI (`CI=true`)
@@ -29,8 +31,8 @@
 //!
 //! Crates, npm packages, gems and non-`.deb` binaries are installed into
 //! the project itself (see `tool_store`), so each project runs exactly its
-//! locked versions, in CI and on a developer machine alike. Python packages
-//! go into the active environment, and `.deb` binaries onto the machine.
+//! locked versions, in CI and on a developer machine alike. `.deb` binaries
+//! go onto the machine.
 
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
@@ -56,7 +58,7 @@ const LOCK_HEADER: &str = "\
 
 /// The registry-backed install methods whose versions the lock records,
 /// besides `binary`.
-const VERSIONED_METHODS: [&str; 4] = ["cargo", "gem", "npm", "pip"];
+const VERSIONED_METHODS: [&str; 3] = ["cargo", "gem", "npm"];
 
 /// The parsed contents of rsconstruct.lock.
 #[derive(Debug, Default, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -76,9 +78,6 @@ pub struct ToolLock {
     pub gem: BTreeMap<String, String>,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub npm: BTreeMap<String, String>,
-    /// Keyed by PEP 503-normalized distribution name.
-    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
-    pub pip: BTreeMap<String, String>,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub binary: BTreeMap<String, BinaryPin>,
 }
@@ -122,7 +121,6 @@ impl ToolLock {
             "cargo" => &self.cargo,
             "gem" => &self.gem,
             "npm" => &self.npm,
-            "pip" | "uv" => &self.pip,
             other => unreachable!("not a versioned lock method: {other}"),
         }
     }
@@ -132,54 +130,38 @@ impl ToolLock {
             "cargo" => &mut self.cargo,
             "gem" => &mut self.gem,
             "npm" => &mut self.npm,
-            "pip" | "uv" => &mut self.pip,
             other => unreachable!("not a versioned lock method: {other}"),
         }
     }
 
     /// The locked version of `name` under the versioned `method`.
     pub fn version(&self, method: &str, name: &str) -> Option<&String> {
-        self.versions(method).get(&lock_key(method, name))
+        self.versions(method).get(name)
     }
 
     /// `package` as an install request for `method`, pinned to its locked
-    /// version: `name@1.2.3` for cargo and npm, `name==1.2.3` for pip/uv
-    /// (extras kept), `name:1.2.3` for gem. Returned unchanged when the
+    /// version: `name@1.2.3` for cargo and npm, `name:1.2.3` for gem.
+    /// Returned unchanged for a method the lock does not version, when the
     /// lock has no entry for it, or when the entry already carries its own
     /// version constraint, which then stands as written.
     pub fn pinned(&self, method: &str, package: &str) -> String {
-        if !VERSIONED_METHODS.contains(&method) && method != "uv" {
+        if !VERSIONED_METHODS.contains(&method) || !is_bare(method, package) {
             return package.to_string();
         }
-        if !is_bare(method, package) {
-            return package.to_string();
-        }
-        let Some(version) = self.versions(method).get(&lock_key(method, package)) else {
+        let Some(version) = self.versions(method).get(package) else {
             return package.to_string();
         };
         match method {
-            "pip" | "uv" => format!("{package}=={version}"),
             "gem" => format!("{package}:{version}"),
             _ => format!("{package}@{version}"),
         }
     }
 }
 
-/// The key `package` is locked under: the PEP 503-normalized name for a
-/// Python package (extras dropped), the name itself otherwise.
-fn lock_key(method: &str, package: &str) -> String {
-    match method {
-        "pip" | "uv" => crate::config::normalized_distribution_name(package),
-        _ => package.to_string(),
-    }
-}
-
 /// Whether `package` is a bare name the lock can pin, rather than a request
-/// that already says which version it wants (`ruff>=0.5`, `pkg@1.0`,
-/// `rake:13.0`).
+/// that already says which version it wants (`pkg@1.0`, `rake:13.0`).
 fn is_bare(method: &str, package: &str) -> bool {
     match method {
-        "pip" | "uv" => !package.contains(['<', '>', '=', '!', '~', ';', '@', ' ']),
         // A scoped package starts with '@'; only a later '@' is a version.
         "npm" => package.rfind('@').is_none_or(|i| i == 0),
         "gem" => !package.contains(':'),
@@ -212,8 +194,6 @@ pub struct Wanted {
     pub cargo: BTreeSet<String>,
     pub gem: BTreeSet<String>,
     pub npm: BTreeSet<String>,
-    /// PEP 503-normalized distribution names.
-    pub pip: BTreeSet<String>,
     pub binary: BTreeSet<String>,
 }
 
@@ -223,7 +203,6 @@ impl Wanted {
             "cargo" => &self.cargo,
             "gem" => &self.gem,
             "npm" => &self.npm,
-            "pip" => &self.pip,
             "binary" => &self.binary,
             other => unreachable!("not a lock method: {other}"),
         }
@@ -236,7 +215,6 @@ impl Wanted {
             "cargo" => &mut self.cargo,
             "gem" => &mut self.gem,
             "npm" => &mut self.npm,
-            "pip" | "uv" => &mut self.pip,
             "binary" => {
                 if !crate::tools::binary_is_pinnable(package) {
                     return false;
@@ -249,7 +227,7 @@ impl Wanted {
         if !is_bare(method, package) {
             return false;
         }
-        set.insert(lock_key(method, package));
+        set.insert(package.to_string());
         true
     }
 }
@@ -257,12 +235,14 @@ impl Wanted {
 /// Collect what the project's lock must hold.
 ///
 /// Processor tools are taken by the install method `tool install` uses for
-/// them (the registry's first). A processor tool that a project lockfile
-/// already pins — a Python package in uv.lock, a Node package in
-/// package-lock.json — is left to that file: install-deps installs it from
-/// there, and a second pin here could only disagree with it.
-/// `[dependencies]` entries are always included; install-deps installs them
-/// with these pins.
+/// them (the one in the slot of their preferred target). A processor tool
+/// that a project lockfile already pins — a Python package in uv.lock, a
+/// Node package in package-lock.json — is left to that file: `tool install
+/// project` installs it from there, and a second pin here could only
+/// disagree with it. A Python tool uv.lock does not pin is an error: the
+/// repo's `.venv` is uv's, so pyproject.toml is the one place to declare
+/// it. `[dependencies]` entries are always included; `tool install
+/// project` installs them with these pins.
 pub fn collect_wanted(
     processors: &ProcessorMap,
     enabled: &dyn Fn(&str) -> bool,
@@ -274,6 +254,7 @@ pub fn collect_wanted(
         npm: npm_owned,
     } = lockfile_owned(deps, root)?;
 
+    let mut unpinned_python: BTreeSet<String> = BTreeSet::new();
     let mut wanted = Wanted::default();
     let mut names: Vec<&String> = processors.keys().collect();
     names.sort();
@@ -291,22 +272,34 @@ pub fn collect_wanted(
             else {
                 continue;
             };
-            let key = lock_key(method.method, method.package);
-            let owned = match method.method {
-                "pip" => uv_owned.contains(&key),
-                "npm" => npm_owned.contains(&key),
-                _ => false,
-            };
-            if !owned {
-                wanted.add(method.method, method.package);
+            match method.method {
+                "pip" => {
+                    let name = crate::config::normalized_distribution_name(method.package);
+                    if !uv_owned.contains(&name) {
+                        unpinned_python.insert(method.package.to_string());
+                    }
+                }
+                "npm" if npm_owned.contains(method.package) => {}
+                _ => {
+                    wanted.add(method.method, method.package);
+                }
             }
         }
+    }
+    if !unpinned_python.is_empty() {
+        let names: Vec<&str> = unpinned_python.iter().map(String::as_str).collect();
+        return Err(crate::exit_code::config_error(format!(
+            "these Python tools are not pinned by uv.lock: {}. The repo's .venv is uv's, so \
+             add them to pyproject.toml's dev dependency group (`uv add --dev {}`), which \
+             also updates uv.lock",
+            names.join(", "),
+            names.join(" "),
+        )));
     }
     for (method, list) in [
         ("cargo", &deps.cargo),
         ("gem", &deps.gem),
         ("npm", &deps.npm),
-        ("pip", &deps.pip),
     ] {
         for package in list {
             wanted.add(method, package);
@@ -325,15 +318,14 @@ struct LockfileOwned {
     npm: BTreeSet<String>,
 }
 
-/// What uv.lock and package-lock.json own, each only when install-deps
-/// actually installs from it: a lockfile that is on disk but not the
-/// configured source (`pip_source = "pyproject"`, `npm_source =
-/// "package-json"`) pins nothing, so its packages must be locked here or
-/// they float.
+/// What uv.lock and package-lock.json own. package-lock.json counts only
+/// when `tool install project` installs from it: one that is on disk but
+/// not the configured source (`npm_source = "package-json"`) pins nothing,
+/// so its packages must be locked here or they float.
 fn lockfile_owned(deps: &crate::config::DependenciesConfig, root: &Path) -> Result<LockfileOwned> {
     let mut owned = LockfileOwned::default();
     let uv_lock = root.join("uv.lock");
-    if deps.pip_source == crate::config::PipSource::UvLock && uv_lock.exists() {
+    if uv_lock.exists() {
         owned.pip = crate::config::uv_lock_pinned_deps(&uv_lock)?
             .iter()
             .map(|req| crate::config::normalized_distribution_name(req))
@@ -459,10 +451,6 @@ fn resolve_version(method: &str, name: &str) -> Result<String> {
                 name.replace('/', "%2F")
             ),
             "/version",
-        ),
-        "pip" => (
-            format!("https://pypi.org/pypi/{name}/json"),
-            "/info/version",
         ),
         other => unreachable!("not a versioned lock method: {other}"),
     };
@@ -652,9 +640,8 @@ fn select_entries(wanted: &Wanted, names: &[String]) -> Result<Entries> {
     for name in names {
         let before = targets.len();
         for method in VERSIONED_METHODS.iter().copied().chain(["binary"]) {
-            let key = lock_key(method, name);
-            if wanted.names(method).contains(&key) {
-                targets.push((method.to_string(), key));
+            if wanted.names(method).contains(name) {
+                targets.push((method.to_string(), name.clone()));
             }
         }
         if targets.len() == before {
@@ -790,10 +777,9 @@ impl std::fmt::Display for Mismatch {
 }
 
 /// The Python packages installed in the environment `python3` on PATH
-/// belongs to (the one install-deps and `tool install` install into),
+/// belongs to (the repo's `.venv`, which rsconstruct puts first on PATH),
 /// with their versions, among `names`. Asks the interpreter itself, not
-/// `pip show`: a uv-managed venv (the default installer's) has no pip.
-/// Shared with `doctor`.
+/// `pip show`: a uv-managed venv has no pip. Used by `doctor`.
 pub fn installed_pip_versions(ctx: &BuildContext, names: &[&str]) -> BTreeMap<String, String> {
     const SCRIPT: &str = "\
 import sys, importlib.metadata as m
@@ -838,8 +824,7 @@ pub fn binary_version(pin: &BinaryPin) -> Option<String> {
 
 /// The locked tools among `wanted` whose installed copy is not the locked
 /// one. Crates, npm packages, gems and non-`.deb` binaries are judged by
-/// the project's tool directory, Python packages by the active environment,
-/// and `.deb` binaries by dpkg.
+/// the project's tool directory, and `.deb` binaries by dpkg.
 pub fn mismatches(ctx: &BuildContext, lock: &ToolLock, wanted: &Wanted) -> Vec<Mismatch> {
     let mut found = Vec::new();
     let mut push = |method: &str, name: &str, locked: &str, installed: Option<String>| {
@@ -863,18 +848,6 @@ pub fn mismatches(ctx: &BuildContext, lock: &ToolLock, wanted: &Wanted) -> Vec<M
                 let have = project_version(method, name);
                 if have.as_ref() != Some(locked) {
                     push(method, name, locked, have);
-                }
-            }
-        }
-    }
-    if !wanted.pip.is_empty() {
-        let names: Vec<&str> = wanted.pip.iter().map(String::as_str).collect();
-        let installed = installed_pip_versions(ctx, &names);
-        for name in &wanted.pip {
-            if let Some(locked) = lock.pip.get(name) {
-                let have = installed.get(name);
-                if have != Some(locked) {
-                    push("pip", name, locked, have.cloned());
                 }
             }
         }
@@ -910,8 +883,8 @@ pub fn verify(ctx: &BuildContext, wanted: &Wanted, coverage: Coverage) -> Result
     if !found.is_empty() {
         let lines: Vec<String> = found.iter().map(ToString::to_string).collect();
         return Err(lock_error(format!(
-            "Installed tools do not match {LOCK_FILE} (run `rsconstruct tool install-deps` \
-             and `rsconstruct tool install`):\n{}",
+            "Installed tools do not match {LOCK_FILE} (run `rsconstruct tool install machine` \
+             and `rsconstruct tool install project`):\n{}",
             lines.join("\n")
         )));
     }
@@ -1032,9 +1005,6 @@ mod tests {
         let mut lock = ToolLock::empty();
         lock.cargo
             .insert("cargo-deny".to_string(), "0.18.3".to_string());
-        lock.pip.insert("ruff".to_string(), "0.14.0".to_string());
-        lock.pip
-            .insert("manim-voiceover".to_string(), "0.3.7".to_string());
         lock.npm
             .insert("@scope/tool".to_string(), "2.0.0".to_string());
         lock.gem.insert("mdl".to_string(), "0.13.0".to_string());
@@ -1105,39 +1075,31 @@ mod tests {
     fn pinned_formats_each_package_manager() {
         let lock = sample_lock();
         assert_eq!(lock.pinned("cargo", "cargo-deny"), "cargo-deny@0.18.3");
-        assert_eq!(lock.pinned("pip", "ruff"), "ruff==0.14.0");
-        assert_eq!(lock.pinned("uv", "Ruff"), "Ruff==0.14.0");
-        assert_eq!(
-            lock.pinned("pip", "manim_voiceover[gtts]"),
-            "manim_voiceover[gtts]==0.3.7"
-        );
         assert_eq!(lock.pinned("npm", "@scope/tool"), "@scope/tool@2.0.0");
         assert_eq!(lock.pinned("gem", "mdl"), "mdl:0.13.0");
     }
 
     /// Unlocked names, explicit constraints and unversioned methods pass
-    /// through untouched.
+    /// through untouched. pip is one of those: uv.lock pins Python
+    /// packages, not this file.
     #[test]
     fn pinned_leaves_other_requests_alone() {
         let lock = sample_lock();
-        assert_eq!(lock.pinned("pip", "black"), "black");
-        assert_eq!(lock.pinned("pip", "ruff>=0.5"), "ruff>=0.5");
-        assert_eq!(lock.pinned("pip", "ruff==0.1.0"), "ruff==0.1.0");
+        assert_eq!(lock.pinned("cargo", "cargo-nextest"), "cargo-nextest");
         assert_eq!(lock.pinned("cargo", "cargo-deny@0.1.0"), "cargo-deny@0.1.0");
+        assert_eq!(lock.pinned("pip", "ruff"), "ruff");
         assert_eq!(lock.pinned("apt", "ruff"), "ruff");
     }
 
     #[test]
-    fn wanted_skips_constrained_entries_and_normalizes_pip_names() {
+    fn wanted_skips_constrained_and_unlocked_entries() {
         let mut wanted = Wanted::default();
-        assert!(wanted.add("pip", "Types_PyYAML"));
-        assert!(!wanted.add("pip", "ruff>=0.5"));
+        assert!(!wanted.add("pip", "ruff"));
         assert!(wanted.add("npm", "@scope/tool"));
         assert!(!wanted.add("npm", "@scope/tool@1.0.0"));
         assert!(!wanted.add("apt", "aspell"));
         assert!(!wanted.add("binary", "google-chrome-stable"));
         assert!(wanted.add("binary", "rumdl"));
-        assert_eq!(wanted.pip.iter().collect::<Vec<_>>(), vec!["types-pyyaml"]);
         assert_eq!(wanted.npm.len(), 1);
         assert_eq!(wanted.binary.len(), 1);
     }
@@ -1155,34 +1117,22 @@ mod tests {
             vec![("cargo".to_string(), "cargo-nextest".to_string())]
         );
         let stale: Vec<String> = stale.iter().map(|(m, n)| format!("{m} {n}")).collect();
-        assert_eq!(
-            stale,
-            vec![
-                "gem mdl",
-                "npm @scope/tool",
-                "pip manim-voiceover",
-                "pip ruff"
-            ]
-        );
+        assert_eq!(stale, vec!["gem mdl", "npm @scope/tool"]);
     }
 
-    /// A name selects its tool under every method the project locks it for
-    /// (Python names compared normalized); an unknown name is an error, and
-    /// `rsconstruct` is one (rsconstruct itself is not locked).
+    /// A name selects its tool under every method the project locks it
+    /// for; an unknown name is an error, and `rsconstruct` is one
+    /// (rsconstruct itself is not locked).
     #[test]
     fn select_entries_matches_names_across_methods() {
         let mut wanted = Wanted::default();
         wanted.add("cargo", "oxlint");
         wanted.add("binary", "oxlint");
-        wanted.add("pip", "types-PyYAML");
         let names = |list: &[&str]| list.iter().map(ToString::to_string).collect::<Vec<_>>();
 
-        let targets = select_entries(&wanted, &names(&["oxlint", "Types_PyYAML"])).unwrap();
+        let targets = select_entries(&wanted, &names(&["oxlint"])).unwrap();
         let targets: Vec<String> = targets.iter().map(|(m, n)| format!("{m} {n}")).collect();
-        assert_eq!(
-            targets,
-            vec!["cargo oxlint", "binary oxlint", "pip types-pyyaml"]
-        );
+        assert_eq!(targets, vec!["cargo oxlint", "binary oxlint"]);
 
         let err = select_entries(&wanted, &names(&["rsconstruct"])).unwrap_err();
         assert!(err.to_string().contains("rsconstruct"), "{err}");
@@ -1249,10 +1199,11 @@ mod tests {
         assert_eq!(binary_version(&deb), None);
     }
 
-    /// A lockfile owns its packages only when install-deps installs from
-    /// it. With `npm_source = "package-json"`, a package-lock.json on disk
+    /// package-lock.json owns its packages only when `tool install project`
+    /// installs from it. With `npm_source = "package-json"`, one on disk
     /// pins nothing, so the packages it names must still be locked here —
-    /// before this, `tool lock` dropped them and they floated.
+    /// before this, `tool lock` dropped them and they floated. uv.lock is
+    /// always the source of the repo's .venv, so it always owns its pins.
     #[test]
     fn lockfiles_own_packages_only_when_they_are_the_source() {
         let tmp = tempfile::TempDir::new().unwrap();
@@ -1277,12 +1228,32 @@ mod tests {
 
         let floating = crate::config::DependenciesConfig {
             npm_source: crate::config::NpmSource::PackageJson,
-            pip_source: crate::config::PipSource::Pyproject,
             ..Default::default()
         };
-        assert_eq!(
-            lockfile_owned(&floating, tmp.path()).unwrap(),
-            LockfileOwned::default()
-        );
+        let owned = lockfile_owned(&floating, tmp.path()).unwrap();
+        assert!(owned.npm.is_empty(), "{owned:?}");
+        assert_eq!(owned.pip.iter().collect::<Vec<_>>(), vec!["ruff"]);
+    }
+
+    /// A Python tool a processor runs must be pinned by uv.lock: the repo's
+    /// .venv is uv's, so pyproject.toml is the one place to declare it.
+    /// Pinned, it is left to uv.lock and not locked here.
+    #[test]
+    fn python_tools_must_be_pinned_by_uv_lock() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let processors = crate::builder::create_all_default_processors().unwrap();
+        let ruff = "processor.checker.ruff";
+        let deps = crate::config::DependenciesConfig::default();
+
+        let err = collect_wanted(&processors, &|p| p == ruff, &deps, tmp.path()).unwrap_err();
+        assert!(err.to_string().contains("uv add --dev ruff"), "{err}");
+
+        fs::write(
+            tmp.path().join("uv.lock"),
+            "version = 1\n\n[[package]]\nname = \"ruff\"\nversion = \"0.14.0\"\nsource = { registry = \"https://pypi.org/simple\" }\n",
+        )
+        .unwrap();
+        let wanted = collect_wanted(&processors, &|p| p == ruff, &deps, tmp.path()).unwrap();
+        assert_eq!(wanted, Wanted::default());
     }
 }

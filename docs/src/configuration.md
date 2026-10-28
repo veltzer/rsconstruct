@@ -53,11 +53,10 @@ viewer = "google-chrome"  # Command to open graph files (default: platform-speci
 shells = ["bash"]
 
 [dependencies]
-pip = ["pyyaml", "jinja2"]    # Python packages
-npm = ["eslint", "prettier"]  # Node.js packages
-gem = ["mdl"]                 # Ruby gems
+npm = ["eslint", "prettier"]  # Node.js packages, into .rsconstruct/tools
+gem = ["mdl"]                 # Ruby gems, into .rsconstruct/tools
 cargo = ["cargo-deny"]        # Crates from crates.io, into .rsconstruct/tools
-system = ["pandoc", "graphviz"]  # System packages (checked but not auto-installed)
+system = ["pandoc", "graphviz"]  # System packages, onto the machine
 
 [pages]
 dir = "out/web"  # Directory published to GitHub Pages (omit the section entirely for non-Pages repos)
@@ -422,74 +421,48 @@ catch.
 
 ### `[dependencies]`
 
-Declare project dependencies by package manager. Used by `rsconstruct doctor` to verify availability and `rsconstruct tool install-deps` to install missing packages.
+Declare project dependencies by package manager. Used by `rsconstruct doctor` to verify availability, and by `rsconstruct tool install machine` (the `system` list) and `rsconstruct tool install project` (everything else) to install missing packages. There is no Python list: a project's Python packages are declared in `pyproject.toml` and pinned by `uv.lock` (see below).
 
 | Key | Type | Default | Description |
 |---|---|---|---|
-| `pip` | array of strings | `[]` | Python packages to install via `pip install`. Supports version specifiers (e.g., `"ruff>=0.4"`). |
-| `pip_source` | string | `"uv-lock"` | Where the Python package set comes from: `"uv-lock"` installs the pinned closure from `uv.lock`; `"pyproject"` resolves the names pyproject.toml declares at install time. |
-| `python_installer` | string | `"uv"` | Which tool installs the Python package set: `"uv"` runs `uv pip install --python python3`; `"pip"` runs `pip install`. See below for why the two differ on the same lock. |
 | `npm` | array of strings | `[]` | Node.js command-line packages installed into the project's tool directory, `.rsconstruct/tools` (see [Tool Lock](tool-lock.md#where-tools-are-installed)), on top of the project's own package.json set. |
 | `npm_source` | string | `"package-lock"` | Where the project's Node.js package set comes from: `"package-lock"` installs the closure package-lock.json pins with `npm ci`; `"package-json"` resolves package.json's ranges with `npm install`. |
 | `gem` | array of strings | `[]` | Ruby gems installed into the project's tool directory, `.rsconstruct/tools`. |
 | `cargo` | array of strings | `[]` | Crates from crates.io installed into the project's tool directory with `cargo install --locked`, by crate name (e.g. `"cargo-deny"`, `"cargo-nextest"`, `"mdbook"`). Bare names; rsconstruct.lock pins the version. See below. |
 | `system` | array of strings | `[]` | System packages installed via the detected package manager (`apt-get`, `dnf`, `pacman`, or `brew`). |
 
-#### Python dependencies come from `uv.lock` by default
+#### Python packages live in the repo's `.venv`, owned by uv
 
-In the default `pip_source = "uv-lock"` mode, `install-deps` and `doctor`
-take the Python package set from `uv.lock`: the exact pinned closure —
-including transitive dependencies — that `uv lock` resolved, so CI installs
-are reproducible instead of floating to whatever pip resolves that day. Only
-registry packages are read from the lock; the project's own entry is
-skipped, and any other source kind (git, path) is an error. A project whose
-`pyproject.toml` declares Python dependencies but has no `uv.lock` is an
-error: run `uv lock`, or opt out per repo with `pip_source = "pyproject"`.
+A project has one Python environment: the repo's `.venv`, built by `uv sync`
+from `uv.lock`. It holds the code's dependencies and the Python tools its
+processors run (ruff, pytest, pyrefly) together, all declared in
+`pyproject.toml` — tools in the dev dependency group — and pinned by
+`uv.lock`, the exact closure including transitive dependencies. `tool install
+project` runs `uv sync --locked`, which fails when the lock is out of date
+with pyproject.toml instead of quietly re-resolving it. rsconstruct never
+runs pip into that venv itself: `uv sync` would remove anything uv.lock does
+not list, and a pip install could shift a version the code has locked.
 
-In `pip_source = "pyproject"` mode the set is instead the dependency *names*
-pyproject.toml declares, resolved by pip at install time:
+Consequences:
 
-- `[project].dependencies`
-- every list in `[project.optional-dependencies]`
-- every [PEP 735](https://peps.python.org/pep-0735/) `[dependency-groups]`
-  list (entries that are `{include-group = "..."}` tables are skipped, since
-  every group is read anyway)
+- A Python tool an enabled processor runs that `uv.lock` does not pin is an
+  error naming the fix, `uv add --dev <tool>`. rsconstruct.lock never pins a
+  Python package.
+- A `pyproject.toml` that declares Python dependencies with no `uv.lock`
+  beside it is an error: run `uv lock`. The declared dependencies are
+  `[project].dependencies`, every list in `[project.optional-dependencies]`,
+  and every [PEP 735](https://peps.python.org/pep-0735/) `[dependency-groups]`
+  list.
+- `uv` itself is a machine install (`tool install machine` provides it for
+  a project with Python dependencies), since it builds the `.venv` and so
+  cannot come from it.
+- Every rsconstruct invocation in a project prepends `.venv/bin` to its own
+  `PATH`, so `python3`, `ruff` and `pytest` resolve to the locked copies with
+  no venv activated.
 
-In both modes `[dependencies].pip` entries merge in front and the result is
-deduplicated by PEP 503-normalized distribution name plus extras, so a
-`[dependencies].pip` entry wins over a lock or pyproject one. Use
-`[dependencies].pip` for repos without a `pyproject.toml` and for packages
-CI needs that the project itself does not declare.
-
-#### uv installs the Python set by default
-
-With the default `python_installer = "uv"`, `install-deps` hands the Python
-set to `uv pip install --python python3` — targeting whichever interpreter
-`python3` on PATH resolves to, the same environment a bare `pip install`
-would touch. Installing a uv-produced lock with uv matters for two reasons:
-
-- **Requires-Python upper bounds.** uv deliberately ignores a package's
-  declared *upper* Requires-Python bound when resolving (upper bounds are
-  almost always stale metadata), so `uv lock` can pin a version whose bound
-  excludes the running interpreter. uv installs that pin; pip enforces the
-  bound and refuses it with "No matching distribution found".
-- **Environment markers.** In uv-lock mode the pins come from `uv export`
-  (run with `--frozen`, so an out-of-sync lock is an error, not a silent
-  re-resolve), which annotates platform-conditional packages with markers
-  like `pywin32==312 ; sys_platform == 'win32'`. uv skips a pin whose
-  marker does not match the current platform, where the flattened lock
-  closure would ask for another platform's package and fail.
-
-uv also audits the whole installed set itself in one pass, so uv mode skips
-the per-package `pip show` preflight probing.
-
-When uv is not on PATH and there is Python work to do, `install-deps`
-bootstraps it with `pip install uv` first — CI runner images ship pip but
-not necessarily uv, and the consuming repo's workflow should not need to
-know which installer rsconstruct uses.
-
-Set `python_installer = "pip"` to keep the pre-uv behavior: per-package
-`pip show` probing followed by `pip install` of the flattened set.
+`doctor` reads the same closure from `uv.lock` (registry packages only; the
+project's own entry is skipped, and any other source kind is an error) and
+asks the interpreter whether each is installed.
 
 #### Node.js dependencies come from `package-lock.json` by default
 
@@ -497,7 +470,7 @@ The Node side works the same way. A project's Node.js packages are declared
 in its `package.json` (`dependencies`, `devDependencies` and
 `optionalDependencies` — the three sections `npm ci` installs) and pinned by
 the `package-lock.json` beside it. In the default `npm_source =
-"package-lock"` mode, `install-deps` runs `npm ci` in the project root, which
+"package-lock"` mode, `tool install project` runs `npm ci` in the project root, which
 installs exactly the lock's closure into the project's own `node_modules/`
 and fails if the lock is out of sync with the manifest instead of silently
 re-resolving. A `package.json` that declares packages but has no
@@ -516,7 +489,7 @@ prepends the project's `node_modules/.bin`, when it exists, to its own
 `PATH` at startup (the same mechanism that appends the user gem bin dirs, see
 `rsconstruct tool` in the commands reference). Prepended, so the version the
 lock pins wins over a global install of the same tool — processors keep
-invoking `stylelint` or `mmdc` plainly, and `tool install` sees the locked
+invoking `stylelint` or `mmdc` plainly, and `tool install machine` sees the locked
 copy and does not install a global one. This is what `npm run` does for
 scripts.
 
@@ -532,7 +505,7 @@ A cargo subcommand or other Rust-built tool a build runs (`cargo-deny`,
 package registry like PyPI or npm. So these are declared as a plain list
 under `cargo`, by crate name, and are not entries in the tool registry.
 The manifest carries bare names, as everywhere else in the fleet, and
-rsconstruct.lock pins each crate's version. `install-deps` installs each
+rsconstruct.lock pins each crate's version. `tool install project` installs each
 crate into the project's tool directory, `.rsconstruct/tools`, with `cargo
 install --locked --root`: `--locked` builds the crate with the Cargo.lock it
 was published with, so a given crate version yields the same binary
@@ -552,21 +525,25 @@ belong in this list.
 
 #### Install order
 
-`rsconstruct tool install-deps` always installs in this fixed order:
+A project is set up with `rsconstruct tool install machine` and then
+`rsconstruct tool install project`, which together install in this fixed
+order:
 
-1. **`system`** — OS packages (apt, dnf, pacman, brew)
-2. **`pip`** — Python packages
-3. **`npm`** — Node.js packages (the global `npm` list, then the project's `npm ci`)
-4. **`gem`** — Ruby gems
-5. **`cargo`** — crates from crates.io
+1. **`system`** — OS packages (apt, dnf, pacman, brew), then the other
+   machine installs (`tool install machine`)
+2. **Python** — `uv sync` into the repo's `.venv` (`tool install project`,
+   from here on)
+3. **Node.js** — the project's `npm ci`
+4. **`.rsconstruct/tools`** — the locked crates, npm packages, gems and
+   release binaries
 
-This order is deliberate and must not be changed. Language-level packages frequently build native extensions that link against system libraries at install time. For example, installing `manim` via pip pulls in `manimpango`, which compiles a C extension and uses `pkg-config` to find `pangocairo` — so `libpango1.0-dev` must already be on the system before `pip install` runs. Running `pip` (or `gem`, or `npm`) before `system` causes wheel/extension builds to fail with messages like `Package 'pangocairo' was not found`.
+This order is deliberate and must not be changed. Language-level packages frequently build native extensions that link against system libraries at install time. For example, installing `manim` pulls in `manimpango`, which compiles a C extension and uses `pkg-config` to find `pangocairo` — so `libpango1.0-dev` must already be on the system before `uv sync` runs. Installing Python (or gem, or npm) packages before `system` causes wheel/extension builds to fail with messages like `Package 'pangocairo' was not found`. That is why `tool install machine` comes first.
 
-The keys inside `[dependencies]` may appear in any order in `rsconstruct.toml`; the install order is enforced by `install-deps` regardless.
+The keys inside `[dependencies]` may appear in any order in `rsconstruct.toml`; the install order is enforced regardless.
 
 #### `eatmydata` wrapping
 
-When [`eatmydata`](https://www.flamingspork.com/projects/libeatmydata/) is installed on the system *and* `CI=true` is in the environment, both `rsconstruct tool install` and `rsconstruct tool install-deps` wrap their `apt`/`dnf`/`pacman` invocations with it. `eatmydata` no-op's `fsync()` for the wrapped process, which speeds up package installs by 3–10×.
+When [`eatmydata`](https://www.flamingspork.com/projects/libeatmydata/) is installed on the system *and* `CI=true` is in the environment, `rsconstruct tool install machine` wraps its `apt`/`dnf`/`pacman` invocations with it. `eatmydata` no-op's `fsync()` for the wrapped process, which speeds up package installs by 3–10×.
 
 The trade-off is loss-on-power-cut: any package files written during the install are not flushed to disk, so a power loss mid-install can leave the package database inconsistent. That's fine on transient CI hosts and wrong on developer workstations — hence the `CI=true` gate.
 
@@ -580,7 +557,7 @@ If `eatmydata` is not installed, the commands run unwrapped — no error, no war
 | ------------------------------------------- | ---------------------------------------------------- |
 | Use the wrap (the CI default)               | Set `CI=true` and have eatmydata installed           |
 | Skip the wrap in CI                         | Unset `CI` (or set it to anything other than `true`) |
-| Use the wrap outside CI                     | Run with `CI=true rsconstruct tool install-deps`    |
+| Use the wrap outside CI                     | Run with `CI=true rsconstruct tool install machine` |
 | Skip the wrap for a single invocation       | Pass `--no-eatmydata`                                |
 
 The CLI flag `--no-eatmydata` always wins. Otherwise the policy is driven entirely by `CI=true`. There is no `rsconstruct.toml` field for this — the env var is the knob.

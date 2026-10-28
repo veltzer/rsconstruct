@@ -4,7 +4,8 @@ use std::fs;
 
 /// A `[dependencies] cargo` entry is a crate installed into the project's
 /// tool directory, so that is where doctor looks: one there is ok, one
-/// absent is reported missing, and the fix doctor names is install-deps.
+/// absent is reported missing, and the fix doctor names is `tool install
+/// project`.
 #[test]
 fn doctor_checks_cargo_dependencies_in_the_project_tool_directory() {
     let temp_dir = setup_project_with_config(
@@ -34,12 +35,13 @@ fn doctor_checks_cargo_dependencies_in_the_project_tool_directory() {
     let missing = find("rsconstruct-fake-missing-crate");
     assert_eq!(missing["status"], "fail");
     assert_eq!(missing["category"], "dependency");
-    assert_eq!(missing["install_hint"], "rsconstruct tool install-deps");
+    assert_eq!(missing["install_hint"], "rsconstruct tool install project");
 }
 
 /// A package.json dependency is a project-local install: doctor judges it
 /// by the project's own node_modules, not by a global copy or a binary on
-/// PATH, and the fix it names is install-deps (which runs `npm ci`).
+/// PATH, and the fix it names is `tool install project` (which runs `npm
+/// ci`).
 #[test]
 fn doctor_checks_package_json_dependencies_in_node_modules() {
     let temp_dir =
@@ -76,7 +78,7 @@ fn doctor_checks_package_json_dependencies_in_node_modules() {
     assert_eq!(find("rsconstruct-fake-installed")["status"], "ok");
     let missing = find("rsconstruct-fake-missing");
     assert_eq!(missing["status"], "fail");
-    assert_eq!(missing["install_hint"], "rsconstruct tool install-deps");
+    assert_eq!(missing["install_hint"], "rsconstruct tool install project");
 }
 
 /// The lock is what makes the install reproducible, so a manifest that
@@ -111,12 +113,13 @@ fn doctor_rejects_package_json_without_lock() {
 /// dictionary) showed as missing even when installed, and any binary that
 /// happens to share a package's name showed as installed without the package
 /// being on. The probe must go through the package manager, the same one
-/// `tool install-deps` uses.
+/// `tool install machine` uses.
 ///
 /// The test plants a fake binary on PATH whose name is not a real package.
 /// The old which()-based doctor reported it ok; the package-manager probe
 /// must report it missing. This assumes a supported package manager exists
-/// (dpkg/rpm/pacman/brew) — on a machine without one, `install-deps` bails
+/// (dpkg/rpm/pacman/brew) — on a machine without one, `tool install
+/// machine` bails
 /// anyway, so that environment is already unsupported.
 #[test]
 fn doctor_system_dependency_is_probed_as_package_not_tool() {
@@ -170,8 +173,8 @@ fn doctor_system_dependency_is_probed_as_package_not_tool() {
     );
     assert_eq!(check["category"], "dependency");
     assert_eq!(
-        check["install_hint"], "rsconstruct tool install-deps",
-        "the fix for a missing system dependency is install-deps, not a tool install",
+        check["install_hint"], "rsconstruct tool install machine",
+        "the fix for a missing system dependency is a machine install",
     );
 }
 
@@ -226,10 +229,10 @@ fn doctor_skips_tools_of_disabled_processors() {
 /// Python and npm dependencies are judged the way `tool check` judges them,
 /// not by the exit status of a package manager:
 ///
-/// - a pip package is asked of the interpreter (`importlib.metadata`), since
-///   a uv-managed venv — the default installer's — has no pip at all. The
-///   fake `pip` here claims every package is installed; the interpreter
-///   knows the declared name is not;
+/// - a Python package (here pinned by uv.lock) is asked of the interpreter
+///   (`importlib.metadata`), since a uv-managed venv has no pip at all.
+///   The fake `pip` here claims every package is installed; the
+///   interpreter knows the pinned name is not;
 /// - an `[dependencies].npm` entry is installed into the project's tool
 ///   directory, so it is looked for there. The fake `npm` lists one package
 ///   globally and claims success for any other query; a global copy does
@@ -237,10 +240,15 @@ fn doctor_skips_tools_of_disabled_processors() {
 #[test]
 fn doctor_probes_pip_through_python_and_npm_in_the_project() {
     let temp_dir = setup_project_with_config(
-        "[processor.generator.tera]\nsrc_dirs = [\"tera.templates\"]\n\n[dependencies]\npip = [\"rsconstruct-fake-missing-dist\"]\nnpm = [\"rsconstruct-fake-global-pkg\", \"rsconstruct-fake-project-pkg\"]\n",
+        "[processor.generator.tera]\nsrc_dirs = [\"tera.templates\"]\n\n[dependencies]\nnpm = [\"rsconstruct-fake-global-pkg\", \"rsconstruct-fake-project-pkg\"]\n",
     );
     let project_path = temp_dir.path();
     fs::create_dir_all(project_path.join("tera.templates")).unwrap();
+    fs::write(
+        project_path.join("uv.lock"),
+        "version = 1\n\n[[package]]\nname = \"rsconstruct-fake-missing-dist\"\nversion = \"1.0.0\"\nsource = { registry = \"https://pypi.org/simple\" }\n",
+    )
+    .unwrap();
     fs::create_dir_all(
         project_path.join(".rsconstruct/tools/pkgs/npm/rsconstruct-fake-project-pkg@1.0.0"),
     )
@@ -299,5 +307,5 @@ fn doctor_probes_pip_through_python_and_npm_in_the_project() {
         global["status"], "fail",
         "a package only in the global tree is not installed for the project: {global}"
     );
-    assert_eq!(global["install_hint"], "rsconstruct tool install-deps");
+    assert_eq!(global["install_hint"], "rsconstruct tool install project");
 }

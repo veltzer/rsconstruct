@@ -2,12 +2,12 @@ use std::collections::BTreeMap;
 // Aliased: `std::io::Write` is also in scope here (for stdout flushing), and
 // both traits define `write!`/`writeln!` methods.
 use super::{Builder, sorted_keys};
-use crate::cli::{GraphFormat, ToolAction};
+use crate::cli::{GraphFormat, InstallAction, ToolAction};
 use crate::color;
 use crate::json_output;
 use crate::tables;
 use crate::tool_lock;
-use anyhow::{Context, Result, bail};
+use anyhow::{Context, Result};
 use std::fmt::Write as FmtWrite;
 use std::io::Write;
 use std::process::Command;
@@ -40,7 +40,7 @@ pub(super) fn is_system_package_installed(
         // printing "unknown ok not-installed" or "deinstall ok config-files".
         // Only "install ok installed" means the files are actually on disk.
         //
-        // Trusting the exit code made install-deps silently skip aspell-en on a
+        // Trusting the exit code made an install silently skip aspell-en on a
         // runner that had neither aspell nor aspell-en, so apt was never asked
         // for it and the spellcheck processor then failed on missing
         // /usr/lib/aspell/en.dat. Packages that ship no binary of their own are
@@ -85,50 +85,6 @@ fn dpkg_status_means_installed(status: &str) -> bool {
 /// so skipping it here does not weaken strictness.
 fn is_installable_tool_name(tool: &str) -> bool {
     !tool.contains('/')
-}
-
-/// Whether a package manager reports `pkg` as already installed.
-///
-/// One helper for the pip/npm/gem probes, which were four copies of the same
-/// spawn-and-discard-output block. Routed through the central runner so a
-/// long `install-deps` preflight stays interruptible.
-fn package_probe_succeeds(
-    ctx: &crate::build_context::BuildContext,
-    program: &str,
-    args: &[&str],
-) -> bool {
-    let mut cmd = Command::new(program);
-    cmd.args(args);
-    crate::processor::run_command_capture(ctx, &cmd).is_ok_and(|o| o.status.success())
-}
-
-/// The project's pinned Python closure as `uv export` renders it from
-/// uv.lock — one requirement per line, environment markers included.
-/// `--frozen` keeps the lock untouched (and fails when it is out of sync
-/// with pyproject.toml instead of silently re-resolving).
-fn uv_export_reqs(ctx: &crate::build_context::BuildContext) -> Result<Vec<String>> {
-    let mut cmd = Command::new("uv");
-    cmd.args([
-        "export",
-        "--frozen",
-        "--no-hashes",
-        "--no-annotate",
-        "--no-header",
-        "--no-emit-project",
-    ]);
-    let out = crate::processor::run_command_capture(ctx, &cmd).context(
-        "failed to run `uv export` — is uv installed? (`rsconstruct tool install uv`, \
-                  or set `python_installer = \"pip\"` under [dependencies] to install with pip)",
-    )?;
-    if !out.status.success() {
-        bail!(
-            "`uv export` failed: {}",
-            String::from_utf8_lossy(&out.stderr).trim()
-        );
-    }
-    Ok(crate::config::parse_uv_export(&String::from_utf8_lossy(
-        &out.stdout,
-    )))
 }
 
 /// Return the language runtime category for a tool.
@@ -225,12 +181,11 @@ fn project_wanted(
 /// The project's lock, synced for an install: filled in outside CI, required
 /// to match in CI. Also returns the locked tools installed outside the
 /// project's tool directory whose installed copy is not the locked one and
-/// may be replaced: Python packages when `python3` is the project's own
-/// virtualenv (or in CI), `.deb` binaries only in CI — outside it they
-/// belong to the machine, and replacing one would change it under every
-/// other project. Those left alone are reported, never passed off as
-/// installed. The project's tool directory is not judged here: syncing it
-/// with the lock is what installing does.
+/// may be replaced: `.deb` binaries, only in CI — outside it they belong to
+/// the machine, and replacing one would change it under every other
+/// project. Those left alone are reported, never passed off as installed.
+/// The project's tool directory is not judged here: syncing it with the
+/// lock is what installing does.
 fn lock_for_install(
     ctx: &crate::build_context::BuildContext,
     wanted: &tool_lock::Wanted,
@@ -243,23 +198,17 @@ fn lock_for_install(
     let synced = tool_lock::sync(ctx, wanted, mode, verbose)?;
     synced.report();
     let in_ci = mode == tool_lock::LockMode::Locked;
-    let python_replaceable = in_ci || crate::tools::python_env_is_inside(std::path::Path::new("."));
     let mut drift = std::collections::BTreeSet::new();
     for m in tool_lock::mismatches(ctx, &synced.lock, wanted) {
-        let (replaceable, why_not) = match m.method.as_str() {
-            "pip" => (
-                python_replaceable,
-                "python3 is not this project's virtualenv",
-            ),
-            "binary" if !crate::tools::binary_is_repo_local(&m.name) => {
-                (in_ci, "a system package, replaced only in CI")
-            }
-            _ => continue,
-        };
-        if replaceable {
+        if m.method != "binary" || crate::tools::binary_is_repo_local(&m.name) {
+            continue;
+        }
+        if in_ci {
             drift.insert((m.method, m.name));
         } else if m.installed.is_some() {
-            crate::output::warn(&format!("{m}: left alone ({why_not})"));
+            crate::output::warn(&format!(
+                "{m}: left alone (a system package, replaced only in CI)"
+            ));
         }
     }
     Ok((synced.lock, drift))
@@ -278,6 +227,18 @@ impl ProjectTools {
         self.packages
             .iter()
             .any(|p| p.method == method && p.name == package)
+    }
+
+    /// The tool directory with `package` added to what it already holds and
+    /// nothing else installed: `tool install project NAME`.
+    fn with_only(self, method: &str, package: &str) -> Self {
+        let packages: std::collections::BTreeSet<crate::tool_store::Package> = self
+            .packages
+            .into_iter()
+            .filter(|p| (p.method == method && p.name == package) || self.plan.present.contains(p))
+            .collect();
+        let plan = crate::tool_store::plan(std::path::Path::new("."), &packages);
+        Self { packages, plan }
     }
 }
 
@@ -415,18 +376,6 @@ fn confirm() -> Result<bool> {
     Ok(matches!(answer.trim().to_lowercase().as_str(), "y" | "yes"))
 }
 
-/// The key a `(method, package)` install has in a mismatch set: Python
-/// names are normalized there, like in the lock.
-fn drift_key(method: &str, package: &str) -> (String, String) {
-    match method {
-        "pip" | "uv" => (
-            "pip".to_string(),
-            crate::config::normalized_distribution_name(package),
-        ),
-        _ => (method.to_string(), package.to_string()),
-    }
-}
-
 impl Builder {
     /// Check that rsconstruct.lock covers the processors `is_active` selects
     /// and that their tools are installed at the locked versions. Run by
@@ -481,35 +430,6 @@ fn run_tools_command(
         &action,
         ToolAction::ListConfigured { methods: true, .. } | ToolAction::List { methods: true }
     );
-    let install_interactive = matches!(
-        &action,
-        ToolAction::Install {
-            interactive: true,
-            ..
-        }
-    );
-    let install_no_eatmydata = matches!(
-        &action,
-        ToolAction::Install {
-            no_eatmydata: true,
-            ..
-        }
-    );
-    // eatmydata speeds up apt/dnf/pacman by no-op'ing fsync; the trade-off
-    // is loss-on-power-cut. Off by default; the post-config phase hook
-    // `eatmydata_ci_default` flips it on when CI=true. Users who want it
-    // off in CI should unset CI; users who want it on outside CI should
-    // run with CI=true. The CLI flag --no-eatmydata always wins.
-    // `--all` is config-independent by design, so there may be no Config for
-    // the `eatmydata_ci_default` hook to have run against. Apply the same
-    // CI=true policy directly, otherwise the one caller that most wants the
-    // speedup (a CI runner with no rsconstruct.toml) would never get it.
-    let install_all = matches!(&action, ToolAction::Install { all: true, .. });
-    let config_enables_eatmydata = builder.is_some_and(|b| b.config.dependencies.eatmydata)
-        || (install_all && crate::config::running_in_ci());
-    let install_use_eatmydata =
-        !install_no_eatmydata && config_enables_eatmydata && which::which("eatmydata").is_ok();
-
     let mut tool_map: BTreeMap<String, Vec<String>> = BTreeMap::new();
     for name in sorted_keys(processors) {
         if !show_all && !is_enabled(name) {
@@ -805,585 +725,533 @@ fn run_tools_command(
                 }
             }
         }
-        ToolAction::Install { name, all, .. } => {
-            // In a project, installs follow rsconstruct.lock. `--all` is the
-            // config-independent registry sweep and has no lock to follow.
-            let (lock, drift, wanted) = match builder {
-                Some(b) if !all => {
-                    let wanted = project_wanted(b, processors, is_enabled)?;
-                    let (lock, drift) = lock_for_install(ctx, &wanted, verbose)?;
-                    (Some(lock), drift, Some(wanted))
-                }
-                _ => (None, std::collections::BTreeSet::new(), None),
-            };
-            // A plain `tool install` in a project syncs the project's tool
-            // directory with the lock (crates, npm packages, gems, release
-            // binaries) and installs only the rest onto the machine. A named
-            // tool or `--all` is a machine install and does not touch it.
-            let project = match (builder, &lock, &wanted) {
-                (Some(b), Some(lock), Some(wanted)) if name.is_none() => {
-                    let project = project_tools(b, wanted, lock)?;
-                    print_project_tools(&project);
-                    if install_interactive && project.plan.has_work() && !confirm()? {
-                        println!("Aborted.");
-                        return Ok(());
-                    }
-                    apply_project_tools(&project, lock, verbose)?;
-                    Some(project)
-                }
-                _ => None,
-            };
-            // Collect missing tools with their install info
-            let missing_tools: Vec<(&str, &crate::tools::InstallMethod)> = if all {
-                // Registry-wide: every tool rsconstruct knows how to install,
-                // independent of any config. Mirrors `tool list`, which is the
-                // registry-wide counterpart of `tool list-configured`.
-                //
-                // Nothing is skipped. A tool with no automatable method is a
-                // hard error, not a warning to scroll past: --all claiming
-                // success while a tool is absent is exactly the silent-gap
-                // failure the strict-by-default rule exists to prevent.
-                let mut missing = Vec::new();
-                let mut manual_only: Vec<&crate::tools::ToolInfo> = Vec::new();
-                for info in crate::tools::all_tools() {
-                    if which::which(info.name).is_ok() {
-                        continue;
-                    }
-                    // The same choice every other install path makes: the
-                    // method in the slot of the tool's preferred target. A
-                    // tool with no slot has none (the test
-                    // `every_slot_holds_a_method_for_its_target` rules that
-                    // out).
-                    match info.preferred_method() {
-                        Some(method) => missing.push((info.name, method)),
-                        None => manual_only.push(info),
-                    }
-                }
-                if !manual_only.is_empty() {
-                    eprintln!(
-                        "{}: {} tool(s) have no automatable install method:",
-                        color::red("Error"),
-                        manual_only.len(),
-                    );
-                    for info in &manual_only {
-                        let instructions = info
-                            .alternatives
-                            .first()
-                            .map_or("no install method known", |m| m.package);
-                        eprintln!("  {} — {}", color::bold(info.name), instructions);
-                    }
-                    return Err(crate::exit_code::RsconstructError::new(
-                        crate::exit_code::RsconstructExitCode::ToolError,
-                        format!(
-                            "Cannot install {} tool(s) automatically: {}",
-                            manual_only.len(),
-                            manual_only
-                                .iter()
-                                .map(|i| i.name)
-                                .collect::<Vec<_>>()
-                                .join(", "),
-                        ),
-                    )
-                    .into());
-                }
-                if missing.is_empty() {
-                    println!(
-                        "{}",
-                        color::green("All registry tools are already installed.")
-                    );
-                    return Ok(());
-                }
-                missing
-            } else if let Some(ref name) = name {
-                // Install a specific tool
-                if let Some(info) = crate::tools::tool_info(name) {
-                    if let Some(method) = info.preferred_method() {
-                        vec![(info.name, method)]
-                    } else {
-                        eprintln!("{}: No install method for '{}'", color::red("Error"), name);
-                        return Err(crate::exit_code::RsconstructError::new(
-                            crate::exit_code::RsconstructExitCode::ToolError,
-                            format!("No install method known for tool '{name}'"),
-                        )
-                        .into());
-                    }
-                } else {
-                    eprintln!("{}: Unknown tool '{}'", color::red("Error"), name);
-                    return Err(crate::exit_code::RsconstructError::new(
-                        crate::exit_code::RsconstructExitCode::ToolError,
-                        format!("Unknown tool '{name}'"),
-                    )
-                    .into());
-                }
-            } else {
-                // Build tool list from the enabled processors. A stanza with
-                // `enabled = false` is skipped: it is kept precisely so its
-                // tool need not be installed. auto_detect is not checked
-                // because the tool itself may need to be installed before
-                // detection can succeed.
-                let mut install_tools: BTreeMap<String, Vec<String>> = BTreeMap::new();
-                for name in sorted_keys(processors) {
-                    if !is_enabled(name) {
-                        continue;
-                    }
-                    for tool in processors[name].required_tools() {
-                        let procs = install_tools.entry(tool).or_default();
-                        if !procs.contains(name) {
-                            procs.push(name.clone());
-                        }
-                    }
-                }
-
-                // Collect missing tools
-                let mut missing = Vec::new();
-                let mut any_unknown = false;
-                for tool_name in install_tools.keys() {
-                    if !is_installable_tool_name(tool_name) {
-                        continue;
-                    }
-                    // Present on PATH counts as installed, unless it was
-                    // found at a version other than the locked one that may
-                    // be replaced (see `lock_for_install`). A tool the
-                    // project's tool directory holds was synced above.
-                    let info = crate::tools::tool_info(tool_name);
-                    let method = info.and_then(crate::tools::ToolInfo::preferred_method);
-                    if method.is_some_and(|m| {
-                        project
-                            .as_ref()
-                            .is_some_and(|p| p.covers(m.method, m.package))
-                    }) {
-                        continue;
-                    }
-                    let drifted =
-                        method.is_some_and(|m| drift.contains(&drift_key(m.method, m.package)));
-                    if which::which(tool_name).is_ok() && !drifted {
-                        continue;
-                    }
-                    if let (Some(info), Some(method)) = (info, method) {
-                        missing.push((info.name, method));
-                    } else {
-                        eprintln!(
-                            "{}: No install method for '{}'",
-                            color::red("Error"),
-                            tool_name
-                        );
-                        any_unknown = true;
-                    }
-                }
-                if any_unknown {
-                    return Err(crate::exit_code::RsconstructError::new(
-                        crate::exit_code::RsconstructExitCode::ToolError,
-                        "Some tools have no known install procedure",
-                    )
-                    .into());
-                }
-                if missing.is_empty() {
-                    println!("{}", color::green("All tools are already installed."));
-                    return Ok(());
-                }
-                missing
-            };
-
-            // Group by install method for batch installation. Methods
-            // that don't batch (binary, manual) keep one entry per package.
-            // Each package is requested at its locked version when the
-            // project's lock has one.
-            let mut by_method: BTreeMap<&str, Vec<String>> = BTreeMap::new();
-            for (_tool_name, method) in &missing_tools {
-                let package = lock.as_ref().map_or_else(
-                    || method.package.to_string(),
-                    |l| l.pinned(method.method, method.package),
-                );
-                by_method.entry(method.method).or_default().push(package);
-            }
-
-            // Display the install plan
-            println!(
-                "Missing {} tool(s), grouped by install method:",
-                missing_tools.len()
-            );
-            println!();
-
-            let method_order = &[
-                "pip", "apt", "brew", "npm", "cargo", "gem", "snap", "binary", "manual",
-            ];
-            let ctx = crate::tools::InstallCtx {
-                verbose,
-                use_eatmydata: install_use_eatmydata,
-                binary_pins: lock.as_ref().map(|l| l.binary.clone()).unwrap_or_default(),
-            };
-            let mut any_failed = false;
-            for method in method_order {
-                let Some(packages) = by_method.get(method) else {
-                    continue;
+        ToolAction::Install { target } => match target {
+            InstallAction::Machine {
+                name,
+                all,
+                interactive,
+                no_eatmydata,
+            } => {
+                // eatmydata speeds up apt/dnf/pacman by no-op'ing fsync; the
+                // trade-off is loss-on-power-cut. Off by default; the
+                // post-config phase hook `eatmydata_ci_default` flips it on
+                // when CI=true. Users who want it off in CI should unset CI;
+                // users who want it on outside CI should run with CI=true.
+                // The CLI flag --no-eatmydata always wins. `--all` is
+                // config-independent by design, so there may be no Config for
+                // the hook to have run against. Apply the same CI=true policy
+                // directly, otherwise the one caller that most wants the
+                // speedup (a CI runner with no rsconstruct.toml) would never
+                // get it.
+                let config_enables_eatmydata = builder
+                    .is_some_and(|b| b.config.dependencies.eatmydata)
+                    || (all && crate::config::running_in_ci());
+                let flags = InstallFlags {
+                    interactive,
+                    use_eatmydata: !no_eatmydata
+                        && config_enables_eatmydata
+                        && which::which("eatmydata").is_ok(),
+                    verbose,
                 };
-                let packages: Vec<&str> = packages.iter().map(String::as_str).collect();
-                println!(
-                    "  {} {}",
-                    color::bold(&format!("[{method}]")),
-                    packages.join(", ")
-                );
-                for argv in crate::tools::describe(method, &packages, &ctx.binary_pins) {
-                    println!("       {}", color::dim(&argv.join(" ")));
-                }
+                install_machine(
+                    ctx,
+                    processors,
+                    is_enabled,
+                    builder,
+                    name.as_deref(),
+                    all,
+                    &flags,
+                )?;
             }
-            println!();
-
-            // Non-interactive by default: CI and scripts are the common
-            // callers and neither can answer a prompt. `-i` opts into the
-            // confirmation, and declining it is a normal outcome, not an
-            // error — the user saw the command list and said no.
-            if install_interactive {
-                print!("Proceed? [y/N] ");
-                std::io::stdout()
-                    .flush()
-                    .context("Failed to flush stdout before install prompt")?;
-                let mut answer = String::new();
-                std::io::stdin()
-                    .read_line(&mut answer)
-                    .context("Failed to read install prompt answer")?;
-                let answer = answer.trim().to_lowercase();
-                if answer != "y" && answer != "yes" {
-                    println!("Aborted.");
-                    return Ok(());
-                }
-            }
-
-            for method in method_order {
-                let Some(packages) = by_method.get(method) else {
-                    continue;
+            InstallAction::Project { name, interactive } => {
+                let builder = builder.ok_or_else(|| {
+                    anyhow::anyhow!("tool install project requires a project with rsconstruct.toml")
+                })?;
+                let flags = InstallFlags {
+                    interactive,
+                    use_eatmydata: false,
+                    verbose,
                 };
-                let packages: Vec<&str> = packages.iter().map(String::as_str).collect();
-                match crate::tools::run(method, &packages, &ctx) {
-                    Ok(()) => println!(
-                        "{} [{}] {}",
-                        color::green("OK"),
-                        method,
-                        packages.join(", ")
-                    ),
-                    Err(e) => {
-                        // `{:#}`, not `{}`: the alternate form walks the
-                        // whole anyhow cause chain. Plain Display prints
-                        // only the outermost context, which turns a real
-                        // diagnosis ("... : http status: 403") back into a
-                        // bare "Failed to query GitHub releases API".
-                        println!(
-                            "{} [{}] {}: {:#}",
-                            color::red("FAILED"),
-                            method,
-                            packages.join(", "),
-                            e
-                        );
-                        any_failed = true;
-                    }
-                }
+                install_project(
+                    ctx,
+                    processors,
+                    is_enabled,
+                    builder,
+                    name.as_deref(),
+                    &flags,
+                )?;
             }
+        },
+    }
 
-            if any_failed {
-                return Err(crate::exit_code::RsconstructError::new(
-                    crate::exit_code::RsconstructExitCode::ToolError,
-                    "Some install commands failed",
-                )
-                .into());
-            }
-            println!("{}", color::green("All tools installed successfully."));
-        }
-        ToolAction::InstallDeps {
-            interactive,
-            no_eatmydata,
-        } => {
-            let builder = builder.ok_or_else(|| {
-                anyhow::anyhow!("install-deps requires a project with rsconstruct.toml")
-            })?;
-            let config = &builder.config.dependencies;
-            // Every package below is requested at its rsconstruct.lock
-            // version; in CI one installed at another version is reinstalled.
-            let wanted = project_wanted(builder, processors, is_enabled)?;
-            let (lock, drift) = lock_for_install(ctx, &wanted, verbose)?;
-            // eatmydata: off by default; turned on by the post-config
-            // phase hook when CI=true. CLI --no-eatmydata overrides.
-            // Wrap also requires eatmydata to be on PATH.
-            let use_eatmydata =
-                !no_eatmydata && config.eatmydata && which::which("eatmydata").is_ok();
+    Ok(())
+}
 
-            // The Python set comes from uv.lock by default (pyproject.toml
-            // in pyproject mode); [dependencies].pip entries merge in front.
-            // The uv installer (the default) takes the lock's pins from
-            // `uv export`, whose environment markers let uv skip other
-            // platforms' packages; the pip installer flattens the lock.
-            let python_installer = config.python_installer;
-            let pip_deps = match python_installer {
-                crate::config::PythonInstaller::Uv => {
-                    // Bootstrap uv with pip when it is not on PATH — CI
-                    // runner images ship pip but not necessarily uv (the
-                    // ubuntu-26.04 image does not), and requiring every
-                    // consuming repo's workflow to install uv first would
-                    // put installer knowledge back into the yml this
-                    // command exists to keep generic. pip's scripts dir is
-                    // already on PATH wherever pip itself runs from, so
-                    // the uv binary is spawnable right after.
-                    // Only when there is Python work to do — a repo with no
-                    // pyproject.toml and no pip list needs no uv.
-                    let has_python_deps =
-                        std::path::Path::new("pyproject.toml").exists() || !config.pip.is_empty();
-                    if has_python_deps && which::which("uv").is_err() {
-                        println!("uv not found on PATH; bootstrapping it with pip");
-                        crate::tools::run(
-                            "pip",
-                            &["uv"],
-                            &crate::tools::InstallCtx {
-                                verbose,
-                                use_eatmydata: false,
-                                binary_pins: BTreeMap::new(),
-                            },
-                        )
-                        .context(
-                            "failed to bootstrap uv with pip; install uv manually \
-                                    or set `python_installer = \"pip\"` under [dependencies]",
-                        )?;
-                    }
-                    config.effective_pip_uv(std::path::Path::new("."), || uv_export_reqs(ctx))?
-                }
-                crate::config::PythonInstaller::Pip => {
-                    config.effective_pip(std::path::Path::new("."))?
-                }
-            };
-            // uv.lock's pins already carry `==`, so only the bare
-            // `[dependencies].pip` names pick up a version here.
-            let pip_deps: Vec<String> = pip_deps.iter().map(|r| lock.pinned("pip", r)).collect();
+/// How an install runs, from the command line.
+struct InstallFlags {
+    /// Ask before installing (`-i`). Off by default: CI and scripts are the
+    /// common callers and neither can answer a prompt.
+    interactive: bool,
+    /// Wrap the system package manager in `eatmydata`.
+    use_eatmydata: bool,
+    verbose: bool,
+}
 
-            // The Node set comes from package.json (and, by default, the
-            // closure package-lock.json pins); [dependencies].npm entries
-            // are global extras installed alongside.
-            let node_deps = config.node_deps(std::path::Path::new("."))?;
+/// The order machine installs run in, by method. Fixed and load-bearing:
+/// system packages go first, because language packages (pip, gem, npm)
+/// often build native extensions that link against them.
+const MACHINE_METHOD_ORDER: &[&str] = &[
+    "apt", "dnf", "pacman", "brew", "snap", "pip", "npm", "cargo", "gem", "binary",
+];
 
-            if config.is_empty() && pip_deps.is_empty() && node_deps.is_empty() {
+/// The install method for `[dependencies]` system packages: the first
+/// system package manager found on this machine.
+fn system_package_method() -> Option<&'static str> {
+    [
+        ("apt-get", "apt"),
+        ("dnf", "dnf"),
+        ("pacman", "pacman"),
+        ("brew", "brew"),
+    ]
+    .into_iter()
+    .find(|(program, _)| which::which(program).is_ok())
+    .map(|(_, method)| method)
+}
+
+/// A tool error, reported with the tool-error exit code.
+fn tool_error(message: String) -> anyhow::Error {
+    crate::exit_code::RsconstructError::new(
+        crate::exit_code::RsconstructExitCode::ToolError,
+        message,
+    )
+    .into()
+}
+
+/// Ask before installing when `-i` was given. True to go ahead; declining is
+/// a normal outcome, not an error — the user saw the plan and said no.
+fn go_ahead(flags: &InstallFlags) -> Result<bool> {
+    if flags.interactive && !confirm()? {
+        println!("Aborted.");
+        return Ok(false);
+    }
+    Ok(true)
+}
+
+/// Run each `(method, packages)` group with `tools::run`, reporting each.
+/// Returns whether one failed; the rest still run.
+fn run_install_groups(groups: &[(&str, Vec<String>)], ctx: &crate::tools::InstallCtx) -> bool {
+    let mut any_failed = false;
+    for (method, packages) in groups {
+        let packages_ref: Vec<&str> = packages.iter().map(String::as_str).collect();
+        match crate::tools::run(method, &packages_ref, ctx) {
+            Ok(()) => println!("{} [{method}] {}", color::green("✓"), packages.join(", ")),
+            Err(e) => {
+                // `{:#}`, not `{}`: the alternate form walks the whole
+                // anyhow cause chain. Plain Display prints only the
+                // outermost context, which turns a real diagnosis ("... :
+                // http status: 403") back into a bare "Failed to query
+                // GitHub releases API".
                 println!(
-                    "No dependencies declared in [dependencies], pyproject.toml or package.json."
-                );
-                return Ok(());
-            }
-
-            // Install order is FIXED and load-bearing: system → pip → npm → gem → cargo.
-            // Language-level packages (pip, gem, npm) often build native
-            // extensions at install time that link against system libraries
-            // via pkg-config — system deps must be present first.
-            // See docs/src/configuration.md "Install order".
-            let system_method: &str = if which::which("apt-get").is_ok() {
-                "apt"
-            } else if which::which("dnf").is_ok() {
-                "dnf"
-            } else if which::which("pacman").is_ok() {
-                "pacman"
-            } else if which::which("brew").is_ok() {
-                "brew"
-            } else if !config.system.is_empty() {
-                bail!(
-                    "No supported package manager found (apt-get, dnf, pacman, brew); install these system packages manually: {}",
-                    config.system.join(", ")
-                );
-            } else {
-                "apt" // unused
-            };
-
-            let mut skipped: Vec<String> = Vec::new();
-            let mut groups: Vec<(&str, Vec<String>)> = Vec::new();
-
-            let system_missing: Vec<String> = config
-                .system
-                .iter()
-                .filter(|pkg| {
-                    let installed = is_system_package_installed(ctx, pkg);
-                    if installed {
-                        skipped.push(format!("[system] {pkg}"));
-                    }
-                    !installed
-                })
-                .cloned()
-                .collect();
-            if !system_missing.is_empty() {
-                groups.push((system_method, system_missing));
-            }
-
-            match python_installer {
-                crate::config::PythonInstaller::Uv => {
-                    // No per-package probing: uv audits the whole set itself
-                    // in one pass, faster and version-aware where `pip show`
-                    // only proves some version of the name is present.
-                    if !pip_deps.is_empty() {
-                        groups.push(("uv", pip_deps));
-                    }
-                }
-                crate::config::PythonInstaller::Pip => {
-                    let pip_missing: Vec<String> = pip_deps
-                        .iter()
-                        .filter(|pkg| {
-                            // `pip show` only proves the base distribution is present;
-                            // it says nothing about an extras entry like `pkg[extra]`,
-                            // whose extra dependencies may still be missing. Always
-                            // hand extras entries to pip — the install is idempotent.
-                            if pkg.contains('[') {
-                                return true;
-                            }
-                            let name = crate::config::normalized_distribution_name(pkg);
-                            let installed =
-                                package_probe_succeeds(ctx, "pip", &["show", name.as_str()])
-                                    && !drift.contains(&drift_key("pip", pkg));
-                            if installed {
-                                skipped.push(format!("[pip] {pkg}"));
-                            }
-                            !installed
-                        })
-                        .cloned()
-                        .collect();
-                    if !pip_missing.is_empty() {
-                        groups.push(("pip", pip_missing));
-                    }
-                }
-            }
-
-            // The project's own Node.js set: package.json declares the
-            // names, and in package-lock mode `npm ci` installs exactly the
-            // pinned closure into ./node_modules (the PATH augmentation at
-            // startup makes its .bin resolvable to the NEXT invocation).
-            // Skipped only when every declared package is already there at
-            // the locked version; `npm ci` wipes node_modules first, so a
-            // needless run is not cheap.
-            if !node_deps.is_empty() {
-                let root = std::path::Path::new(".");
-                let (method, up_to_date) = match config.npm_source {
-                    crate::config::NpmSource::PackageLock => {
-                        let pins =
-                            crate::config::package_lock_pins(&root.join("package-lock.json"))?;
-                        let up_to_date = node_deps.iter().all(|name| {
-                            let installed =
-                                crate::config::installed_node_package_version(root, name);
-                            installed.is_some() && installed == pins.get(name).cloned()
-                        });
-                        ("npm-ci", up_to_date)
-                    }
-                    crate::config::NpmSource::PackageJson => {
-                        let up_to_date = node_deps.iter().all(|name| {
-                            crate::config::installed_node_package_version(root, name).is_some()
-                        });
-                        ("npm-install", up_to_date)
-                    }
-                };
-                if up_to_date {
-                    for name in &node_deps {
-                        skipped.push(format!("[{method}] {name}"));
-                    }
-                } else {
-                    groups.push((method, node_deps));
-                }
-            }
-
-            // `[dependencies]` cargo, npm and gem entries, and every other
-            // locked crate, npm package, gem and release binary, go into the
-            // project's tool directory. That is synced last: crates and gems
-            // may build native code against the system packages above.
-            let project = project_tools(builder, &wanted, &lock)?;
-
-            if !skipped.is_empty() {
-                println!("{}:", color::dim("Already installed (skipping)"));
-                for s in &skipped {
-                    println!("  {} {}", color::green("✓"), s);
-                }
-                println!();
-            }
-            print_project_tools(&project);
-
-            if groups.is_empty() && !project.plan.has_work() {
-                // Nothing to install, but bin/ is rebuilt all the same.
-                apply_project_tools(&project, &lock, verbose)?;
-                println!("{}", color::green("All dependencies already installed."));
-                return Ok(());
-            }
-
-            let ctx = crate::tools::InstallCtx {
-                verbose,
-                use_eatmydata,
-                binary_pins: lock.binary.clone(),
-            };
-            // The project tools to install were listed above; this is the
-            // rest, when there is any.
-            if !groups.is_empty() {
-                println!("{}:", color::bold("Dependencies to install"));
-                for (method, packages) in &groups {
-                    let pkgs_ref: Vec<&str> = packages.iter().map(String::as_str).collect();
-                    let preview = crate::tools::describe(method, &pkgs_ref, &ctx.binary_pins);
-                    let line = preview.first().map(|a| a.join(" ")).unwrap_or_default();
-                    println!(
-                        "  {} {}",
-                        color::bold(&format!("[{method}]")),
-                        color::dim(&line)
-                    );
-                }
-                println!();
-            }
-
-            // Non-interactive by default; see the note in Install above.
-            if interactive {
-                use std::io::Write;
-                print!("Proceed? [y/N] ");
-                std::io::stdout()
-                    .flush()
-                    .context("Failed to flush stdout before dependency install prompt")?;
-                let mut answer = String::new();
-                std::io::stdin()
-                    .read_line(&mut answer)
-                    .context("Failed to read dependency install prompt answer")?;
-                if !matches!(answer.trim().to_lowercase().as_str(), "y" | "yes") {
-                    println!("Aborted.");
-                    return Ok(());
-                }
-            }
-
-            let mut any_failed = false;
-            for (method, packages) in &groups {
-                let pkgs_ref: Vec<&str> = packages.iter().map(String::as_str).collect();
-                match crate::tools::run(method, &pkgs_ref, &ctx) {
-                    Ok(()) => {
-                        println!("{} [{}] {}", color::green("✓"), method, packages.join(", "));
-                    }
-                    Err(e) => {
-                        // `{:#}` walks the whole cause chain; see the note
-                        // in Install above.
-                        println!(
-                            "{} [{}] {}: {:#}",
-                            color::red("✗"),
-                            method,
-                            packages.join(", "),
-                            e
-                        );
-                        any_failed = true;
-                    }
-                }
-            }
-            if let Err(e) = apply_project_tools(&project, &lock, verbose) {
-                println!(
-                    "{} [{}]: {:#}",
+                    "{} [{method}] {}: {e:#}",
                     color::red("✗"),
-                    crate::tool_store::REPO_TOOLS_DIR,
-                    e
+                    packages.join(", ")
                 );
                 any_failed = true;
             }
+        }
+    }
+    any_failed
+}
 
-            if any_failed {
-                return Err(crate::exit_code::RsconstructError::new(
-                    crate::exit_code::RsconstructExitCode::ToolError,
-                    "Some dependency installs failed",
-                )
-                .into());
+/// Print each `(method, packages)` group with the commands it will run.
+fn print_install_groups(groups: &[(&str, Vec<String>)], ctx: &crate::tools::InstallCtx) {
+    for (method, packages) in groups {
+        let packages_ref: Vec<&str> = packages.iter().map(String::as_str).collect();
+        println!(
+            "  {} {}",
+            color::bold(&format!("[{method}]")),
+            packages.join(", ")
+        );
+        for argv in crate::tools::describe(method, &packages_ref, &ctx.binary_pins) {
+            println!("       {}", color::dim(&argv.join(" ")));
+        }
+    }
+    println!();
+}
+
+/// `tool install machine`: install onto the machine, each tool through its
+/// machine install (a system package manager or a user-wide prefix; see
+/// `tools::run`). With a `name`, that one tool; with `all`, every tool in the
+/// registry, config or not; otherwise what this project needs on the
+/// machine: its `[dependencies]` system packages and the tools of its enabled
+/// processors whose preferred target is the machine, among them the
+/// installers `tool install project` runs (uv for a Python project, npm for
+/// a Node one). Nothing here goes into the project.
+fn install_machine(
+    ctx: &crate::build_context::BuildContext,
+    processors: &crate::processor::ProcessorMap,
+    is_enabled: &dyn Fn(&str) -> bool,
+    builder: Option<&Builder>,
+    name: Option<&str>,
+    all: bool,
+    flags: &InstallFlags,
+) -> Result<()> {
+    let root = std::path::Path::new(".");
+    // In a project, each tool is requested at its rsconstruct.lock version
+    // (a `.deb` at its locked asset). `--all` is the config-independent
+    // registry sweep and has no lock to follow.
+    let (lock, drift) = match builder {
+        Some(b) if !all => {
+            let wanted = project_wanted(b, processors, is_enabled)?;
+            let (lock, drift) = lock_for_install(ctx, &wanted, flags.verbose)?;
+            (Some(lock), drift)
+        }
+        _ => (None, std::collections::BTreeSet::new()),
+    };
+
+    let mut missing: Vec<&crate::tools::InstallMethod> = Vec::new();
+    let mut system_packages: Vec<String> = Vec::new();
+    if all {
+        // Registry-wide, like `tool list`. Nothing is skipped: a tool with
+        // no machine install is a hard error, not a warning to scroll past,
+        // since --all claiming success while a tool is absent is exactly the
+        // silent gap the strict-by-default rule exists to prevent.
+        let mut no_machine: Vec<&str> = Vec::new();
+        for info in crate::tools::all_tools() {
+            if which::which(info.name).is_ok() {
+                continue;
             }
-            println!(
-                "{}",
-                color::green("All dependencies installed successfully.")
-            );
+            match &info.machine {
+                Some(method) => missing.push(method),
+                None => no_machine.push(info.name),
+            }
+        }
+        if !no_machine.is_empty() {
+            return Err(tool_error(format!(
+                "{} tool(s) have no machine install: {}",
+                no_machine.len(),
+                no_machine.join(", ")
+            )));
+        }
+    } else if let Some(name) = name {
+        let info = crate::tools::tool_info(name)
+            .ok_or_else(|| tool_error(format!("Unknown tool '{name}'")))?;
+        let method = info.machine.as_ref().ok_or_else(|| {
+            tool_error(format!(
+                "'{name}' has no machine install; install it into the project with \
+                 `rsconstruct tool install project {name}`"
+            ))
+        })?;
+        missing.push(method);
+    } else {
+        let builder = builder.ok_or_else(|| {
+            anyhow::anyhow!(
+                "`tool install machine` needs a project with rsconstruct.toml, a tool name, or --all"
+            )
+        })?;
+        let deps = &builder.config.dependencies;
+        system_packages = deps
+            .system
+            .iter()
+            .filter(|pkg| !is_system_package_installed(ctx, pkg))
+            .cloned()
+            .collect();
+        // The tools of the enabled processors. A stanza with `enabled =
+        // false` is skipped: it is kept precisely so its tool need not be
+        // installed. auto_detect is not checked, because the tool itself may
+        // need to be installed before detection can succeed.
+        let mut tools: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
+        for pname in sorted_keys(processors) {
+            if is_enabled(pname) {
+                tools.extend(processors[pname].required_tools());
+            }
+        }
+        // The installers `tool install project` runs.
+        if crate::config::has_python_deps(root)? {
+            tools.insert("uv".to_string());
+        }
+        if !deps.node_deps(root)?.is_empty() {
+            tools.insert("npm".to_string());
+        }
+        for tool in &tools {
+            if !is_installable_tool_name(tool) {
+                continue;
+            }
+            // A tool the registry does not know is a binary of one of the
+            // project's `[dependencies]` packages (cargo-deny from the crate
+            // of that name), which `tool install project` installs and
+            // checks for.
+            let Some(info) = crate::tools::tool_info(tool) else {
+                continue;
+            };
+            if info.preferred_target() != Some(crate::tools::InstallTarget::Machine) {
+                continue;
+            }
+            let Some(method) = &info.machine else {
+                continue;
+            };
+            // Present on PATH counts as installed, unless it was found at
+            // a version other than the locked one that may be replaced (see
+            // `lock_for_install`).
+            let drifted = drift.contains(&(method.method.to_string(), method.package.to_string()));
+            if which::which(tool).is_err() || drifted {
+                missing.push(method);
+            }
         }
     }
 
+    // A machine install never goes into the project's own venv, which is
+    // uv's (see `tool install project`).
+    if missing.iter().any(|m| m.method == "pip")
+        && let Ok(pip) = which::which("pip")
+        && let (Ok(pip), Ok(here)) = (pip.canonicalize(), root.canonicalize())
+        && pip.starts_with(&here)
+    {
+        return Err(tool_error(format!(
+            "pip on PATH ({}) belongs to this project's venv, which `uv sync` owns; \
+             activate a venv outside the project for a machine install",
+            pip.display()
+        )));
+    }
+
+    // Grouped by method, each package at its locked version when the
+    // project's lock has one, in the fixed machine order.
+    let mut by_method: BTreeMap<&str, Vec<String>> = BTreeMap::new();
+    if !system_packages.is_empty() {
+        let method = system_package_method().ok_or_else(|| {
+            anyhow::anyhow!(
+                "No supported package manager found (apt-get, dnf, pacman, brew); \
+                 install these system packages manually: {}",
+                system_packages.join(", ")
+            )
+        })?;
+        by_method.insert(method, system_packages);
+    }
+    for method in missing {
+        let package = lock.as_ref().map_or_else(
+            || method.package.to_string(),
+            |l| l.pinned(method.method, method.package),
+        );
+        let packages = by_method.entry(method.method).or_default();
+        if !packages.contains(&package) {
+            packages.push(package);
+        }
+    }
+    if by_method.is_empty() {
+        println!(
+            "{}",
+            color::green("Everything this needs on the machine is already installed.")
+        );
+        return Ok(());
+    }
+    let groups: Vec<(&str, Vec<String>)> = MACHINE_METHOD_ORDER
+        .iter()
+        .filter_map(|m| by_method.remove(m).map(|packages| (*m, packages)))
+        .collect();
+
+    let install_ctx = crate::tools::InstallCtx {
+        verbose: flags.verbose,
+        use_eatmydata: flags.use_eatmydata,
+        binary_pins: lock.map(|l| l.binary).unwrap_or_default(),
+    };
+    println!("{}:", color::bold("To install onto the machine"));
+    print_install_groups(&groups, &install_ctx);
+    if !go_ahead(flags)? {
+        return Ok(());
+    }
+    if run_install_groups(&groups, &install_ctx) {
+        return Err(tool_error("Some machine installs failed".to_string()));
+    }
+    println!("{}", color::green("All machine installs succeeded."));
+    Ok(())
+}
+
+/// `tool install project`: install into the project, from its lockfiles:
+/// `uv sync` builds the repo's `.venv` from uv.lock (the code's Python
+/// dependencies and the Python tools its processors run), `npm ci` fills
+/// `node_modules` from package-lock.json, and the locked crates, npm
+/// packages, gems and release binaries are linked into `.rsconstruct/tools`
+/// from the tool store. With a `name`, only that tool's project install.
+/// Nothing here touches the machine: a missing uv or npm is an error that
+/// names `tool install machine`.
+fn install_project(
+    ctx: &crate::build_context::BuildContext,
+    processors: &crate::processor::ProcessorMap,
+    is_enabled: &dyn Fn(&str) -> bool,
+    builder: &Builder,
+    name: Option<&str>,
+    flags: &InstallFlags,
+) -> Result<()> {
+    let root = std::path::Path::new(".");
+    let deps = &builder.config.dependencies;
+    let wanted = project_wanted(builder, processors, is_enabled)?;
+    let (lock, _) = lock_for_install(ctx, &wanted, flags.verbose)?;
+    let mut tool_dir = Some(project_tools(builder, &wanted, &lock)?);
+    // The project's own package sets, each installed by its package manager
+    // from its lockfile; the names are for display only.
+    let mut groups: Vec<(&str, Vec<String>)> = Vec::new();
+    let mut up_to_date: Vec<String> = Vec::new();
+
+    if let Some(name) = name {
+        let info = crate::tools::tool_info(name)
+            .ok_or_else(|| tool_error(format!("Unknown tool '{name}'")))?;
+        let method = info.project.as_ref().ok_or_else(|| {
+            tool_error(format!(
+                "'{name}' has no project install; install it onto the machine with \
+                 `rsconstruct tool install machine {name}`"
+            ))
+        })?;
+        if method.method == "pip" {
+            let wanted_name = crate::config::normalized_distribution_name(method.package);
+            let pinned = crate::config::python_deps(root)?
+                .iter()
+                .any(|req| crate::config::normalized_distribution_name(req) == wanted_name);
+            if !pinned {
+                return Err(crate::exit_code::config_error(format!(
+                    "{} is not pinned by uv.lock. The repo's .venv is uv's, so add it to \
+                     pyproject.toml's dev dependency group (`uv add --dev {}`)",
+                    method.package, method.package
+                )));
+            }
+            groups.push(("uv-sync", vec![method.package.to_string()]));
+            tool_dir = None;
+        } else {
+            let dir = tool_dir.take().expect("set above");
+            if !dir.covers(method.method, method.package) {
+                return Err(tool_error(format!(
+                    "'{name}' is not one of this project's tools: enable a processor that \
+                     runs it, or add {} to [dependencies] {}",
+                    method.package, method.method
+                )));
+            }
+            tool_dir = Some(dir.with_only(method.method, method.package));
+        }
+    } else {
+        // uv audits the whole set itself in one pass, so it always runs.
+        if crate::config::has_python_deps(root)? {
+            groups.push(("uv-sync", vec!["uv.lock".to_string()]));
+        }
+        // package.json declares the names, and in package-lock mode `npm
+        // ci` installs exactly the pinned closure into ./node_modules.
+        // Skipped only when every declared package is already there at the
+        // locked version: `npm ci` wipes node_modules first, so a needless
+        // run is not cheap.
+        let node_deps = deps.node_deps(root)?;
+        if !node_deps.is_empty() {
+            let (method, current) = match deps.npm_source {
+                crate::config::NpmSource::PackageLock => {
+                    let pins = crate::config::package_lock_pins(&root.join("package-lock.json"))?;
+                    let current = node_deps.iter().all(|name| {
+                        let installed = crate::config::installed_node_package_version(root, name);
+                        installed.is_some() && installed == pins.get(name).cloned()
+                    });
+                    ("npm-ci", current)
+                }
+                crate::config::NpmSource::PackageJson => {
+                    let current = node_deps.iter().all(|name| {
+                        crate::config::installed_node_package_version(root, name).is_some()
+                    });
+                    ("npm-install", current)
+                }
+            };
+            if current {
+                up_to_date.extend(node_deps.iter().map(|n| format!("[{method}] {n}")));
+            } else {
+                groups.push((method, node_deps));
+            }
+        }
+    }
+
+    // uv and npm are machine installs; this command does not make them.
+    for (method, _) in &groups {
+        let program = if *method == "uv-sync" { "uv" } else { "npm" };
+        if which::which(program).is_err() {
+            return Err(tool_error(format!(
+                "{program} is not installed; install it onto the machine with \
+                 `rsconstruct tool install machine {program}`"
+            )));
+        }
+    }
+
+    if !up_to_date.is_empty() {
+        println!("{}:", color::dim("Already installed (skipping)"));
+        for s in &up_to_date {
+            println!("  {} {s}", color::green("✓"));
+        }
+        println!();
+    }
+    let install_ctx = crate::tools::InstallCtx {
+        verbose: flags.verbose,
+        use_eatmydata: false,
+        binary_pins: lock.binary.clone(),
+    };
+    if !groups.is_empty() {
+        println!("{}:", color::bold("Project environments"));
+        print_install_groups(&groups, &install_ctx);
+    }
+    if let Some(dir) = &tool_dir {
+        print_project_tools(dir);
+    }
+    let has_work = !groups.is_empty() || tool_dir.as_ref().is_some_and(|d| d.plan.has_work());
+    if has_work && !go_ahead(flags)? {
+        return Ok(());
+    }
+    let groups_failed = run_install_groups(&groups, &install_ctx);
+    // The tool directory goes last: crates and gems may build native code
+    // against what the environments above provide. With nothing to
+    // install, its bin/ is still rebuilt.
+    let tool_dir_failed = match &tool_dir {
+        Some(dir) => match apply_project_tools(dir, &lock, flags.verbose) {
+            Ok(()) => false,
+            Err(e) => {
+                println!(
+                    "{} [{}]: {e:#}",
+                    color::red("✗"),
+                    crate::tool_store::REPO_TOOLS_DIR
+                );
+                true
+            }
+        },
+        None => false,
+    };
+    if groups_failed || tool_dir_failed {
+        return Err(tool_error("Some project installs failed".to_string()));
+    }
+    // A processor tool the registry does not know can only come from the
+    // project's `[dependencies]` (a crate's binary), so after the installs
+    // above it must be on PATH; otherwise nothing will ever install it.
+    if name.is_none() {
+        let mut unprovided: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
+        for pname in sorted_keys(processors) {
+            if !is_enabled(pname) {
+                continue;
+            }
+            for tool in processors[pname].required_tools() {
+                if is_installable_tool_name(&tool)
+                    && crate::tools::tool_info(&tool).is_none()
+                    && which::which(&tool).is_err()
+                {
+                    unprovided.insert(tool);
+                }
+            }
+        }
+        if !unprovided.is_empty() {
+            let names: Vec<&str> = unprovided.iter().map(String::as_str).collect();
+            return Err(tool_error(format!(
+                "No install method known for: {} (not in the tool registry and not \
+                 provided by [dependencies])",
+                names.join(", ")
+            )));
+        }
+    }
+    if has_work {
+        println!("{}", color::green("All project installs succeeded."));
+    } else {
+        println!(
+            "{}",
+            color::green("Everything this project installs is already installed.")
+        );
+    }
     Ok(())
 }
 

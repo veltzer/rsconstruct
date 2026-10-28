@@ -118,11 +118,13 @@ fn main() -> std::process::ExitCode {
     platform::reset_sigpipe();
     // Must run before any thread exists (see platform::set_env): make
     // user-installed gem executables, the project's own node_modules
-    // executables and the project's tool directory resolvable for tool
-    // probes and every child process. The tool directory goes last so it
-    // ends up first: the project's locked tools win over everything else.
+    // executables, the repo's .venv and the project's tool directory
+    // resolvable for tool probes and every child process. The tool
+    // directory goes last so it ends up first: the project's locked tools
+    // win over everything else.
     tools::augment_path_with_user_gem_bins();
     tools::augment_path_with_node_modules_bin();
+    tools::augment_path_with_repo_venv();
     tool_store::augment_env();
 
     let (result, show_status) = run();

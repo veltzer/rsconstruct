@@ -191,5 +191,5 @@ always available.
 
 5. **Naming of the new commands**: `rsconstruct python-deps {check,list}`
    vs. extending the existing `analyzer` subcommand vs. extending
-   `tool install-deps`. The third would be the most integrated but blurs
+   `tool install project`. The third would be the most integrated but blurs
    the line between "what this code uses" and "what's declared".

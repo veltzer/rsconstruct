@@ -156,10 +156,10 @@ impl Builder {
             }
         }
 
-        // Check declared dependencies. The Python set comes from uv.lock by
-        // default (pyproject.toml in pyproject mode) plus [dependencies].pip.
+        // Check declared dependencies. The Python set is uv.lock's closure,
+        // which `tool install project` puts into the repo's .venv.
         let deps = &self.config.dependencies;
-        let pip_deps = deps.effective_pip(std::path::Path::new("."))?;
+        let pip_deps = crate::config::python_deps(std::path::Path::new("."))?;
         // The Node set comes from package.json; installed means present in
         // the project's node_modules (a global copy is not what the lock
         // asked for).
@@ -175,7 +175,7 @@ impl Builder {
                 // package manager whether it is installed. which() is wrong
                 // here — packages like aspell-en (a dictionary) ship no
                 // binary named after themselves, so which() reported them
-                // as missing even right after install-deps put them on.
+                // as missing even right after an install put them on.
                 if super::tools::is_system_package_installed(ctx, pkg) {
                     record(
                         format!("{pkg} (system)"),
@@ -193,7 +193,7 @@ impl Builder {
                         "fail",
                         "dependency",
                         Some("system".to_string()),
-                        Some("rsconstruct tool install-deps".to_string()),
+                        Some("rsconstruct tool install machine".to_string()),
                         &mut ok_count,
                         &mut fail_count,
                         &mut warn_count,
@@ -233,7 +233,7 @@ impl Builder {
                         "fail",
                         "dependency",
                         Some("pip".to_string()),
-                        Some(format!("pip install {pkg}")),
+                        Some("rsconstruct tool install project".to_string()),
                         &mut ok_count,
                         &mut fail_count,
                         &mut warn_count,
@@ -274,7 +274,7 @@ impl Builder {
                             "fail",
                             "dependency",
                             Some(method.to_string()),
-                            Some("rsconstruct tool install-deps".to_string()),
+                            Some("rsconstruct tool install project".to_string()),
                             &mut ok_count,
                             &mut fail_count,
                             &mut warn_count,
@@ -304,7 +304,7 @@ impl Builder {
                         "fail",
                         "dependency",
                         Some("npm".to_string()),
-                        Some("rsconstruct tool install-deps".to_string()),
+                        Some("rsconstruct tool install project".to_string()),
                         &mut ok_count,
                         &mut fail_count,
                         &mut warn_count,

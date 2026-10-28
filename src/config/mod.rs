@@ -1084,7 +1084,7 @@ fn apply_spans_to_instance(
 }
 
 /// Post-config hook: when `CI=true` is in the environment, enable the
-/// `eatmydata` wrap for `tool install` / `tool install-deps`. The
+/// `eatmydata` wrap for `tool install machine`. The
 /// trade-off (loss-on-power-cut for a 3-10× speedup) is right for
 /// transient CI hosts and wrong for developer workstations, so we tie
 /// the policy to `CI=true`. Users who want a different policy adjust
@@ -1098,7 +1098,7 @@ fn eatmydata_ci_default(config: &mut Config) -> anyhow::Result<()> {
 }
 
 /// The `CI=true` policy predicate behind [`eatmydata_ci_default`], shared with
-/// the config-independent `tool install --all` path (which has no `Config` to
+/// the config-independent `tool install machine --all` path (which has no `Config` to
 /// run the hook against).
 pub fn running_in_ci() -> bool {
     std::env::var("CI").is_ok_and(|v| v == "true")
