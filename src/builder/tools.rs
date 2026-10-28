@@ -152,6 +152,42 @@ pub(super) fn instance_enabled(processors: &crate::processor::ProcessorMap, name
     processors[name].scan_config().enabled
 }
 
+/// How many processors a `tool list` row names before summarizing the rest
+/// as "+N more": `python3` alone is run by 13, and naming them all made the
+/// table several terminal widths wide. `--json` always carries the full list.
+const TOOL_LIST_MAX_PROCESSORS: usize = 2;
+
+/// The Install cell of `tool list` and `tool list-configured`: the command
+/// of the tool's preferred method, or with `-M` every method it lists, each
+/// labeled with the slots it fills (`alt` for an alternative). "?" for a
+/// tool the registry does not know.
+fn install_cell(info: Option<&crate::tools::ToolInfo>, show_methods: bool) -> String {
+    let Some(info) = info else {
+        return "?".to_string();
+    };
+    if !show_methods {
+        return info
+            .preferred_method()
+            .map_or_else(|| "?".to_string(), crate::tools::InstallMethod::command);
+    }
+    info.methods()
+        .into_iter()
+        .map(|(m, targets)| {
+            let slots = if targets.is_empty() {
+                "alt".to_string()
+            } else {
+                targets
+                    .iter()
+                    .map(|t| t.as_str())
+                    .collect::<Vec<_>>()
+                    .join("+")
+            };
+            format!("{slots} {}: {}", m.method, m.command())
+        })
+        .collect::<Vec<_>>()
+        .join(" | ")
+}
+
 /// Handle `rsconstruct tool` subcommands without a project config.
 /// Uses default processor configs so List, Stats, Install, and Graph work
 /// even outside a project directory.
@@ -507,19 +543,12 @@ fn run_tools_command(
             }
             if crate::json_output::is_json_mode() {
                 let entries: Vec<json_output::ToolListEntry> = crate::tools::all_tools()
-                    .map(|info| json_output::ToolListEntry {
-                        tool: info.name.to_string(),
-                        installed: which::which(info.name).is_ok(),
-                        runtime: info.runtime.to_string(),
-                        processor: runners.get(info.name).cloned().unwrap_or_default(),
-                        install_methods: info
-                            .install_methods
-                            .iter()
-                            .map(|m| json_output::ToolInstallMethodEntry {
-                                method: m.method.to_string(),
-                                command: m.command(),
-                            })
-                            .collect(),
+                    .map(|info| {
+                        json_output::ToolListEntry::new(
+                            info.name,
+                            Some(info),
+                            runners.get(info.name).cloned().unwrap_or_default(),
+                        )
                     })
                     .collect();
                 println!("{}", serde_json::to_string_pretty(&entries)?);
@@ -544,37 +573,19 @@ fn run_tools_command(
                     };
                     let procs = runners.get(info.name).map_or_else(
                         || color::yellow("(none)").to_string(),
-                        |names| {
-                            names
-                                .iter()
-                                .map(|n| tables::short_processor_name(n))
-                                .collect::<Vec<_>>()
-                                .join(", ")
-                        },
+                        |names| tables::processor_names_cell(names, TOOL_LIST_MAX_PROCESSORS),
                     );
-                    let mut row = vec![
+                    let target = info
+                        .preferred_target()
+                        .map_or("?", crate::tools::InstallTarget::as_str);
+                    vec![
                         info.name.to_string(),
                         status.to_string(),
                         info.runtime.to_string(),
+                        target.to_string(),
                         procs,
-                    ];
-                    let install_str = if show_methods {
-                        let methods: Vec<String> = info
-                            .install_methods
-                            .iter()
-                            .map(|m| format!("{}: {}", m.method, m.command()))
-                            .collect();
-                        if methods.is_empty() {
-                            "?".to_string()
-                        } else {
-                            methods.join(" | ")
-                        }
-                    } else {
-                        info.default_install_method()
-                            .map_or_else(|| "?".to_string(), crate::tools::InstallMethod::command)
-                    };
-                    row.push(install_str);
-                    row
+                        install_cell(Some(info), show_methods),
+                    ]
                 })
                 .collect();
             tables::print(&tables::defs::TOOL_LIST, show_install, &rows);
@@ -584,25 +595,11 @@ fn run_tools_command(
                 let entries: Vec<json_output::ToolListEntry> = tool_map
                     .iter()
                     .map(|(tool, procs)| {
-                        let info = crate::tools::tool_info(tool);
-                        let install_methods = info
-                            .map(|i| {
-                                i.install_methods
-                                    .iter()
-                                    .map(|m| json_output::ToolInstallMethodEntry {
-                                        method: m.method.to_string(),
-                                        command: m.command(),
-                                    })
-                                    .collect()
-                            })
-                            .unwrap_or_default();
-                        json_output::ToolListEntry {
-                            tool: tool.clone(),
-                            installed: which::which(tool).is_ok(),
-                            runtime: info.map_or("unknown", |i| i.runtime).to_string(),
-                            processor: procs.clone(),
-                            install_methods,
-                        }
+                        json_output::ToolListEntry::new(
+                            tool,
+                            crate::tools::tool_info(tool),
+                            procs.clone(),
+                        )
                     })
                     .collect();
                 println!("{}", serde_json::to_string_pretty(&entries)?);
@@ -617,24 +614,7 @@ fn run_tools_command(
                 };
                 let info = crate::tools::tool_info(tool);
                 let runtime = info.map_or("unknown", |i| i.runtime);
-                let install_str = if show_methods {
-                    let methods: Vec<String> = info
-                        .map(|i| {
-                            i.install_methods
-                                .iter()
-                                .map(|m| format!("{}: {}", m.method, m.command()))
-                                .collect()
-                        })
-                        .unwrap_or_default();
-                    if methods.is_empty() {
-                        "?".to_string()
-                    } else {
-                        methods.join(" | ")
-                    }
-                } else {
-                    info.and_then(crate::tools::ToolInfo::default_install_method)
-                        .map_or_else(|| "?".to_string(), crate::tools::InstallMethod::command)
-                };
+                let install_str = install_cell(info, show_methods);
                 println!(
                     "{} [{}] [{}] ({}) — {}",
                     tool,
@@ -870,12 +850,11 @@ fn run_tools_command(
                         continue;
                     }
                     // The same choice every other install path makes: the
-                    // first method that can be run. A tool with only manual
-                    // methods has none (the registry currently has no manual
-                    // method at all; the test
-                    // `tools_install_all_has_no_manual_only_entries` keeps it
-                    // that way).
-                    match info.default_install_method() {
+                    // method in the slot of the tool's preferred target. A
+                    // tool with no slot has none (the test
+                    // `every_slot_holds_a_method_for_its_target` rules that
+                    // out).
+                    match info.preferred_method() {
                         Some(method) => missing.push((info.name, method)),
                         None => manual_only.push(info),
                     }
@@ -888,7 +867,7 @@ fn run_tools_command(
                     );
                     for info in &manual_only {
                         let instructions = info
-                            .install_methods
+                            .alternatives
                             .first()
                             .map_or("no install method known", |m| m.package);
                         eprintln!("  {} — {}", color::bold(info.name), instructions);
@@ -918,7 +897,7 @@ fn run_tools_command(
             } else if let Some(ref name) = name {
                 // Install a specific tool
                 if let Some(info) = crate::tools::tool_info(name) {
-                    if let Some(method) = info.default_install_method() {
+                    if let Some(method) = info.preferred_method() {
                         vec![(info.name, method)]
                     } else {
                         eprintln!("{}: No install method for '{}'", color::red("Error"), name);
@@ -967,7 +946,7 @@ fn run_tools_command(
                     // be replaced (see `lock_for_install`). A tool the
                     // project's tool directory holds was synced above.
                     let info = crate::tools::tool_info(tool_name);
-                    let method = info.and_then(crate::tools::ToolInfo::default_install_method);
+                    let method = info.and_then(crate::tools::ToolInfo::preferred_method);
                     if method.is_some_and(|m| {
                         project
                             .as_ref()
@@ -1492,25 +1471,11 @@ fn tools_graph_json(tool_map: &BTreeMap<String, Vec<String>>) -> Result<String> 
     let entries: Vec<crate::json_output::ToolListEntry> = tool_map
         .iter()
         .map(|(tool, procs)| {
-            let info = crate::tools::tool_info(tool);
-            let install_methods = info
-                .map(|i| {
-                    i.install_methods
-                        .iter()
-                        .map(|m| crate::json_output::ToolInstallMethodEntry {
-                            method: m.method.to_string(),
-                            command: m.command(),
-                        })
-                        .collect()
-                })
-                .unwrap_or_default();
-            crate::json_output::ToolListEntry {
-                tool: tool.clone(),
-                installed: which::which(tool).is_ok(),
-                runtime: info.map_or("unknown", |i| i.runtime).to_string(),
-                processor: procs.clone(),
-                install_methods,
-            }
+            crate::json_output::ToolListEntry::new(
+                tool,
+                crate::tools::tool_info(tool),
+                procs.clone(),
+            )
         })
         .collect();
     Ok(serde_json::to_string_pretty(&entries)?)

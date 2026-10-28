@@ -33,7 +33,8 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     max_jobs_cap: None,
 } }
 inventory::submit! { crate::tools::ToolInfo {
-    name: "eslint", runtime: "node", install_methods: &[
-        crate::tools::InstallMethod { method: "npm", package: "eslint" },
-    ],
+    name: "eslint", runtime: "node",
+    project: Some(crate::tools::InstallMethod::new("npm", "eslint")),
+    machine: Some(crate::tools::InstallMethod::new("npm", "eslint")),
+    alternatives: &[], prefer: None,
 } }

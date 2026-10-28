@@ -231,7 +231,8 @@ inventory::submit! {
     }
 }
 inventory::submit! { crate::tools::ToolInfo {
-    name: "qpdf", runtime: "system", install_methods: &[
-        crate::tools::InstallMethod { method: "apt", package: "qpdf" },
-    ],
+    name: "qpdf", runtime: "system",
+    project: None,
+    machine: Some(crate::tools::InstallMethod::new("apt", "qpdf")),
+    alternatives: &[], prefer: None,
 } }

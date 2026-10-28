@@ -286,8 +286,8 @@ pub fn collect_wanted(
             if tool.contains('/') {
                 continue;
             }
-            let Some(method) = crate::tools::tool_info(&tool)
-                .and_then(crate::tools::ToolInfo::default_install_method)
+            let Some(method) =
+                crate::tools::tool_info(&tool).and_then(crate::tools::ToolInfo::preferred_method)
             else {
                 continue;
             };

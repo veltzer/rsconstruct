@@ -212,7 +212,14 @@ pub mod defs {
     pub const TOOL_LIST: TableDef = def(
         "tool_list",
         "tool list",
-        &["Tool", "Status", "Runtime", "Processors", "Install"],
+        &[
+            "Tool",
+            "Status",
+            "Runtime",
+            "Target",
+            "Processors",
+            "Install",
+        ],
         &["Install"],
     );
     pub const TOOL_RUNTIMES: TableDef = def(
@@ -450,6 +457,21 @@ pub fn short_processor_name(name: &str) -> &str {
     name.strip_prefix("processor.").unwrap_or(name)
 }
 
+/// A list of processors as one table cell: the first `max` short names, then
+/// "+N more" for the rest, so a tool many processors run does not stretch
+/// its column across the screen.
+pub fn processor_names_cell(names: &[String], max: usize) -> String {
+    let mut parts: Vec<String> = names
+        .iter()
+        .take(max)
+        .map(|n| short_processor_name(n).to_string())
+        .collect();
+    if names.len() > max {
+        parts.push(format!("+{} more", names.len() - max));
+    }
+    parts.join(", ")
+}
+
 /// Render a boolean as "Yes" or "No" — the canonical formatting used in tables.
 /// Change this in one place to rename/translate the representation everywhere.
 pub const fn yes_no(b: bool) -> &'static str {
@@ -472,6 +494,20 @@ pub fn opt_json(value: Option<&serde_json::Value>) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn processor_names_cell_summarizes_past_the_limit() {
+        let names: Vec<String> = ["a", "b", "c", "d"]
+            .iter()
+            .map(|n| format!("processor.checker.{n}"))
+            .collect();
+        assert_eq!(processor_names_cell(&names[..1], 2), "checker.a");
+        assert_eq!(processor_names_cell(&names[..2], 2), "checker.a, checker.b");
+        assert_eq!(
+            processor_names_cell(&names, 2),
+            "checker.a, checker.b, +2 more"
+        );
+    }
 
     /// Table names are unique, listed in order, and every fixed-column
     /// table's `verbose_only` names real columns.

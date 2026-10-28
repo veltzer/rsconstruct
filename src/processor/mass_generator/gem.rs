@@ -192,9 +192,10 @@ inventory::submit! {
     }
 }
 inventory::submit! { crate::tools::ToolInfo {
-    name: "bundle", runtime: "ruby", install_methods: &[
-        crate::tools::InstallMethod { method: "gem", package: "bundler" },
-    ],
+    name: "bundle", runtime: "ruby",
+    project: Some(crate::tools::InstallMethod::new("gem", "bundler")),
+    machine: Some(crate::tools::InstallMethod::new("gem", "bundler")),
+    alternatives: &[], prefer: None,
 } }
 
 #[cfg(test)]

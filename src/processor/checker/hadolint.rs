@@ -35,9 +35,12 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     max_jobs_cap: None,
 } }
 inventory::submit! { crate::tools::ToolInfo {
-    name: "hadolint", runtime: "system", install_methods: &[
-        crate::tools::InstallMethod { method: "binary", package: "hadolint" },
-        crate::tools::InstallMethod { method: "brew", package: "hadolint" },
-        crate::tools::InstallMethod { method: "apt", package: "hadolint" },
+    name: "hadolint", runtime: "system",
+    project: Some(crate::tools::InstallMethod::new("binary", "hadolint")),
+    machine: Some(crate::tools::InstallMethod::new("binary", "hadolint")),
+    alternatives: &[
+        crate::tools::InstallMethod::new("brew", "hadolint"),
+        crate::tools::InstallMethod::new("apt", "hadolint"),
     ],
+    prefer: None,
 } }

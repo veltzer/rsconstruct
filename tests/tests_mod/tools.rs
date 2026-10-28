@@ -41,6 +41,9 @@ fn tools_list_shows_all_registry_tools() {
         row("gcc")
     );
     assert!(row("clojure").contains("(none)"), "{}", row("clojure"));
+    // A tool many processors run names two of them and counts the rest,
+    // instead of stretching the table across the screen.
+    assert!(row("python3").contains(" more"), "{}", row("python3"));
 }
 
 #[test]
@@ -67,6 +70,52 @@ fn tools_list_json_names_each_tools_processors() {
     };
     assert_eq!(processors("ruff"), ["processor.checker.ruff"]);
     assert!(processors("clojure").is_empty());
+}
+
+/// `--json tool list` says where each install goes: per tool its preferred
+/// target, per method the targets it can reach and the slots it fills.
+/// ruff's pip install fills both slots, so the project is preferred; a
+/// `.deb` (drawio) reaches only the machine; brew is clojure's alternative.
+#[test]
+fn tools_list_json_names_install_targets() {
+    let temp_dir = setup_test_project();
+    let output = run_rsconstruct_with_env(temp_dir.path(), &["--json", "tool", "list"], &[]);
+    assert!(
+        output.status.success(),
+        "tool list --json failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let entries: Vec<Value> = serde_json::from_slice(&output.stdout).unwrap();
+    let entry = |tool: &str| -> &Value {
+        entries
+            .iter()
+            .find(|e| e["tool"] == tool)
+            .unwrap_or_else(|| panic!("no entry for {tool}"))
+    };
+    let method = |tool: &str, name: &str| -> &Value {
+        entry(tool)["install_methods"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|m| m["method"] == name)
+            .unwrap_or_else(|| panic!("{tool} has no {name} method"))
+    };
+    assert_eq!(entry("ruff")["preferred"], "project");
+    assert_eq!(
+        method("ruff", "pip")["slots"],
+        serde_json::json!(["project", "machine"])
+    );
+    assert_eq!(
+        method("ruff", "pip")["targets"],
+        serde_json::json!(["project", "machine"])
+    );
+    assert_eq!(entry("drawio")["preferred"], "machine");
+    assert_eq!(
+        method("drawio", "binary")["targets"],
+        serde_json::json!(["machine"])
+    );
+    assert_eq!(entry("clojure")["preferred"], "machine");
+    assert_eq!(method("clojure", "brew")["slots"], serde_json::json!([]));
 }
 
 #[test]

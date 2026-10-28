@@ -1028,12 +1028,14 @@ inventory::submit! {
     }
 }
 inventory::submit! { crate::tools::ToolInfo {
-    name: "sh", runtime: "system", install_methods: &[
-        crate::tools::InstallMethod { method: "apt", package: "dash" },
-    ],
+    name: "sh", runtime: "system",
+    project: None,
+    machine: Some(crate::tools::InstallMethod::new("apt", "dash")),
+    alternatives: &[], prefer: None,
 } }
 inventory::submit! { crate::tools::ToolInfo {
-    name: "git", runtime: "system", install_methods: &[
-        crate::tools::InstallMethod { method: "apt", package: "git" },
-    ],
+    name: "git", runtime: "system",
+    project: None,
+    machine: Some(crate::tools::InstallMethod::new("apt", "git")),
+    alternatives: &[], prefer: None,
 } }

@@ -151,15 +151,17 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     max_jobs_cap: None,
 } }
 inventory::submit! { crate::tools::ToolInfo {
-    name: "pandoc", runtime: "system", install_methods: &[
-        crate::tools::InstallMethod { method: "apt", package: "pandoc" },
-    ],
+    name: "pandoc", runtime: "system",
+    project: None,
+    machine: Some(crate::tools::InstallMethod::new("apt", "pandoc")),
+    alternatives: &[], prefer: None,
 } }
 // xelatex ships in texlive-xetex, not in a package of its own; pandoc's
 // `pdf_engine = "xelatex"` needs the binary, so probe the binary and
 // install the distribution that provides it.
 inventory::submit! { crate::tools::ToolInfo {
-    name: "xelatex", runtime: "system", install_methods: &[
-        crate::tools::InstallMethod { method: "apt", package: "texlive-xetex" },
-    ],
+    name: "xelatex", runtime: "system",
+    project: None,
+    machine: Some(crate::tools::InstallMethod::new("apt", "texlive-xetex")),
+    alternatives: &[], prefer: None,
 } }

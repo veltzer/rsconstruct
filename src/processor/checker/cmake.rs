@@ -35,7 +35,8 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     max_jobs_cap: None,
 } }
 inventory::submit! { crate::tools::ToolInfo {
-    name: "cmakelint", runtime: "python", install_methods: &[
-        crate::tools::InstallMethod { method: "pip", package: "cmakelint" },
-    ],
+    name: "cmakelint", runtime: "python",
+    project: Some(crate::tools::InstallMethod::new("pip", "cmakelint")),
+    machine: Some(crate::tools::InstallMethod::new("pip", "cmakelint")),
+    alternatives: &[], prefer: None,
 } }

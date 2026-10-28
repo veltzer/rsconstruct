@@ -33,7 +33,8 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     max_jobs_cap: None,
 } }
 inventory::submit! { crate::tools::ToolInfo {
-    name: "standard", runtime: "node", install_methods: &[
-        crate::tools::InstallMethod { method: "npm", package: "standard" },
-    ],
+    name: "standard", runtime: "node",
+    project: Some(crate::tools::InstallMethod::new("npm", "standard")),
+    machine: Some(crate::tools::InstallMethod::new("npm", "standard")),
+    alternatives: &[], prefer: None,
 } }

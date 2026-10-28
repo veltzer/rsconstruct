@@ -521,9 +521,10 @@ inventory::submit! {
     }
 }
 inventory::submit! { crate::tools::ToolInfo {
-    name: "sphinx-build", runtime: "python", install_methods: &[
-        crate::tools::InstallMethod { method: "pip", package: "sphinx" },
-    ],
+    name: "sphinx-build", runtime: "python",
+    project: Some(crate::tools::InstallMethod::new("pip", "sphinx")),
+    machine: Some(crate::tools::InstallMethod::new("pip", "sphinx")),
+    alternatives: &[], prefer: None,
 } }
 
 #[cfg(test)]

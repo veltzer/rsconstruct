@@ -33,7 +33,8 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     max_jobs_cap: None,
 } }
 inventory::submit! { crate::tools::ToolInfo {
-    name: "xmllint", runtime: "system", install_methods: &[
-        crate::tools::InstallMethod { method: "apt", package: "libxml2-utils" },
-    ],
+    name: "xmllint", runtime: "system",
+    project: None,
+    machine: Some(crate::tools::InstallMethod::new("apt", "libxml2-utils")),
+    alternatives: &[], prefer: None,
 } }

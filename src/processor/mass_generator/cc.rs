@@ -760,7 +760,8 @@ inventory::submit! {
     }
 }
 inventory::submit! { crate::tools::ToolInfo {
-    name: "ar", runtime: "system", install_methods: &[
-        crate::tools::InstallMethod { method: "apt", package: "binutils" },
-    ],
+    name: "ar", runtime: "system",
+    project: None,
+    machine: Some(crate::tools::InstallMethod::new("apt", "binutils")),
+    alternatives: &[], prefer: None,
 } }

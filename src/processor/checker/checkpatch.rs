@@ -33,7 +33,8 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     max_jobs_cap: None,
 } }
 inventory::submit! { crate::tools::ToolInfo {
-    name: "checkpatch.pl", runtime: "perl", install_methods: &[
-        crate::tools::InstallMethod { method: "binary", package: "checkpatch.pl" },
-    ],
+    name: "checkpatch.pl", runtime: "perl",
+    project: Some(crate::tools::InstallMethod::new("binary", "checkpatch.pl")),
+    machine: Some(crate::tools::InstallMethod::new("binary", "checkpatch.pl")),
+    alternatives: &[], prefer: None,
 } }

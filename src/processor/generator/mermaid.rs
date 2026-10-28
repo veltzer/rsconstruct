@@ -60,7 +60,8 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     max_jobs_cap: None,
 } }
 inventory::submit! { crate::tools::ToolInfo {
-    name: "mmdc", runtime: "node", install_methods: &[
-        crate::tools::InstallMethod { method: "npm", package: "@mermaid-js/mermaid-cli" },
-    ],
+    name: "mmdc", runtime: "node",
+    project: Some(crate::tools::InstallMethod::new("npm", "@mermaid-js/mermaid-cli")),
+    machine: Some(crate::tools::InstallMethod::new("npm", "@mermaid-js/mermaid-cli")),
+    alternatives: &[], prefer: None,
 } }

@@ -33,8 +33,9 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     max_jobs_cap: None,
 } }
 inventory::submit! { crate::tools::ToolInfo {
-    name: "taplo", runtime: "rust", install_methods: &[
-        crate::tools::InstallMethod { method: "binary", package: "taplo" },
-        crate::tools::InstallMethod { method: "cargo", package: "taplo-cli" },
-    ],
+    name: "taplo", runtime: "rust",
+    project: Some(crate::tools::InstallMethod::new("binary", "taplo")),
+    machine: Some(crate::tools::InstallMethod::new("binary", "taplo")),
+    alternatives: &[crate::tools::InstallMethod::new("cargo", "taplo-cli")],
+    prefer: None,
 } }

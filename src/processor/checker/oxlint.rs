@@ -45,9 +45,12 @@ inventory::submit! { crate::registries::ProcessorPlugin {
 // an npm package, and a crate. The binary comes first so a repo needs neither
 // node nor a Rust toolchain to lint JavaScript.
 inventory::submit! { crate::tools::ToolInfo {
-    name: "oxlint", runtime: "rust", install_methods: &[
-        crate::tools::InstallMethod { method: "binary", package: "oxlint" },
-        crate::tools::InstallMethod { method: "npm", package: "oxlint" },
-        crate::tools::InstallMethod { method: "cargo", package: "oxlint" },
+    name: "oxlint", runtime: "rust",
+    project: Some(crate::tools::InstallMethod::new("binary", "oxlint")),
+    machine: Some(crate::tools::InstallMethod::new("binary", "oxlint")),
+    alternatives: &[
+        crate::tools::InstallMethod::new("npm", "oxlint"),
+        crate::tools::InstallMethod::new("cargo", "oxlint"),
     ],
+    prefer: None,
 } }

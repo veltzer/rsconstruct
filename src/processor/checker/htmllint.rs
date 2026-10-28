@@ -35,7 +35,8 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     max_jobs_cap: None,
 } }
 inventory::submit! { crate::tools::ToolInfo {
-    name: "htmllint", runtime: "node", install_methods: &[
-        crate::tools::InstallMethod { method: "npm", package: "htmllint-cli" },
-    ],
+    name: "htmllint", runtime: "node",
+    project: Some(crate::tools::InstallMethod::new("npm", "htmllint-cli")),
+    machine: Some(crate::tools::InstallMethod::new("npm", "htmllint-cli")),
+    alternatives: &[], prefer: None,
 } }

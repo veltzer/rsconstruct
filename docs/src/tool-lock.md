@@ -24,7 +24,8 @@ hand.
 Entries come from two places:
 
 - **Processor tools** of the enabled processors, by the install method `tool
-  install` uses for them (the first one in the tool registry). A stanza with
+  install` uses for them (the one in the slot of the tool's preferred
+  target; see [Install targets](commands.md#install-targets)). A stanza with
   `enabled = false` contributes nothing: it exists to keep its config while
   its tool is absent, so `tool lock` drops its tool from the lock and `tool
   install`, `tool check` and `doctor` do not ask for it.

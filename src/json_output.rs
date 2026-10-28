@@ -130,6 +130,26 @@ pub struct ProcessorListEntry {
 pub struct ToolInstallMethodEntry {
     pub method: String,
     pub command: String,
+    /// The targets ("project", "machine") this method can install to.
+    pub targets: Vec<String>,
+    /// The targets this method is the tool's install for; empty for an
+    /// alternative, which no install chooses.
+    pub slots: Vec<String>,
+}
+
+impl ToolInstallMethodEntry {
+    /// One entry per method the tool lists (see `ToolInfo::methods`).
+    pub fn all(info: &crate::tools::ToolInfo) -> Vec<Self> {
+        info.methods()
+            .into_iter()
+            .map(|(m, targets)| Self {
+                method: m.method.to_string(),
+                command: m.command(),
+                targets: m.targets().iter().map(|t| t.as_str().to_string()).collect(),
+                slots: targets.iter().map(|t| t.as_str().to_string()).collect(),
+            })
+            .collect()
+    }
 }
 
 /// Entry for `rsconstruct tool list --json`.
@@ -139,7 +159,26 @@ pub struct ToolListEntry {
     pub installed: bool,
     pub runtime: String,
     pub processor: Vec<String>,
+    /// The target `tool install` uses for this tool ("project" or "machine").
+    pub preferred: Option<String>,
     pub install_methods: Vec<ToolInstallMethodEntry>,
+}
+
+impl ToolListEntry {
+    /// The entry for `tool`, run by `processor`. `info` is None for a tool
+    /// the registry does not know (a `required_tools` name).
+    pub fn new(tool: &str, info: Option<&crate::tools::ToolInfo>, processor: Vec<String>) -> Self {
+        Self {
+            tool: tool.to_string(),
+            installed: which::which(tool).is_ok(),
+            runtime: info.map_or("unknown", |i| i.runtime).to_string(),
+            processor,
+            preferred: info
+                .and_then(crate::tools::ToolInfo::preferred_target)
+                .map(|t| t.as_str().to_string()),
+            install_methods: info.map(ToolInstallMethodEntry::all).unwrap_or_default(),
+        }
+    }
 }
 
 /// Output for `rsconstruct tool stats --json`.

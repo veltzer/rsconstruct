@@ -33,7 +33,8 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     max_jobs_cap: None,
 } }
 inventory::submit! { crate::tools::ToolInfo {
-    name: "black", runtime: "python", install_methods: &[
-        crate::tools::InstallMethod { method: "pip", package: "black" },
-    ],
+    name: "black", runtime: "python",
+    project: Some(crate::tools::InstallMethod::new("pip", "black")),
+    machine: Some(crate::tools::InstallMethod::new("pip", "black")),
+    alternatives: &[], prefer: None,
 } }

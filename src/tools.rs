@@ -13,6 +13,27 @@ pub struct InstallMethod {
     pub package: &'static str,
 }
 
+/// Where an install puts a tool.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum InstallTarget {
+    /// Inside the project: its tool directory (`.rsconstruct/tools`), or
+    /// the venv inside the repo.
+    Project,
+    /// Onto the machine: a system package manager, a user-wide prefix
+    /// (`~/.cargo/bin`, `npm -g`, `gem --user-install`), or a venv outside
+    /// the repo.
+    Machine,
+}
+
+impl InstallTarget {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Project => "project",
+            Self::Machine => "machine",
+        }
+    }
+}
+
 /// Context for executing an install: verbosity and eatmydata preference.
 ///
 /// `sudo` is decided at execution time via `crate::platform::needs_sudo()`;
@@ -31,6 +52,35 @@ pub struct InstallCtx {
 }
 
 impl InstallMethod {
+    pub const fn new(method: &'static str, package: &'static str) -> Self {
+        Self { method, package }
+    }
+
+    /// The targets this method can install to. A system package manager
+    /// only reaches the machine; a language package manager or a release
+    /// binary reaches either, depending on the prefix (or venv) it is
+    /// pointed at. A `.deb` binary is installed by apt, so it is machine
+    /// only. Empty for `manual`, which installs nothing, and for anything
+    /// unknown.
+    pub fn targets(&self) -> &'static [InstallTarget] {
+        const MACHINE: &[InstallTarget] = &[InstallTarget::Machine];
+        const BOTH: &[InstallTarget] = &[InstallTarget::Project, InstallTarget::Machine];
+        match self.method {
+            "apt" | "dnf" | "pacman" | "brew" | "snap" => MACHINE,
+            "pip" | "uv" | "npm" | "cargo" | "gem" => BOTH,
+            "npm-ci" | "npm-install" => &[InstallTarget::Project],
+            "binary" => match binary_recipe(self.package) {
+                Some(BinaryRecipe {
+                    archive: ArchiveKind::Deb { .. },
+                    ..
+                }) => MACHINE,
+                Some(_) => BOTH,
+                None => &[],
+            },
+            _ => &[],
+        }
+    }
+
     /// Human-readable preview of what installing this entry's package
     /// would do — first line of the first describe step. Lossy for
     /// multi-step installs (binary fetches), but adequate for `tool list`,
@@ -49,11 +99,55 @@ impl InstallMethod {
 }
 
 impl ToolInfo {
-    /// The method `tool install` uses for this tool: the first one that can
-    /// be run. A `manual` method only carries instructions, so it is passed
-    /// over; None when every method is manual.
-    pub fn default_install_method(&self) -> Option<&'static InstallMethod> {
-        self.install_methods.iter().find(|m| m.method != "manual")
+    /// The tool's preferred target: `prefer` when it is set, otherwise the
+    /// project when the tool has a project install, since a project runs
+    /// its own tools and the machine is the last resort. None only for a
+    /// tool with neither slot, which `every_slot_holds_a_method_for_its_target`
+    /// rules out.
+    pub fn preferred_target(&self) -> Option<InstallTarget> {
+        self.prefer.or_else(|| {
+            if self.project.is_some() {
+                Some(InstallTarget::Project)
+            } else if self.machine.is_some() {
+                Some(InstallTarget::Machine)
+            } else {
+                None
+            }
+        })
+    }
+
+    /// The tool's install method for `target`, if it has one.
+    pub const fn slot(&self, target: InstallTarget) -> Option<&InstallMethod> {
+        match target {
+            InstallTarget::Project => self.project.as_ref(),
+            InstallTarget::Machine => self.machine.as_ref(),
+        }
+    }
+
+    /// The method `tool install` uses for this tool: the one in the slot of
+    /// its preferred target.
+    pub fn preferred_method(&self) -> Option<&InstallMethod> {
+        self.slot(self.preferred_target()?)
+    }
+
+    /// Every method the tool lists, each once, in the order project,
+    /// machine, alternatives, with the targets it is listed for: a method
+    /// that fills both slots appears once, for both.
+    pub fn methods(&self) -> Vec<(&InstallMethod, Vec<InstallTarget>)> {
+        let mut out: Vec<(&InstallMethod, Vec<InstallTarget>)> = Vec::new();
+        for target in [InstallTarget::Project, InstallTarget::Machine] {
+            if let Some(m) = self.slot(target) {
+                match out
+                    .iter_mut()
+                    .find(|(seen, _)| seen.method == m.method && seen.package == m.package)
+                {
+                    Some((_, targets)) => targets.push(target),
+                    None => out.push((m, vec![target])),
+                }
+            }
+        }
+        out.extend(self.alternatives.iter().map(|m| (m, Vec::new())));
+        out
     }
 }
 
@@ -1404,8 +1498,19 @@ pub struct ToolInfo {
     pub name: &'static str,
     /// Runtime category ("python", "node", "ruby", "rust", "perl", "jvm", "system")
     pub runtime: &'static str,
-    /// Install methods, ordered by preference (first is the default)
-    pub install_methods: &'static [InstallMethod],
+    /// The preferred way to install the tool into the project. None when
+    /// there is no project route (a system package, a `.deb`).
+    pub project: Option<InstallMethod>,
+    /// The preferred way to install the tool onto the machine.
+    pub machine: Option<InstallMethod>,
+    /// Other known ways to install it (brew for macOS, a crate where a
+    /// release binary is preferred, ...). Listed by `tool list -M`, never
+    /// chosen by an install.
+    pub alternatives: &'static [InstallMethod],
+    /// The preferred target overall, when it is not the default (the
+    /// project if the tool has a project install, else the machine; see
+    /// [`ToolInfo::preferred_target`]). Set only to override that default.
+    pub prefer: Option<InstallTarget>,
 }
 
 /// The tools no single processor owns: language runtimes and compilers that
@@ -1419,36 +1524,36 @@ pub static TOOLS: &[ToolInfo] = &[
     ToolInfo {
         name: "uv",
         runtime: "python",
-        install_methods: &[InstallMethod {
-            method: "pip",
-            package: "uv",
-        }],
+        project: Some(InstallMethod::new("pip", "uv")),
+        machine: Some(InstallMethod::new("pip", "uv")),
+        alternatives: &[],
+        prefer: None,
     },
     ToolInfo {
         name: "python3",
         runtime: "python",
-        install_methods: &[InstallMethod {
-            method: "apt",
-            package: "python3",
-        }],
+        project: None,
+        machine: Some(InstallMethod::new("apt", "python3")),
+        alternatives: &[],
+        prefer: None,
     },
     // Node
     ToolInfo {
         name: "node",
         runtime: "node",
-        install_methods: &[InstallMethod {
-            method: "apt",
-            package: "nodejs",
-        }],
+        project: None,
+        machine: Some(InstallMethod::new("apt", "nodejs")),
+        alternatives: &[],
+        prefer: None,
     },
     // Ruby
     ToolInfo {
         name: "ruby",
         runtime: "ruby",
-        install_methods: &[InstallMethod {
-            method: "apt",
-            package: "ruby",
-        }],
+        project: None,
+        machine: Some(InstallMethod::new("apt", "ruby")),
+        alternatives: &[],
+        prefer: None,
     },
     // Rust
     // rustup is the canonical route, but `apt install cargo` is a real,
@@ -1459,27 +1564,27 @@ pub static TOOLS: &[ToolInfo] = &[
     ToolInfo {
         name: "cargo",
         runtime: "rust",
-        install_methods: &[InstallMethod {
-            method: "apt",
-            package: "cargo",
-        }],
+        project: None,
+        machine: Some(InstallMethod::new("apt", "cargo")),
+        alternatives: &[],
+        prefer: None,
     },
     // Perl
     ToolInfo {
         name: "perl",
         runtime: "perl",
-        install_methods: &[InstallMethod {
-            method: "apt",
-            package: "perl",
-        }],
+        project: None,
+        machine: Some(InstallMethod::new("apt", "perl")),
+        alternatives: &[],
+        prefer: None,
     },
     ToolInfo {
         name: "perltidy",
         runtime: "perl",
-        install_methods: &[InstallMethod {
-            method: "apt",
-            package: "perltidy",
-        }],
+        project: None,
+        machine: Some(InstallMethod::new("apt", "perltidy")),
+        alternatives: &[],
+        prefer: None,
     },
     // System
     // ARM bare-metal cross toolchain. Debian splits it the same way as the
@@ -1488,108 +1593,102 @@ pub static TOOLS: &[ToolInfo] = &[
     ToolInfo {
         name: "arm-none-eabi-gcc",
         runtime: "system",
-        install_methods: &[InstallMethod {
-            method: "apt",
-            package: "gcc-arm-none-eabi",
-        }],
+        project: None,
+        machine: Some(InstallMethod::new("apt", "gcc-arm-none-eabi")),
+        alternatives: &[],
+        prefer: None,
     },
     ToolInfo {
         name: "arm-none-eabi-ar",
         runtime: "system",
-        install_methods: &[InstallMethod {
-            method: "apt",
-            package: "binutils-arm-none-eabi",
-        }],
+        project: None,
+        machine: Some(InstallMethod::new("apt", "binutils-arm-none-eabi")),
+        alternatives: &[],
+        prefer: None,
     },
     ToolInfo {
         name: "arm-none-eabi-objcopy",
         runtime: "system",
-        install_methods: &[InstallMethod {
-            method: "apt",
-            package: "binutils-arm-none-eabi",
-        }],
+        project: None,
+        machine: Some(InstallMethod::new("apt", "binutils-arm-none-eabi")),
+        alternatives: &[],
+        prefer: None,
     },
     ToolInfo {
         name: "gcc",
         runtime: "system",
-        install_methods: &[InstallMethod {
-            method: "apt",
-            package: "gcc",
-        }],
+        project: None,
+        machine: Some(InstallMethod::new("apt", "gcc")),
+        alternatives: &[],
+        prefer: None,
     },
     ToolInfo {
         name: "g++",
         runtime: "system",
-        install_methods: &[InstallMethod {
-            method: "apt",
-            package: "g++",
-        }],
+        project: None,
+        machine: Some(InstallMethod::new("apt", "g++")),
+        alternatives: &[],
+        prefer: None,
     },
     ToolInfo {
         name: "clang",
         runtime: "system",
-        install_methods: &[InstallMethod {
-            method: "apt",
-            package: "clang",
-        }],
+        project: None,
+        machine: Some(InstallMethod::new("apt", "clang")),
+        alternatives: &[],
+        prefer: None,
     },
     ToolInfo {
         name: "clang++",
         runtime: "system",
-        install_methods: &[InstallMethod {
-            method: "apt",
-            package: "clang",
-        }],
+        project: None,
+        machine: Some(InstallMethod::new("apt", "clang")),
+        alternatives: &[],
+        prefer: None,
     },
     ToolInfo {
         name: "make",
         runtime: "system",
-        install_methods: &[InstallMethod {
-            method: "apt",
-            package: "make",
-        }],
+        project: None,
+        machine: Some(InstallMethod::new("apt", "make")),
+        alternatives: &[],
+        prefer: None,
     },
     ToolInfo {
         name: "pdflatex",
         runtime: "system",
-        install_methods: &[InstallMethod {
-            method: "apt",
-            package: "texlive-latex-base",
-        }],
+        project: None,
+        machine: Some(InstallMethod::new("apt", "texlive-latex-base")),
+        alternatives: &[],
+        prefer: None,
     },
     ToolInfo {
         name: "dot",
         runtime: "system",
-        install_methods: &[InstallMethod {
-            method: "apt",
-            package: "graphviz",
-        }],
+        project: None,
+        machine: Some(InstallMethod::new("apt", "graphviz")),
+        alternatives: &[],
+        prefer: None,
     },
+    // Debian/Ubuntu package the Clojure CLI, which is what makes this
+    // installable without the official shell installer; brew is the macOS
+    // route. See https://clojure.org/guides/install_clojure
     ToolInfo {
         name: "clojure",
         runtime: "jvm",
-        install_methods: &[
-            // Debian/Ubuntu package the Clojure CLI, which is what makes this
-            // installable without the official shell installer; brew is the macOS
-            // route. See https://clojure.org/guides/install_clojure
-            InstallMethod {
-                method: "apt",
-                package: "clojure",
-            },
-            InstallMethod {
-                method: "brew",
-                package: "clojure/tools/clojure",
-            },
-        ],
+        project: None,
+        machine: Some(InstallMethod::new("apt", "clojure")),
+        alternatives: &[InstallMethod::new("brew", "clojure/tools/clojure")],
+        prefer: None,
     },
     // Built-in / coreutils
     ToolInfo {
         name: "true",
         runtime: "system",
-        install_methods: &[InstallMethod {
-            method: "apt",
-            package: "coreutils",
-        }],
+        project: None,
+        machine: Some(InstallMethod::new("apt", "coreutils")),
+        alternatives: &[],
+        prefer: None,
     },
 ];
 
@@ -1628,6 +1727,87 @@ mod registry_tests {
         }
         dups.sort_unstable();
         assert!(dups.is_empty(), "duplicate tool registry entries: {dups:?}");
+    }
+
+    /// A slot names a method that can install to the slot's target (no apt
+    /// in `project`, no `manual` anywhere), every tool fills at least one
+    /// slot, and `prefer` only overrides: it names a filled slot other than
+    /// the one the default would pick.
+    #[test]
+    fn every_slot_holds_a_method_for_its_target() {
+        let mut bad: Vec<String> = Vec::new();
+        for t in all_tools() {
+            for target in [InstallTarget::Project, InstallTarget::Machine] {
+                if let Some(m) = t.slot(target)
+                    && !m.targets().contains(&target)
+                {
+                    bad.push(format!(
+                        "{}: {} slot holds {} {}, which cannot install to the {}",
+                        t.name,
+                        target.as_str(),
+                        m.method,
+                        m.package,
+                        target.as_str(),
+                    ));
+                }
+            }
+            if t.project.is_none() && t.machine.is_none() {
+                bad.push(format!(
+                    "{}: neither a project nor a machine install",
+                    t.name
+                ));
+            }
+            if let Some(prefer) = t.prefer {
+                let default = if t.project.is_some() {
+                    InstallTarget::Project
+                } else {
+                    InstallTarget::Machine
+                };
+                if t.slot(prefer).is_none() {
+                    bad.push(format!(
+                        "{}: prefers the {}, but has no {} install",
+                        t.name,
+                        prefer.as_str(),
+                        prefer.as_str(),
+                    ));
+                } else if prefer == default {
+                    bad.push(format!(
+                        "{}: `prefer` repeats the default ({}); leave it None",
+                        t.name,
+                        prefer.as_str(),
+                    ));
+                }
+            }
+        }
+        assert!(bad.is_empty(), "install slots: {bad:#?}");
+    }
+
+    /// An alternative is never installed, so it must still be a method
+    /// `run` knows, and must not repeat a slot.
+    #[test]
+    fn alternatives_are_known_and_distinct_from_the_slots() {
+        let mut bad: Vec<String> = Vec::new();
+        for t in all_tools() {
+            for alt in t.alternatives {
+                if alt.targets().is_empty() {
+                    bad.push(format!(
+                        "{}: alternative {} {} installs nowhere",
+                        t.name, alt.method, alt.package
+                    ));
+                }
+                let repeats = [t.project.as_ref(), t.machine.as_ref()]
+                    .into_iter()
+                    .flatten()
+                    .any(|m| m.method == alt.method && m.package == alt.package);
+                if repeats {
+                    bad.push(format!(
+                        "{}: alternative {} {} repeats a slot",
+                        t.name, alt.method, alt.package
+                    ));
+                }
+            }
+        }
+        assert!(bad.is_empty(), "install alternatives: {bad:#?}");
     }
 
     /// The names of the `ToolInfo` entries a processor file submits.
@@ -1692,7 +1872,7 @@ mod registry_tests {
 /// Return the default install command for a tool, if known.
 pub fn tool_install_command(tool: &str) -> Option<String> {
     tool_info(tool)
-        .and_then(ToolInfo::default_install_method)
+        .and_then(ToolInfo::preferred_method)
         .map(InstallMethod::command)
 }
 

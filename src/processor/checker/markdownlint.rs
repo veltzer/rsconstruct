@@ -103,7 +103,8 @@ inventory::submit! {
     }
 }
 inventory::submit! { crate::tools::ToolInfo {
-    name: "markdownlint", runtime: "node", install_methods: &[
-        crate::tools::InstallMethod { method: "npm", package: "markdownlint-cli" },
-    ],
+    name: "markdownlint", runtime: "node",
+    project: Some(crate::tools::InstallMethod::new("npm", "markdownlint-cli")),
+    machine: Some(crate::tools::InstallMethod::new("npm", "markdownlint-cli")),
+    alternatives: &[], prefer: None,
 } }

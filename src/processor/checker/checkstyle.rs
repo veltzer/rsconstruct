@@ -33,7 +33,8 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     max_jobs_cap: None,
 } }
 inventory::submit! { crate::tools::ToolInfo {
-    name: "checkstyle", runtime: "jvm", install_methods: &[
-        crate::tools::InstallMethod { method: "apt", package: "checkstyle" },
-    ],
+    name: "checkstyle", runtime: "jvm",
+    project: None,
+    machine: Some(crate::tools::InstallMethod::new("apt", "checkstyle")),
+    alternatives: &[], prefer: None,
 } }

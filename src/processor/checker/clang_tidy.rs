@@ -124,7 +124,8 @@ inventory::submit! {
     }
 }
 inventory::submit! { crate::tools::ToolInfo {
-    name: "clang-tidy", runtime: "system", install_methods: &[
-        crate::tools::InstallMethod { method: "apt", package: "clang-tidy" },
-    ],
+    name: "clang-tidy", runtime: "system",
+    project: None,
+    machine: Some(crate::tools::InstallMethod::new("apt", "clang-tidy")),
+    alternatives: &[], prefer: None,
 } }

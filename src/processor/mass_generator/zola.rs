@@ -1512,9 +1512,10 @@ inventory::submit! {
 // would fail or fetch the wrong thing. The GitHub release is the only
 // automatable route.
 inventory::submit! { crate::tools::ToolInfo {
-    name: "zola", runtime: "rust", install_methods: &[
-        crate::tools::InstallMethod { method: "binary", package: "zola" },
-    ],
+    name: "zola", runtime: "rust",
+    project: Some(crate::tools::InstallMethod::new("binary", "zola")),
+    machine: Some(crate::tools::InstallMethod::new("binary", "zola")),
+    alternatives: &[], prefer: None,
 } }
 
 #[cfg(test)]

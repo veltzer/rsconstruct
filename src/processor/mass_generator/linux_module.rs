@@ -449,7 +449,8 @@ inventory::submit! {
     }
 }
 inventory::submit! { crate::tools::ToolInfo {
-    name: "uname", runtime: "system", install_methods: &[
-        crate::tools::InstallMethod { method: "apt", package: "coreutils" },
-    ],
+    name: "uname", runtime: "system",
+    project: None,
+    machine: Some(crate::tools::InstallMethod::new("apt", "coreutils")),
+    alternatives: &[], prefer: None,
 } }

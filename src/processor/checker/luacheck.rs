@@ -37,7 +37,8 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     max_jobs_cap: None,
 } }
 inventory::submit! { crate::tools::ToolInfo {
-    name: "luacheck", runtime: "system", install_methods: &[
-        crate::tools::InstallMethod { method: "apt", package: "lua-check" },
-    ],
+    name: "luacheck", runtime: "system",
+    project: None,
+    machine: Some(crate::tools::InstallMethod::new("apt", "lua-check")),
+    alternatives: &[], prefer: None,
 } }

@@ -157,7 +157,8 @@ inventory::submit! {
     }
 }
 inventory::submit! { crate::tools::ToolInfo {
-    name: "pip", runtime: "python", install_methods: &[
-        crate::tools::InstallMethod { method: "apt", package: "python3-pip" },
-    ],
+    name: "pip", runtime: "python",
+    project: None,
+    machine: Some(crate::tools::InstallMethod::new("apt", "python3-pip")),
+    alternatives: &[], prefer: None,
 } }

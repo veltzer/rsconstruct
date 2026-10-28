@@ -33,7 +33,8 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     max_jobs_cap: None,
 } }
 inventory::submit! { crate::tools::ToolInfo {
-    name: "jq", runtime: "system", install_methods: &[
-        crate::tools::InstallMethod { method: "apt", package: "jq" },
-    ],
+    name: "jq", runtime: "system",
+    project: None,
+    machine: Some(crate::tools::InstallMethod::new("apt", "jq")),
+    alternatives: &[], prefer: None,
 } }

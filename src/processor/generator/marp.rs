@@ -230,9 +230,10 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     max_jobs_cap: None,
 } }
 inventory::submit! { crate::tools::ToolInfo {
-    name: "marp", runtime: "node", install_methods: &[
-        crate::tools::InstallMethod { method: "npm", package: "@marp-team/marp-cli" },
-    ],
+    name: "marp", runtime: "node",
+    project: Some(crate::tools::InstallMethod::new("npm", "@marp-team/marp-cli")),
+    machine: Some(crate::tools::InstallMethod::new("npm", "@marp-team/marp-cli")),
+    alternatives: &[], prefer: None,
 } }
 
 /// CI cap for marp: GitHub Actions runners (and similar 2-vCPU CI hosts) OOM

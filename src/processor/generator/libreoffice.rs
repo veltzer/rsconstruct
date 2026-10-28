@@ -85,12 +85,14 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     max_jobs_cap: None,
 } }
 inventory::submit! { crate::tools::ToolInfo {
-    name: "libreoffice", runtime: "system", install_methods: &[
-        crate::tools::InstallMethod { method: "apt", package: "libreoffice" },
-    ],
+    name: "libreoffice", runtime: "system",
+    project: None,
+    machine: Some(crate::tools::InstallMethod::new("apt", "libreoffice")),
+    alternatives: &[], prefer: None,
 } }
 inventory::submit! { crate::tools::ToolInfo {
-    name: "flock", runtime: "system", install_methods: &[
-        crate::tools::InstallMethod { method: "apt", package: "util-linux" },
-    ],
+    name: "flock", runtime: "system",
+    project: None,
+    machine: Some(crate::tools::InstallMethod::new("apt", "util-linux")),
+    alternatives: &[], prefer: None,
 } }

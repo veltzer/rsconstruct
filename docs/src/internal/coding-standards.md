@@ -56,7 +56,8 @@ A processor is one file. Everything that defines it lives in its file under
 `create`, `fields` (one `FieldSpec` per custom config field: name, type,
 whether it affects output, doc), `omit_standard_fields`, `scan_defaults`,
 `defaults`, and the capability flags. Processors own their tools: each tool
-only this processor runs gets its `ToolInfo` (name, runtime, install methods)
+only this processor runs gets its `ToolInfo` (name, runtime, project and
+machine install, alternatives, preferred target)
 submitted from the same file. The central `TOOLS` table in `src/tools.rs`
 holds only the tools no single processor owns: runtimes and compilers several
 processors run, and tools a project selects through config or rsconstruct runs

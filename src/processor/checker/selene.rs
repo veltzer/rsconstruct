@@ -43,8 +43,9 @@ inventory::submit! { crate::registries::ProcessorPlugin {
 // selene is published as a zipped binary on its GitHub release and as a
 // crate. The binary comes first so a repo needs no Rust toolchain to lint Lua.
 inventory::submit! { crate::tools::ToolInfo {
-    name: "selene", runtime: "rust", install_methods: &[
-        crate::tools::InstallMethod { method: "binary", package: "selene" },
-        crate::tools::InstallMethod { method: "cargo", package: "selene" },
-    ],
+    name: "selene", runtime: "rust",
+    project: Some(crate::tools::InstallMethod::new("binary", "selene")),
+    machine: Some(crate::tools::InstallMethod::new("binary", "selene")),
+    alternatives: &[crate::tools::InstallMethod::new("cargo", "selene")],
+    prefer: None,
 } }

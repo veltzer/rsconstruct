@@ -176,7 +176,8 @@ inventory::submit! {
 // distribution, so probing it is an exact proxy for "the library is
 // importable", and installing it installs the library.
 inventory::submit! { crate::tools::ToolInfo {
-    name: "mako-render", runtime: "python", install_methods: &[
-        crate::tools::InstallMethod { method: "pip", package: "mako" },
-    ],
+    name: "mako-render", runtime: "python",
+    project: Some(crate::tools::InstallMethod::new("pip", "mako")),
+    machine: Some(crate::tools::InstallMethod::new("pip", "mako")),
+    alternatives: &[], prefer: None,
 } }

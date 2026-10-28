@@ -243,7 +243,8 @@ inventory::submit! {
     }
 }
 inventory::submit! { crate::tools::ToolInfo {
-    name: "pdfunite", runtime: "system", install_methods: &[
-        crate::tools::InstallMethod { method: "apt", package: "poppler-utils" },
-    ],
+    name: "pdfunite", runtime: "system",
+    project: None,
+    machine: Some(crate::tools::InstallMethod::new("apt", "poppler-utils")),
+    alternatives: &[], prefer: None,
 } }

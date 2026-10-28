@@ -171,7 +171,8 @@ inventory::submit! {
 // --all` on a bare machine. A host that already has a rustup toolchain never
 // reaches the install path: `which` finds rustc first.
 inventory::submit! { crate::tools::ToolInfo {
-    name: "rustc", runtime: "rust", install_methods: &[
-        crate::tools::InstallMethod { method: "apt", package: "rustc" },
-    ],
+    name: "rustc", runtime: "rust",
+    project: None,
+    machine: Some(crate::tools::InstallMethod::new("apt", "rustc")),
+    alternatives: &[], prefer: None,
 } }

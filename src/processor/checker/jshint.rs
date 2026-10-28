@@ -33,7 +33,8 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     max_jobs_cap: None,
 } }
 inventory::submit! { crate::tools::ToolInfo {
-    name: "jshint", runtime: "node", install_methods: &[
-        crate::tools::InstallMethod { method: "npm", package: "jshint" },
-    ],
+    name: "jshint", runtime: "node",
+    project: Some(crate::tools::InstallMethod::new("npm", "jshint")),
+    machine: Some(crate::tools::InstallMethod::new("npm", "jshint")),
+    alternatives: &[], prefer: None,
 } }

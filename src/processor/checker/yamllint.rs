@@ -33,7 +33,8 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     max_jobs_cap: None,
 } }
 inventory::submit! { crate::tools::ToolInfo {
-    name: "yamllint", runtime: "python", install_methods: &[
-        crate::tools::InstallMethod { method: "pip", package: "yamllint" },
-    ],
+    name: "yamllint", runtime: "python",
+    project: Some(crate::tools::InstallMethod::new("pip", "yamllint")),
+    machine: Some(crate::tools::InstallMethod::new("pip", "yamllint")),
+    alternatives: &[], prefer: None,
 } }

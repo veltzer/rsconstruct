@@ -33,7 +33,8 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     max_jobs_cap: None,
 } }
 inventory::submit! { crate::tools::ToolInfo {
-    name: "cppcheck", runtime: "system", install_methods: &[
-        crate::tools::InstallMethod { method: "apt", package: "cppcheck" },
-    ],
+    name: "cppcheck", runtime: "system",
+    project: None,
+    machine: Some(crate::tools::InstallMethod::new("apt", "cppcheck")),
+    alternatives: &[], prefer: None,
 } }

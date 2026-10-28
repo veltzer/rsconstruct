@@ -59,7 +59,8 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     max_jobs_cap: None,
 } }
 inventory::submit! { crate::tools::ToolInfo {
-    name: "sass", runtime: "node", install_methods: &[
-        crate::tools::InstallMethod { method: "npm", package: "sass" },
-    ],
+    name: "sass", runtime: "node",
+    project: Some(crate::tools::InstallMethod::new("npm", "sass")),
+    machine: Some(crate::tools::InstallMethod::new("npm", "sass")),
+    alternatives: &[], prefer: None,
 } }

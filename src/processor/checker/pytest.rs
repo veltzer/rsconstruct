@@ -33,7 +33,8 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     max_jobs_cap: None,
 } }
 inventory::submit! { crate::tools::ToolInfo {
-    name: "pytest", runtime: "python", install_methods: &[
-        crate::tools::InstallMethod { method: "pip", package: "pytest" },
-    ],
+    name: "pytest", runtime: "python",
+    project: Some(crate::tools::InstallMethod::new("pip", "pytest")),
+    machine: Some(crate::tools::InstallMethod::new("pip", "pytest")),
+    alternatives: &[], prefer: None,
 } }

@@ -38,7 +38,8 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     max_jobs_cap: None,
 } }
 inventory::submit! { crate::tools::ToolInfo {
-    name: "svgo", runtime: "node", install_methods: &[
-        crate::tools::InstallMethod { method: "npm", package: "svgo" },
-    ],
+    name: "svgo", runtime: "node",
+    project: Some(crate::tools::InstallMethod::new("npm", "svgo")),
+    machine: Some(crate::tools::InstallMethod::new("npm", "svgo")),
+    alternatives: &[], prefer: None,
 } }

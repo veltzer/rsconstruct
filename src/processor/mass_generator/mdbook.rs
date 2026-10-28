@@ -397,9 +397,10 @@ inventory::submit! {
     }
 }
 inventory::submit! { crate::tools::ToolInfo {
-    name: "mdbook", runtime: "rust", install_methods: &[
-        crate::tools::InstallMethod { method: "cargo", package: "mdbook" },
-    ],
+    name: "mdbook", runtime: "rust",
+    project: Some(crate::tools::InstallMethod::new("cargo", "mdbook")),
+    machine: Some(crate::tools::InstallMethod::new("cargo", "mdbook")),
+    alternatives: &[], prefer: None,
 } }
 
 #[cfg(test)]

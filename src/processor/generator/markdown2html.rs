@@ -65,7 +65,8 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     max_jobs_cap: None,
 } }
 inventory::submit! { crate::tools::ToolInfo {
-    name: "markdown", runtime: "perl", install_methods: &[
-        crate::tools::InstallMethod { method: "apt", package: "markdown" },
-    ],
+    name: "markdown", runtime: "perl",
+    project: None,
+    machine: Some(crate::tools::InstallMethod::new("apt", "markdown")),
+    alternatives: &[], prefer: None,
 } }

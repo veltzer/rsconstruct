@@ -67,7 +67,8 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     max_jobs_cap: None,
 } }
 inventory::submit! { crate::tools::ToolInfo {
-    name: "google-chrome", runtime: "system", install_methods: &[
-        crate::tools::InstallMethod { method: "binary", package: "google-chrome-stable" },
-    ],
+    name: "google-chrome", runtime: "system",
+    project: None,
+    machine: Some(crate::tools::InstallMethod::new("binary", "google-chrome-stable")),
+    alternatives: &[], prefer: None,
 } }

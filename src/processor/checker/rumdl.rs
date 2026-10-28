@@ -47,8 +47,9 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     max_jobs_cap: None,
 } }
 inventory::submit! { crate::tools::ToolInfo {
-    name: "rumdl", runtime: "rust", install_methods: &[
-        crate::tools::InstallMethod { method: "binary", package: "rumdl" },
-        crate::tools::InstallMethod { method: "cargo", package: "rumdl" },
-    ],
+    name: "rumdl", runtime: "rust",
+    project: Some(crate::tools::InstallMethod::new("binary", "rumdl")),
+    machine: Some(crate::tools::InstallMethod::new("binary", "rumdl")),
+    alternatives: &[crate::tools::InstallMethod::new("cargo", "rumdl")],
+    prefer: None,
 } }

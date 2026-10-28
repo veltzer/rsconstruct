@@ -663,6 +663,33 @@ provision CI — one command covers the whole matrix, and a registry entry that
 loses its install method fails the provisioning step instead of quietly
 shrinking the matrix. `--all` cannot be combined with a tool name.
 
+### Install targets
+
+Every install goes to one of two targets: the **project** (its
+`.rsconstruct/tools` directory, or the venv inside the repo) or the
+**machine** (a system package manager, a user-wide prefix such as
+`~/.cargo/bin` or `npm -g`, or a venv outside the repo). A system package
+manager (apt, dnf, pacman, brew, snap) and a `.deb` binary can only reach the
+machine; pip, uv, npm, cargo, gem and other release binaries can reach either,
+depending on where they are pointed.
+
+Each tool in the registry names up to three preferences:
+
+- its **project install**: the method that installs it into the project, if
+  there is one;
+- its **machine install**: the method that installs it onto the machine;
+- its **preferred target** overall: the project when the tool has a project
+  install, otherwise the machine. A tool can override this, but none does
+  today.
+
+`install` uses the method of the preferred target. Any other methods a tool
+lists are alternatives (brew for macOS, a crate where a release binary is
+preferred): shown by `list -M`, never chosen by an install. `list` shows the
+preferred target in its Target column; `list -M` labels each method with the
+slots it fills (`project`, `machine`, or `alt`); `--json tool list` carries,
+per method, the targets it can reach (`targets`) and the slots it fills
+(`slots`), and per tool the `preferred` target.
+
 ### Ruby gems without a writable gem dir
 
 Only system package managers (apt/dnf/pacman/snap) are sudo-wrapped; `pip`,

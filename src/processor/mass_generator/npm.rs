@@ -162,9 +162,10 @@ inventory::submit! {
     }
 }
 inventory::submit! { crate::tools::ToolInfo {
-    name: "npm", runtime: "node", install_methods: &[
-        crate::tools::InstallMethod { method: "apt", package: "npm" },
-    ],
+    name: "npm", runtime: "node",
+    project: None,
+    machine: Some(crate::tools::InstallMethod::new("apt", "npm")),
+    alternatives: &[], prefer: None,
 } }
 
 #[cfg(test)]

@@ -50,8 +50,9 @@ inventory::submit! { crate::registries::ProcessorPlugin {
 // fallback. No cargo method: upstream does not publish the CLI to
 // crates.io (the `biome_*` crates there are its internal libraries).
 inventory::submit! { crate::tools::ToolInfo {
-    name: "biome", runtime: "rust", install_methods: &[
-        crate::tools::InstallMethod { method: "binary", package: "biome" },
-        crate::tools::InstallMethod { method: "npm", package: "@biomejs/biome" },
-    ],
+    name: "biome", runtime: "rust",
+    project: Some(crate::tools::InstallMethod::new("binary", "biome")),
+    machine: Some(crate::tools::InstallMethod::new("binary", "biome")),
+    alternatives: &[crate::tools::InstallMethod::new("npm", "@biomejs/biome")],
+    prefer: None,
 } }

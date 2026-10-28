@@ -33,7 +33,8 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     max_jobs_cap: None,
 } }
 inventory::submit! { crate::tools::ToolInfo {
-    name: "perlcritic", runtime: "perl", install_methods: &[
-        crate::tools::InstallMethod { method: "apt", package: "libperl-critic-perl" },
-    ],
+    name: "perlcritic", runtime: "perl",
+    project: None,
+    machine: Some(crate::tools::InstallMethod::new("apt", "libperl-critic-perl")),
+    alternatives: &[], prefer: None,
 } }

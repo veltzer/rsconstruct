@@ -33,9 +33,12 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     max_jobs_cap: None,
 } }
 inventory::submit! { crate::tools::ToolInfo {
-    name: "yq", runtime: "system", install_methods: &[
-        crate::tools::InstallMethod { method: "pip", package: "yq" },
-        crate::tools::InstallMethod { method: "snap", package: "yq" },
-        crate::tools::InstallMethod { method: "apt", package: "yq" },
+    name: "yq", runtime: "system",
+    project: Some(crate::tools::InstallMethod::new("pip", "yq")),
+    machine: Some(crate::tools::InstallMethod::new("pip", "yq")),
+    alternatives: &[
+        crate::tools::InstallMethod::new("snap", "yq"),
+        crate::tools::InstallMethod::new("apt", "yq"),
     ],
+    prefer: None,
 } }

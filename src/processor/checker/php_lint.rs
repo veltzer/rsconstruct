@@ -33,7 +33,8 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     max_jobs_cap: None,
 } }
 inventory::submit! { crate::tools::ToolInfo {
-    name: "php", runtime: "system", install_methods: &[
-        crate::tools::InstallMethod { method: "apt", package: "php-cli" },
-    ],
+    name: "php", runtime: "system",
+    project: None,
+    machine: Some(crate::tools::InstallMethod::new("apt", "php-cli")),
+    alternatives: &[], prefer: None,
 } }

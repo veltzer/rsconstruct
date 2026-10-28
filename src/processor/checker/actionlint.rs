@@ -35,8 +35,9 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     max_jobs_cap: None,
 } }
 inventory::submit! { crate::tools::ToolInfo {
-    name: "actionlint", runtime: "system", install_methods: &[
-        crate::tools::InstallMethod { method: "binary", package: "actionlint" },
-        crate::tools::InstallMethod { method: "brew", package: "actionlint" },
-    ],
+    name: "actionlint", runtime: "system",
+    project: Some(crate::tools::InstallMethod::new("binary", "actionlint")),
+    machine: Some(crate::tools::InstallMethod::new("binary", "actionlint")),
+    alternatives: &[crate::tools::InstallMethod::new("brew", "actionlint")],
+    prefer: None,
 } }
