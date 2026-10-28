@@ -438,8 +438,11 @@ from `uv.lock`. It holds the code's dependencies and the Python tools its
 processors run (ruff, pytest, pyrefly) together, all declared in
 `pyproject.toml` — tools in the dev dependency group — and pinned by
 `uv.lock`, the exact closure including transitive dependencies. `tool install
-project` runs `uv sync --locked`, which fails when the lock is out of date
-with pyproject.toml instead of quietly re-resolving it. rsconstruct never
+project` runs `uv sync --locked --no-install-project`: `--locked` fails when
+the lock is out of date with pyproject.toml instead of quietly re-resolving
+it, and the project itself is left out, since building it is the build's
+job (a package whose build hook needs a file CI lacks would otherwise fail
+the install). rsconstruct never
 runs pip into that venv itself: `uv sync` would remove anything uv.lock does
 not list, and a pip install could shift a version the code has locked.
 

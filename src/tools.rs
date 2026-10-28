@@ -518,10 +518,14 @@ fn gem_install_argv() -> Vec<String> {
 /// The project install of the repo's Python packages: `uv sync` builds the
 /// repo's `.venv` from uv.lock, the code's dependencies and the Python
 /// tools its processors run together. `--locked` fails when uv.lock is out
-/// of date with pyproject.toml instead of quietly re-resolving it. Used by
-/// both `describe` and `run` so the printed plan matches what executes.
+/// of date with pyproject.toml instead of quietly re-resolving it.
+/// `--no-install-project` leaves the project itself out: building it is
+/// the build's job, not the install's, and a package whose build needs
+/// something CI does not have (a build hook demanding an uncommitted
+/// `client_secret.json`) failed the install outright when it was in. Used
+/// by both `describe` and `run` so the printed plan matches what executes.
 fn uv_sync_argv() -> Vec<String> {
-    ["uv", "sync", "--locked"]
+    ["uv", "sync", "--locked", "--no-install-project"]
         .iter()
         .map(|s| (*s).to_string())
         .collect()
@@ -1998,14 +2002,19 @@ mod tests {
         assert!(!argv.contains(&"sudo".to_string()));
     }
 
-    /// `uv-sync` is one `uv sync --locked`, whatever names it is handed:
-    /// it reads pyproject.toml and uv.lock, and never uses sudo.
+    /// `uv-sync` is one `uv sync --locked --no-install-project`, whatever
+    /// names it is handed: it reads pyproject.toml and uv.lock, leaves the
+    /// project itself to the build, and never uses sudo.
     #[test]
     fn uv_sync_describe_is_a_locked_sync() {
         let steps = describe("uv-sync", &["ruff", "pytest"], &no_pins());
         assert_eq!(
             steps,
-            vec![["uv", "sync", "--locked"].map(String::from).to_vec()]
+            vec![
+                ["uv", "sync", "--locked", "--no-install-project"]
+                    .map(String::from)
+                    .to_vec()
+            ]
         );
     }
 
