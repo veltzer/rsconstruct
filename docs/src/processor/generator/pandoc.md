@@ -78,6 +78,15 @@ Notes:
   injected when the engine is pdflatex (or the empty default). Other engines
   would error on it.
 
+## Installation
+
+`rsconstruct tool install project` downloads the statically linked Linux
+binary from the pandoc GitHub release into `.rsconstruct/tools`, at the
+version rsconstruct.lock pins, so every machine renders with the same
+pandoc. `rsconstruct tool install machine pandoc` installs the
+distribution's package with apt instead. The PDF engines (`xelatex`,
+`pdflatex`) are TeX Live system packages and stay machine installs.
+
 ## Batch support
 
 Each input file is processed individually, producing its own output file.

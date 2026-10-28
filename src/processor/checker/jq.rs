@@ -34,7 +34,7 @@ inventory::submit! { crate::registries::ProcessorPlugin {
 } }
 inventory::submit! { crate::tools::ToolInfo {
     name: "jq", runtime: "system",
-    project: None,
+    project: Some(crate::tools::InstallMethod::new("binary", "jq")),
     machine: Some(crate::tools::InstallMethod::new("apt", "jq")),
     alternatives: &[], prefer: None,
 } }

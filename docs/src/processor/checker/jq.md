@@ -36,6 +36,13 @@ dep_inputs = []                            # Additional files that trigger rebui
 | `args` | string[] | `[]` | Extra arguments passed to jq (after the `empty` filter) |
 | `dep_inputs` | string[] | `[]` | Extra files whose changes trigger rebuilds |
 
+## Installation
+
+`rsconstruct tool install project` downloads the statically linked Linux
+binary from the jq GitHub release into `.rsconstruct/tools`, at the release
+rsconstruct.lock pins. `rsconstruct tool install machine jq` installs the
+distribution's package with apt instead.
+
 ## Batch support
 
 The tool accepts multiple files on the command line. When batching is enabled (default), rsconstruct passes all files in a single invocation for better performance.

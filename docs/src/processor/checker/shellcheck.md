@@ -35,6 +35,13 @@ dep_inputs = []                            # Additional files that trigger rebui
 | `args` | string[] | `[]` | Extra arguments passed to shellcheck |
 | `dep_inputs` | string[] | `[]` | Extra files whose changes trigger rebuilds |
 
+## Installation
+
+`rsconstruct tool install project` downloads the statically linked Linux
+binary from the shellcheck GitHub release into `.rsconstruct/tools`, at the
+version rsconstruct.lock pins. `rsconstruct tool install machine shellcheck`
+installs the distribution's package with apt instead.
+
 ## Batch support
 
 The tool accepts multiple files on the command line. When batching is enabled (default), rsconstruct passes all files in a single invocation for better performance.

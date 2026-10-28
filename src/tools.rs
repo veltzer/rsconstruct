@@ -1340,6 +1340,35 @@ fn binary_recipe(pkg: &str) -> Option<BinaryRecipe> {
             archive: ArchiveKind::Raw,
             dest: "biome",
         }),
+        // Pinned like actionlint: shellcheck's release assets embed the
+        // version in the filename and in the tarball's top directory. The
+        // binary is statically linked. Bump this deliberately.
+        "shellcheck" => Some(BinaryRecipe {
+            url: "https://github.com/koalaman/shellcheck/releases/download/v0.11.0/shellcheck-v0.11.0.linux.x86_64.tar.gz",
+            archive: ArchiveKind::TarGz {
+                inner: "shellcheck-v0.11.0/shellcheck",
+            },
+            dest: "shellcheck",
+        }),
+        // Tracks latest like hadolint: every jq release carries the raw,
+        // statically linked `jq-linux-amd64` asset under that same name.
+        "jq" => Some(BinaryRecipe {
+            url: "https://github.com/jqlang/jq/releases/latest/download/jq-linux-amd64",
+            archive: ArchiveKind::Raw,
+            dest: "jq",
+        }),
+        // Pinned like actionlint: pandoc's release assets embed the version
+        // in the filename and in the tarball's top directory. The binary is
+        // statically linked; pandoc-server and pandoc-lua beside it are not
+        // needed. A new pandoc can change generated documents, so bump this
+        // deliberately.
+        "pandoc" => Some(BinaryRecipe {
+            url: "https://github.com/jgm/pandoc/releases/download/3.13/pandoc-3.13-linux-amd64.tar.gz",
+            archive: ArchiveKind::TarGz {
+                inner: "pandoc-3.13/bin/pandoc",
+            },
+            dest: "pandoc",
+        }),
         // checkpatch.pl ships only inside the kernel tree — there is no release
         // artifact and no distro package. Fetching the single script from
         // torvalds/linux master is the automatable equivalent of "copy it out
@@ -2022,7 +2051,16 @@ mod tests {
     /// chmod, mv) with no shell metacharacters anywhere.
     #[test]
     fn binary_describe_has_no_shell_metachars() {
-        for pkg in &["taplo", "rumdl", "zola", "oxlint", "selene"] {
+        for pkg in &[
+            "taplo",
+            "rumdl",
+            "zola",
+            "oxlint",
+            "selene",
+            "shellcheck",
+            "jq",
+            "pandoc",
+        ] {
             let steps = describe("binary", &[pkg], &no_pins());
             assert!(steps.len() >= 3, "binary {pkg} should have >=3 steps");
             for step in &steps {
