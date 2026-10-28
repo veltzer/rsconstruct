@@ -161,6 +161,11 @@ inventory::submit! {
         max_jobs_cap: Some(1),
     }
 }
+inventory::submit! { crate::tools::ToolInfo {
+    name: "npm", runtime: "node", install_methods: &[
+        crate::tools::InstallMethod { method: "apt", package: "npm" },
+    ],
+} }
 
 #[cfg(test)]
 mod tests {

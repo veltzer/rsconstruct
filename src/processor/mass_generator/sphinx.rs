@@ -520,6 +520,11 @@ inventory::submit! {
         max_jobs_cap: Some(1),
     }
 }
+inventory::submit! { crate::tools::ToolInfo {
+    name: "sphinx-build", runtime: "python", install_methods: &[
+        crate::tools::InstallMethod { method: "pip", package: "sphinx" },
+    ],
+} }
 
 #[cfg(test)]
 mod tests {

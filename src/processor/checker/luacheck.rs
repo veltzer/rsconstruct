@@ -36,3 +36,8 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     caches_outputs: true,
     max_jobs_cap: None,
 } }
+inventory::submit! { crate::tools::ToolInfo {
+    name: "luacheck", runtime: "system", install_methods: &[
+        crate::tools::InstallMethod { method: "apt", package: "lua-check" },
+    ],
+} }

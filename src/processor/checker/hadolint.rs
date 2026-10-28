@@ -34,3 +34,10 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     caches_outputs: true,
     max_jobs_cap: None,
 } }
+inventory::submit! { crate::tools::ToolInfo {
+    name: "hadolint", runtime: "system", install_methods: &[
+        crate::tools::InstallMethod { method: "binary", package: "hadolint" },
+        crate::tools::InstallMethod { method: "brew", package: "hadolint" },
+        crate::tools::InstallMethod { method: "apt", package: "hadolint" },
+    ],
+} }

@@ -1651,7 +1651,7 @@ mod tests {
     }
 
     /// Verify that every tool declared by any processor's `required_tools()` has
-    /// an entry in the central TOOLS registry (install command + runtime category).
+    /// an entry in the tool registry (install command + runtime category).
     /// This prevents silent gaps like the missing `ar` tool.
     #[test]
     fn all_required_tools_have_registry_entries() {

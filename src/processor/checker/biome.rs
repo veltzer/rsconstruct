@@ -45,3 +45,13 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     caches_outputs: true,
     max_jobs_cap: None,
 } }
+// Binary first: biome's GitHub release ships a static Linux binary, so a
+// repo needs no node runtime to lint CSS or JS. The npm package is the
+// fallback. No cargo method: upstream does not publish the CLI to
+// crates.io (the `biome_*` crates there are its internal libraries).
+inventory::submit! { crate::tools::ToolInfo {
+    name: "biome", runtime: "rust", install_methods: &[
+        crate::tools::InstallMethod { method: "binary", package: "biome" },
+        crate::tools::InstallMethod { method: "npm", package: "@biomejs/biome" },
+    ],
+} }

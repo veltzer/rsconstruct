@@ -229,6 +229,11 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     caches_outputs: true,
     max_jobs_cap: None,
 } }
+inventory::submit! { crate::tools::ToolInfo {
+    name: "marp", runtime: "node", install_methods: &[
+        crate::tools::InstallMethod { method: "npm", package: "@marp-team/marp-cli" },
+    ],
+} }
 
 /// CI cap for marp: GitHub Actions runners (and similar 2-vCPU CI hosts) OOM
 /// when running marp at full project parallelism. Equivalent to the user

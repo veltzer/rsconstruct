@@ -1027,3 +1027,13 @@ inventory::submit! {
         max_jobs_cap: None,
     }
 }
+inventory::submit! { crate::tools::ToolInfo {
+    name: "sh", runtime: "system", install_methods: &[
+        crate::tools::InstallMethod { method: "apt", package: "dash" },
+    ],
+} }
+inventory::submit! { crate::tools::ToolInfo {
+    name: "git", runtime: "system", install_methods: &[
+        crate::tools::InstallMethod { method: "apt", package: "git" },
+    ],
+} }

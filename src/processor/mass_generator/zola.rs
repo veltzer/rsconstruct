@@ -1506,6 +1506,16 @@ inventory::submit! {
         max_jobs_cap: Some(1),
     }
 }
+// Binary only, no cargo fallback: upstream does not publish zola to
+// crates.io. The `zola` crate there is an unrelated squatter -- version
+// 0.0.0, yanked, described as "zola installer" -- so `cargo install zola`
+// would fail or fetch the wrong thing. The GitHub release is the only
+// automatable route.
+inventory::submit! { crate::tools::ToolInfo {
+    name: "zola", runtime: "rust", install_methods: &[
+        crate::tools::InstallMethod { method: "binary", package: "zola" },
+    ],
+} }
 
 #[cfg(test)]
 mod tests {

@@ -449,3 +449,8 @@ inventory::submit! {
         max_jobs_cap: Some(1),
     }
 }
+inventory::submit! { crate::tools::ToolInfo {
+    name: "jekyll", runtime: "ruby", install_methods: &[
+        crate::tools::InstallMethod { method: "gem", package: "jekyll" },
+    ],
+} }

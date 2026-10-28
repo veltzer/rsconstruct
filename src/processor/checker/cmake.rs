@@ -34,3 +34,8 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     caches_outputs: true,
     max_jobs_cap: None,
 } }
+inventory::submit! { crate::tools::ToolInfo {
+    name: "cmakelint", runtime: "python", install_methods: &[
+        crate::tools::InstallMethod { method: "pip", package: "cmakelint" },
+    ],
+} }

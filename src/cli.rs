@@ -612,7 +612,7 @@ pub enum ToolAction {
         #[arg(long)]
         no_eatmydata: bool,
     },
-    /// List all tools known to rsconstruct, from the central registry (no config needed)
+    /// List all tools known to rsconstruct, from the tool registry (no config needed)
     List {
         /// Show all available installation methods for each tool
         #[arg(short = 'M', long)]

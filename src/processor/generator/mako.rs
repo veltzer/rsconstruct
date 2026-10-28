@@ -170,3 +170,13 @@ inventory::submit! {
         max_jobs_cap: None,
     }
 }
+// The mako processor runs `python3 -c "import mako..."`, so what it really
+// needs is the Mako *library*, which the registry can't probe directly (it
+// probes executables). The `mako-render` console script ships in the same
+// distribution, so probing it is an exact proxy for "the library is
+// importable", and installing it installs the library.
+inventory::submit! { crate::tools::ToolInfo {
+    name: "mako-render", runtime: "python", install_methods: &[
+        crate::tools::InstallMethod { method: "pip", package: "mako" },
+    ],
+} }

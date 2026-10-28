@@ -102,3 +102,8 @@ inventory::submit! {
         max_jobs_cap: None,
     }
 }
+inventory::submit! { crate::tools::ToolInfo {
+    name: "markdownlint", runtime: "node", install_methods: &[
+        crate::tools::InstallMethod { method: "npm", package: "markdownlint-cli" },
+    ],
+} }

@@ -84,3 +84,13 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     caches_outputs: true,
     max_jobs_cap: None,
 } }
+inventory::submit! { crate::tools::ToolInfo {
+    name: "libreoffice", runtime: "system", install_methods: &[
+        crate::tools::InstallMethod { method: "apt", package: "libreoffice" },
+    ],
+} }
+inventory::submit! { crate::tools::ToolInfo {
+    name: "flock", runtime: "system", install_methods: &[
+        crate::tools::InstallMethod { method: "apt", package: "util-linux" },
+    ],
+} }

@@ -55,8 +55,13 @@ A processor is one file. Everything that defines it lives in its file under
 `src/registries/processor.rs`) carrying the whole schema: `processor_type`,
 `create`, `fields` (one `FieldSpec` per custom config field: name, type,
 whether it affects output, doc), `omit_standard_fields`, `scan_defaults`,
-`defaults`, and the capability flags. A tool the central registry in
-`src/tools.rs` lacks gets its `ToolInfo` submitted from the same file.
+`defaults`, and the capability flags. Processors own their tools: each tool
+only this processor runs gets its `ToolInfo` (name, runtime, install methods)
+submitted from the same file. The central `TOOLS` table in `src/tools.rs`
+holds only the tools no single processor owns: runtimes and compilers several
+processors run, and tools a project selects through config or rsconstruct runs
+itself. The test `central_registry_holds_only_unowned_tools` builds every
+processor with its default config and fails when a tool sits on the wrong side.
 `src/processor/checker/svglint.rs` is the minimal template.
 
 There are no central per-processor tables, and none may be added: the

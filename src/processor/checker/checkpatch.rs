@@ -32,3 +32,8 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     caches_outputs: true,
     max_jobs_cap: None,
 } }
+inventory::submit! { crate::tools::ToolInfo {
+    name: "checkpatch.pl", runtime: "perl", install_methods: &[
+        crate::tools::InstallMethod { method: "binary", package: "checkpatch.pl" },
+    ],
+} }

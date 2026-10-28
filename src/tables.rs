@@ -212,7 +212,7 @@ pub mod defs {
     pub const TOOL_LIST: TableDef = def(
         "tool_list",
         "tool list",
-        &["Tool", "Status", "Runtime", "Install"],
+        &["Tool", "Status", "Runtime", "Processors", "Install"],
         &["Install"],
     );
     pub const TOOL_RUNTIMES: TableDef = def(

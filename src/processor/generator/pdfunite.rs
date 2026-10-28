@@ -242,3 +242,8 @@ inventory::submit! {
         max_jobs_cap: Some(1),
     }
 }
+inventory::submit! { crate::tools::ToolInfo {
+    name: "pdfunite", runtime: "system", install_methods: &[
+        crate::tools::InstallMethod { method: "apt", package: "poppler-utils" },
+    ],
+} }

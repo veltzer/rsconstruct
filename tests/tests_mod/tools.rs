@@ -6,7 +6,7 @@ fn tools_list_shows_all_registry_tools() {
     let temp_dir = setup_test_project();
     let project_path = temp_dir.path();
 
-    // `tool list` shows the central registry regardless of config, like
+    // `tool list` shows the whole tool registry regardless of config, like
     // `processor list`. It lists tools no processor in this project needs.
     let output = run_rsconstruct_with_env(project_path, &["tool", "list"], &[("NO_COLOR", "1")]);
     assert!(
@@ -20,16 +20,53 @@ fn tools_list_shows_all_registry_tools() {
         !stdout.is_empty(),
         "tool list should show at least one tool"
     );
-    // The registry view is not processor-scoped, so it has no "(...)" column.
-    assert!(
-        !stdout.contains("("),
-        "registry list should not show processor names in parentheses"
-    );
     // It includes tools the minimal test project does not require.
     assert!(
         stdout.contains("clojure"),
         "registry list should include all known tools, e.g. clojure"
     );
+    // Each tool names the processors that run it at their default config,
+    // whatever the project enables; a tool no processor runs says so.
+    let row = |tool: &str| {
+        stdout
+            .lines()
+            .find(|l| l.split('│').nth(1).is_some_and(|c| c.trim() == tool))
+            .unwrap_or_else(|| panic!("no row for {tool}:\n{stdout}"))
+            .to_string()
+    };
+    assert!(row("ruff").contains("checker.ruff"), "{}", row("ruff"));
+    assert!(
+        row("gcc").contains("generator.cc_single_file, mass_generator.cc"),
+        "{}",
+        row("gcc")
+    );
+    assert!(row("clojure").contains("(none)"), "{}", row("clojure"));
+}
+
+#[test]
+fn tools_list_json_names_each_tools_processors() {
+    let temp_dir = setup_test_project();
+    let output = run_rsconstruct_with_env(temp_dir.path(), &["--json", "tool", "list"], &[]);
+    assert!(
+        output.status.success(),
+        "tool list --json failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let entries: Vec<Value> = serde_json::from_slice(&output.stdout).unwrap();
+    let processors = |tool: &str| -> Vec<String> {
+        let entry = entries
+            .iter()
+            .find(|e| e["tool"] == tool)
+            .unwrap_or_else(|| panic!("no entry for {tool}"));
+        entry["processor"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|p| p.as_str().unwrap().to_string())
+            .collect()
+    };
+    assert_eq!(processors("ruff"), ["processor.checker.ruff"]);
+    assert!(processors("clojure").is_empty());
 }
 
 #[test]

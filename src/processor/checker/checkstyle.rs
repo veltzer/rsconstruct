@@ -32,3 +32,8 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     caches_outputs: true,
     max_jobs_cap: None,
 } }
+inventory::submit! { crate::tools::ToolInfo {
+    name: "checkstyle", runtime: "jvm", install_methods: &[
+        crate::tools::InstallMethod { method: "apt", package: "checkstyle" },
+    ],
+} }

@@ -167,3 +167,8 @@ inventory::submit! {
         max_jobs_cap: None,
     }
 }
+inventory::submit! { crate::tools::ToolInfo {
+    name: "mdl", runtime: "ruby", install_methods: &[
+        crate::tools::InstallMethod { method: "gem", package: "mdl" },
+    ],
+} }

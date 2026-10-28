@@ -201,8 +201,10 @@ is decided separately, by `rsconstruct.lock` (see `docs/src/tool-lock.md`).
 
 ## Tool detection
 
-The `TOOLS` registry in `src/tools.rs` lists every external tool
-rsconstruct knows about. Each entry's `name` is the **detection key**: it is
+The tool registry lists every external tool rsconstruct knows about:
+`all_tools()` in `src/tools.rs`, the central `TOOLS` table (tools no single
+processor owns) plus the `ToolInfo` entries each processor file submits for
+the tools it alone runs. Each entry's `name` is the **detection key**: it is
 passed directly to `which::which` by `builder/tools.rs` and `tool_lock.rs`, so
 it decides whether `rsconstruct tool list` reports `installed` or `missing`,
 and which binary the build's tool hashing identifies.
@@ -340,7 +342,7 @@ Category directories are singular (`checker/`, not `checkers/`), like every othe
 - **Generators** use `SimpleGenerator` (data-driven with a custom `execute_fn`) or `GeneratorProcessor` for the generic pass-through generator.
 - **Mass generators** use `MassGeneratorProcessor` for the generic case (a user `predict_command`), or their own struct for tools whose outputs they predict themselves (cargo profiles, sphinx and mdbook page lists, etc.).
 - **Explicit** is a singleton processor type with its own folder because it is neither a checker nor a generator.
-- **A processor is one file.** Everything that defines a processor lives in its file: the `Processor` impl (or SimpleChecker/SimpleGenerator params), its config struct, and one `inventory::submit!` plugin entry carrying the whole schema — `fields` (a `FieldSpec` list from which known/checksum/must fields, descriptions, and expected types all derive), `scan_defaults`, `defaults`, and `omit_standard_fields`. Tools missing from the central registry are submitted as `ToolInfo` from the processor file. There are no central per-processor tables: the former 92/71/~120-arm match tables in `config/mod.rs` are deleted, and every default value is encoded exactly once. The remaining out-of-file touch-points (the category `mod` declaration, the docs page, the test file) are enforced by completeness tests in `config/tests.rs`.
+- **A processor is one file.** Everything that defines a processor lives in its file: the `Processor` impl (or SimpleChecker/SimpleGenerator params), its config struct, and one `inventory::submit!` plugin entry carrying the whole schema — `fields` (a `FieldSpec` list from which known/checksum/must fields, descriptions, and expected types all derive), `scan_defaults`, `defaults`, and `omit_standard_fields`. Processors own their tools: a tool only one processor runs is submitted as `ToolInfo` from that processor's file, and the central `TOOLS` table holds only the shared and config-selected ones. There are no central per-processor tables: the former 92/71/~120-arm match tables in `config/mod.rs` are deleted, and every default value is encoded exactly once. The remaining out-of-file touch-points (the category `mod` declaration, the docs page, the test file) are enforced by completeness tests in `config/tests.rs`.
 
 ## Determinism
 

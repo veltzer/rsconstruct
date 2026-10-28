@@ -5,12 +5,6 @@
 //! This is the data and the mechanics of "what tools exist and how do we
 //! install them", which `builder/tools.rs` orchestrates on top of.
 
-/// Central registry of all known external tools — single source of truth for
-/// runtime category and install command. Both `tool_install_command()` and
-/// `tool_runtime()` (in `builder/tools.rs`) look up data from this table.
-///
-/// Runtime categories: "python", "node", "ruby", "rust", "perl", "jvm", "system"
-///
 /// A single way to install a tool.
 pub struct InstallMethod {
     /// Package manager or method name (e.g., "pip", "apt", "npm", "snap", "cargo", "binary")
@@ -1414,123 +1408,20 @@ pub struct ToolInfo {
     pub install_methods: &'static [InstallMethod],
 }
 
+/// The tools no single processor owns: language runtimes and compilers that
+/// several processors run, and tools a project selects through config
+/// (`required_tools`, a cc profile's cross toolchain) or that rsconstruct
+/// runs itself. A tool exactly one processor runs is declared in that
+/// processor's file instead (see `inventory::collect!(ToolInfo)` below);
+/// `central_registry_holds_only_unowned_tools` keeps the split honest.
 pub static TOOLS: &[ToolInfo] = &[
-    // Python tools
-    ToolInfo {
-        name: "ruff",
-        runtime: "python",
-        install_methods: &[InstallMethod {
-            method: "pip",
-            package: "ruff",
-        }],
-    },
-    ToolInfo {
-        name: "pylint",
-        runtime: "python",
-        install_methods: &[InstallMethod {
-            method: "pip",
-            package: "pylint",
-        }],
-    },
-    ToolInfo {
-        name: "mypy",
-        runtime: "python",
-        install_methods: &[InstallMethod {
-            method: "pip",
-            package: "mypy",
-        }],
-    },
-    ToolInfo {
-        name: "pyrefly",
-        runtime: "python",
-        install_methods: &[InstallMethod {
-            method: "pip",
-            package: "pyrefly",
-        }],
-    },
-    ToolInfo {
-        name: "yamllint",
-        runtime: "python",
-        install_methods: &[InstallMethod {
-            method: "pip",
-            package: "yamllint",
-        }],
-    },
-    ToolInfo {
-        name: "sphinx-build",
-        runtime: "python",
-        install_methods: &[InstallMethod {
-            method: "pip",
-            package: "sphinx",
-        }],
-    },
-    ToolInfo {
-        name: "pip",
-        runtime: "python",
-        install_methods: &[InstallMethod {
-            method: "apt",
-            package: "python3-pip",
-        }],
-    },
+    // Python
     ToolInfo {
         name: "uv",
         runtime: "python",
         install_methods: &[InstallMethod {
             method: "pip",
             package: "uv",
-        }],
-    },
-    ToolInfo {
-        name: "jsonlint",
-        runtime: "python",
-        install_methods: &[InstallMethod {
-            method: "pip",
-            package: "demjson3",
-        }],
-    },
-    ToolInfo {
-        name: "cpplint",
-        runtime: "python",
-        install_methods: &[InstallMethod {
-            method: "pip",
-            package: "cpplint",
-        }],
-    },
-    ToolInfo {
-        name: "black",
-        runtime: "python",
-        install_methods: &[InstallMethod {
-            method: "pip",
-            package: "black",
-        }],
-    },
-    ToolInfo {
-        name: "pytest",
-        runtime: "python",
-        install_methods: &[InstallMethod {
-            method: "pip",
-            package: "pytest",
-        }],
-    },
-    ToolInfo {
-        name: "a2x",
-        runtime: "python",
-        install_methods: &[InstallMethod {
-            method: "apt",
-            package: "asciidoc",
-        }],
-    },
-    // The mako processor runs `python3 -c "import mako..."`, so what it really
-    // needs is the Mako *library*, which the registry can't probe directly (it
-    // probes executables). The `mako-render` console script ships in the same
-    // distribution, so probing it is an exact proxy for "the library is
-    // importable", and installing it installs the library.
-    ToolInfo {
-        name: "mako-render",
-        runtime: "python",
-        install_methods: &[InstallMethod {
-            method: "pip",
-            package: "mako",
         }],
     },
     ToolInfo {
@@ -1541,71 +1432,7 @@ pub static TOOLS: &[ToolInfo] = &[
             package: "python3",
         }],
     },
-    // Node tools
-    ToolInfo {
-        name: "marp",
-        runtime: "node",
-        install_methods: &[InstallMethod {
-            method: "npm",
-            package: "@marp-team/marp-cli",
-        }],
-    },
-    ToolInfo {
-        name: "mmdc",
-        runtime: "node",
-        install_methods: &[InstallMethod {
-            method: "npm",
-            package: "@mermaid-js/mermaid-cli",
-        }],
-    },
-    ToolInfo {
-        name: "markdownlint",
-        runtime: "node",
-        install_methods: &[InstallMethod {
-            method: "npm",
-            package: "markdownlint-cli",
-        }],
-    },
-    ToolInfo {
-        name: "prettier",
-        runtime: "node",
-        install_methods: &[InstallMethod {
-            method: "npm",
-            package: "prettier",
-        }],
-    },
-    ToolInfo {
-        name: "eslint",
-        runtime: "node",
-        install_methods: &[InstallMethod {
-            method: "npm",
-            package: "eslint",
-        }],
-    },
-    ToolInfo {
-        name: "htmlhint",
-        runtime: "node",
-        install_methods: &[InstallMethod {
-            method: "npm",
-            package: "htmlhint",
-        }],
-    },
-    ToolInfo {
-        name: "jshint",
-        runtime: "node",
-        install_methods: &[InstallMethod {
-            method: "npm",
-            package: "jshint",
-        }],
-    },
-    ToolInfo {
-        name: "npm",
-        runtime: "node",
-        install_methods: &[InstallMethod {
-            method: "apt",
-            package: "npm",
-        }],
-    },
+    // Node
     ToolInfo {
         name: "node",
         runtime: "node",
@@ -1614,23 +1441,7 @@ pub static TOOLS: &[ToolInfo] = &[
             package: "nodejs",
         }],
     },
-    // Ruby tools
-    ToolInfo {
-        name: "mdl",
-        runtime: "ruby",
-        install_methods: &[InstallMethod {
-            method: "gem",
-            package: "mdl",
-        }],
-    },
-    ToolInfo {
-        name: "bundle",
-        runtime: "ruby",
-        install_methods: &[InstallMethod {
-            method: "gem",
-            package: "bundler",
-        }],
-    },
+    // Ruby
     ToolInfo {
         name: "ruby",
         runtime: "ruby",
@@ -1639,78 +1450,11 @@ pub static TOOLS: &[ToolInfo] = &[
             package: "ruby",
         }],
     },
-    // Rust tools
-    ToolInfo {
-        name: "mdbook",
-        runtime: "rust",
-        install_methods: &[InstallMethod {
-            method: "cargo",
-            package: "mdbook",
-        }],
-    },
-    ToolInfo {
-        name: "rumdl",
-        runtime: "rust",
-        install_methods: &[
-            InstallMethod {
-                method: "binary",
-                package: "rumdl",
-            },
-            InstallMethod {
-                method: "cargo",
-                package: "rumdl",
-            },
-        ],
-    },
-    // Binary only, no cargo fallback: upstream does not publish zola to
-    // crates.io. The `zola` crate there is an unrelated squatter -- version
-    // 0.0.0, yanked, described as "zola installer" -- so `cargo install zola`
-    // would fail or fetch the wrong thing. The GitHub release is the only
-    // automatable route.
-    ToolInfo {
-        name: "zola",
-        runtime: "rust",
-        install_methods: &[InstallMethod {
-            method: "binary",
-            package: "zola",
-        }],
-    },
-    // Binary first: biome's GitHub release ships a static Linux binary, so a
-    // repo needs no node runtime to lint CSS or JS. The npm package is the
-    // fallback. No cargo method: upstream does not publish the CLI to
-    // crates.io (the `biome_*` crates there are its internal libraries).
-    ToolInfo {
-        name: "biome",
-        runtime: "rust",
-        install_methods: &[
-            InstallMethod {
-                method: "binary",
-                package: "biome",
-            },
-            InstallMethod {
-                method: "npm",
-                package: "@biomejs/biome",
-            },
-        ],
-    },
-    ToolInfo {
-        name: "taplo",
-        runtime: "rust",
-        install_methods: &[
-            InstallMethod {
-                method: "binary",
-                package: "taplo",
-            },
-            InstallMethod {
-                method: "cargo",
-                package: "taplo-cli",
-            },
-        ],
-    },
-    // rustup is the canonical route, but `apt install rustc/cargo` is a real,
-    // automatable install and is what makes these reachable from
+    // Rust
+    // rustup is the canonical route, but `apt install cargo` is a real,
+    // automatable install and is what makes cargo reachable from
     // `tool install --all` on a bare machine. A host that already has a
-    // rustup toolchain never reaches the install path: `which` finds these
+    // rustup toolchain never reaches the install path: `which` finds cargo
     // first.
     ToolInfo {
         name: "cargo",
@@ -1720,37 +1464,13 @@ pub static TOOLS: &[ToolInfo] = &[
             package: "cargo",
         }],
     },
-    ToolInfo {
-        name: "rustc",
-        runtime: "rust",
-        install_methods: &[InstallMethod {
-            method: "apt",
-            package: "rustc",
-        }],
-    },
-    // Perl tools
+    // Perl
     ToolInfo {
         name: "perl",
         runtime: "perl",
         install_methods: &[InstallMethod {
             method: "apt",
             package: "perl",
-        }],
-    },
-    ToolInfo {
-        name: "markdown",
-        runtime: "perl",
-        install_methods: &[InstallMethod {
-            method: "apt",
-            package: "markdown",
-        }],
-    },
-    ToolInfo {
-        name: "checkpatch.pl",
-        runtime: "perl",
-        install_methods: &[InstallMethod {
-            method: "binary",
-            package: "checkpatch.pl",
         }],
     },
     ToolInfo {
@@ -1761,18 +1481,7 @@ pub static TOOLS: &[ToolInfo] = &[
             package: "perltidy",
         }],
     },
-    // System tools
-    // xelatex ships in texlive-xetex, not in a package of its own; pandoc's
-    // `pdf_engine = "xelatex"` needs the binary, so probe the binary and
-    // install the distribution that provides it.
-    ToolInfo {
-        name: "xelatex",
-        runtime: "system",
-        install_methods: &[InstallMethod {
-            method: "apt",
-            package: "texlive-xetex",
-        }],
-    },
+    // System
     // ARM bare-metal cross toolchain. Debian splits it the same way as the
     // native one: the compiler driver comes from gcc-arm-none-eabi, while ar
     // and objcopy come from binutils-arm-none-eabi.
@@ -1798,38 +1507,6 @@ pub static TOOLS: &[ToolInfo] = &[
         install_methods: &[InstallMethod {
             method: "apt",
             package: "binutils-arm-none-eabi",
-        }],
-    },
-    ToolInfo {
-        name: "shellcheck",
-        runtime: "system",
-        install_methods: &[InstallMethod {
-            method: "apt",
-            package: "shellcheck",
-        }],
-    },
-    ToolInfo {
-        name: "luacheck",
-        runtime: "system",
-        install_methods: &[InstallMethod {
-            method: "apt",
-            package: "lua-check",
-        }],
-    },
-    ToolInfo {
-        name: "cppcheck",
-        runtime: "system",
-        install_methods: &[InstallMethod {
-            method: "apt",
-            package: "cppcheck",
-        }],
-    },
-    ToolInfo {
-        name: "clang-tidy",
-        runtime: "system",
-        install_methods: &[InstallMethod {
-            method: "apt",
-            package: "clang-tidy",
         }],
     },
     ToolInfo {
@@ -1865,43 +1542,11 @@ pub static TOOLS: &[ToolInfo] = &[
         }],
     },
     ToolInfo {
-        name: "ar",
-        runtime: "system",
-        install_methods: &[InstallMethod {
-            method: "apt",
-            package: "binutils",
-        }],
-    },
-    ToolInfo {
         name: "make",
         runtime: "system",
         install_methods: &[InstallMethod {
             method: "apt",
             package: "make",
-        }],
-    },
-    ToolInfo {
-        name: "jq",
-        runtime: "system",
-        install_methods: &[InstallMethod {
-            method: "apt",
-            package: "jq",
-        }],
-    },
-    ToolInfo {
-        name: "aspell",
-        runtime: "system",
-        install_methods: &[InstallMethod {
-            method: "apt",
-            package: "aspell",
-        }],
-    },
-    ToolInfo {
-        name: "pandoc",
-        runtime: "system",
-        install_methods: &[InstallMethod {
-            method: "apt",
-            package: "pandoc",
         }],
     },
     ToolInfo {
@@ -1913,107 +1558,11 @@ pub static TOOLS: &[ToolInfo] = &[
         }],
     },
     ToolInfo {
-        name: "qpdf",
-        runtime: "system",
-        install_methods: &[InstallMethod {
-            method: "apt",
-            package: "qpdf",
-        }],
-    },
-    ToolInfo {
         name: "dot",
         runtime: "system",
         install_methods: &[InstallMethod {
             method: "apt",
             package: "graphviz",
-        }],
-    },
-    ToolInfo {
-        name: "drawio",
-        runtime: "system",
-        install_methods: &[InstallMethod {
-            method: "binary",
-            package: "drawio",
-        }],
-    },
-    ToolInfo {
-        name: "libreoffice",
-        runtime: "system",
-        install_methods: &[InstallMethod {
-            method: "apt",
-            package: "libreoffice",
-        }],
-    },
-    ToolInfo {
-        name: "flock",
-        runtime: "system",
-        install_methods: &[InstallMethod {
-            method: "apt",
-            package: "util-linux",
-        }],
-    },
-    ToolInfo {
-        name: "uname",
-        runtime: "system",
-        install_methods: &[InstallMethod {
-            method: "apt",
-            package: "coreutils",
-        }],
-    },
-    ToolInfo {
-        name: "sh",
-        runtime: "system",
-        install_methods: &[InstallMethod {
-            method: "apt",
-            package: "dash",
-        }],
-    },
-    ToolInfo {
-        name: "git",
-        runtime: "system",
-        install_methods: &[InstallMethod {
-            method: "apt",
-            package: "git",
-        }],
-    },
-    ToolInfo {
-        name: "pdfunite",
-        runtime: "system",
-        install_methods: &[InstallMethod {
-            method: "apt",
-            package: "poppler-utils",
-        }],
-    },
-    ToolInfo {
-        name: "google-chrome",
-        runtime: "system",
-        install_methods: &[InstallMethod {
-            method: "binary",
-            package: "google-chrome-stable",
-        }],
-    },
-    ToolInfo {
-        name: "objdump",
-        runtime: "system",
-        install_methods: &[InstallMethod {
-            method: "apt",
-            package: "binutils",
-        }],
-    },
-    ToolInfo {
-        name: "tidy",
-        runtime: "system",
-        install_methods: &[InstallMethod {
-            method: "apt",
-            package: "tidy",
-        }],
-    },
-    ToolInfo {
-        name: "xmllint",
-        runtime: "system",
-        install_methods: &[InstallMethod {
-            method: "apt",
-            package: "libxml2-utils",
         }],
     },
     ToolInfo {
@@ -2033,157 +1582,6 @@ pub static TOOLS: &[ToolInfo] = &[
             },
         ],
     },
-    ToolInfo {
-        name: "svglint",
-        runtime: "node",
-        install_methods: &[InstallMethod {
-            method: "npm",
-            package: "svglint",
-        }],
-    },
-    ToolInfo {
-        name: "svgo",
-        runtime: "node",
-        install_methods: &[InstallMethod {
-            method: "npm",
-            package: "svgo",
-        }],
-    },
-    ToolInfo {
-        name: "cmakelint",
-        runtime: "python",
-        install_methods: &[InstallMethod {
-            method: "pip",
-            package: "cmakelint",
-        }],
-    },
-    ToolInfo {
-        name: "protoc",
-        runtime: "system",
-        install_methods: &[InstallMethod {
-            method: "apt",
-            package: "protobuf-compiler",
-        }],
-    },
-    ToolInfo {
-        name: "sass",
-        runtime: "node",
-        install_methods: &[InstallMethod {
-            method: "npm",
-            package: "sass",
-        }],
-    },
-    ToolInfo {
-        name: "hadolint",
-        runtime: "system",
-        install_methods: &[
-            InstallMethod {
-                method: "binary",
-                package: "hadolint",
-            },
-            InstallMethod {
-                method: "brew",
-                package: "hadolint",
-            },
-            InstallMethod {
-                method: "apt",
-                package: "hadolint",
-            },
-        ],
-    },
-    ToolInfo {
-        name: "php",
-        runtime: "system",
-        install_methods: &[InstallMethod {
-            method: "apt",
-            package: "php-cli",
-        }],
-    },
-    ToolInfo {
-        name: "checkstyle",
-        runtime: "jvm",
-        install_methods: &[InstallMethod {
-            method: "apt",
-            package: "checkstyle",
-        }],
-    },
-    ToolInfo {
-        name: "yq",
-        runtime: "system",
-        install_methods: &[
-            InstallMethod {
-                method: "pip",
-                package: "yq",
-            },
-            InstallMethod {
-                method: "snap",
-                package: "yq",
-            },
-            InstallMethod {
-                method: "apt",
-                package: "yq",
-            },
-        ],
-    },
-    // Node tools (additional)
-    ToolInfo {
-        name: "stylelint",
-        runtime: "node",
-        install_methods: &[InstallMethod {
-            method: "npm",
-            package: "stylelint",
-        }],
-    },
-    ToolInfo {
-        name: "jslint",
-        runtime: "node",
-        install_methods: &[InstallMethod {
-            method: "npm",
-            package: "jslint",
-        }],
-    },
-    ToolInfo {
-        name: "standard",
-        runtime: "node",
-        install_methods: &[InstallMethod {
-            method: "npm",
-            package: "standard",
-        }],
-    },
-    ToolInfo {
-        name: "htmllint",
-        runtime: "node",
-        install_methods: &[InstallMethod {
-            method: "npm",
-            package: "htmllint-cli",
-        }],
-    },
-    ToolInfo {
-        name: "slidev",
-        runtime: "node",
-        install_methods: &[InstallMethod {
-            method: "npm",
-            package: "@slidev/cli",
-        }],
-    },
-    // Perl tools (additional)
-    ToolInfo {
-        name: "perlcritic",
-        runtime: "perl",
-        install_methods: &[InstallMethod {
-            method: "apt",
-            package: "libperl-critic-perl",
-        }],
-    },
-    // Ruby tools (additional)
-    ToolInfo {
-        name: "jekyll",
-        runtime: "ruby",
-        install_methods: &[InstallMethod {
-            method: "gem",
-            package: "jekyll",
-        }],
-    },
     // Built-in / coreutils
     ToolInfo {
         name: "true",
@@ -2195,10 +1593,9 @@ pub static TOOLS: &[ToolInfo] = &[
     },
 ];
 
-// Processor files may submit additional ToolInfo entries via
-// `inventory::submit!` — a new processor declares its external tool in its
-// own file instead of editing this registry. The central TOOLS table above
-// keeps the long-standing shared entries; consumers must iterate
+// A processor owns its tools: each tool only it runs is declared in its own
+// file with `inventory::submit!`, next to its plugin entry, so the install
+// methods sit beside the code that runs the tool. Consumers must iterate
 // `all_tools()`, never TOOLS directly.
 inventory::collect!(ToolInfo);
 
@@ -2231,6 +1628,64 @@ mod registry_tests {
         }
         dups.sort_unstable();
         assert!(dups.is_empty(), "duplicate tool registry entries: {dups:?}");
+    }
+
+    /// The names of the `ToolInfo` entries a processor file submits.
+    fn submitted_tool_names(source: &str) -> Vec<&str> {
+        source
+            .split("crate::tools::ToolInfo {")
+            .skip(1)
+            .filter_map(|rest| rest.split_once("name: \"")?.1.split_once('"'))
+            .map(|(name, _)| name)
+            .collect()
+    }
+
+    /// Processors own their tools. Every processor is built with its default
+    /// config and asked which tools it runs. A tool exactly one processor
+    /// runs must be declared in that processor's file, not in the central
+    /// table; a tool a processor file declares must be run by no other
+    /// processor, or it is shared and belongs in the central table.
+    #[test]
+    fn central_registry_holds_only_unowned_tools() {
+        let processors = crate::builder::create_all_default_processors().unwrap();
+        let mut runners: std::collections::BTreeMap<String, Vec<String>> =
+            std::collections::BTreeMap::new();
+        for (pname, processor) in &processors {
+            for tool in processor.required_tools() {
+                runners.entry(tool).or_default().push(pname.clone());
+            }
+        }
+        let mut bad: Vec<String> = Vec::new();
+        for tool in TOOLS {
+            if let Some([only]) = runners.get(tool.name).map(Vec::as_slice) {
+                bad.push(format!(
+                    "{}: only {only} runs it, so it belongs in that processor's file",
+                    tool.name
+                ));
+            }
+        }
+        for plugin in crate::registries::all_plugins() {
+            let pname = plugin.pname();
+            let file = format!("src/{}.rs", pname.replace('.', "/"));
+            let source = std::fs::read_to_string(&file)
+                .unwrap_or_else(|e| panic!("{pname}: cannot read {file}: {e}"));
+            for name in submitted_tool_names(&source) {
+                let others: Vec<&String> = runners
+                    .get(name)
+                    .into_iter()
+                    .flatten()
+                    .filter(|p| **p != pname)
+                    .collect();
+                if !others.is_empty() {
+                    bad.push(format!(
+                        "{name}: declared in {file} but also run by {others:?}, so it is \
+                         shared and belongs in the central table"
+                    ));
+                }
+            }
+        }
+        bad.sort();
+        assert!(bad.is_empty(), "tool registry ownership: {bad:#?}");
     }
 }
 

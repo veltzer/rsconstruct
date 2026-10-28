@@ -491,14 +491,27 @@ fn run_tools_command(
         ToolAction::List { .. } => {
             // Registry-wide list: every tool rsconstruct knows how to install,
             // independent of which processors are configured. Mirrors
-            // `processor list`, which shows all built-in processors.
+            // `processor list`, which shows all built-in processors. So the
+            // Processors column comes from every processor at its default
+            // config, not from the project's: a tool no processor runs is one
+            // a project selects through config (`required_tools`, a cc
+            // profile) or that rsconstruct runs itself.
+            let all_processors = super::create_all_default_processors()?;
+            let mut runners: BTreeMap<&str, Vec<String>> = BTreeMap::new();
+            for name in sorted_keys(&all_processors) {
+                for tool in all_processors[name].required_tools() {
+                    if let Some(info) = crate::tools::tool_info(&tool) {
+                        runners.entry(info.name).or_default().push(name.clone());
+                    }
+                }
+            }
             if crate::json_output::is_json_mode() {
                 let entries: Vec<json_output::ToolListEntry> = crate::tools::all_tools()
                     .map(|info| json_output::ToolListEntry {
                         tool: info.name.to_string(),
                         installed: which::which(info.name).is_ok(),
                         runtime: info.runtime.to_string(),
-                        processor: Vec::new(),
+                        processor: runners.get(info.name).cloned().unwrap_or_default(),
                         install_methods: info
                             .install_methods
                             .iter()
@@ -529,10 +542,21 @@ fn run_tools_command(
                     } else {
                         color::red("missing")
                     };
+                    let procs = runners.get(info.name).map_or_else(
+                        || color::yellow("(none)").to_string(),
+                        |names| {
+                            names
+                                .iter()
+                                .map(|n| tables::short_processor_name(n))
+                                .collect::<Vec<_>>()
+                                .join(", ")
+                        },
+                    );
                     let mut row = vec![
                         info.name.to_string(),
                         status.to_string(),
                         info.runtime.to_string(),
+                        procs,
                     ];
                     let install_str = if show_methods {
                         let methods: Vec<String> = info

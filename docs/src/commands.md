@@ -605,7 +605,7 @@ the processors' built-in metadata, so it needs no `rsconstruct.toml`.
 
 ## `rsconstruct tool`
 
-List or check external tools required by declared processors. `list` reads only the central registry; `check` and `lock` need a project; the rest use config if available and without one operate on all built-in processors.
+List or check external tools required by declared processors. `list` reads only the tool registry; `check` and `lock` need a project; the rest use config if available and without one operate on all built-in processors.
 
 | Subcommand | Config required? |
 |------------|-----------------|
@@ -619,7 +619,7 @@ List or check external tools required by declared processors. `list` reads only 
 | `stats` | Uses config if available |
 
 ```bash
-rsconstruct tool list              # List all tools known to rsconstruct (from the central registry)
+rsconstruct tool list              # List all tools known to rsconstruct (from the tool registry)
 rsconstruct tool list -M           # ...with every install method for each tool
 rsconstruct tool list-configured   # List tools this project's processors require, and which needs them
 rsconstruct tool list-configured -a   # Include tools from disabled processors
@@ -656,7 +656,7 @@ The project's tools are those of its enabled processors. A stanza with
 `list-configured`, `install`, `lock`, `check`, `stats` and `graph` leave its
 tools out; `list-configured --all` is the one way to see them.
 
-`install --all` walks the central registry instead of the project config, so it
+`install --all` walks the tool registry instead of the project config, so it
 needs no `rsconstruct.toml`. It never skips: a tool with no automatable install
 method is a hard error, not a warning. This makes it the intended way to
 provision CI — one command covers the whole matrix, and a registry entry that

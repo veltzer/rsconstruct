@@ -238,3 +238,8 @@ inventory::submit! {
         max_jobs_cap: None,
     }
 }
+inventory::submit! { crate::tools::ToolInfo {
+    name: "aspell", runtime: "system", install_methods: &[
+        crate::tools::InstallMethod { method: "apt", package: "aspell" },
+    ],
+} }

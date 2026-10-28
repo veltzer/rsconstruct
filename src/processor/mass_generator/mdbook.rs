@@ -396,6 +396,11 @@ inventory::submit! {
         max_jobs_cap: Some(1),
     }
 }
+inventory::submit! { crate::tools::ToolInfo {
+    name: "mdbook", runtime: "rust", install_methods: &[
+        crate::tools::InstallMethod { method: "cargo", package: "mdbook" },
+    ],
+} }
 
 #[cfg(test)]
 mod tests {
