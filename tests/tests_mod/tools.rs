@@ -36,12 +36,12 @@ fn tools_list_shows_all_registry_tools() {
     };
     assert!(row("ruff").contains("checker.ruff"), "{}", row("ruff"));
     assert!(
-        row("gcc").contains("generator.cc_single_file, mass_generator.cc"),
+        row("gcc").contains("generator.cc_single_file, +1 more"),
         "{}",
         row("gcc")
     );
     assert!(row("clojure").contains("(none)"), "{}", row("clojure"));
-    // A tool many processors run names two of them and counts the rest,
+    // A tool many processors run names one of them and counts the rest,
     // instead of stretching the table across the screen.
     assert!(row("python3").contains(" more"), "{}", row("python3"));
 }

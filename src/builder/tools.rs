@@ -110,8 +110,9 @@ pub(super) fn instance_enabled(processors: &crate::processor::ProcessorMap, name
 
 /// How many processors a `tool list` row names before summarizing the rest
 /// as "+N more": `python3` alone is run by 13, and naming them all made the
-/// table several terminal widths wide. `--json` always carries the full list.
-const TOOL_LIST_MAX_PROCESSORS: usize = 2;
+/// table several terminal widths wide. One keeps the table within about 90
+/// columns; `--json` always carries the full list.
+const TOOL_LIST_MAX_PROCESSORS: usize = 1;
 
 /// The Install cell of `tool list` and `tool list-configured`: the command
 /// of the tool's preferred method, or with `-M` every method it lists, each
