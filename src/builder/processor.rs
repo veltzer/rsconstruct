@@ -132,8 +132,6 @@ pub fn list_processors_no_config(verbose: bool, type_filter: Option<&str>) -> Re
             .map(|p| crate::json_output::ProcessorListEntry {
                 name: p.pname(),
                 processor_type: p.processor_type.as_str().to_string(),
-                enabled: false,
-                detected: false,
                 supports_batch: p.supports_batch,
                 caches_outputs: p.caches_outputs,
                 builtin: p.is_builtin,

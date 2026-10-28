@@ -106,8 +106,8 @@ pub struct ProcessorFileEntry {
 pub struct ProcessorListEntry {
     pub name: String,
     pub processor_type: String,
-    pub enabled: bool,
-    pub detected: bool,
+    // No enabled/detected here: this is the registry, read without a
+    // project. `processor used` says what a project enables and detects.
     /// Whether the processor can take several input files in one tool
     /// invocation (the plugin's `supports_batch`, as `info --json` reports
     /// it). A user's `batch = false` can switch batching off for an instance,

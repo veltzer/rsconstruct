@@ -602,13 +602,11 @@ fn processors_list_json() {
             entry.get("processor_type").is_some(),
             "Entry should have 'processor_type' field"
         );
+        // The registry knows nothing of a project: what is enabled and
+        // detected is `processor used`'s answer, not a constant here.
         assert!(
-            entry.get("enabled").is_some(),
-            "Entry should have 'enabled' field"
-        );
-        assert!(
-            entry.get("detected").is_some(),
-            "Entry should have 'detected' field"
+            entry.get("enabled").is_none() && entry.get("detected").is_none(),
+            "Entry should have no project state: {entry}"
         );
         assert!(
             entry.get("supports_batch").is_some(),
