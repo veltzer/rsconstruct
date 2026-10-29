@@ -39,6 +39,16 @@ dep_inputs = []                      # Additional files that trigger rebuilds wh
 | `dep_inputs` | string[] | `[]` | Extra files whose changes trigger rebuilds |
 | `required_tools` | string[] | `[]` | Extra tools the build needs on PATH beyond the built-in ones (e.g. what a wrapper script shells out to); checked before building and covered by `tool install` and version locking |
 
+## Installation
+
+pdflatex is part of TeX Live, a system package installed with
+`rsconstruct tool install machine`. With `qpdf = true`, `rsconstruct tool
+install project` downloads the qpdf release from the qpdf GitHub releases
+into `.rsconstruct/tools`, at the version rsconstruct.lock pins. The
+release is kept whole: qpdf loads its own libraries from the `lib/` beside
+its `bin/`. `rsconstruct tool install machine qpdf` installs the
+distribution's package with apt instead.
+
 ## Batch support
 
 Each input file is processed individually, producing its own output file.

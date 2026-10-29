@@ -278,6 +278,10 @@ fn processor_info_shows_description_and_fields() {
         stdout.contains("File extensions to match during scanning"),
         "field descriptions are shown: {stdout}"
     );
+    assert!(
+        stdout.contains("Tools: ruff\n"),
+        "the tools it runs are shown: {stdout}"
+    );
 }
 
 /// Without a name, `processor info` covers every processor, each with a
@@ -313,7 +317,17 @@ fn processor_info_without_name_covers_every_processor() {
             fields.iter().any(|f| f["name"] == "enabled"),
             "every processor has the standard fields: {entry}"
         );
+        assert!(entry["tools"].is_array(), "{entry}");
     }
+    let pandoc = entries
+        .iter()
+        .find(|e| e["name"] == "processor.generator.pandoc")
+        .expect("pandoc entry");
+    assert_eq!(
+        pandoc["tools"],
+        serde_json::json!(["pandoc", "pdflatex"]),
+        "{pandoc}"
+    );
 }
 
 #[test]

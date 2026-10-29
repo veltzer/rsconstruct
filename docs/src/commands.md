@@ -528,7 +528,7 @@ rsconstruct smart remove-no-file-processors  # Remove processors that don't matc
 rsconstruct processor list              # List all built-in processors with type and description
 rsconstruct processor list --type checker  # ...only one processor type
 rsconstruct --json processor list       # Same list as JSON
-rsconstruct processor info processor.checker.ruff         # Describe a processor and every config field
+rsconstruct processor info processor.checker.ruff         # Describe a processor, the tools it runs at its default config, and every config field
 rsconstruct processor info              # ...every processor
 rsconstruct --json processor info       # Same as JSON
 rsconstruct processor types             # List the processor types
@@ -628,14 +628,14 @@ rsconstruct tool lock              # Write rsconstruct.lock: add missing entries
 rsconstruct tool lock --upgrade    # Re-resolve every rsconstruct.lock entry to its latest release
 rsconstruct tool lock --upgrade ruff cargo-deny   # Re-resolve only these entries
 rsconstruct tool install           # List the two targets: machine and project
-rsconstruct tool install machine   # Install what this project needs on the machine: [dependencies] system packages, machine-preferred tools, uv/npm
+rsconstruct tool install machine   # Install what this project needs on the machine: [dependencies] system packages, machine-preferred tools, npm
 rsconstruct tool install machine shellcheck   # Install one tool through its machine install
 rsconstruct tool install machine --all        # Install every tool in the registry onto the machine, ignoring the config (no config needed)
 rsconstruct tool install machine --no-eatmydata   # Don't wrap apt/dnf/pacman with eatmydata
 rsconstruct tool install project   # Install everything into the project from its lockfiles: uv sync (.venv), npm ci (node_modules), .rsconstruct/tools
 rsconstruct tool install project rumdl        # Install one tool through its project install
 rsconstruct tool install project -i           # Ask for confirmation first (default: install without asking)
-rsconstruct tool stats             # Show tool availability and language runtime breakdown
+rsconstruct tool stats             # Show tool availability (one processor per row, then "+N more") and language runtime breakdown
 rsconstruct tool stats --json      # Show tool stats in JSON format
 rsconstruct tool graph             # Show tool-to-processor dependency graph (DOT format)
 rsconstruct tool graph --format mermaid  # Mermaid format
@@ -650,15 +650,16 @@ touches only its own target:
   Python dependencies and the Python tools its processors run, together),
   `npm ci` fills `node_modules` from `package-lock.json`, and the crates, npm
   packages, gems and release binaries `rsconstruct.lock` pins are linked into
-  `.rsconstruct/tools` from a machine-wide store. It never touches the
-  machine: a missing `uv` or `npm` is an error naming `install machine`.
+  `.rsconstruct/tools` from a machine-wide store. `uv` is one of those
+  release binaries, locked by every Python project and linked in ahead of
+  `uv sync`. It never touches the machine: a missing `npm` is an error
+  naming `install machine`.
 - **`install machine`** installs onto the machine: the `[dependencies]
   system` packages, the tools of the enabled processors whose preferred
   target is the machine (compilers, runtimes, apt-only tools, `.deb`s), and
-  the installers `install project` runs (`uv` for a Python project, `npm`
-  for a Node one). A pip install here must not land in the project's own
-  `.venv`, which is uv's; it is an error when `pip` on PATH is the
-  project's.
+  `npm` for a Node project, which `install project` runs. A pip install
+  here must not land in the project's own `.venv`, which is uv's; it is an
+  error when `pip` on PATH is the project's.
 
 A fresh checkout is set up with `install machine` followed by `install
 project`. Both work from `rsconstruct.lock` in a project, together with
@@ -696,8 +697,10 @@ Every install goes to one of two targets: the **project** (its
 **machine** (a system package manager, a user-wide prefix such as
 `~/.cargo/bin` or `npm -g`, or a venv outside the repo). A system package
 manager (apt, dnf, pacman, brew, snap) and a `.deb` binary can only reach the
-machine; pip, uv, npm, cargo, gem and other release binaries can reach either,
-depending on where they are pointed.
+machine; a release kept whole (protoc beside its `include/`, qpdf beside its
+`lib/`) needs a prefix of its own and can only reach the project; pip, uv,
+npm, cargo, gem and other release binaries can reach either, depending on
+where they are pointed.
 
 Each tool in the registry names up to three preferences:
 
@@ -705,8 +708,8 @@ Each tool in the registry names up to three preferences:
   there is one;
 - its **machine install**: the method that installs it onto the machine;
 - its **preferred target** overall: the project when the tool has a project
-  install, otherwise the machine. A tool can override this; `uv` does, since
-  it builds the project's `.venv` and so cannot live in it.
+  install, otherwise the machine. A registry entry can override this
+  (`prefer`); none does today.
 
 The preferred target decides which of `install project` and `install
 machine` installs a tool the project needs; naming a tool (`install project

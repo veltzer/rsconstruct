@@ -60,8 +60,9 @@ impl InstallMethod {
     /// only reaches the machine; a language package manager or a release
     /// binary reaches either, depending on the prefix (or venv) it is
     /// pointed at. A `.deb` binary is installed by apt, so it is machine
-    /// only. Empty for `manual`, which installs nothing, and for anything
-    /// unknown.
+    /// only; a binary kept as a whole release tree needs a prefix of its
+    /// own, so it is project only. Empty for `manual`, which installs
+    /// nothing, and for anything unknown.
     pub fn targets(&self) -> &'static [InstallTarget] {
         const MACHINE: &[InstallTarget] = &[InstallTarget::Machine];
         const BOTH: &[InstallTarget] = &[InstallTarget::Project, InstallTarget::Machine];
@@ -74,6 +75,10 @@ impl InstallMethod {
                     archive: ArchiveKind::Deb { .. },
                     ..
                 }) => MACHINE,
+                Some(BinaryRecipe {
+                    archive: ArchiveKind::ZipTree { .. },
+                    ..
+                }) => &[InstallTarget::Project],
                 Some(_) => BOTH,
                 None => &[],
             },
@@ -460,16 +465,36 @@ fn install_binary_into_prefix(
             pin.url
         );
     }
-    let bin = prefix.join("bin");
-    std::fs::create_dir_all(&bin).with_context(|| format!("Failed to create {}", bin.display()))?;
-    let dest = bin.join(recipe.dest);
-    std::fs::rename(payload, &dest).with_context(|| {
-        format!(
-            "Failed to move {} into place as {}",
-            payload.display(),
-            dest.display()
-        )
-    })?;
+    if matches!(recipe.archive, ArchiveKind::ZipTree { .. }) {
+        // The unpacked tree is the prefix: its top-level entries move up.
+        let tree = std::path::PathBuf::from(tree_dir(&work.to_string_lossy(), recipe.dest));
+        let entries = std::fs::read_dir(&tree)
+            .with_context(|| format!("Failed to read directory {}", tree.display()))?;
+        for entry in entries {
+            let entry =
+                entry.with_context(|| format!("Failed to read directory {}", tree.display()))?;
+            let dest = prefix.join(entry.file_name());
+            std::fs::rename(entry.path(), &dest).with_context(|| {
+                format!(
+                    "Failed to move {} into place as {}",
+                    entry.path().display(),
+                    dest.display()
+                )
+            })?;
+        }
+    } else {
+        let bin = prefix.join("bin");
+        std::fs::create_dir_all(&bin)
+            .with_context(|| format!("Failed to create {}", bin.display()))?;
+        let dest = bin.join(recipe.dest);
+        std::fs::rename(payload, &dest).with_context(|| {
+            format!(
+                "Failed to move {} into place as {}",
+                payload.display(),
+                dest.display()
+            )
+        })?;
+    }
     std::fs::remove_dir_all(&work).with_context(|| format!("Failed to remove {}", work.display()))
 }
 
@@ -777,7 +802,15 @@ fn describe_binary(
         )]);
     }
     steps.extend(plan.unpack.iter().map(Step::argv));
-    steps.push(install_argv(&recipe, &plan.payload));
+    if matches!(recipe.archive, ArchiveKind::ZipTree { .. }) {
+        steps.push(vec![format!(
+            "# {} becomes the package's prefix in {}",
+            tree_dir(INSTALL_WORK_DIR, recipe.dest),
+            crate::tool_store::REPO_TOOLS_DIR
+        )]);
+    } else {
+        steps.push(install_argv(&recipe, &plan.payload));
+    }
     steps
 }
 
@@ -909,6 +942,22 @@ fn fetch_plan(recipe: &BinaryRecipe, url: &str, base: &str) -> FetchPlan {
             }];
             (download, unpack)
         }
+        // The whole archive is unpacked; the executable stays in its tree.
+        ArchiveKind::ZipTree { exe } => {
+            let download = format!("{base}/{dest}.dl");
+            let tree = tree_dir(base, dest);
+            let payload = format!("{tree}/{exe}");
+            return FetchPlan {
+                curl: crate::download::curl_argv(url, &download),
+                unpack: vec![
+                    exec(&["unzip", "-q", "-o", &download, "-d", &tree]),
+                    Step::Remove(download.clone()),
+                    Step::MakeExecutable(payload.clone()),
+                ],
+                download,
+                payload,
+            };
+        }
     };
     let mut unpack = unpack;
     unpack.push(Step::MakeExecutable(final_tmp.clone()));
@@ -920,9 +969,15 @@ fn fetch_plan(recipe: &BinaryRecipe, url: &str, base: &str) -> FetchPlan {
     }
 }
 
+/// Where a [`ArchiveKind::ZipTree`] recipe unpacks its archive under `base`.
+fn tree_dir(base: &str, dest: &str) -> String {
+    format!("{base}/{dest}.tree")
+}
+
 /// The command that installs a fetched payload: apt for a `.deb`, a move
 /// into `/usr/local/bin` for an executable. Shared by `run_binary` and
-/// `describe_binary`.
+/// `describe_binary`. Not for a [`ArchiveKind::ZipTree`], which only a
+/// project's tool directory installs.
 fn install_argv(recipe: &BinaryRecipe, payload: &str) -> Vec<String> {
     let mut argv: Vec<String> = sudo_argv().iter().map(|s| (*s).to_string()).collect();
     if matches!(recipe.archive, ArchiveKind::Deb { .. }) {
@@ -1111,6 +1166,12 @@ fn unpinned_binary_url(recipe: &BinaryRecipe) -> anyhow::Result<String> {
 fn run_binary(pkg: &str, ctx: &InstallCtx) -> anyhow::Result<()> {
     let recipe = binary_recipe(pkg)
         .ok_or_else(|| anyhow::anyhow!("no binary install recipe for '{pkg}'"))?;
+    if matches!(recipe.archive, ArchiveKind::ZipTree { .. }) {
+        anyhow::bail!(
+            "the '{pkg}' binary is a whole release tree, installed only into a project \
+             (`rsconstruct tool install project {pkg}`)"
+        );
+    }
     // A lock entry decides the exact asset and its bytes; without one (no
     // project, or a recipe that cannot be pinned) the recipe decides.
     let pin = ctx.binary_pins.get(pkg);
@@ -1247,6 +1308,13 @@ enum ArchiveKind {
     Gunzip,
     /// The download is the binary itself, no extraction needed.
     Raw,
+    /// A `.zip` whose contents are an install prefix (`bin/` beside the
+    /// `include/` or `lib/` the executable finds relative to its own path),
+    /// kept whole. Installed only into a project's tool directory, where a
+    /// package has a prefix of its own; `exe` is the executable's member.
+    ZipTree {
+        exe: &'static str,
+    },
     /// The download is a `.deb` installed with apt, not a bare binary dropped
     /// into /usr/local/bin: apt pulls the dependency tree a raw binary would
     /// be missing.
@@ -1369,6 +1437,34 @@ fn binary_recipe(pkg: &str) -> Option<BinaryRecipe> {
             },
             dest: "pandoc",
         }),
+        // Pinned like actionlint: protoc's release assets embed the version
+        // in the filename. Kept whole: protoc finds the well-known types
+        // (google/protobuf/*.proto) in the include/ beside its bin/. Code it
+        // generates checks the protobuf runtime it is compiled or imported
+        // against, so bump this deliberately.
+        "protoc" => Some(BinaryRecipe {
+            url: "https://github.com/protocolbuffers/protobuf/releases/download/v36.2/protoc-36.2-linux-x86_64.zip",
+            archive: ArchiveKind::ZipTree { exe: "bin/protoc" },
+            dest: "protoc",
+        }),
+        // Pinned like actionlint: qpdf's release assets embed the version in
+        // the filename. Kept whole: qpdf loads libqpdf and the libraries
+        // bundled with it from the lib/ beside its bin/ (RUNPATH
+        // $ORIGIN/../lib).
+        "qpdf" => Some(BinaryRecipe {
+            url: "https://github.com/qpdf/qpdf/releases/download/v12.4.2/qpdf-12.4.2-bin-linux-x86_64.zip",
+            archive: ArchiveKind::ZipTree { exe: "bin/qpdf" },
+            dest: "qpdf",
+        }),
+        // Tracks latest like hadolint: every uv release carries this asset
+        // under the same name. The glibc build, like the rest of the registry.
+        "uv" => Some(BinaryRecipe {
+            url: "https://github.com/astral-sh/uv/releases/latest/download/uv-x86_64-unknown-linux-gnu.tar.gz",
+            archive: ArchiveKind::TarGz {
+                inner: "uv-x86_64-unknown-linux-gnu/uv",
+            },
+            dest: "uv",
+        }),
         // checkpatch.pl ships only inside the kernel tree — there is no release
         // artifact and no distro package. Fetching the single script from
         // torvalds/linux master is the automatable equivalent of "copy it out
@@ -1466,15 +1562,15 @@ pub struct ToolInfo {
 pub static TOOLS: &[ToolInfo] = &[
     // Python
     // uv builds the project's .venv (`tool install project` runs `uv
-    // sync`), so it cannot come from that venv: it is installed onto the
-    // machine.
+    // sync`), so it cannot come from that venv: its release binary goes into
+    // the project's tool directory, installed ahead of the sync.
     ToolInfo {
         name: "uv",
         runtime: "python",
-        project: Some(InstallMethod::new("pip", "uv")),
+        project: Some(InstallMethod::new("binary", "uv")),
         machine: Some(InstallMethod::new("pip", "uv")),
         alternatives: &[],
-        prefer: Some(InstallTarget::Machine),
+        prefer: None,
     },
     ToolInfo {
         name: "python3",
@@ -2060,6 +2156,9 @@ mod tests {
             "shellcheck",
             "jq",
             "pandoc",
+            "protoc",
+            "qpdf",
+            "uv",
         ] {
             let steps = describe("binary", &[pkg], &no_pins());
             assert!(steps.len() >= 3, "binary {pkg} should have >=3 steps");
@@ -2242,5 +2341,62 @@ mod tests {
             "{err}"
         );
         assert!(!tmp.path().join("fake-tar-tool.dl").exists());
+    }
+
+    /// A release kept whole unpacks to a tree beside the work files: the
+    /// executable stays at its member path, next to the directories it
+    /// reads at run time, and the download is gone.
+    #[test]
+    fn fetch_binary_keeps_a_zip_tree_whole() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let base = tmp.path().to_string_lossy().into_owned();
+        let src = tmp.path().join("src");
+        std::fs::create_dir_all(src.join("bin")).unwrap();
+        std::fs::create_dir_all(src.join("include/google")).unwrap();
+        std::fs::write(src.join("bin/tool"), b"#!/bin/sh\necho tree\n").unwrap();
+        std::fs::write(src.join("include/google/a.proto"), b"syntax").unwrap();
+        let status = std::process::Command::new("zip")
+            .args(["-q", "-r", "../tool.zip", "bin", "include"])
+            .current_dir(&src)
+            .status()
+            .unwrap();
+        assert!(status.success());
+        let recipe = BinaryRecipe {
+            url: "",
+            archive: ArchiveKind::ZipTree { exe: "bin/tool" },
+            dest: "fake-tree-tool",
+        };
+        let url = format!("file://{}", tmp.path().join("tool.zip").display());
+        let fetched = fetch_binary(&recipe, &url, None, &base, false).unwrap();
+        let tree = tree_dir(&base, "fake-tree-tool");
+        assert_eq!(fetched.payload, format!("{tree}/bin/tool"));
+        let meta = std::fs::metadata(&fetched.payload).unwrap();
+        assert!(crate::platform::get_mode(&meta) & 0o111 != 0);
+        assert_eq!(
+            std::fs::read(format!("{tree}/include/google/a.proto")).unwrap(),
+            b"syntax"
+        );
+        assert!(!tmp.path().join("fake-tree-tool.dl").exists());
+    }
+
+    /// protoc and qpdf need the directories beside their executable, so
+    /// their release is kept whole and installs only into a project; a
+    /// machine install of it is refused rather than half done.
+    #[test]
+    fn zip_tree_binaries_install_only_into_a_project() {
+        for pkg in ["protoc", "qpdf"] {
+            assert_eq!(
+                InstallMethod::new("binary", pkg).targets(),
+                &[InstallTarget::Project],
+                "{pkg}"
+            );
+            let ctx = InstallCtx {
+                verbose: false,
+                use_eatmydata: false,
+                binary_pins: no_pins(),
+            };
+            let err = run_binary(pkg, &ctx).unwrap_err();
+            assert!(err.to_string().contains("only into a project"), "{err}");
+        }
     }
 }

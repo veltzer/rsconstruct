@@ -186,14 +186,34 @@ pub fn create_all_default_processors() -> Result<ProcessorMap> {
     let mut processors: ProcessorMap = HashMap::new();
     for entry in registry_entries() {
         let pname = entry.pname();
-        let mut empty_toml = toml::Value::Table(toml::map::Map::new());
-        let mut provenance = crate::config::ProvenanceMap::new();
-        crate::registries::apply_all_defaults(&pname, &mut empty_toml, &mut provenance);
-        let processor = (entry.create)(&empty_toml)
-            .with_context(|| format!("Failed to create processor '{pname}' with default config"))?;
+        let processor = create_default_processor(entry)?;
         processors.insert(pname, processor);
     }
     Ok(processors)
+}
+
+/// The tools the processor `entry` registers runs at its default config,
+/// as `tool list` counts them: a config can add more (pandoc's
+/// `pdf_engine`).
+pub fn default_processor_tools(
+    entry: &crate::registries::processor::ProcessorPlugin,
+) -> Result<Vec<String>> {
+    let mut tools = create_default_processor(entry)?.required_tools();
+    tools.sort();
+    tools.dedup();
+    Ok(tools)
+}
+
+/// Create the processor `entry` registers, at its default config.
+fn create_default_processor(
+    entry: &crate::registries::processor::ProcessorPlugin,
+) -> Result<Box<dyn crate::processor::Processor>> {
+    let pname = entry.pname();
+    let mut empty_toml = toml::Value::Table(toml::map::Map::new());
+    let mut provenance = crate::config::ProvenanceMap::new();
+    crate::registries::apply_all_defaults(&pname, &mut empty_toml, &mut provenance);
+    (entry.create)(&empty_toml)
+        .with_context(|| format!("Failed to create processor '{pname}' with default config"))
 }
 
 pub struct Builder {

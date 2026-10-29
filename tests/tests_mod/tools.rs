@@ -546,6 +546,27 @@ fn tools_stats_shows_summary() {
     assert!(stdout.contains("installed"), "Expected 'installed' count");
 }
 
+/// Like `tool list`, a `tool stats` row names one processor and counts the
+/// rest: outside a project every processor counts, and python3 alone is
+/// run by more than a dozen.
+#[test]
+fn tools_stats_summarizes_many_processors() {
+    let temp_dir = tempfile::TempDir::new().unwrap();
+    let output =
+        run_rsconstruct_with_env(temp_dir.path(), &["tool", "stats"], &[("NO_COLOR", "1")]);
+    assert!(
+        output.status.success(),
+        "tool stats failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let row = stdout
+        .lines()
+        .find(|l| l.split('│').nth(1).is_some_and(|c| c.trim() == "python3"))
+        .unwrap_or_else(|| panic!("no row for python3:\n{stdout}"));
+    assert!(row.contains(" more"), "{row}");
+}
+
 #[test]
 fn tools_stats_json() {
     let temp_dir = setup_test_project();

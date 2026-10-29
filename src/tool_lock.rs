@@ -286,6 +286,14 @@ pub fn collect_wanted(
             }
         }
     }
+    // uv builds a Python project's .venv, so the project locks the uv that
+    // `tool install project` installs ahead of `uv sync`.
+    if crate::config::has_python_deps(root)?
+        && let Some(method) =
+            crate::tools::tool_info("uv").and_then(crate::tools::ToolInfo::preferred_method)
+    {
+        wanted.add(method.method, method.package);
+    }
     if !unpinned_python.is_empty() {
         let names: Vec<&str> = unpinned_python.iter().map(String::as_str).collect();
         return Err(crate::exit_code::config_error(format!(
@@ -1237,7 +1245,8 @@ mod tests {
 
     /// A Python tool a processor runs must be pinned by uv.lock: the repo's
     /// .venv is uv's, so pyproject.toml is the one place to declare it.
-    /// Pinned, it is left to uv.lock and not locked here.
+    /// Pinned, it is left to uv.lock and not locked here; what is locked
+    /// here is the uv binary that builds the .venv.
     #[test]
     fn python_tools_must_be_pinned_by_uv_lock() {
         let tmp = tempfile::TempDir::new().unwrap();
@@ -1254,6 +1263,18 @@ mod tests {
         )
         .unwrap();
         let wanted = collect_wanted(&processors, &|p| p == ruff, &deps, tmp.path()).unwrap();
+        let mut expected = Wanted::default();
+        expected.add("binary", "uv");
+        assert_eq!(wanted, expected);
+    }
+
+    /// A project without a Python environment does not lock uv.
+    #[test]
+    fn uv_is_locked_only_for_a_python_project() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let processors = crate::builder::create_all_default_processors().unwrap();
+        let deps = crate::config::DependenciesConfig::default();
+        let wanted = collect_wanted(&processors, &|_| false, &deps, tmp.path()).unwrap();
         assert_eq!(wanted, Wanted::default());
     }
 }

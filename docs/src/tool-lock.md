@@ -139,9 +139,17 @@ Where a hard link is impossible (the store on another filesystem) the files are
 copied. Store files are read-only, since a hard link shares the file with every
 other project.
 
+A release binary is usually one executable. protoc and qpdf need the
+directories beside it (protoc reads the well-known `.proto` files from its
+`include/`, qpdf loads its libraries from its `lib/`), so their release is
+unpacked whole into the package's directory and only its `bin/` is linked:
+such a recipe installs only into a project, never onto the machine. `uv` is a
+release binary too, locked by every project with Python dependencies, and
+`tool install project` links it in ahead of `uv sync`, which needs it.
+
 What stays on the machine: system packages (`apt` and friends) and the `.deb`
-binary recipes, which the OS package manager owns, plus the installers the
-project install runs (`uv`, `npm`). All of these come from `tool install
+binary recipes, which the OS package manager owns, plus `npm`, which the
+project install runs. All of these come from `tool install
 machine`, which never touches any project's tool directory; `tool install
 machine <name>` and `tool install machine --all` install a named tool, or the
 whole registry, for the machine.

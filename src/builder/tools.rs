@@ -108,8 +108,8 @@ pub(super) fn instance_enabled(processors: &crate::processor::ProcessorMap, name
     processors[name].scan_config().enabled
 }
 
-/// How many processors a `tool list` row names before summarizing the rest
-/// as "+N more": `python3` alone is run by 13, and naming them all made the
+/// How many processors a `tool list` or `tool stats` row names before
+/// summarizing the rest as "+N more": `python3` alone is run by 13, and naming them all made the
 /// table several terminal widths wide. One keeps the table within about 90
 /// columns; `--json` always carries the full list.
 const TOOL_LIST_MAX_PROCESSORS: usize = 1;
@@ -678,12 +678,8 @@ fn run_tools_command(
                         } else {
                             color::red("\u{2717}")
                         };
-                        let procs = stat
-                            .processor
-                            .iter()
-                            .map(|n| tables::short_processor_name(n))
-                            .collect::<Vec<_>>()
-                            .join(", ");
+                        let procs =
+                            tables::processor_names_cell(&stat.processor, TOOL_LIST_MAX_PROCESSORS);
                         let install = stat.install_command.as_deref().unwrap_or("").to_string();
                         vec![stat.name.clone(), status.to_string(), procs, install]
                     })
@@ -885,9 +881,9 @@ fn print_install_groups(groups: &[(&str, Vec<String>)], ctx: &crate::tools::Inst
 /// `tools::run`). With a `name`, that one tool; with `all`, every tool in the
 /// registry, config or not; otherwise what this project needs on the
 /// machine: its `[dependencies]` system packages and the tools of its enabled
-/// processors whose preferred target is the machine, among them the
-/// installers `tool install project` runs (uv for a Python project, npm for
-/// a Node one). Nothing here goes into the project.
+/// processors whose preferred target is the machine, and npm for a Node
+/// project, which `tool install project` runs. Nothing here goes into the
+/// project.
 fn install_machine(
     ctx: &crate::build_context::BuildContext,
     processors: &crate::processor::ProcessorMap,
@@ -967,10 +963,8 @@ fn install_machine(
                 tools.extend(processors[pname].required_tools());
             }
         }
-        // The installers `tool install project` runs.
-        if crate::config::has_python_deps(root)? {
-            tools.insert("uv".to_string());
-        }
+        // npm, which `tool install project` runs. uv, the other installer
+        // it runs, is installed into the project by that command itself.
         if !deps.node_deps(root)?.is_empty() {
             tools.insert("npm".to_string());
         }
@@ -1072,9 +1066,9 @@ fn install_machine(
 /// dependencies and the Python tools its processors run), `npm ci` fills
 /// `node_modules` from package-lock.json, and the locked crates, npm
 /// packages, gems and release binaries are linked into `.rsconstruct/tools`
-/// from the tool store. With a `name`, only that tool's project install.
-/// Nothing here touches the machine: a missing uv or npm is an error that
-/// names `tool install machine`.
+/// from the tool store, uv among them, installed ahead of `uv sync`. With a
+/// `name`, only that tool's project install. Nothing here touches the
+/// machine: a missing npm is an error that names `tool install machine`.
 fn install_project(
     ctx: &crate::build_context::BuildContext,
     processors: &crate::processor::ProcessorMap,
@@ -1163,9 +1157,22 @@ fn install_project(
         }
     }
 
-    // uv and npm are machine installs; this command does not make them.
+    // `uv sync` needs uv, and the project's own uv is a release binary in
+    // its tool directory: that one package goes in ahead of the sync.
+    let uv_dir = if groups.iter().any(|(method, _)| *method == "uv-sync") {
+        let dir = project_tools(builder, &wanted, &lock)?;
+        dir.covers("binary", "uv")
+            .then(|| dir.with_only("binary", "uv"))
+    } else {
+        None
+    };
+    // npm, and uv where the project does not install it, are machine
+    // installs; this command does not make them.
     for (method, _) in &groups {
         let program = if *method == "uv-sync" { "uv" } else { "npm" };
+        if program == "uv" && uv_dir.is_some() {
+            continue;
+        }
         if which::which(program).is_err() {
             return Err(tool_error(format!(
                 "{program} is not installed; install it onto the machine with \
@@ -1190,12 +1197,21 @@ fn install_project(
         println!("{}:", color::bold("Project environments"));
         print_install_groups(&groups, &install_ctx);
     }
-    if let Some(dir) = &tool_dir {
-        print_project_tools(dir);
+    match (&tool_dir, &uv_dir) {
+        (Some(dir), _) | (None, Some(dir)) => print_project_tools(dir),
+        (None, None) => {}
     }
     let has_work = !groups.is_empty() || tool_dir.as_ref().is_some_and(|d| d.plan.has_work());
     if has_work && !go_ahead(flags)? {
         return Ok(());
+    }
+    if let Some(dir) = uv_dir.as_ref().filter(|d| d.plan.has_work())
+        && let Err(e) = apply_project_tools(dir, &lock, flags.verbose)
+    {
+        return Err(tool_error(format!(
+            "Failed to install uv into {}: {e:#}",
+            crate::tool_store::REPO_TOOLS_DIR
+        )));
     }
     let groups_failed = run_install_groups(&groups, &install_ctx);
     // The tool directory goes last: crates and gems may build native code

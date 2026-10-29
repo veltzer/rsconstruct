@@ -39,6 +39,17 @@ dep_inputs = []                         # Additional files that trigger rebuilds
 | `output_dir` | string | `"out/processor.generator.protobuf"` | Output directory |
 | `dep_inputs` | string[] | `[]` | Extra files whose changes trigger rebuilds |
 
+## Installation
+
+`rsconstruct tool install project` downloads the protoc release from the
+protobuf GitHub releases into `.rsconstruct/tools`, at the version
+rsconstruct.lock pins. The release is kept whole: protoc finds the
+well-known types (`google/protobuf/timestamp.proto` and the rest) in the
+`include/` beside its `bin/`. Code it generates checks the protobuf runtime
+it is compiled or imported against, so the pinned protoc is bumped
+deliberately. `rsconstruct tool install machine protoc` installs the
+distribution's `protobuf-compiler` package with apt instead.
+
 ## Batch support
 
 Each input file is processed individually, producing its own output file.

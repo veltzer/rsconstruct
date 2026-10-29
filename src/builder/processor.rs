@@ -604,13 +604,14 @@ pub fn processor_info(pname: Option<&str>) -> Result<()> {
                 "Unknown processor: '{name}'. Run 'rsconstruct processor list' to see available processors."
             )
         })?;
-        plugins.push((name.as_str(), plugin));
+        let tools = super::default_processor_tools(plugin)?;
+        plugins.push((name.as_str(), plugin, tools));
     }
 
     if crate::json_output::is_json_mode() {
         let entries: Vec<serde_json::Value> = plugins
             .iter()
-            .map(|(name, p)| {
+            .map(|(name, p, tools)| {
                 serde_json::json!({
                     "name": name,
                     "type": p.processor_type.as_str(),
@@ -622,6 +623,7 @@ pub fn processor_info(pname: Option<&str>) -> Result<()> {
                     "supports_batch": p.supports_batch,
                     "caches_outputs": p.caches_outputs,
                     "max_jobs_cap": p.max_jobs_cap,
+                    "tools": tools,
                     "fields": processor_fields(name),
                 })
             })
@@ -630,7 +632,7 @@ pub fn processor_info(pname: Option<&str>) -> Result<()> {
         return Ok(());
     }
 
-    for (i, (name, p)) in plugins.iter().enumerate() {
+    for (i, (name, p, tools)) in plugins.iter().enumerate() {
         if i > 0 {
             println!();
         }
@@ -649,6 +651,13 @@ pub fn processor_info(pname: Option<&str>) -> Result<()> {
                 .map_or_else(|| "unlimited".to_string(), |n| n.to_string()),
             p.version,
         );
+        // At the default config, like `tool list`'s Processors column.
+        let tools = if tools.is_empty() {
+            tables::NONE_LABEL.to_string()
+        } else {
+            tools.join(", ")
+        };
+        println!("  Tools: {tools}");
         println!();
         print_processor_metadata(name, true);
     }

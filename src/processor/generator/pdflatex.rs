@@ -232,7 +232,7 @@ inventory::submit! {
 }
 inventory::submit! { crate::tools::ToolInfo {
     name: "qpdf", runtime: "system",
-    project: None,
+    project: Some(crate::tools::InstallMethod::new("binary", "qpdf")),
     machine: Some(crate::tools::InstallMethod::new("apt", "qpdf")),
     alternatives: &[], prefer: None,
 } }

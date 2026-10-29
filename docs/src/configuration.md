@@ -456,9 +456,11 @@ Consequences:
   `[project].dependencies`, every list in `[project.optional-dependencies]`,
   and every [PEP 735](https://peps.python.org/pep-0735/) `[dependency-groups]`
   list.
-- `uv` itself is a machine install (`tool install machine` provides it for
-  a project with Python dependencies), since it builds the `.venv` and so
-  cannot come from it.
+- `uv` itself builds the `.venv` and so cannot come from it: it is a release
+  binary that every project with Python dependencies locks in
+  `rsconstruct.lock` (`[binary.uv]`), and `tool install project` links it
+  into `.rsconstruct/tools` before it runs `uv sync`. The machine needs no
+  uv.
 - Every rsconstruct invocation in a project prepends `.venv/bin` to its own
   `PATH`, so `python3`, `ruff` and `pytest` resolve to the locked copies with
   no venv activated.
