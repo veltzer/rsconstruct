@@ -483,6 +483,10 @@ re-resolving. A `package.json` that declares packages but has no
 opt out per repo with `npm_source = "package-json"`, which runs `npm install`
 and lets the versions float.
 
+The `node` (and so the `npm`) that runs all this is the project's own: a Node
+project locks the Node.js release in `rsconstruct.lock`, and `tool install
+project` links it into `.rsconstruct/tools` before any npm step.
+
 The install is skipped when every declared package is already present in
 `node_modules/` at the version the lock pins — `npm ci` wipes `node_modules/`
 before installing, so a needless run is not free. `doctor` reports each
@@ -537,7 +541,7 @@ order:
 1. **`system`** — OS packages (apt, dnf, pacman, brew), then the other
    machine installs (`tool install machine`)
 2. **Python** — `uv sync` into the repo's `.venv` (`tool install project`,
-   from here on)
+   from here on), after linking in the project's locked `uv` and `node`
 3. **Node.js** — the project's `npm ci`
 4. **`.rsconstruct/tools`** — the locked crates, npm packages, gems and
    release binaries

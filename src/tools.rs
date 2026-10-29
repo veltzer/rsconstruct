@@ -76,7 +76,7 @@ impl InstallMethod {
                     ..
                 }) => MACHINE,
                 Some(BinaryRecipe {
-                    archive: ArchiveKind::ZipTree { .. },
+                    archive: ArchiveKind::Tree { .. },
                     ..
                 }) => &[InstallTarget::Project],
                 Some(_) => BOTH,
@@ -465,9 +465,10 @@ fn install_binary_into_prefix(
             pin.url
         );
     }
-    if matches!(recipe.archive, ArchiveKind::ZipTree { .. }) {
-        // The unpacked tree is the prefix: its top-level entries move up.
-        let tree = std::path::PathBuf::from(tree_dir(&work.to_string_lossy(), recipe.dest));
+    if let ArchiveKind::Tree { exe, .. } = recipe.archive {
+        // The unpacked prefix is the package's: its top-level entries move up.
+        let tree = std::path::PathBuf::from(tree_dir(&work.to_string_lossy(), recipe.dest))
+            .join(tree_prefix(exe));
         let entries = std::fs::read_dir(&tree)
             .with_context(|| format!("Failed to read directory {}", tree.display()))?;
         for entry in entries {
@@ -802,10 +803,12 @@ fn describe_binary(
         )]);
     }
     steps.extend(plan.unpack.iter().map(Step::argv));
-    if matches!(recipe.archive, ArchiveKind::ZipTree { .. }) {
+    if let ArchiveKind::Tree { exe, .. } = recipe.archive {
+        let prefix =
+            std::path::Path::new(&tree_dir(INSTALL_WORK_DIR, recipe.dest)).join(tree_prefix(exe));
         steps.push(vec![format!(
             "# {} becomes the package's prefix in {}",
-            tree_dir(INSTALL_WORK_DIR, recipe.dest),
+            prefix.display(),
             crate::tool_store::REPO_TOOLS_DIR
         )]);
     } else {
@@ -943,17 +946,23 @@ fn fetch_plan(recipe: &BinaryRecipe, url: &str, base: &str) -> FetchPlan {
             (download, unpack)
         }
         // The whole archive is unpacked; the executable stays in its tree.
-        ArchiveKind::ZipTree { exe } => {
+        ArchiveKind::Tree { packing, exe } => {
             let download = format!("{base}/{dest}.dl");
             let tree = tree_dir(base, dest);
             let payload = format!("{tree}/{exe}");
+            let mut unpack = match packing {
+                Packing::Zip => vec![exec(&["unzip", "-q", "-o", &download, "-d", &tree])],
+                // tar finds the compression (gzip, xz) from the file itself.
+                Packing::Tar => vec![
+                    exec(&["mkdir", "-p", &tree]),
+                    exec(&["tar", "-xf", &download, "-C", &tree]),
+                ],
+            };
+            unpack.push(Step::Remove(download.clone()));
+            unpack.push(Step::MakeExecutable(payload.clone()));
             return FetchPlan {
                 curl: crate::download::curl_argv(url, &download),
-                unpack: vec![
-                    exec(&["unzip", "-q", "-o", &download, "-d", &tree]),
-                    Step::Remove(download.clone()),
-                    Step::MakeExecutable(payload.clone()),
-                ],
+                unpack,
                 download,
                 payload,
             };
@@ -969,14 +978,24 @@ fn fetch_plan(recipe: &BinaryRecipe, url: &str, base: &str) -> FetchPlan {
     }
 }
 
-/// Where a [`ArchiveKind::ZipTree`] recipe unpacks its archive under `base`.
+/// Where a [`ArchiveKind::Tree`] recipe unpacks its archive under `base`.
 fn tree_dir(base: &str, dest: &str) -> String {
     format!("{base}/{dest}.tree")
 }
 
+/// The install prefix inside a [`ArchiveKind::Tree`] archive: its `exe`
+/// member (`<prefix>/bin/<name>`) without the `bin/<name>`. Empty when the
+/// archive's root is the prefix.
+fn tree_prefix(exe: &str) -> &std::path::Path {
+    std::path::Path::new(exe)
+        .parent()
+        .and_then(std::path::Path::parent)
+        .unwrap_or_else(|| std::path::Path::new(""))
+}
+
 /// The command that installs a fetched payload: apt for a `.deb`, a move
 /// into `/usr/local/bin` for an executable. Shared by `run_binary` and
-/// `describe_binary`. Not for a [`ArchiveKind::ZipTree`], which only a
+/// `describe_binary`. Not for a [`ArchiveKind::Tree`], which only a
 /// project's tool directory installs.
 fn install_argv(recipe: &BinaryRecipe, payload: &str) -> Vec<String> {
     let mut argv: Vec<String> = sudo_argv().iter().map(|s| (*s).to_string()).collect();
@@ -1166,7 +1185,7 @@ fn unpinned_binary_url(recipe: &BinaryRecipe) -> anyhow::Result<String> {
 fn run_binary(pkg: &str, ctx: &InstallCtx) -> anyhow::Result<()> {
     let recipe = binary_recipe(pkg)
         .ok_or_else(|| anyhow::anyhow!("no binary install recipe for '{pkg}'"))?;
-    if matches!(recipe.archive, ArchiveKind::ZipTree { .. }) {
+    if matches!(recipe.archive, ArchiveKind::Tree { .. }) {
         anyhow::bail!(
             "the '{pkg}' binary is a whole release tree, installed only into a project \
              (`rsconstruct tool install project {pkg}`)"
@@ -1308,11 +1327,15 @@ enum ArchiveKind {
     Gunzip,
     /// The download is the binary itself, no extraction needed.
     Raw,
-    /// A `.zip` whose contents are an install prefix (`bin/` beside the
-    /// `include/` or `lib/` the executable finds relative to its own path),
+    /// An archive holding an install prefix (`bin/` beside the `include/`,
+    /// `lib/` or `share/` the executables find relative to their own path),
     /// kept whole. Installed only into a project's tool directory, where a
-    /// package has a prefix of its own; `exe` is the executable's member.
-    ZipTree {
+    /// package has a prefix of its own, and every executable in the
+    /// prefix's `bin/` goes on PATH. `exe` is the member the lock hashes,
+    /// `<prefix>/bin/<name>`: the prefix is the archive's root
+    /// (`bin/protoc`) or its top directory (`node-v26.13.0-linux-x64/bin/node`).
+    Tree {
+        packing: Packing,
         exe: &'static str,
     },
     /// The download is a `.deb` installed with apt, not a bare binary dropped
@@ -1326,6 +1349,14 @@ enum ArchiveKind {
     Deb {
         source: DebSource,
     },
+}
+
+/// How a [`ArchiveKind::Tree`] archive is packed.
+#[derive(Clone, Copy)]
+enum Packing {
+    Zip,
+    /// A tarball, compressed with whatever `tar -xf` recognizes.
+    Tar,
 }
 
 /// Where a [`ArchiveKind::Deb`] payload is fetched from.
@@ -1444,7 +1475,10 @@ fn binary_recipe(pkg: &str) -> Option<BinaryRecipe> {
         // against, so bump this deliberately.
         "protoc" => Some(BinaryRecipe {
             url: "https://github.com/protocolbuffers/protobuf/releases/download/v36.2/protoc-36.2-linux-x86_64.zip",
-            archive: ArchiveKind::ZipTree { exe: "bin/protoc" },
+            archive: ArchiveKind::Tree {
+                packing: Packing::Zip,
+                exe: "bin/protoc",
+            },
             dest: "protoc",
         }),
         // Pinned like actionlint: qpdf's release assets embed the version in
@@ -1453,8 +1487,52 @@ fn binary_recipe(pkg: &str) -> Option<BinaryRecipe> {
         // $ORIGIN/../lib).
         "qpdf" => Some(BinaryRecipe {
             url: "https://github.com/qpdf/qpdf/releases/download/v12.4.2/qpdf-12.4.2-bin-linux-x86_64.zip",
-            archive: ArchiveKind::ZipTree { exe: "bin/qpdf" },
+            archive: ArchiveKind::Tree {
+                packing: Packing::Zip,
+                exe: "bin/qpdf",
+            },
             dest: "qpdf",
+        }),
+        // Pinned to one release: nodejs.org keeps every version under a
+        // permanent URL, but has no GitHub-style "latest" redirect that
+        // `tool lock --upgrade` could follow. The current LTS. Kept whole:
+        // npm and npx in its bin/ link into the lib/node_modules beside it.
+        // Bump this deliberately.
+        "node" => Some(BinaryRecipe {
+            url: "https://nodejs.org/dist/v26.13.0/node-v26.13.0-linux-x64.tar.xz",
+            archive: ArchiveKind::Tree {
+                packing: Packing::Tar,
+                exe: "node-v26.13.0-linux-x64/bin/node",
+            },
+            dest: "node",
+        }),
+        // Pinned like node: LilyPond publishes its binaries on GitLab, one
+        // permanent URL per version. 2.24.4 is the stable release the
+        // fleet's scores were engraved with; a new LilyPond changes the
+        // engraving, so bump this deliberately. Kept whole: lilypond runs
+        // its bundled Guile, Ghostscript and Python from the tree.
+        "lilypond" => Some(BinaryRecipe {
+            url: "https://gitlab.com/api/v4/projects/lilypond%2Flilypond/packages/generic/lilypond/2.24.4/lilypond-2.24.4-linux-x86_64.tar.gz",
+            archive: ArchiveKind::Tree {
+                packing: Packing::Tar,
+                exe: "lilypond-2.24.4/bin/lilypond",
+            },
+            dest: "lilypond",
+        }),
+        // FFmpeg publishes no binaries; BtbN's static GPL builds are the
+        // usual source. Pinned to a month-end autobuild: BtbN prunes the
+        // daily builds after about two weeks but keeps each month's last
+        // one for about two years, while its "latest" assets are replaced
+        // in place and would break a locked hash. The build is static;
+        // ffprobe and ffplay come with it. Bump this deliberately, to a
+        // newer month-end build.
+        "ffmpeg" => Some(BinaryRecipe {
+            url: "https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-09-30-13-08/ffmpeg-n8.1.3-9-g29e619e767-linux64-gpl-8.1.tar.xz",
+            archive: ArchiveKind::Tree {
+                packing: Packing::Tar,
+                exe: "ffmpeg-n8.1.3-9-g29e619e767-linux64-gpl-8.1/bin/ffmpeg",
+            },
+            dest: "ffmpeg",
         }),
         // Tracks latest like hadolint: every uv release carries this asset
         // under the same name. The glibc build, like the rest of the registry.
@@ -1581,10 +1659,13 @@ pub static TOOLS: &[ToolInfo] = &[
         prefer: None,
     },
     // Node
+    // The project's own Node.js, npm included: its release tree goes into
+    // the project's tool directory, installed ahead of `npm ci` and the
+    // npm packages, which run on it.
     ToolInfo {
         name: "node",
         runtime: "node",
-        project: None,
+        project: Some(InstallMethod::new("binary", "node")),
         machine: Some(InstallMethod::new("apt", "nodejs")),
         alternatives: &[],
         prefer: None,
@@ -1630,6 +1711,24 @@ pub static TOOLS: &[ToolInfo] = &[
         prefer: None,
     },
     // System
+    // Run by a project's own scripts (a generic processor's
+    // `required_tools`), not by any one processor.
+    ToolInfo {
+        name: "ffmpeg",
+        runtime: "system",
+        project: Some(InstallMethod::new("binary", "ffmpeg")),
+        machine: Some(InstallMethod::new("apt", "ffmpeg")),
+        alternatives: &[],
+        prefer: None,
+    },
+    ToolInfo {
+        name: "lilypond",
+        runtime: "system",
+        project: Some(InstallMethod::new("binary", "lilypond")),
+        machine: Some(InstallMethod::new("apt", "lilypond")),
+        alternatives: &[],
+        prefer: None,
+    },
     // ARM bare-metal cross toolchain. Debian splits it the same way as the
     // native one: the compiler driver comes from gcc-arm-none-eabi, while ar
     // and objcopy come from binutils-arm-none-eabi.
@@ -2159,6 +2258,9 @@ mod tests {
             "protoc",
             "qpdf",
             "uv",
+            "node",
+            "lilypond",
+            "ffmpeg",
         ] {
             let steps = describe("binary", &[pkg], &no_pins());
             assert!(steps.len() >= 3, "binary {pkg} should have >=3 steps");
@@ -2347,7 +2449,7 @@ mod tests {
     /// executable stays at its member path, next to the directories it
     /// reads at run time, and the download is gone.
     #[test]
-    fn fetch_binary_keeps_a_zip_tree_whole() {
+    fn fetch_binary_keeps_a_release_tree_whole() {
         let tmp = tempfile::TempDir::new().unwrap();
         let base = tmp.path().to_string_lossy().into_owned();
         let src = tmp.path().join("src");
@@ -2363,7 +2465,10 @@ mod tests {
         assert!(status.success());
         let recipe = BinaryRecipe {
             url: "",
-            archive: ArchiveKind::ZipTree { exe: "bin/tool" },
+            archive: ArchiveKind::Tree {
+                packing: Packing::Zip,
+                exe: "bin/tool",
+            },
             dest: "fake-tree-tool",
         };
         let url = format!("file://{}", tmp.path().join("tool.zip").display());
@@ -2377,14 +2482,72 @@ mod tests {
             b"syntax"
         );
         assert!(!tmp.path().join("fake-tree-tool.dl").exists());
+
+        // A tarball whose prefix is its top directory, xz-compressed.
+        let status = std::process::Command::new("tar")
+            .arg("-cJf")
+            .arg(tmp.path().join("tool.tar.xz"))
+            .arg("--transform=s,^,tool-1.0/,")
+            .args(["bin", "include"])
+            .current_dir(&src)
+            .status()
+            .unwrap();
+        assert!(status.success());
+        let recipe = BinaryRecipe {
+            url: "",
+            archive: ArchiveKind::Tree {
+                packing: Packing::Tar,
+                exe: "tool-1.0/bin/tool",
+            },
+            dest: "fake-tar-tree-tool",
+        };
+        let url = format!("file://{}", tmp.path().join("tool.tar.xz").display());
+        let fetched = fetch_binary(&recipe, &url, None, &base, false).unwrap();
+        let tree = tree_dir(&base, "fake-tar-tree-tool");
+        assert_eq!(fetched.payload, format!("{tree}/tool-1.0/bin/tool"));
+        let meta = std::fs::metadata(&fetched.payload).unwrap();
+        assert!(crate::platform::get_mode(&meta) & 0o111 != 0);
+        assert_eq!(
+            std::fs::read(format!("{tree}/tool-1.0/include/google/a.proto")).unwrap(),
+            b"syntax"
+        );
+        assert!(!tmp.path().join("fake-tar-tree-tool.dl").exists());
     }
 
-    /// protoc and qpdf need the directories beside their executable, so
-    /// their release is kept whole and installs only into a project; a
-    /// machine install of it is refused rather than half done.
+    /// A tree recipe's `exe` is `<prefix>/bin/<name>`: the prefix becomes
+    /// the package's, and its bin/ is what goes on PATH.
     #[test]
-    fn zip_tree_binaries_install_only_into_a_project() {
-        for pkg in ["protoc", "qpdf"] {
+    fn tree_recipes_name_an_executable_in_the_prefix_bin() {
+        assert_eq!(tree_prefix("bin/protoc"), std::path::Path::new(""));
+        assert_eq!(
+            tree_prefix("node-v1/bin/node"),
+            std::path::Path::new("node-v1")
+        );
+        for info in all_tools() {
+            for method in [&info.project, &info.machine].into_iter().flatten() {
+                if method.method != "binary" {
+                    continue;
+                }
+                let Some(BinaryRecipe {
+                    archive: ArchiveKind::Tree { exe, .. },
+                    ..
+                }) = binary_recipe(method.package)
+                else {
+                    continue;
+                };
+                let parent = std::path::Path::new(exe).parent().unwrap();
+                assert!(parent.ends_with("bin"), "{}: {exe}", method.package);
+            }
+        }
+    }
+
+    /// node, lilypond, ffmpeg, protoc and qpdf need the directories beside
+    /// their executable, so their release is kept whole and installs only
+    /// into a project; a machine install of it is refused rather than half
+    /// done.
+    #[test]
+    fn tree_binaries_install_only_into_a_project() {
+        for pkg in ["protoc", "qpdf", "node", "lilypond", "ffmpeg"] {
             assert_eq!(
                 InstallMethod::new("binary", pkg).targets(),
                 &[InstallTarget::Project],

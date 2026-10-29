@@ -139,17 +139,23 @@ Where a hard link is impossible (the store on another filesystem) the files are
 copied. Store files are read-only, since a hard link shares the file with every
 other project.
 
-A release binary is usually one executable. protoc and qpdf need the
-directories beside it (protoc reads the well-known `.proto` files from its
-`include/`, qpdf loads its libraries from its `lib/`), so their release is
-unpacked whole into the package's directory and only its `bin/` is linked:
-such a recipe installs only into a project, never onto the machine. `uv` is a
-release binary too, locked by every project with Python dependencies, and
-`tool install project` links it in ahead of `uv sync`, which needs it.
+A release binary is usually one executable. Some need the directories beside
+it: protoc reads the well-known `.proto` files from its `include/`, qpdf loads
+its libraries from its `lib/`, node's `npm` lives in its `lib/node_modules/`,
+and lilypond runs the Guile, Ghostscript and Python bundled in its tree. Their
+release (a zip or a tarball, ffmpeg's too) is unpacked whole into the
+package's directory and every executable in its `bin/` is linked: such a
+recipe installs only into a project, never onto the machine. A tool a
+project's own scripts run, like lilypond or ffmpeg, is named in the generic
+processor's `required_tools`, which is what makes the project lock it.
+
+`uv` and `node` are the installers `tool install project` runs. Every project
+with Python dependencies locks uv, and every project with Node packages
+(package.json or `[dependencies] npm`) locks node; each is linked in ahead of
+the `uv sync` or npm steps that need it.
 
 What stays on the machine: system packages (`apt` and friends) and the `.deb`
-binary recipes, which the OS package manager owns, plus `npm`, which the
-project install runs. All of these come from `tool install
+binary recipes, which the OS package manager owns. They come from `tool install
 machine`, which never touches any project's tool directory; `tool install
 machine <name>` and `tool install machine --all` install a named tool, or the
 whole registry, for the machine.

@@ -230,13 +230,18 @@ impl ProjectTools {
             .any(|p| p.method == method && p.name == package)
     }
 
-    /// The tool directory with `package` added to what it already holds and
-    /// nothing else installed: `tool install project NAME`.
-    fn with_only(self, method: &str, package: &str) -> Self {
+    /// The tool directory with `only`, `(method, package)` pairs, added to
+    /// what it already holds and nothing else installed: `tool install
+    /// project NAME`.
+    fn with_only(self, only: &[(&str, &str)]) -> Self {
         let packages: std::collections::BTreeSet<crate::tool_store::Package> = self
             .packages
             .into_iter()
-            .filter(|p| (p.method == method && p.name == package) || self.plan.present.contains(p))
+            .filter(|p| {
+                only.iter()
+                    .any(|(method, package)| p.method == *method && p.name == *package)
+                    || self.plan.present.contains(p)
+            })
             .collect();
         let plan = crate::tool_store::plan(std::path::Path::new("."), &packages);
         Self { packages, plan }
@@ -881,9 +886,8 @@ fn print_install_groups(groups: &[(&str, Vec<String>)], ctx: &crate::tools::Inst
 /// `tools::run`). With a `name`, that one tool; with `all`, every tool in the
 /// registry, config or not; otherwise what this project needs on the
 /// machine: its `[dependencies]` system packages and the tools of its enabled
-/// processors whose preferred target is the machine, and npm for a Node
-/// project, which `tool install project` runs. Nothing here goes into the
-/// project.
+/// processors whose preferred target is the machine. Nothing here goes
+/// into the project.
 fn install_machine(
     ctx: &crate::build_context::BuildContext,
     processors: &crate::processor::ProcessorMap,
@@ -962,11 +966,6 @@ fn install_machine(
             if is_enabled(pname) {
                 tools.extend(processors[pname].required_tools());
             }
-        }
-        // npm, which `tool install project` runs. uv, the other installer
-        // it runs, is installed into the project by that command itself.
-        if !deps.node_deps(root)?.is_empty() {
-            tools.insert("npm".to_string());
         }
         for tool in &tools {
             if !is_installable_tool_name(tool) {
@@ -1066,9 +1065,10 @@ fn install_machine(
 /// dependencies and the Python tools its processors run), `npm ci` fills
 /// `node_modules` from package-lock.json, and the locked crates, npm
 /// packages, gems and release binaries are linked into `.rsconstruct/tools`
-/// from the tool store, uv among them, installed ahead of `uv sync`. With a
-/// `name`, only that tool's project install. Nothing here touches the
-/// machine: a missing npm is an error that names `tool install machine`.
+/// from the tool store, uv and node among them, installed ahead of the `uv
+/// sync` and npm steps that run them. With a `name`, only that tool's
+/// project install. Nothing here touches the machine: an installer the
+/// project does not lock is an error that names `tool install machine`.
 fn install_project(
     ctx: &crate::build_context::BuildContext,
     processors: &crate::processor::ProcessorMap,
@@ -1119,7 +1119,12 @@ fn install_project(
                     method.package, method.method
                 )));
             }
-            tool_dir = Some(dir.with_only(method.method, method.package));
+            // An npm package runs on the project's node, so node stays.
+            let mut only = vec![(method.method, method.package)];
+            if method.method == "npm" && dir.covers("binary", "node") {
+                only.push(("binary", "node"));
+            }
+            tool_dir = Some(dir.with_only(&only));
         }
     } else {
         // uv audits the whole set itself in one pass, so it always runs.
@@ -1157,20 +1162,31 @@ fn install_project(
         }
     }
 
-    // `uv sync` needs uv, and the project's own uv is a release binary in
-    // its tool directory: that one package goes in ahead of the sync.
-    let uv_dir = if groups.iter().any(|(method, _)| *method == "uv-sync") {
-        let dir = project_tools(builder, &wanted, &lock)?;
-        dir.covers("binary", "uv")
-            .then(|| dir.with_only("binary", "uv"))
-    } else {
-        None
-    };
-    // npm, and uv where the project does not install it, are machine
-    // installs; this command does not make them.
-    for (method, _) in &groups {
-        let program = if *method == "uv-sync" { "uv" } else { "npm" };
-        if program == "uv" && uv_dir.is_some() {
+    // The installers the steps below run are release binaries in the
+    // project's tool directory: uv for `uv sync`, and node, whose npm runs
+    // `npm ci` and installs the npm packages. Those go in ahead of the rest.
+    let needs_uv = groups.iter().any(|(method, _)| *method == "uv-sync");
+    let needs_node = groups.iter().any(|(method, _)| *method != "uv-sync")
+        || tool_dir
+            .as_ref()
+            .is_some_and(|d| d.plan.missing.iter().any(|p| p.method == "npm"));
+    // (binary package, the program run from it)
+    let installers: Vec<(&str, &str)> = [("uv", "uv", needs_uv), ("node", "npm", needs_node)]
+        .into_iter()
+        .filter(|(_, _, needed)| *needed)
+        .map(|(package, program, _)| (package, program))
+        .collect();
+    let all_tools = project_tools(builder, &wanted, &lock)?;
+    let only: Vec<(&str, &str)> = installers
+        .iter()
+        .filter(|(package, _)| all_tools.covers("binary", package))
+        .map(|(package, _)| ("binary", *package))
+        .collect();
+    let installer_dir = (!only.is_empty()).then(|| all_tools.with_only(&only));
+    // An installer the project does not lock is a machine install; this
+    // command does not make it.
+    for (package, program) in &installers {
+        if only.iter().any(|(_, locked)| locked == package) {
             continue;
         }
         if which::which(program).is_err() {
@@ -1197,7 +1213,7 @@ fn install_project(
         println!("{}:", color::bold("Project environments"));
         print_install_groups(&groups, &install_ctx);
     }
-    match (&tool_dir, &uv_dir) {
+    match (&tool_dir, &installer_dir) {
         (Some(dir), _) | (None, Some(dir)) => print_project_tools(dir),
         (None, None) => {}
     }
@@ -1205,11 +1221,13 @@ fn install_project(
     if has_work && !go_ahead(flags)? {
         return Ok(());
     }
-    if let Some(dir) = uv_dir.as_ref().filter(|d| d.plan.has_work())
+    if let Some(dir) = installer_dir.as_ref().filter(|d| d.plan.has_work())
         && let Err(e) = apply_project_tools(dir, &lock, flags.verbose)
     {
+        let names: Vec<&str> = only.iter().map(|(_, package)| *package).collect();
         return Err(tool_error(format!(
-            "Failed to install uv into {}: {e:#}",
+            "Failed to install {} into {}: {e:#}",
+            names.join(", "),
             crate::tool_store::REPO_TOOLS_DIR
         )));
     }

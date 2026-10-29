@@ -313,6 +313,14 @@ pub fn collect_wanted(
             wanted.add(method, package);
         }
     }
+    // npm installs a Node project's packages and they run on node, so the
+    // project locks the node `tool install project` installs ahead of them.
+    if (!wanted.npm.is_empty() || !deps.node_deps(root)?.is_empty())
+        && let Some(method) =
+            crate::tools::tool_info("node").and_then(crate::tools::ToolInfo::preferred_method)
+    {
+        wanted.add(method.method, method.package);
+    }
     Ok(wanted)
 }
 
@@ -1276,5 +1284,42 @@ mod tests {
         let deps = crate::config::DependenciesConfig::default();
         let wanted = collect_wanted(&processors, &|_| false, &deps, tmp.path()).unwrap();
         assert_eq!(wanted, Wanted::default());
+    }
+
+    /// A Node project locks the node its npm steps run on, whether its
+    /// packages come from package-lock.json or from `[dependencies] npm`.
+    #[test]
+    fn node_is_locked_for_a_node_project() {
+        let processors = crate::builder::create_all_default_processors().unwrap();
+        let with_node = || {
+            let mut want = Wanted::default();
+            want.add("binary", "node");
+            want
+        };
+
+        let tmp = tempfile::TempDir::new().unwrap();
+        std::fs::write(
+            tmp.path().join("package.json"),
+            r#"{"devDependencies": {"eslint": "^9"}}"#,
+        )
+        .unwrap();
+        std::fs::write(
+            tmp.path().join("package-lock.json"),
+            r#"{"lockfileVersion": 3, "packages": {"node_modules/eslint": {"version": "9.0.0"}}}"#,
+        )
+        .unwrap();
+        let deps = crate::config::DependenciesConfig::default();
+        let wanted = collect_wanted(&processors, &|_| false, &deps, tmp.path()).unwrap();
+        assert_eq!(wanted, with_node());
+
+        let tmp = tempfile::TempDir::new().unwrap();
+        let deps = crate::config::DependenciesConfig {
+            npm: vec!["eslint".to_string()],
+            ..Default::default()
+        };
+        let wanted = collect_wanted(&processors, &|_| false, &deps, tmp.path()).unwrap();
+        let mut expected = with_node();
+        expected.add("npm", "eslint");
+        assert_eq!(wanted, expected);
     }
 }

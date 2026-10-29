@@ -628,7 +628,7 @@ rsconstruct tool lock              # Write rsconstruct.lock: add missing entries
 rsconstruct tool lock --upgrade    # Re-resolve every rsconstruct.lock entry to its latest release
 rsconstruct tool lock --upgrade ruff cargo-deny   # Re-resolve only these entries
 rsconstruct tool install           # List the two targets: machine and project
-rsconstruct tool install machine   # Install what this project needs on the machine: [dependencies] system packages, machine-preferred tools, npm
+rsconstruct tool install machine   # Install what this project needs on the machine: [dependencies] system packages, machine-preferred tools
 rsconstruct tool install machine shellcheck   # Install one tool through its machine install
 rsconstruct tool install machine --all        # Install every tool in the registry onto the machine, ignoring the config (no config needed)
 rsconstruct tool install machine --no-eatmydata   # Don't wrap apt/dnf/pacman with eatmydata
@@ -650,14 +650,13 @@ touches only its own target:
   Python dependencies and the Python tools its processors run, together),
   `npm ci` fills `node_modules` from `package-lock.json`, and the crates, npm
   packages, gems and release binaries `rsconstruct.lock` pins are linked into
-  `.rsconstruct/tools` from a machine-wide store. `uv` is one of those
-  release binaries, locked by every Python project and linked in ahead of
-  `uv sync`. It never touches the machine: a missing `npm` is an error
-  naming `install machine`.
+  `.rsconstruct/tools` from a machine-wide store. `uv` and `node` (with its
+  `npm`) are among those release binaries: every Python project locks uv
+  and every Node project locks node, and each is linked in ahead of the
+  `uv sync` or npm steps that run it. It never touches the machine.
 - **`install machine`** installs onto the machine: the `[dependencies]
-  system` packages, the tools of the enabled processors whose preferred
-  target is the machine (compilers, runtimes, apt-only tools, `.deb`s), and
-  `npm` for a Node project, which `install project` runs. A pip install
+  system` packages and the tools of the enabled processors whose preferred
+  target is the machine (compilers, runtimes, apt-only tools, `.deb`s). A pip install
   here must not land in the project's own `.venv`, which is uv's; it is an
   error when `pip` on PATH is the project's.
 

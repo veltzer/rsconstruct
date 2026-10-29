@@ -161,9 +161,10 @@ inventory::submit! {
         max_jobs_cap: Some(1),
     }
 }
+// npm ships inside the Node.js release, so the project's npm is its node.
 inventory::submit! { crate::tools::ToolInfo {
     name: "npm", runtime: "node",
-    project: None,
+    project: Some(crate::tools::InstallMethod::new("binary", "node")),
     machine: Some(crate::tools::InstallMethod::new("apt", "npm")),
     alternatives: &[], prefer: None,
 } }
