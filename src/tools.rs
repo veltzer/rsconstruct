@@ -1680,16 +1680,17 @@ pub static TOOLS: &[ToolInfo] = &[
         prefer: None,
     },
     // Rust
-    // rustup is the canonical route, but `apt install cargo` is a real,
-    // automatable install and is what makes cargo reachable from
-    // `tool install machine --all` on a bare machine. A host that already has a
-    // rustup toolchain never reaches the install path: `which` finds cargo
-    // first.
+    // The machine gets rustup, never a distro cargo: Ubuntu's rustup package
+    // installs cargo, rustc, rustfmt and cargo-clippy as rustup proxies,
+    // which run the toolchain the project's rust-toolchain.toml pins and
+    // install it on first use. A plain `apt install cargo` would ignore that
+    // file. A host that already has rustup never reaches the install path:
+    // `which` finds cargo first.
     ToolInfo {
         name: "cargo",
         runtime: "rust",
         project: None,
-        machine: Some(InstallMethod::new("apt", "cargo")),
+        machine: Some(InstallMethod::new("apt", "rustup")),
         alternatives: &[],
         prefer: None,
     },

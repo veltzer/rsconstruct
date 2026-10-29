@@ -154,6 +154,14 @@ with Python dependencies locks uv, and every project with Node packages
 (package.json or `[dependencies] npm`) locks node; each is linked in ahead of
 the `uv sync` or npm steps that need it.
 
+The language toolchains are pinned by their own managers' files rather than
+by `rsconstruct.lock`: `.python-version` names the Python that `uv sync`
+builds the `.venv` with (uv downloads that exact build where the machine
+lacks it), and `rust-toolchain.toml` names the rustc, clippy and rustfmt that
+rustup runs for `cargo`. That is why the machine install for `cargo` and
+`rustc` is rustup, whose proxies read the file, and never a distro package
+that would ignore it.
+
 What stays on the machine: system packages (`apt` and friends) and the `.deb`
 binary recipes, which the OS package manager owns. They come from `tool install
 machine`, which never touches any project's tool directory; `tool install

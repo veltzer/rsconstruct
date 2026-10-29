@@ -166,13 +166,13 @@ inventory::submit! {
         max_jobs_cap: None,
     }
 }
-// rustup is the canonical route, but `apt install rustc` is a real,
-// automatable install and is what makes rustc reachable from `tool install
-// --all` on a bare machine. A host that already has a rustup toolchain never
+// The machine gets rustup, whose rustc proxy runs the toolchain the
+// project's rust-toolchain.toml pins (see cargo in the central registry); a
+// distro rustc would ignore that file. A host that already has rustup never
 // reaches the install path: `which` finds rustc first.
 inventory::submit! { crate::tools::ToolInfo {
     name: "rustc", runtime: "rust",
     project: None,
-    machine: Some(crate::tools::InstallMethod::new("apt", "rustc")),
+    machine: Some(crate::tools::InstallMethod::new("apt", "rustup")),
     alternatives: &[], prefer: None,
 } }
