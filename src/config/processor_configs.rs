@@ -45,6 +45,17 @@ pub struct StandardConfig {
     /// processor itself.
     #[serde(default)]
     pub output_depends_on_input_name: bool,
+    /// The result depends on the Python packages installed in the
+    /// project's `./.venv`: a pyrefly verdict, a pytest run, a build script
+    /// that imports a third-party package. Adds a fingerprint of the
+    /// installed packages and interpreter version to the cache key, so an
+    /// upgrade (`uv lock --upgrade && uv sync`) rebuilds. `None` — neither
+    /// the user nor the plugin defaults set it — means detect: keyed when
+    /// one of the processor's tools runs the venv's Python. Read by the
+    /// builder (`python_env::processors_keyed_by_python_env`), not by the
+    /// processor itself.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hash_python_env: Option<bool>,
     // --- Scan fields (file discovery) ---
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub src_dirs: Option<Vec<String>>,
@@ -74,6 +85,7 @@ impl Default for StandardConfig {
             max_jobs: None,
             enabled: true,
             output_depends_on_input_name: false,
+            hash_python_env: None,
             src_dirs: None,
             src_extensions: None,
             src_exclude_dirs: None,

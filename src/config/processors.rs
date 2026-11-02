@@ -6,8 +6,9 @@ use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 
 use super::{
-    FieldProvenance, KnownFields, OUTPUT_DEPENDS_ON_INPUT_NAME, ProcessorDefaults, ProvenanceMap,
-    SCAN_CONFIG_FIELDS, STANDARD_EXTRA_FIELDS, ScanDefaultsData, StandardConfig, provenance,
+    FieldProvenance, HASH_PYTHON_ENV, KnownFields, OUTPUT_DEPENDS_ON_INPUT_NAME, ProcessorDefaults,
+    ProvenanceMap, SCAN_CONFIG_FIELDS, STANDARD_EXTRA_FIELDS, ScanDefaultsData, StandardConfig,
+    provenance,
 };
 use crate::registries::{self as registry, ProcessorPlugin};
 
@@ -254,6 +255,14 @@ pub fn apply_processor_defaults(
         provenance::record_if_absent(
             provenance,
             OUTPUT_DEPENDS_ON_INPUT_NAME,
+            FieldProvenance::ProcessorDefault,
+        );
+    }
+    if defaults.hash_python_env && !table.contains_key(HASH_PYTHON_ENV) {
+        table.insert(HASH_PYTHON_ENV.into(), toml::Value::Boolean(true));
+        provenance::record_if_absent(
+            provenance,
+            HASH_PYTHON_ENV,
             FieldProvenance::ProcessorDefault,
         );
     }

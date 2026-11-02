@@ -90,6 +90,7 @@ pub(super) fn expected_field_type(processor: &str, field: &str) -> Option<FieldT
         "max_jobs" => return Some(FieldType::Integer),
         "enabled" => return Some(FieldType::Bool),
         super::OUTPUT_DEPENDS_ON_INPUT_NAME => return Some(FieldType::Bool),
+        super::HASH_PYTHON_ENV => return Some(FieldType::Bool),
         "batch" => return Some(FieldType::Bool),
         // Near-universal fields from StandardConfig — declared by almost
         // every processor, so they are validated generically rather than

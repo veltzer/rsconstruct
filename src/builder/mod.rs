@@ -870,6 +870,37 @@ impl Builder {
             .collect()
     }
 
+    /// Key the products of every processor that depends on the project's
+    /// Python environment by its fingerprint (see `python_env`). Nothing
+    /// to do without a `./.venv`.
+    fn apply_python_env(&self, graph: &mut BuildGraph, processors: &ProcessorMap) -> Result<()> {
+        let cwd = std::env::current_dir().context("Failed to read the current directory")?;
+        let venv = cwd.join(crate::python_env::VENV_DIR);
+        let Some(fingerprint) = crate::python_env::fingerprint(&venv) else {
+            return Ok(());
+        };
+        let explicit: std::collections::HashMap<&str, bool> = self
+            .config
+            .processor
+            .instances
+            .iter()
+            .filter_map(|inst| {
+                inst.config_toml
+                    .get(crate::config::HASH_PYTHON_ENV)
+                    .and_then(toml::Value::as_bool)
+                    .map(|v| (inst.instance_name.as_str(), v))
+            })
+            .collect();
+        let keyed = crate::python_env::processors_keyed_by_python_env(
+            processors,
+            &|name| tools::instance_enabled(processors, name),
+            &|name| explicit.get(name).copied(),
+            &venv,
+        );
+        graph.apply_python_env(&keyed, &fingerprint);
+        Ok(())
+    }
+
     /// Build the dependency graph using provided processors. Every active
     /// processor takes part: `-p`/`-x` select from the finished graph (see
     /// `select_processors`), since a selection needs its producers.
@@ -947,6 +978,14 @@ impl Builder {
             }
         }
         phase_timings.push(("tool_version_hashes".to_string(), t.elapsed()));
+
+        // Phase 3b: the project's Python environment, for the processors
+        // whose results depend on the installed packages.
+        let t = Instant::now();
+        if self.config.build.hash_python_env {
+            self.apply_python_env(&mut graph, processors)?;
+        }
+        phase_timings.push(("python_env".to_string(), t.elapsed()));
         print_graph_stats(GraphSnapshot::AfterApplyToolHashes, &graph);
 
         // Phase 4: Resolve dependencies

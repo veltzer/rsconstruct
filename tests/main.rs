@@ -35,6 +35,8 @@ mod pages;
 mod processor_cmd;
 #[path = "tests_mod/product.rs"]
 mod product;
+#[path = "tests_mod/python_env.rs"]
+mod python_env;
 #[path = "tests_mod/rsconstructignore.rs"]
 mod rsconstructignore;
 #[path = "tests_mod/scheduler.rs"]

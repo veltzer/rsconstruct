@@ -76,6 +76,16 @@ pub struct BuildConfig {
     /// all; cache keys then ignore tool identity, as they did before.
     #[serde(default = "default_hash_tool_versions")]
     pub hash_tool_versions: bool,
+    /// When true (the default), a fingerprint of the packages installed in
+    /// the project's `./.venv` (plus its interpreter version) is mixed into
+    /// the cache keys of the processors whose results depend on them — the
+    /// Python checkers, and any processor whose tool runs the venv's Python
+    /// (see the per-processor `hash_python_env` field). Upgrading the
+    /// packages then rebuilds what was checked or built against the old
+    /// ones. Set to false to leave the Python environment out of every
+    /// cache key.
+    #[serde(default = "default_hash_python_env")]
+    pub hash_python_env: bool,
     /// When true, every symlink encountered during the file-index walk is
     /// reported as a warning. The walker never follows symlinks, so a
     /// symlinked source (or a symlinked directory of sources) is silently
@@ -159,6 +169,10 @@ const fn default_hash_tool_versions() -> bool {
     true
 }
 
+const fn default_hash_python_env() -> bool {
+    true
+}
+
 const fn default_warn_symlinks() -> bool {
     false
 }
@@ -188,6 +202,7 @@ impl Default for BuildConfig {
             max_arg_len: default_max_arg_len(),
             max_discovery_passes: default_max_discovery_passes(),
             hash_tool_versions: default_hash_tool_versions(),
+            hash_python_env: default_hash_python_env(),
             warn_symlinks: default_warn_symlinks(),
             allow_missing_dep_auto: default_allow_missing_dep_auto(),
             allow_missing_src_dirs: default_allow_missing_src_dirs(),

@@ -25,7 +25,7 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     // pylint's `find_default_config_files`: the rc names in its lookup order,
     // then `pyproject.toml` (`[tool.pylint]`), `setup.cfg` and `tox.ini`
     // (`[pylint.*]` sections), all looked up from the working directory.
-    defaults: Some(crate::config::ProcessorDefaults { command: "pylint", dep_auto: &["pylintrc", "pylintrc.toml", ".pylintrc", ".pylintrc.toml", "pyproject.toml", "setup.cfg", "tox.ini"], output_depends_on_input_name: true, ..crate::config::ProcessorDefaults::EMPTY }),
+    defaults: Some(crate::config::ProcessorDefaults { command: "pylint", dep_auto: &["pylintrc", "pylintrc.toml", ".pylintrc", ".pylintrc.toml", "pyproject.toml", "setup.cfg", "tox.ini"], output_depends_on_input_name: true, hash_python_env: true, ..crate::config::ProcessorDefaults::EMPTY }),
     defconfig_json: crate::registries::default_config_json::<crate::config::StandardConfig>,
     keywords: &["python", "linter", "py", "pip"],
     description: "Lint Python files using pylint",

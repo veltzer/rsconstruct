@@ -264,11 +264,16 @@ pub const SCAN_CONFIG_FIELDS: &[&str] = &[
 /// Universal `StandardConfig` fields that apply to every processor.
 /// Automatically appended to every processor's `known_fields` list during validation
 /// and to the defconfig display table — individual processors don't need to repeat them.
-pub const STANDARD_EXTRA_FIELDS: &[&str] = &["enabled", OUTPUT_DEPENDS_ON_INPUT_NAME];
+pub const STANDARD_EXTRA_FIELDS: &[&str] =
+    &["enabled", OUTPUT_DEPENDS_ON_INPUT_NAME, HASH_PYTHON_ENV];
 
 /// The universal field that keys a processor's products by input path as
 /// well as content (see `StandardConfig::output_depends_on_input_name`).
 pub const OUTPUT_DEPENDS_ON_INPUT_NAME: &str = "output_depends_on_input_name";
+
+/// The universal field that keys a processor's products by the project's
+/// installed Python packages (see `StandardConfig::hash_python_env`).
+pub const HASH_PYTHON_ENV: &str = "hash_python_env";
 
 pub trait KnownFields {
     /// Return the known fields for this config struct, excluding scan fields.
@@ -352,6 +357,12 @@ pub struct ProcessorDefaults {
     /// Default `output_depends_on_input_name`: true for a tool whose verdict
     /// depends on the file's path (per-file rules, module names).
     pub output_depends_on_input_name: bool,
+    /// Default `hash_python_env`: true for a tool whose result depends on
+    /// the project's Python environment but which detection cannot see
+    /// running it (ruff and pyrefly are native binaries), and for the
+    /// Python checkers generally, so the behavior is stated rather than
+    /// detected. False leaves the field unset, i.e. detected.
+    pub hash_python_env: bool,
 }
 
 impl ProcessorDefaults {
@@ -365,6 +376,7 @@ impl ProcessorDefaults {
         args: &[],
         batch: None,
         output_depends_on_input_name: false,
+        hash_python_env: false,
     };
 }
 
@@ -452,6 +464,10 @@ pub const SHARED_FIELD_DESCRIPTIONS: &[(&str, &str)] = &[
     (
         OUTPUT_DEPENDS_ON_INPUT_NAME,
         "The result depends on input paths, not only content: a renamed or identical file is rebuilt, not restored from cache",
+    ),
+    (
+        HASH_PYTHON_ENV,
+        "The result depends on the packages installed in ./.venv: upgrading them rebuilds. Unset means detect (the tool runs the venv's Python)",
     ),
 ];
 

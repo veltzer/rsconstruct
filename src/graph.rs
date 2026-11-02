@@ -645,6 +645,18 @@ impl BuildGraph {
         }
     }
 
+    /// Mix the project's Python-environment fingerprint into the cache key
+    /// of every product of `processors`, so upgrading the installed
+    /// packages (or the interpreter) invalidates what was checked or built
+    /// against the old ones. See `python_env`.
+    pub fn apply_python_env(&mut self, processors: &HashSet<String>, fingerprint: &str) {
+        for product in &mut self.products {
+            if processors.contains(&product.processor) {
+                product.cache_key.push(KeyComponent::PythonEnv, fingerprint);
+            }
+        }
+    }
+
     /// Add analyzer-discovered `deps` to a product's inputs, keeping the
     /// input index in step. Paths already among the inputs, and the
     /// product's own outputs (see [`without_own_outputs`]), are skipped.

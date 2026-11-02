@@ -92,6 +92,7 @@ mod phases;
 mod platform;
 mod processor;
 mod progress;
+mod python_env;
 mod registries;
 mod remote_cache;
 mod runtime_flags;

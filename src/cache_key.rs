@@ -31,6 +31,10 @@ pub enum Component {
     Analyzer,
     /// Hash of the versions of the external tools the processor invokes.
     ToolVersion,
+    /// Fingerprint of the project's installed Python packages and
+    /// interpreter version (`python_env::fingerprint`), for processors
+    /// whose result depends on what the venv has installed.
+    PythonEnv,
     /// A variant/profile name (e.g. a compiler profile).
     Variant,
 }
@@ -44,18 +48,21 @@ impl Component {
             Self::Config => "config",
             Self::Analyzer => "analyzer",
             Self::ToolVersion => "tool",
+            Self::PythonEnv => "python_env",
             Self::Variant => "variant",
         }
     }
 
     /// The build phase that contributes this kind: discovery (config,
-    /// variant), then analysis, then tool-version hashing. Contribution
-    /// order — and so the digest — follows the phases.
+    /// variant), then analysis, then tool-version hashing, then the Python
+    /// environment. Contribution order — and so the digest — follows the
+    /// phases.
     pub const fn phase(self) -> u8 {
         match self {
             Self::Config | Self::Variant => 0,
             Self::Analyzer => 1,
             Self::ToolVersion => 2,
+            Self::PythonEnv => 3,
         }
     }
 }
@@ -330,7 +337,24 @@ mod tests {
         key.push(Component::Config, "c");
         key.push(Component::Analyzer, "a");
         key.push(Component::ToolVersion, "t");
+        key.push(Component::PythonEnv, "p");
         let tags: Vec<_> = key.components().iter().map(|(c, _)| c.tag()).collect();
-        assert_eq!(tags, vec!["config", "analyzer", "tool"]);
+        assert_eq!(tags, vec!["config", "analyzer", "tool", "python_env"]);
+    }
+
+    /// Redoing analysis mid-build lands the analyzer pieces before the
+    /// Python-environment component too, as a from-scratch build orders them.
+    #[test]
+    fn replace_puts_analyzer_pieces_before_python_env() {
+        let mut fresh = CacheKey::new();
+        fresh.push(Component::Config, "c");
+        fresh.push(Component::Analyzer, "a");
+        fresh.push(Component::PythonEnv, "p");
+
+        let mut redone = CacheKey::new();
+        redone.push(Component::Config, "c");
+        redone.push(Component::PythonEnv, "p");
+        redone.replace(Component::Analyzer, vec!["a".into()]);
+        assert_eq!(redone, fresh);
     }
 }

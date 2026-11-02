@@ -118,10 +118,12 @@ named, typed component and one function folds them into the digest:
 | `variant` | `Product::with_variant` | multiple products from one input (e.g. one per output format) |
 | `analyzer` | `Product::extend_config_hash` | non-content state an analyzer resolves, e.g. the sorted set of paths matching a glob |
 | `tool` | `apply_tool_version_hashes`, gated on [`hash_tool_versions`](../configuration.md#build) | identity of the external tools the processor invokes |
+| `python_env` | `apply_python_env`, gated on [`hash_python_env`](../configuration.md#build) and the per-processor field | the distributions installed in `./.venv` and its interpreter version — see [Python Environment Fingerprint](python-env-fingerprint.md) |
 
 The component *kind* is part of the digest, so a `config` value and a `tool`
 value that happen to be equal do not collide. Order is significant and
-deterministic (discovery, then analyzers, then tool versions).
+deterministic (discovery, then analyzers, then tool versions, then the
+Python environment).
 
 `rsconstruct product show <path>` prints the components individually, so any
 descriptor-key change is attributable to exactly one of them (or to

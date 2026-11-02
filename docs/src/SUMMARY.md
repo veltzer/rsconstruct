@@ -162,6 +162,7 @@ The chapters below cover the internal design and implementation of rsconstruct. 
 - [Checksum Cache](internal/checksum-cache.md)
 - [Dependency Caching](internal/dependency-caching.md)
 - [Processor Versioning](internal/processor-versioning.md)
+- [Python Environment Fingerprint](internal/python-env-fingerprint.md)
 - [Cross-Processor Dependencies](internal/cross-processor-dependencies.md)
 - [Glob-aware Tera Dependencies](internal/glob-deps.md)
 - [Shared Output Directory](internal/shared-output-directory.md)
