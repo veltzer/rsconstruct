@@ -464,7 +464,7 @@ Consequences:
   into `.rsconstruct/tools` before it runs `uv sync`. The machine needs no
   uv.
 - Every rsconstruct invocation in a project prepends `.venv/bin` to its own
-  `PATH`, so `python3`, `ruff` and `pytest` resolve to the locked copies with
+  `PATH`, so `python`, `ruff` and `pytest` resolve to the locked copies with
   no venv activated.
 
 `doctor` reads the same closure from `uv.lock` (registry packages only; the

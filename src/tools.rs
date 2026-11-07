@@ -629,7 +629,7 @@ pub fn augment_path_with_node_modules_bin() {
 /// Make the repo's Python environment the one everything runs in: prepend
 /// `./.venv/bin` to this process's PATH. That is where `tool install
 /// project` (`uv sync`) puts the code's dependencies and the Python tools
-/// its processors run, and with it first, `python3`, `ruff` and `pytest`
+/// its processors run, and with it first, `python`, `ruff` and `pytest`
 /// resolve to the locked copies with no venv activated, in a shell or on a
 /// CI runner alike.
 ///
@@ -1651,10 +1651,11 @@ pub static TOOLS: &[ToolInfo] = &[
         prefer: None,
     },
     ToolInfo {
-        name: "python3",
+        name: "python",
         runtime: "python",
         project: None,
-        machine: Some(InstallMethod::new("apt", "python3")),
+        // `python-is-python3` provides `/usr/bin/python` and pulls in `python3`.
+        machine: Some(InstallMethod::new("apt", "python-is-python3")),
         alternatives: &[],
         prefer: None,
     },

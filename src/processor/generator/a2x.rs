@@ -54,7 +54,7 @@ fn create_a2x(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processor::Pr
         Box::new(SimpleGenerator::new(
             cfg,
             SimpleGeneratorParams {
-                extra_tools: &["python3"],
+                extra_tools: &["python"],
                 extra_tools_fn: None,
                 source_filter: None,
                 discover_mode: DiscoverMode::SingleFormat("pdf"),

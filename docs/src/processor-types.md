@@ -196,7 +196,7 @@ One blob per output file (like generator).
 
 ```toml
 [processor.explicit.generic.site]
-command = "python3"
+command = "python"
 args = ["build_site.py"]
 input_globs = ["out/processor.generator.pandoc/*.html", "templates/*.html"]
 inputs = ["site.yaml"]

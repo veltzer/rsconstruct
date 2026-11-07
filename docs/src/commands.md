@@ -133,7 +133,7 @@ The `-p` flag supports `@`-prefixed shortcuts that expand to groups of processor
 - `@mass_generator` — all mass generator processors
 
 **By tool or name** — any other `@x` selects both of these:
-- every processor that requires tool `x` (`@python3`, `@node`; matched
+- every processor that requires tool `x` (`@python`, `@node`; matched
   against each processor's `required_tools()`)
 - every processor whose short name is `x`, with all its instances
   (`@tera` → `processor.generator.tera` and e.g.
@@ -147,7 +147,7 @@ Examples:
 ```bash
 rsconstruct build -p @checker              # Run only checker processors
 rsconstruct build -p @generator            # Run only generator processors
-rsconstruct build -p @python3               # Run all Python-based processors
+rsconstruct build -p @python                # Run all Python-based processors
 rsconstruct build -p @checker,tera         # Mix shortcuts with processor names
 ```
 
@@ -217,7 +217,7 @@ Pass `--no-empty-dirs` to skip the sweep entirely. Files still get cleaned; empt
 `-p` / `--processor` takes a comma-separated list of the same selectors as
 [`build -p`](#rsconstruct-build): a processor name with or without the
 `processor.` prefix (`generator.tera`, as the tables print it), an instance
-name (`generator.marp.slides`), `@checker` for a type, `@python3` for every
+name (`generator.marp.slides`), `@checker` for a type, `@python` for every
 processor that needs a tool, `@tera` for a short name with all its
 instances. A selector that matches nothing is an error listing the
 processors in the config. Only the selected processors' products are
@@ -746,7 +746,7 @@ already installed and does not add a global one on top.
 
 In a project directory the startup step also prepends the repo's
 `.venv/bin`, where `install project` (`uv sync`) puts the code's
-dependencies and the Python tools its processors run. `python3`, `ruff` and
+dependencies and the Python tools its processors run. `python`, `ruff` and
 `pytest` therefore resolve to the locked copies with no venv activated, in a
 shell and on a CI runner alike.
 

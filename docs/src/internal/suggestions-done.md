@@ -45,7 +45,7 @@ Items from `suggestions.md` that have been implemented.
 - **sass** — Compile SCSS/SASS files to CSS. `src/processor/generator/sass.rs`.
 - **protobuf** — Compile `.proto` files to generated code using `protoc`. `src/processor/generator/protobuf.rs`.
 - **pytest** — Run Python test files with pytest. `src/processor/checker/pytest.rs`.
-- **doctest** — Run Python doctests via `python3 -m doctest`. `src/processor/checker/doctest.rs`.
+- **doctest** — Run Python doctests via `python -m doctest`. `src/processor/checker/doctest.rs`.
 
 ## Completed Test Coverage
 

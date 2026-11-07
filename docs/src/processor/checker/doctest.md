@@ -2,12 +2,12 @@
 
 ## Purpose
 
-Runs Python doctests embedded in `.py` files using `python3 -m doctest`.
+Runs Python doctests embedded in `.py` files using `python -m doctest`.
 
 ## How It Works
 
 Python files (`.py`) are checked for embedded doctests. Each file is run through
-`python3 -m doctest` — failing doctests cause the build to fail.
+`python -m doctest` — failing doctests cause the build to fail.
 
 ## Source Files
 

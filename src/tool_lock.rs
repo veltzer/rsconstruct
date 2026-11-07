@@ -792,7 +792,7 @@ impl std::fmt::Display for Mismatch {
     }
 }
 
-/// The Python packages installed in the environment `python3` on PATH
+/// The Python packages installed in the environment `python` on PATH
 /// belongs to (the repo's `.venv`, which rsconstruct puts first on PATH),
 /// with their versions, among `names`. Asks the interpreter itself, not
 /// `pip show`: a uv-managed venv has no pip. Used by `doctor`.
@@ -805,7 +805,7 @@ for n in sys.argv[1:]:
     except m.PackageNotFoundError:
         pass
 ";
-    let mut cmd = std::process::Command::new("python3");
+    let mut cmd = std::process::Command::new("python");
     cmd.arg("-c").arg(SCRIPT).args(names);
     let Ok(out) = crate::processor::run_command_capture(ctx, &cmd) else {
         return BTreeMap::new();

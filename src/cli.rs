@@ -390,7 +390,7 @@ pub enum CleanAction {
     All {
         /// Only these processors; comma-separated. Same selectors as
         /// `build -p`: a name with or without the `processor.` prefix, an
-        /// instance, `@checker` (a type), `@python3` (a tool), `@tera` (a
+        /// instance, `@checker` (a type), `@python` (a tool), `@tera` (a
         /// short name). Without it, everything goes
         #[arg(short, long, value_delimiter = ',')]
         processor: Vec<String>,
@@ -407,7 +407,7 @@ pub enum CleanAction {
     Outputs {
         /// Only clean outputs of these processors; comma-separated. Same
         /// selectors as `build -p`: a name with or without the `processor.`
-        /// prefix, an instance, `@checker` (a type), `@python3` (a tool),
+        /// prefix, an instance, `@checker` (a type), `@python` (a tool),
         /// `@tera` (a short name)
         #[arg(short, long, value_delimiter = ',')]
         processor: Vec<String>,
@@ -841,7 +841,7 @@ pub struct SharedBuildArgs {
     pub processor: Option<Vec<String>>,
 
     /// Exclude specific processors by instance name (comma-separated list).
-    /// Mirrors `-p` and accepts the same shortcuts (e.g. `@checker`, `@python3`).
+    /// Mirrors `-p` and accepts the same shortcuts (e.g. `@checker`, `@python`).
     /// When combined with `-p`, excludes are subtracted from the included set;
     /// a processor appearing in both is an error.
     #[arg(short = 'x', long = "exclude-processor", value_delimiter = ',')]

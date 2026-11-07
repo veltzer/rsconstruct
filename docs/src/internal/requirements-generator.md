@@ -37,7 +37,7 @@ The Python analyzer already resolves bucket 1 via
 Python 3.10+ ships `sys.stdlib_module_names` — a frozenset of every stdlib
 top-level module name. We bake this list into a static table inside the
 processor (`src/processor/generator/requirements.rs`) rather than probing
-`python3` at build time. Reasons:
+`python` at build time. Reasons:
 
 - The list is stable across 3.10+ with a handful of additions per minor
   release.
@@ -45,7 +45,7 @@ processor (`src/processor/generator/requirements.rs`) rather than probing
   hermetic.
 - The list is ~300 names, a few KB of source.
 
-A refresh script regenerates the table from `python3 -c 'import sys;
+A refresh script regenerates the table from `python -c 'import sys;
 print(sorted(sys.stdlib_module_names))'` when we bump Python support. The
 list lives alongside the processor, not in a user-facing config.
 

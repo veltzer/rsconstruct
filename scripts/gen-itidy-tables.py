@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python
 """Generate src/engines/tidy/tables.json from the HTML Tidy sources.
 
 itidy (processor.checker.itidy) is a port of HTML Tidy 5.8.0; its tag,

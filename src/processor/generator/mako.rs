@@ -11,7 +11,7 @@ use crate::processor::{Processor, check_command_output, resolve_dep_inputs, run_
 use super::TemplateItem;
 
 /// Mako template processor config. No custom fields.
-/// `command` is the Python interpreter used to render (default: python3).
+/// `command` is the Python interpreter used to render (default: python).
 #[derive(Debug, Deserialize, Serialize, Clone, Default)]
 pub struct MakoConfig {
     #[serde(flatten)]
@@ -93,7 +93,7 @@ impl Processor for MakoProcessor {
     }
 
     fn required_tools(&self) -> Vec<String> {
-        // `command` is the interpreter (python3); rendering additionally needs
+        // `command` is the interpreter (python); rendering additionally needs
         // the Mako library, which `render_mako` imports. `mako-render` is the
         // console script from that same distribution — probing it is how a
         // library dependency becomes visible to the executable-based tool
@@ -159,7 +159,7 @@ inventory::submit! {
         fields: &[],
         omit_standard_fields: &["formats", "args", "output_dir", "batch"],
         scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &[".mako"], src_exclude_dirs: &[] }),
-        defaults: Some(crate::config::ProcessorDefaults { command: "python3", ..crate::config::ProcessorDefaults::EMPTY }),
+        defaults: Some(crate::config::ProcessorDefaults { command: "python", ..crate::config::ProcessorDefaults::EMPTY }),
         defconfig_json: crate::registries::default_config_json::<MakoConfig>,
         keywords: &["python", "template", "generator", "pip"],
         description: "Render Mako templates into output files",
@@ -170,7 +170,7 @@ inventory::submit! {
         max_jobs_cap: None,
     }
 }
-// The mako processor runs `python3 -c "import mako..."`, so what it really
+// The mako processor runs `python -c "import mako..."`, so what it really
 // needs is the Mako *library*, which the registry can't probe directly (it
 // probes executables). The `mako-render` console script ships in the same
 // distribution, so probing it is an exact proxy for "the library is

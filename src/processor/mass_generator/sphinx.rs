@@ -173,7 +173,7 @@ fn default_root() -> String {
 }
 
 fn default_python() -> String {
-    "python3".to_string()
+    "python".to_string()
 }
 
 impl Default for SphinxConfig {
@@ -596,9 +596,6 @@ mod tests {
         cfg.standard.output_dir = "docs".to_string();
         cfg.standard.required_tools = vec!["dot".to_string()];
         let proc = SphinxProcessor::new(cfg).unwrap();
-        assert_eq!(
-            proc.required_tools(),
-            vec!["sphinx-build", "python3", "dot"]
-        );
+        assert_eq!(proc.required_tools(), vec!["sphinx-build", "python", "dot"]);
     }
 }

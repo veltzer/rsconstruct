@@ -389,7 +389,7 @@ pub struct SimpleCheckerParams {
     pub subcommand: Option<&'static str>,
     /// Args prepended before config args (e.g., ["--check"] for black)
     pub prepend_args: &'static [&'static str],
-    /// Additional tools required beyond the command (e.g., ["python3", "node"])
+    /// Additional tools required beyond the command (e.g., ["python", "node"])
     pub extra_tools: &'static [&'static str],
 }
 

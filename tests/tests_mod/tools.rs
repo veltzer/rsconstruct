@@ -43,7 +43,7 @@ fn tools_list_shows_all_registry_tools() {
     assert!(row("clojure").contains("(none)"), "{}", row("clojure"));
     // A tool many processors run names one of them and counts the rest,
     // instead of stretching the table across the screen.
-    assert!(row("python3").contains(" more"), "{}", row("python3"));
+    assert!(row("python").contains(" more"), "{}", row("python"));
 }
 
 #[test]
@@ -135,7 +135,7 @@ fn tools_list_shows_configured_tools() {
     );
 
     let stdout = String::from_utf8_lossy(&output.stdout);
-    // Template processor requires python3, so list-configured always has output.
+    // Template processor requires python, so list-configured always has output.
     assert!(
         !stdout.is_empty(),
         "tool list-configured should show at least one tool"
@@ -547,7 +547,7 @@ fn tools_stats_shows_summary() {
 }
 
 /// Like `tool list`, a `tool stats` row names one processor and counts the
-/// rest: outside a project every processor counts, and python3 alone is
+/// rest: outside a project every processor counts, and python alone is
 /// run by more than a dozen.
 #[test]
 fn tools_stats_summarizes_many_processors() {
@@ -562,8 +562,8 @@ fn tools_stats_summarizes_many_processors() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     let row = stdout
         .lines()
-        .find(|l| l.split('│').nth(1).is_some_and(|c| c.trim() == "python3"))
-        .unwrap_or_else(|| panic!("no row for python3:\n{stdout}"));
+        .find(|l| l.split('│').nth(1).is_some_and(|c| c.trim() == "python"))
+        .unwrap_or_else(|| panic!("no row for python:\n{stdout}"));
     assert!(row.contains(" more"), "{row}");
 }
 

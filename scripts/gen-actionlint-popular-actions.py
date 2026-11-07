@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python
 """Convert actionlint's popular_actions.go into src/engines/actionlint/popular_actions.json.
 
 iactionlint (src/engines/actionlint/) is a port of actionlint and checks `uses:` of

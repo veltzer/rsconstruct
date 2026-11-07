@@ -16,7 +16,7 @@ use crate::common::{make_executable, run_rsconstruct, write_file};
 /// fails (exit 1) when a `.fail-modules` marker sits in M=<dir>, so tests
 /// can watch what a failed build leaves behind. It ignores `-C <kdir>`,
 /// ARCH=, CROSS_COMPILE=, V=, W=.
-const FAKE_MAKE: &str = r#"#!/usr/bin/env python3
+const FAKE_MAKE: &str = r#"#!/usr/bin/env python
 import os
 import sys
 

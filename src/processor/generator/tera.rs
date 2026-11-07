@@ -161,7 +161,7 @@ impl Processor for TeraProcessor {
     }
 
     fn required_tools(&self) -> Vec<String> {
-        vec!["python3".to_string(), "sh".to_string(), "git".to_string()]
+        vec!["python".to_string(), "sh".to_string(), "git".to_string()]
     }
 
     fn discover(
@@ -749,7 +749,7 @@ print(json.dumps(result))
     );
 
     // Execute Python and capture output
-    let mut cmd = Command::new("python3");
+    let mut cmd = Command::new("python");
     cmd.arg("-c").arg(&python_script);
     let output = run_command_capture(ctx, &cmd)?;
 

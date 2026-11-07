@@ -11,7 +11,7 @@ fn create_mypy(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processor::P
                 description: "Type-check Python files using mypy",
                 subcommand: None,
                 prepend_args: &[],
-                extra_tools: &["python3"],
+                extra_tools: &["python"],
             },
         ))
     })

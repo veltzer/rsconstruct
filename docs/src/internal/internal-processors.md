@@ -272,7 +272,7 @@ Convert YAML files to pretty-printed JSON.
 
 ### ijinja2 — Jinja2 templates
 
-Replaces: the `jinja2` generator (Python Jinja2 through `python3 -c`)
+Replaces: the `jinja2` generator (Python Jinja2 through `python -c`)
 
 `src/processor/generator/ijinja2.rs` keeps the generator's contract (the
 shared `find_templates` discovery, the output path with the extension

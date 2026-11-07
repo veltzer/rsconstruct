@@ -11,7 +11,7 @@ fn create_black(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processor::
                 description: "Check Python code formatting using black",
                 subcommand: None,
                 prepend_args: &["--check"],
-                extra_tools: &["python3"],
+                extra_tools: &["python"],
             },
         ))
     })

@@ -6,7 +6,7 @@ Renders Mako template files into output files using the Python Mako template lib
 
 ## How It Works
 
-Files matching configured extensions in `templates.mako/` are rendered via `python3` using
+Files matching configured extensions in `templates.mako/` are rendered via `python` using
 the `mako` Python library. Output is written with the extension stripped and the
 `templates.mako/` prefix removed:
 

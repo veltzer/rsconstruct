@@ -338,7 +338,7 @@ const MAPPINGS: &[(&str, &str)] = &[
 // ---------------------------------------------------------------------------
 // Python stdlib module names.
 //
-// Generated from `python3 -c 'import sys; print(sorted(sys.stdlib_module_names))'`
+// Generated from `python -c 'import sys; print(sorted(sys.stdlib_module_names))'`
 // on Python 3.12. Covers 3.10+ (names added in later minor releases are included;
 // removed names are not present in older releases, which matches desired behavior).
 //

@@ -104,7 +104,7 @@ cannot see running Python.
   This covers `command = "python"`, `python -m scripts.x`,
   `scripts/build.py` with `#!/usr/bin/env python`, Python console scripts
   installed in the venv (yamllint, cpplint, sphinx-build, ...), and the
-  tera generator, whose `load_python` function runs the venv's `python3`.
+  tera generator, whose `load_python` function runs the venv's `python`.
   A system script with `#!/usr/bin/python3` is Python too, but it never
   sees the venv's packages and is not keyed. Detection misses Python run
   from behind a shell wrapper; such a processor sets

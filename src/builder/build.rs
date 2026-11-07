@@ -21,7 +21,7 @@ use std::time::{Duration, Instant};
 ///   `@mass_generator` — every processor (and instance) of that type.
 ///   A type with no configured processors selects nothing.
 /// - **Anything else**, `@x`, selects the union of the processors whose
-///   `required_tools()` contains `x` (`@python3`) and the processors whose
+///   `required_tools()` contains `x` (`@python`) and the processors whose
 ///   short name is `x` (`@tera` → `processor.generator.tera` and each of its
 ///   instances; `@generic` → every generic processor of every type).
 /// - An `@x` that selects nothing stays as written, so validation reports

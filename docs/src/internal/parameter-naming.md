@@ -87,7 +87,7 @@ For the `script` and `generator` processors, if `command` points to a file that
 exists on disk (e.g. `command = "scripts/my_linter.sh"`), rsconstruct
 automatically adds it as an input dependency. This means that if the script
 itself changes, all affected products are rebuilt. System tools (e.g. `bash`,
-`python3`) are not files in the project and are not tracked.
+`python`) are not files in the project and are not tracked.
 
 ---
 

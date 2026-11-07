@@ -109,7 +109,7 @@ pub(super) fn instance_enabled(processors: &crate::processor::ProcessorMap, name
 }
 
 /// How many processors a `tool list` or `tool stats` row names before
-/// summarizing the rest as "+N more": `python3` alone is run by 13, and naming them all made the
+/// summarizing the rest as "+N more": `python` alone is run by 13, and naming them all made the
 /// table several terminal widths wide. One keeps the table within about 90
 /// columns; `--json` always carries the full list.
 const TOOL_LIST_MAX_PROCESSORS: usize = 1;

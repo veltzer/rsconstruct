@@ -126,7 +126,7 @@ fn tools_install_skips_repo_local_script_commands() {
     ));
     let project = temp_dir.path();
     write_file(project, "checked/doc.md", "# doc");
-    write_file(project, "scripts/check_md.py", "#!/usr/bin/env python3\n");
+    write_file(project, "scripts/check_md.py", "#!/usr/bin/env python\n");
 
     let output = run_rsconstruct(project, &["tool", "install", "machine"]);
     let stderr = String::from_utf8_lossy(&output.stderr);

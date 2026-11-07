@@ -11,7 +11,7 @@ fn create_yamllint(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processo
                 description: "Lint YAML files using yamllint",
                 subcommand: None,
                 prepend_args: &[],
-                extra_tools: &["python3"],
+                extra_tools: &["python"],
             },
         ))
     })
