@@ -133,3 +133,18 @@ pub fn block_size(metadata: &std::fs::Metadata) -> u64 {
 pub fn interrupt_signal() -> std::io::Result<tokio::signal::unix::Signal> {
     tokio::signal::unix::signal(tokio::signal::unix::SignalKind::interrupt())
 }
+
+/// Whether `metadata` describes an overlayfs whiteout: a character device
+/// with device number 0:0, which overlayfs leaves in its upper directory to
+/// record that a lower file was deleted. Used by the sandbox
+/// (`src/sandbox.rs`) to see what a tool removed.
+pub fn is_overlay_whiteout(metadata: &std::fs::Metadata) -> bool {
+    use std::os::unix::fs::{FileTypeExt, MetadataExt};
+    metadata.file_type().is_char_device() && metadata.rdev() == 0
+}
+
+/// Read the extended attribute `name` of `path` without following a
+/// symlink. `None` when the attribute is absent.
+pub fn get_xattr(path: &std::path::Path, name: &str) -> std::io::Result<Option<Vec<u8>>> {
+    xattr::get(path, name)
+}

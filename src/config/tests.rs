@@ -1504,3 +1504,37 @@ fn build_python_defaults_to_python_and_is_switchable() {
         .to_string();
     assert!(err.contains("[build] python"), "{err}");
 }
+
+/// `[build] execution_model` is `native` unless set; `sandbox` is the one
+/// other value. Sandboxing is an option, never the default.
+#[test]
+fn build_execution_model_defaults_to_native() {
+    use super::ExecutionModel;
+    let absent: super::BuildConfig = toml::from_str("").unwrap();
+    assert_eq!(absent.execution_model, ExecutionModel::Native);
+    assert_eq!(
+        super::BuildConfig::default().execution_model,
+        ExecutionModel::Native
+    );
+    let set: super::BuildConfig = toml::from_str("execution_model = \"sandbox\"\n").unwrap();
+    assert_eq!(set.execution_model, ExecutionModel::Sandbox);
+    assert!(toml::from_str::<super::BuildConfig>("execution_model = \"docker\"\n").is_err());
+}
+
+/// The per-processor sandbox fields are accepted on any processor, and a
+/// misspelled `execution_model` is a config error, not a late build error.
+#[test]
+fn processor_sandbox_fields_validate() {
+    let ok = toml_of(
+        "[processor.checker.ruff]\nexecution_model = \"sandbox\"\nsandbox_network = true\nsandbox_writable = [\".ruff_cache\"]\n",
+    );
+    let errors = validate_processor_fields_raw(&ok);
+    assert!(errors.is_empty(), "unexpected errors: {errors:?}");
+    let bad = toml_of("[processor.checker.ruff]\nexecution_model = \"sandbx\"\n");
+    let errors = validate_processor_fields_raw(&bad);
+    assert_eq!(errors.len(), 1, "{errors:?}");
+    assert!(
+        errors[0].contains("\"native\" or \"sandbox\""),
+        "{errors:?}"
+    );
+}

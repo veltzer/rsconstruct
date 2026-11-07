@@ -66,6 +66,7 @@ unicode-width = "0.2.2"
 unicode-normalization = "0.1.25"
 unicode-general-category = "1.1.0"
 imbl = "7.0.2"
+xattr = "1.7.0"
 
 [target.'cfg(unix)'.dependencies]
 libc = "0.2"

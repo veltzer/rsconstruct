@@ -279,8 +279,26 @@ pub const SCAN_CONFIG_FIELDS: &[&str] = &[
 /// Universal `StandardConfig` fields that apply to every processor.
 /// Automatically appended to every processor's `known_fields` list during validation
 /// and to the defconfig display table — individual processors don't need to repeat them.
-pub const STANDARD_EXTRA_FIELDS: &[&str] =
-    &["enabled", OUTPUT_DEPENDS_ON_INPUT_NAME, HASH_PYTHON_ENV];
+pub const STANDARD_EXTRA_FIELDS: &[&str] = &[
+    "enabled",
+    OUTPUT_DEPENDS_ON_INPUT_NAME,
+    HASH_PYTHON_ENV,
+    EXECUTION_MODEL,
+    SANDBOX_NETWORK,
+    SANDBOX_WRITABLE,
+];
+
+/// The universal field naming the state directories a sandboxed tool may
+/// write directly (see `StandardConfig::sandbox_writable`).
+pub const SANDBOX_WRITABLE: &str = "sandbox_writable";
+
+/// The universal field overriding `[build] execution_model` for one
+/// processor (see `StandardConfig::execution_model`).
+pub const EXECUTION_MODEL: &str = "execution_model";
+
+/// The universal field letting a sandboxed processor reach the network
+/// (see `StandardConfig::sandbox_network`).
+pub const SANDBOX_NETWORK: &str = "sandbox_network";
 
 /// The universal field that keys a processor's products by input path as
 /// well as content (see `StandardConfig::output_depends_on_input_name`).
@@ -382,6 +400,9 @@ pub struct ProcessorDefaults {
     /// rather than `command`, which must then be empty: for processors that
     /// run `python -m <module>` or a Python program on the interpreter.
     pub python_command: bool,
+    /// Default `sandbox_writable`: the directories the tool keeps its own
+    /// state in, relative to the project root.
+    pub sandbox_writable: &'static [&'static str],
 }
 
 impl ProcessorDefaults {
@@ -397,6 +418,7 @@ impl ProcessorDefaults {
         output_depends_on_input_name: false,
         hash_python_env: false,
         python_command: false,
+        sandbox_writable: &[],
     };
 }
 
@@ -509,6 +531,18 @@ pub const SHARED_FIELD_DESCRIPTIONS: &[(&str, &str)] = &[
     (
         HASH_PYTHON_ENV,
         "The result depends on the packages installed in ./.venv: upgrading them rebuilds. Unset means detect (the tool runs the venv's Python)",
+    ),
+    (
+        EXECUTION_MODEL,
+        "\"native\" or \"sandbox\": overrides [build] execution_model for this processor. Unset follows the build-wide setting",
+    ),
+    (
+        SANDBOX_NETWORK,
+        "Under the sandbox execution model, let this processor's tools reach the network",
+    ),
+    (
+        SANDBOX_WRITABLE,
+        "Under the sandbox execution model, state directories the tool writes directly (cargo's target, a linter's cache), not checked",
     ),
 ];
 

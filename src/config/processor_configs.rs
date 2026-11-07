@@ -56,6 +56,23 @@ pub struct StandardConfig {
     /// processor itself.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub hash_python_env: Option<bool>,
+    /// Overrides `[build] execution_model` for this processor. `None`
+    /// follows the build-wide setting. Read by the executor
+    /// (`sandbox::spec_for`), not by the processor itself; not part of the
+    /// cache key, since a sandbox never changes a successful result.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub execution_model: Option<super::ExecutionModel>,
+    /// Under the sandbox execution model, let this processor's tools reach
+    /// the network (pip, npm, cargo fetching packages). Ignored natively.
+    #[serde(default)]
+    pub sandbox_network: bool,
+    /// Under the sandbox execution model, directories (relative to the
+    /// project root) the tool keeps its own state in -- cargo's `target`,
+    /// a linter's cache -- passed through to the real tree read-write and
+    /// not checked. Without this every run would start from a cold cache.
+    /// Ignored natively.
+    #[serde(default)]
+    pub sandbox_writable: Vec<String>,
     // --- Scan fields (file discovery) ---
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub src_dirs: Option<Vec<String>>,
@@ -86,6 +103,9 @@ impl Default for StandardConfig {
             enabled: true,
             output_depends_on_input_name: false,
             hash_python_env: None,
+            execution_model: None,
+            sandbox_network: false,
+            sandbox_writable: Vec::new(),
             src_dirs: None,
             src_extensions: None,
             src_exclude_dirs: None,

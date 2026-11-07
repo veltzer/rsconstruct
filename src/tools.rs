@@ -1722,6 +1722,16 @@ pub static TOOLS: &[ToolInfo] = &[
         prefer: None,
     },
     // System
+    // Run by rsconstruct itself under `execution_model = "sandbox"`
+    // (src/sandbox.rs), around every sandboxed processor's tools.
+    ToolInfo {
+        name: "bwrap",
+        runtime: "system",
+        project: None,
+        machine: Some(InstallMethod::new("apt", "bubblewrap")),
+        alternatives: &[],
+        prefer: None,
+    },
     // Run by a project's own scripts (a generic processor's
     // `required_tools`), not by any one processor.
     ToolInfo {

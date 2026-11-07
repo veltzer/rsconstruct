@@ -913,6 +913,13 @@ impl Executor<'_> {
                 (0..chunk.len()).map(|_| None).collect();
             let mut pending: Vec<usize> = (0..chunk.len()).collect();
             crate::processor::set_declared_tools(Some(processor.required_tools()));
+            // A batched invocation may write the outputs of any product in
+            // the chunk; retries re-run a subset, which the union covers.
+            crate::sandbox::set_spec(crate::sandbox::spec_for(
+                processor.scan_config(),
+                self.build_ctx.execution_model(),
+                &product_refs,
+            ));
             for attempt in 1..=max_attempts {
                 let refs: Vec<&crate::graph::Product> =
                     pending.iter().map(|&i| product_refs[i]).collect();
@@ -968,6 +975,7 @@ impl Executor<'_> {
                 }
             }
             crate::processor::set_declared_tools(None);
+            crate::sandbox::set_spec(None);
             let batch_duration = batch_start.elapsed();
 
             // Process per-product results
@@ -1097,6 +1105,11 @@ impl Executor<'_> {
                 let mut last_error = None;
                 let max_attempts = 1 + self.retry;
                 crate::processor::set_declared_tools(Some(processor.required_tools()));
+                crate::sandbox::set_spec(crate::sandbox::spec_for(
+                    processor.scan_config(),
+                    self.build_ctx.execution_model(),
+                    &[product],
+                ));
                 for attempt in 1..=max_attempts {
                     let outcome = guard_panic(
                         || format!("[{}] {}", product.processor, self.product_display(product)),
@@ -1177,6 +1190,7 @@ impl Executor<'_> {
                     self.handle_error(&ctx, e, Some(duration));
                 }
                 crate::processor::set_declared_tools(None);
+                crate::sandbox::set_spec(None);
                 Self::inc_progress(lctx.pb, lctx.shared);
             }
         }

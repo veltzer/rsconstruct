@@ -195,6 +195,12 @@ fn run_command_inner(
         return Err(crate::exit_code::interrupted());
     }
 
+    // Under the sandbox execution model the command runs wrapped in bwrap;
+    // the run is settled (declared outputs applied, the rest refused or
+    // discarded) once the tool has exited.
+    let sandbox = crate::sandbox::prepare(cmd)?;
+    let cmd = sandbox.as_ref().map_or(cmd, |run| &run.command);
+
     let program = cmd.get_program().to_os_string();
     let args: Vec<_> = cmd.get_args().map(std::ffi::OsStr::to_os_string).collect();
     let current_dir = cmd.get_current_dir().map(std::path::Path::to_path_buf);
@@ -203,7 +209,7 @@ fn run_command_inner(
         .filter_map(|(k, v)| v.map(|val| (k.to_os_string(), val.to_os_string())))
         .collect();
 
-    ctx.runtime().block_on(async {
+    let result = ctx.runtime().block_on(async {
         let mut tokio_cmd = tokio::process::Command::new(&program);
         tokio_cmd.args(&args);
         if let Some(dir) = &current_dir {
@@ -303,7 +309,16 @@ fn run_command_inner(
             }
             result = wait => result,
         } }
-    })
+    });
+
+    let Some(run) = sandbox else {
+        return result;
+    };
+    let succeeded = matches!(&result, Ok(output) if output.status.success());
+    let finished = run.finish(succeeded);
+    let output = result?;
+    finished?;
+    Ok(output)
 }
 
 /// Run a command under the build-wide `[build] command_timeout_secs` limit

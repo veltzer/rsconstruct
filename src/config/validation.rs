@@ -91,6 +91,9 @@ pub(super) fn expected_field_type(processor: &str, field: &str) -> Option<FieldT
         "enabled" => return Some(FieldType::Bool),
         super::OUTPUT_DEPENDS_ON_INPUT_NAME => return Some(FieldType::Bool),
         super::HASH_PYTHON_ENV => return Some(FieldType::Bool),
+        super::EXECUTION_MODEL => return Some(FieldType::String),
+        super::SANDBOX_NETWORK => return Some(FieldType::Bool),
+        super::SANDBOX_WRITABLE => return Some(FieldType::StringArray),
         "batch" => return Some(FieldType::Bool),
         // Near-universal fields from StandardConfig — declared by almost
         // every processor, so they are validated generically rather than
@@ -161,6 +164,15 @@ pub(super) fn validate_single_processor(
                 expected.label(),
                 FieldType::describe_value(field_value),
                 field_value,
+            ));
+        } else if key == super::EXECUTION_MODEL
+            && field_value
+                .clone()
+                .try_into::<super::ExecutionModel>()
+                .is_err()
+        {
+            errors.push(format!(
+                "[{section_label}]: field '{key}' must be \"native\" or \"sandbox\", got {field_value}",
             ));
         }
     }

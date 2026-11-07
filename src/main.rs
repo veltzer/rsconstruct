@@ -96,6 +96,7 @@ mod python_env;
 mod registries;
 mod remote_cache;
 mod runtime_flags;
+mod sandbox;
 mod stats;
 mod tables;
 mod tool_lock;

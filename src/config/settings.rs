@@ -157,6 +157,27 @@ pub struct BuildConfig {
     /// `python` (no `python-is-python3`, no venv).
     #[serde(default = "default_python")]
     pub python: String,
+    /// How processors run their external tools: `native` (the default)
+    /// runs them directly in the project tree; `sandbox` runs each one
+    /// under bubblewrap, catching files it writes that its product does not
+    /// declare and any network access. A correctness check, not a security
+    /// boundary; see docs/src/internal/sandbox.md. A processor can override
+    /// this with its own `execution_model` field.
+    #[serde(default)]
+    pub execution_model: ExecutionModel,
+}
+
+/// How a processor's external tools are run (`[build] execution_model`
+/// and the per-processor `execution_model` field).
+#[derive(Debug, Deserialize, Serialize, Clone, Copy, Default, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum ExecutionModel {
+    /// Run the tool directly in the project tree.
+    #[default]
+    Native,
+    /// Run the tool under bubblewrap with the project tree behind an
+    /// overlay; only declared outputs reach the real tree.
+    Sandbox,
 }
 
 const fn default_parallel() -> usize {
@@ -226,6 +247,7 @@ impl Default for BuildConfig {
             command_timeout_secs: 0,
             worker_stack_mib: default_worker_stack_mib(),
             python: default_python(),
+            execution_model: ExecutionModel::Native,
         }
     }
 }

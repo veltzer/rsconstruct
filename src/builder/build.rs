@@ -81,6 +81,7 @@ fn check_required_tools(
     processors: &ProcessorMap,
     processor_filter: Option<&[String]>,
     only: Option<&std::collections::HashSet<&str>>,
+    execution_model: crate::config::ExecutionModel,
 ) -> Result<()> {
     let active_names: Vec<&String> = processors
         .keys()
@@ -104,6 +105,21 @@ fn check_required_tools(
                 missing.push((tool, procs));
             }
         }
+    }
+    // A processor that runs external tools under the sandbox execution
+    // model runs them through bwrap. Builtin processors run in-process and
+    // have nothing to wrap.
+    let sandboxed: Vec<String> = active_names
+        .iter()
+        .filter(|n| {
+            let p = &processors[**n];
+            !p.required_tools().is_empty()
+                && crate::sandbox::is_sandboxed(p.scan_config(), execution_model)
+        })
+        .map(|n| (*n).clone())
+        .collect();
+    if !sandboxed.is_empty() && which::which(crate::sandbox::SANDBOX_TOOL).is_err() {
+        missing.push((crate::sandbox::SANDBOX_TOOL.to_string(), sandboxed));
     }
     if !missing.is_empty() {
         missing.sort_by(|a, b| a.0.cmp(&b.0));
@@ -294,6 +310,7 @@ impl Builder {
         // run_checker can read it via ctx.max_arg_len().
         ctx.set_max_arg_len(self.config.build.max_arg_len);
         ctx.set_command_timeout_secs(self.config.build.command_timeout_secs);
+        ctx.set_execution_model(self.config.build.execution_model);
     }
 
     /// Discover → filter → validate: everything between "we have a config" and
@@ -364,7 +381,12 @@ impl Builder {
             .iter()
             .map(|p| p.processor.as_str())
             .collect();
-        check_required_tools(&processors, None, Some(&with_products))?;
+        check_required_tools(
+            &processors,
+            None,
+            Some(&with_products),
+            self.config.build.execution_model,
+        )?;
 
         // The lock check (CI, or --verify-tool-versions) judges the same
         // set: the tools of the processors that build here must be locked

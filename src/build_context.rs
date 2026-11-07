@@ -45,6 +45,9 @@ pub struct BuildContext {
     pub(crate) webcache_ttl_secs: std::sync::atomic::AtomicU64,
     /// `[build] command_timeout_secs`; 0 means no limit (the default).
     pub(crate) command_timeout_secs: std::sync::atomic::AtomicU64,
+    /// `[build] execution_model == "sandbox"`: the default for processors
+    /// that do not set their own `execution_model`.
+    sandbox_by_default: AtomicBool,
     /// Every path some product of the current graph declares as an output.
     /// Filled by the executor before the first product runs. A processor
     /// that inspects a shared output directory after its tool ran (the
@@ -77,6 +80,7 @@ impl BuildContext {
             max_arg_len: std::sync::atomic::AtomicUsize::new(1_000_000),
             webcache_ttl_secs: std::sync::atomic::AtomicU64::new(7 * 24 * 60 * 60),
             command_timeout_secs: std::sync::atomic::AtomicU64::new(0),
+            sandbox_by_default: AtomicBool::new(false),
             declared_outputs: Mutex::new(HashSet::new()),
             declared_output_dirs: Mutex::new(Vec::new()),
             combined_memo: Mutex::new(crate::checksum::CombinedMemo::default()),
@@ -106,6 +110,22 @@ impl BuildContext {
             .unwrap()
             .iter()
             .any(|dir| path.starts_with(dir))
+    }
+
+    pub(crate) fn set_execution_model(&self, model: crate::config::ExecutionModel) {
+        self.sandbox_by_default.store(
+            model == crate::config::ExecutionModel::Sandbox,
+            Ordering::Relaxed,
+        );
+    }
+
+    /// The build-wide execution model (`[build] execution_model`).
+    pub(crate) fn execution_model(&self) -> crate::config::ExecutionModel {
+        if self.sandbox_by_default.load(Ordering::Relaxed) {
+            crate::config::ExecutionModel::Sandbox
+        } else {
+            crate::config::ExecutionModel::Native
+        }
     }
 
     pub(crate) fn set_command_timeout_secs(&self, n: u64) {
