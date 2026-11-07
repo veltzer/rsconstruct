@@ -1,6 +1,6 @@
 //! eslint checker — registered as a {`SimpleChecker`}.
 
-use crate::config::SimpleCheckerParams;
+use crate::config::{ExtraTool, SimpleCheckerParams};
 use crate::processor::SimpleChecker;
 
 fn create_eslint(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processor::Processor>> {
@@ -11,7 +11,7 @@ fn create_eslint(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processor:
                 description: "Lint JavaScript/TypeScript files using ESLint",
                 subcommand: None,
                 prepend_args: &[],
-                extra_tools: &["node"],
+                extra_tools: &[ExtraTool::Named("node")],
             },
         ))
     })

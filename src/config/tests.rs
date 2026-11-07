@@ -1487,3 +1487,20 @@ fn build_command_timeout_secs_is_zero_unless_set() {
     let set: super::BuildConfig = toml::from_str("command_timeout_secs = 30\n").unwrap();
     assert_eq!(set.command_timeout_secs, 30);
 }
+
+/// `[build] python` names the interpreter: `python` unless set, switchable
+/// to `python3` with the one key, and never empty.
+#[test]
+fn build_python_defaults_to_python_and_is_switchable() {
+    let absent: super::BuildConfig = toml::from_str("").unwrap();
+    assert_eq!(absent.python, "python");
+    assert_eq!(super::BuildConfig::default().python, "python");
+    let set: super::BuildConfig = toml::from_str("python = \"python3\"\n").unwrap();
+    assert_eq!(set.python, "python3");
+    super::validate_build_config(&set).unwrap();
+    let empty: super::BuildConfig = toml::from_str("python = \"\"\n").unwrap();
+    let err = super::validate_build_config(&empty)
+        .unwrap_err()
+        .to_string();
+    assert!(err.contains("[build] python"), "{err}");
+}

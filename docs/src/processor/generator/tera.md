@@ -17,6 +17,8 @@ tera.templates/sub/readme.txt.tera  →  sub/readme.txt
 
 Templates use the [Tera](https://keats.github.io/tera/) templating engine and can call
 `load_python(path="...")` or `load_lua(path="...")` to load variables from config files.
+`load_python` runs the interpreter named by [`[build] python`](../../configuration.md#build)
+(default `python`).
 
 ### Loading Lua config
 

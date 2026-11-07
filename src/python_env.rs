@@ -38,6 +38,25 @@ use crate::processor::ProcessorMap;
 /// puts `./.venv/bin` first on PATH from the same place).
 pub const VENV_DIR: &str = ".venv";
 
+/// The interpreter named by `[build] python`. Set by `Config::load` before
+/// the processor sections are deserialized, so processor defaults built
+/// during deserialization already see it. Process-wide rather than on the
+/// `BuildContext` because the readers include static plugin defaults and
+/// `required_tools()`, neither of which is handed a context.
+static INTERPRETER: std::sync::LazyLock<std::sync::RwLock<String>> =
+    std::sync::LazyLock::new(|| std::sync::RwLock::new(crate::config::default_python()));
+
+/// The Python interpreter to run and require (`[build] python`).
+pub fn interpreter() -> String {
+    INTERPRETER.read().unwrap().clone()
+}
+
+/// Record `[build] python`. Called on every config load, so a config edit
+/// under `rsconstruct watch` takes effect on the next rebuild.
+pub fn set_interpreter(name: &str) {
+    *INTERPRETER.write().unwrap() = name.to_string();
+}
+
 /// How many bytes of a tool file are read to find its shebang line. A
 /// shebang longer than this is not a real one (Linux caps it at 256).
 const SHEBANG_READ_LIMIT: usize = 512;

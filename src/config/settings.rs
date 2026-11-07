@@ -147,6 +147,16 @@ pub struct BuildConfig {
     /// not memory.
     #[serde(default = "default_worker_stack_mib")]
     pub worker_stack_mib: usize,
+    /// The Python interpreter rsconstruct runs and requires wherever it
+    /// needs Python: the default `command` of the processors that run the
+    /// interpreter directly (doctest, jinja2, mako), the interpreter the
+    /// Python checkers and the a2x/pip/tera/sphinx processors list as a
+    /// required tool, tera's `load_python()`, and `doctor`'s package query.
+    /// A bare name is looked up on PATH, where the project's `.venv/bin`
+    /// comes first. Set it to `"python3"` on a machine that has no
+    /// `python` (no `python-is-python3`, no venv).
+    #[serde(default = "default_python")]
+    pub python: String,
 }
 
 const fn default_parallel() -> usize {
@@ -193,6 +203,12 @@ const fn default_worker_stack_mib() -> usize {
     256
 }
 
+/// The one place the default interpreter name is spelled out; everything
+/// else asks [`crate::python_env::interpreter`].
+pub fn default_python() -> String {
+    "python".into()
+}
+
 impl Default for BuildConfig {
     fn default() -> Self {
         Self {
@@ -209,6 +225,7 @@ impl Default for BuildConfig {
             reject_dot_src_dirs: default_reject_dot_src_dirs(),
             command_timeout_secs: 0,
             worker_stack_mib: default_worker_stack_mib(),
+            python: default_python(),
         }
     }
 }

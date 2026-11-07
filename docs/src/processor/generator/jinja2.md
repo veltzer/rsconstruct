@@ -8,7 +8,7 @@ The Rust alternative is [ijinja2](ijinja2.md): the same discovery, output paths 
 
 ## How It Works
 
-Files matching configured extensions in `templates.jinja2/` are rendered via `python` using
+Files matching configured extensions in `templates.jinja2/` are rendered via the Python interpreter ([`[build] python`](../../configuration.md#build), default `python`) using
 the `jinja2` Python library. Output is written with the extension stripped and the
 `templates.jinja2/` prefix removed:
 

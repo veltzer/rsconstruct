@@ -161,7 +161,11 @@ impl Processor for TeraProcessor {
     }
 
     fn required_tools(&self) -> Vec<String> {
-        vec!["python".to_string(), "sh".to_string(), "git".to_string()]
+        vec![
+            crate::python_env::interpreter(),
+            "sh".to_string(),
+            "git".to_string(),
+        ]
     }
 
     fn discover(
@@ -749,7 +753,7 @@ print(json.dumps(result))
     );
 
     // Execute Python and capture output
-    let mut cmd = Command::new("python");
+    let mut cmd = Command::new(crate::python_env::interpreter());
     cmd.arg("-c").arg(&python_script);
     let output = run_command_capture(ctx, &cmd)?;
 

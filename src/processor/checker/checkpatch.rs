@@ -1,6 +1,6 @@
 //! checkpatch checker — registered as a {`SimpleChecker`}.
 
-use crate::config::SimpleCheckerParams;
+use crate::config::{ExtraTool, SimpleCheckerParams};
 use crate::processor::SimpleChecker;
 
 fn create_checkpatch(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processor::Processor>> {
@@ -11,7 +11,7 @@ fn create_checkpatch(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::proces
                 description: "Check kernel patches using checkpatch.pl",
                 subcommand: None,
                 prepend_args: &["--no-tree", "-f"],
-                extra_tools: &["perl"],
+                extra_tools: &[ExtraTool::Named("perl")],
             },
         ))
     })

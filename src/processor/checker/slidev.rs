@@ -1,6 +1,6 @@
 //! slidev checker — registered as a {`SimpleChecker`}.
 
-use crate::config::SimpleCheckerParams;
+use crate::config::{ExtraTool, SimpleCheckerParams};
 use crate::processor::SimpleChecker;
 
 fn create_slidev(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processor::Processor>> {
@@ -11,7 +11,7 @@ fn create_slidev(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processor:
                 description: "Build Slidev presentations",
                 subcommand: Some("build"),
                 prepend_args: &[],
-                extra_tools: &["node"],
+                extra_tools: &[ExtraTool::Named("node")],
             },
         ))
     })

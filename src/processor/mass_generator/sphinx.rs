@@ -173,7 +173,7 @@ fn default_root() -> String {
 }
 
 fn default_python() -> String {
-    "python".to_string()
+    crate::python_env::interpreter()
 }
 
 impl Default for SphinxConfig {
@@ -499,7 +499,7 @@ inventory::submit! {
                 doc: "The Sphinx source directory (holding conf.py), relative to the project root" },
             crate::config::FieldSpec { name: "python", ty: crate::config::FieldType::String,
                 affects_output: false, required: false,
-                doc: "The interpreter the planner runs with; it must import the same Sphinx as `command`" },
+                doc: "The interpreter the planner runs with (default: `[build] python`); it must import the same Sphinx as `command`" },
             crate::config::FieldSpec { name: "output_dir", ty: crate::config::FieldType::String,
                 affects_output: true, required: false,
                 doc: "Where the HTML is written" },

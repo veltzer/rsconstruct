@@ -1288,7 +1288,7 @@ impl Processor for SimpleChecker {
     fn required_tools(&self) -> Vec<String> {
         let mut tools = vec![self.config.standard.command.clone()];
         for t in self.params.extra_tools {
-            tools.push(t.to_string());
+            tools.push(t.name());
         }
         with_declared_tools(tools, &self.config.standard)
     }

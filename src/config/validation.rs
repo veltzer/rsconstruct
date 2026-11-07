@@ -210,6 +210,11 @@ pub(super) fn validate_build_config(build: &BuildConfig) -> Result<()> {
             "[build] worker_stack_mib must be at least 1".to_string(),
         ));
     }
+    if build.python.trim().is_empty() {
+        return Err(crate::exit_code::config_error(
+            "[build] python must name an interpreter (e.g. \"python\" or \"python3\")".to_string(),
+        ));
+    }
     Ok(())
 }
 

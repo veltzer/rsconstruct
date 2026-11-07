@@ -1,6 +1,6 @@
 //! jshint checker — registered as a {`SimpleChecker`}.
 
-use crate::config::SimpleCheckerParams;
+use crate::config::{ExtraTool, SimpleCheckerParams};
 use crate::processor::SimpleChecker;
 
 fn create_jshint(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processor::Processor>> {
@@ -11,7 +11,7 @@ fn create_jshint(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processor:
                 description: "Lint JavaScript files using JSHint",
                 subcommand: None,
                 prepend_args: &[],
-                extra_tools: &["node"],
+                extra_tools: &[ExtraTool::Named("node")],
             },
         ))
     })

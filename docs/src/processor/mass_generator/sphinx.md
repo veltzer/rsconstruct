@@ -79,7 +79,7 @@ inspection.
 # output_dir = "docs"      # Where the HTML goes
 dep_inputs = ["src/mypkg/**/*.py", "pyproject.toml", "uv.lock"]
 # args = ["-W"]            # Extra sphinx-build arguments
-# python = "python"        # The interpreter that runs the planner
+# python = "python"        # The interpreter that runs the planner (default: [build] python)
 # loose_manifest = false   # true: report plan/build mismatches as warnings
 ```
 
@@ -89,7 +89,7 @@ dep_inputs = ["src/mypkg/**/*.py", "pyproject.toml", "uv.lock"]
 | `args` | string[] | `[]` | Extra arguments for `sphinx-build` (see the owned options above) |
 | `root` | string | `"sphinx"` | The Sphinx source directory, relative to the project root |
 | `output_dir` | string | `"docs"` | Where the HTML is written |
-| `python` | string | `"python"` | The interpreter the planner runs with; it must import the same Sphinx as `command` |
+| `python` | string | [`[build] python`](../../configuration.md#build) (`"python"`) | The interpreter the planner runs with; it must import the same Sphinx as `command` |
 | `dep_inputs` | string[] | `[]` | Extra sources of every product (the autodoc'd package, files `conf.py` reads) |
 | `loose_manifest` | boolean | `false` | Report plan/build mismatches as warnings instead of errors |
 

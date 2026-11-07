@@ -1,6 +1,6 @@
 //! perlcritic checker — registered as a {`SimpleChecker`}.
 
-use crate::config::SimpleCheckerParams;
+use crate::config::{ExtraTool, SimpleCheckerParams};
 use crate::processor::SimpleChecker;
 
 fn create_perlcritic(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processor::Processor>> {
@@ -11,7 +11,7 @@ fn create_perlcritic(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::proces
                 description: "Analyze Perl code using perlcritic",
                 subcommand: None,
                 prepend_args: &[],
-                extra_tools: &["perl"],
+                extra_tools: &[ExtraTool::Named("perl")],
             },
         ))
     })

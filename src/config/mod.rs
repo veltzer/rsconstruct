@@ -192,6 +192,21 @@ fn read_user_config() -> Result<Option<toml::Value>> {
     Ok(Some(raw))
 }
 
+/// Record the merged config's `[build] python` before the rest of the
+/// config is deserialized: processor defaults (a `python_command`
+/// processor's `command`, sphinx's `python`) are filled in during that
+/// deserialization and must see the configured interpreter.
+fn set_python_interpreter(raw: &toml::Value) -> Result<()> {
+    let build: BuildConfig = raw
+        .get("build")
+        .cloned()
+        .unwrap_or_else(|| toml::Value::Table(toml::map::Map::new()))
+        .try_into()
+        .map_err(|e| crate::exit_code::config_error(format!("Failed to parse [build]: {e}")))?;
+    crate::python_env::set_interpreter(&build.python);
+    Ok(())
+}
+
 /// The user config's `[build]` part, for merging under the repo's files.
 /// `[tables]` is presentation only and is not part of `Config`, so it is
 /// dropped here; `user_tables_config` reads it.
@@ -363,6 +378,10 @@ pub struct ProcessorDefaults {
     /// Python checkers generally, so the behavior is stated rather than
     /// detected. False leaves the field unset, i.e. detected.
     pub hash_python_env: bool,
+    /// The default `command` is the Python interpreter (`[build] python`)
+    /// rather than `command`, which must then be empty: for processors that
+    /// run `python -m <module>` or a Python program on the interpreter.
+    pub python_command: bool,
 }
 
 impl ProcessorDefaults {
@@ -377,6 +396,7 @@ impl ProcessorDefaults {
         batch: None,
         output_depends_on_input_name: false,
         hash_python_env: false,
+        python_command: false,
     };
 }
 
@@ -389,8 +409,29 @@ pub struct SimpleCheckerParams {
     pub subcommand: Option<&'static str>,
     /// Args prepended before config args (e.g., ["--check"] for black)
     pub prepend_args: &'static [&'static str],
-    /// Additional tools required beyond the command (e.g., ["python", "node"])
-    pub extra_tools: &'static [&'static str],
+    /// Additional tools required beyond the command
+    /// (e.g. `[ExtraTool::Python]`, `[ExtraTool::Named("node")]`)
+    pub extra_tools: &'static [ExtraTool],
+}
+
+/// A tool a simple checker requires besides its command.
+#[derive(Copy, Clone, Debug)]
+pub enum ExtraTool {
+    /// A tool with a fixed name.
+    Named(&'static str),
+    /// The Python interpreter, as named by `[build] python`.
+    Python,
+}
+
+impl ExtraTool {
+    /// The executable name to require.
+    #[must_use]
+    pub fn name(self) -> String {
+        match self {
+            Self::Named(name) => name.to_string(),
+            Self::Python => crate::python_env::interpreter(),
+        }
+    }
 }
 
 /// Validate `dep_inputs` paths exist and return them as `PathBufs`.
@@ -881,6 +922,7 @@ impl Config {
                 // get pretty per-section errors instead of serde's raw messages.
                 // Errors from both validators are surfaced together under a single
                 // "Invalid config:" header.
+                set_python_interpreter(&raw)?;
                 let mut all_errors = validate_processor_fields_raw(&raw);
                 all_errors.extend(validate_analyzer_fields_raw(&raw));
                 if !all_errors.is_empty() {
@@ -912,7 +954,7 @@ impl Config {
                         "{LOCAL_CONFIG_FILE} found without {CONFIG_FILE} — the local overlay only extends a main config file",
                     );
                 }
-                let config = match read_user_build_config()? {
+                let config: Self = match read_user_build_config()? {
                     Some(raw) => raw.try_into().map_err(|e| {
                         crate::exit_code::config_error(format!(
                             "Failed to parse user config file: {e}"
@@ -920,6 +962,9 @@ impl Config {
                     })?,
                     None => Self::default(),
                 };
+                // No processor sections here, so nothing was deserialized
+                // against the interpreter yet; recording it now suffices.
+                crate::python_env::set_interpreter(&config.build.python);
                 validate_build_config(&config.build)?;
                 (
                     config,

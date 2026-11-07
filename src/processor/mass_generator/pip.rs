@@ -87,7 +87,10 @@ impl Processor for PipProcessor {
 
     fn required_tools(&self) -> Vec<String> {
         crate::processor::with_declared_tools(
-            vec![self.config.standard.command.clone(), "python".to_string()],
+            vec![
+                self.config.standard.command.clone(),
+                crate::python_env::interpreter(),
+            ],
             &self.config.standard,
         )
     }

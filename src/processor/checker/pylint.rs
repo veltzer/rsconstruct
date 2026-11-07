@@ -1,6 +1,6 @@
 //! pylint checker — registered as a {`SimpleChecker`}.
 
-use crate::config::SimpleCheckerParams;
+use crate::config::{ExtraTool, SimpleCheckerParams};
 use crate::processor::SimpleChecker;
 
 fn create_pylint(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processor::Processor>> {
@@ -11,7 +11,7 @@ fn create_pylint(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processor:
                 description: "Lint Python files using pylint",
                 subcommand: None,
                 prepend_args: &[],
-                extra_tools: &["python"],
+                extra_tools: &[ExtraTool::Python],
             },
         ))
     })

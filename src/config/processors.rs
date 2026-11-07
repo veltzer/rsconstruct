@@ -206,10 +206,11 @@ pub fn apply_processor_defaults(
     let Some(table) = value.as_table_mut() else {
         return;
     };
+    let python = defaults.python_command.then(crate::python_env::interpreter);
     set_string_default(
         table,
         "command",
-        defaults.command,
+        python.as_deref().unwrap_or(defaults.command),
         provenance,
         FieldProvenance::ProcessorDefault,
     );

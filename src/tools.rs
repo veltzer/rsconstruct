@@ -1659,6 +1659,15 @@ pub static TOOLS: &[ToolInfo] = &[
         alternatives: &[],
         prefer: None,
     },
+    // The interpreter under the name `[build] python = "python3"` requires.
+    ToolInfo {
+        name: "python3",
+        runtime: "python",
+        project: None,
+        machine: Some(InstallMethod::new("apt", "python3")),
+        alternatives: &[],
+        prefer: None,
+    },
     // Node
     // The project's own Node.js, npm included: its release tree goes into
     // the project's tool directory, installed ahead of `npm ci` and the

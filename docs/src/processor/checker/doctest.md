@@ -7,7 +7,9 @@ Runs Python doctests embedded in `.py` files using `python -m doctest`.
 ## How It Works
 
 Python files (`.py`) are checked for embedded doctests. Each file is run through
-`python -m doctest` — failing doctests cause the build to fail.
+`python -m doctest` — failing doctests cause the build to fail. The interpreter is
+[`[build] python`](../../configuration.md#build) (default `python`); set `command` to
+override it for this processor alone.
 
 ## Source Files
 

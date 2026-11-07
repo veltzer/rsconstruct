@@ -1,6 +1,6 @@
 //! htmlhint checker — registered as a {`SimpleChecker`}.
 
-use crate::config::SimpleCheckerParams;
+use crate::config::{ExtraTool, SimpleCheckerParams};
 use crate::processor::SimpleChecker;
 
 fn create_htmlhint(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processor::Processor>> {
@@ -11,7 +11,7 @@ fn create_htmlhint(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processo
                 description: "Lint HTML files using HTMLHint",
                 subcommand: None,
                 prepend_args: &[],
-                extra_tools: &["node"],
+                extra_tools: &[ExtraTool::Named("node")],
             },
         ))
     })

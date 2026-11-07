@@ -159,7 +159,7 @@ inventory::submit! {
         fields: &[],
         omit_standard_fields: &["formats", "args", "output_dir", "batch"],
         scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &[".mako"], src_exclude_dirs: &[] }),
-        defaults: Some(crate::config::ProcessorDefaults { command: "python", ..crate::config::ProcessorDefaults::EMPTY }),
+        defaults: Some(crate::config::ProcessorDefaults { python_command: true, ..crate::config::ProcessorDefaults::EMPTY }),
         defconfig_json: crate::registries::default_config_json::<MakoConfig>,
         keywords: &["python", "template", "generator", "pip"],
         description: "Render Mako templates into output files",

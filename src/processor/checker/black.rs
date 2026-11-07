@@ -1,6 +1,6 @@
 //! black checker — registered as a {`SimpleChecker`}.
 
-use crate::config::SimpleCheckerParams;
+use crate::config::{ExtraTool, SimpleCheckerParams};
 use crate::processor::SimpleChecker;
 
 fn create_black(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processor::Processor>> {
@@ -11,7 +11,7 @@ fn create_black(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processor::
                 description: "Check Python code formatting using black",
                 subcommand: None,
                 prepend_args: &["--check"],
-                extra_tools: &["python"],
+                extra_tools: &[ExtraTool::Python],
             },
         ))
     })
