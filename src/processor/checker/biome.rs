@@ -56,4 +56,6 @@ inventory::submit! { crate::tools::ToolInfo {
     machine: Some(crate::tools::InstallMethod::new("binary", "biome")),
     alternatives: &[crate::tools::InstallMethod::new("npm", "@biomejs/biome")],
     prefer: None,
+    sandbox_writable: &[],
+    needs_network: false,
 } }

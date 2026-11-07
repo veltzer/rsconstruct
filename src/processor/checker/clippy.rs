@@ -203,7 +203,7 @@ inventory::submit! {
         ],
         omit_standard_fields: &["formats", "output_dir", "batch"],
         scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &["Cargo.toml"], src_exclude_dirs: &[] }),
-        defaults: Some(crate::config::ProcessorDefaults { command: "clippy", sandbox_writable: &["target"], ..crate::config::ProcessorDefaults::EMPTY }),
+        defaults: Some(crate::config::ProcessorDefaults { command: "clippy", ..crate::config::ProcessorDefaults::EMPTY }),
         defconfig_json: crate::registries::default_config_json::<ClippyConfig>,
         keywords: &["rust", "linter", "cargo", "rs"],
         description: "Lint Rust projects using Cargo Clippy",
@@ -215,3 +215,12 @@ inventory::submit! {
         max_jobs_cap: None,
     }
 }
+// `cargo deny`, run through this processor when the project's tool
+// directory holds it (`project_subcommand`). It fetches the RustSec
+// advisory database on every run.
+inventory::submit! { crate::tools::ToolInfo {
+    name: "cargo-deny", runtime: "rust",
+    project: Some(crate::tools::InstallMethod::new("cargo", "cargo-deny")),
+    machine: Some(crate::tools::InstallMethod::new("cargo", "cargo-deny")),
+    alternatives: &[], prefer: None, sandbox_writable: &[], needs_network: true,
+} }

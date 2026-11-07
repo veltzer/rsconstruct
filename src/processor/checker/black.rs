@@ -37,5 +37,5 @@ inventory::submit! { crate::tools::ToolInfo {
     name: "black", runtime: "python",
     project: Some(crate::tools::InstallMethod::new("pip", "black")),
     machine: Some(crate::tools::InstallMethod::new("pip", "black")),
-    alternatives: &[], prefer: None,
+    alternatives: &[], prefer: None, sandbox_writable: &["**/__pycache__"], needs_network: false,
 } }

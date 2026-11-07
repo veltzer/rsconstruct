@@ -242,13 +242,6 @@ pub fn apply_processor_defaults(
         provenance,
         FieldProvenance::ProcessorDefault,
     );
-    set_string_array_default(
-        table,
-        crate::config::SANDBOX_WRITABLE,
-        defaults.sandbox_writable,
-        provenance,
-        FieldProvenance::ProcessorDefault,
-    );
     if let Some(batch) = defaults.batch
         && !table.contains_key("batch")
     {

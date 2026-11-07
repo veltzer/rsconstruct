@@ -37,5 +37,5 @@ inventory::submit! { crate::tools::ToolInfo {
     name: "shellcheck", runtime: "system",
     project: Some(crate::tools::InstallMethod::new("binary", "shellcheck")),
     machine: Some(crate::tools::InstallMethod::new("apt", "shellcheck")),
-    alternatives: &[], prefer: None,
+    alternatives: &[], prefer: None, sandbox_writable: &[], needs_network: false,
 } }

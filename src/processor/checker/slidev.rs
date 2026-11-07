@@ -37,5 +37,5 @@ inventory::submit! { crate::tools::ToolInfo {
     name: "slidev", runtime: "node",
     project: Some(crate::tools::InstallMethod::new("npm", "@slidev/cli")),
     machine: Some(crate::tools::InstallMethod::new("npm", "@slidev/cli")),
-    alternatives: &[], prefer: None,
+    alternatives: &[], prefer: None, sandbox_writable: &[], needs_network: false,
 } }

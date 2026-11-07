@@ -40,5 +40,5 @@ inventory::submit! { crate::tools::ToolInfo {
     name: "mypy", runtime: "python",
     project: Some(crate::tools::InstallMethod::new("pip", "mypy")),
     machine: Some(crate::tools::InstallMethod::new("pip", "mypy")),
-    alternatives: &[], prefer: None,
+    alternatives: &[], prefer: None, sandbox_writable: &[".mypy_cache", "**/__pycache__"], needs_network: false,
 } }

@@ -71,5 +71,5 @@ inventory::submit! { crate::tools::ToolInfo {
     name: "drawio", runtime: "system",
     project: None,
     machine: Some(crate::tools::InstallMethod::new("binary", "drawio")),
-    alternatives: &[], prefer: None,
+    alternatives: &[], prefer: None, sandbox_writable: &[], needs_network: false,
 } }

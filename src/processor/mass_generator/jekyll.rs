@@ -454,5 +454,5 @@ inventory::submit! { crate::tools::ToolInfo {
     name: "jekyll", runtime: "ruby",
     project: Some(crate::tools::InstallMethod::new("gem", "jekyll")),
     machine: Some(crate::tools::InstallMethod::new("gem", "jekyll")),
-    alternatives: &[], prefer: None,
+    alternatives: &[], prefer: None, sandbox_writable: &[".jekyll-cache"], needs_network: false,
 } }

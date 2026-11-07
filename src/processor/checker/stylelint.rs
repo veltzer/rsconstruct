@@ -37,5 +37,5 @@ inventory::submit! { crate::tools::ToolInfo {
     name: "stylelint", runtime: "node",
     project: Some(crate::tools::InstallMethod::new("npm", "stylelint")),
     machine: Some(crate::tools::InstallMethod::new("npm", "stylelint")),
-    alternatives: &[], prefer: None,
+    alternatives: &[], prefer: None, sandbox_writable: &[], needs_network: false,
 } }

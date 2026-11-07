@@ -41,4 +41,6 @@ inventory::submit! { crate::tools::ToolInfo {
     machine: Some(crate::tools::InstallMethod::new("binary", "actionlint")),
     alternatives: &[crate::tools::InstallMethod::new("brew", "actionlint")],
     prefer: None,
+    sandbox_writable: &[],
+    needs_network: false,
 } }

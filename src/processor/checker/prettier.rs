@@ -37,5 +37,5 @@ inventory::submit! { crate::tools::ToolInfo {
     name: "prettier", runtime: "node",
     project: Some(crate::tools::InstallMethod::new("npm", "prettier")),
     machine: Some(crate::tools::InstallMethod::new("npm", "prettier")),
-    alternatives: &[], prefer: None,
+    alternatives: &[], prefer: None, sandbox_writable: &[], needs_network: false,
 } }

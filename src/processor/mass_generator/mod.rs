@@ -237,10 +237,15 @@ pub(super) fn write_plan_cache(path: &Path, key: &str, manifest: &str) -> Result
 
 /// An empty, freshly created directory under the state directory for this
 /// instance. Whatever a previous run left there is removed first.
+///
+/// The tool writes into it during the product, so under the sandbox it is
+/// declared as one of the running product's output directories; what the
+/// tool wrote there is then checked against the plan by `install_staged`.
 pub(super) fn fresh_state_dir(instance_name: &str, suffix: &str) -> Result<PathBuf> {
     let dir = state_path(instance_name, suffix);
     remove_dir_if_present(&dir)?;
     std::fs::create_dir_all(&dir).with_context(|| format!("Failed to create {}", dir.display()))?;
+    crate::sandbox::declare_output_dir(&dir);
     Ok(dir)
 }
 

@@ -49,4 +49,6 @@ inventory::submit! { crate::tools::ToolInfo {
     machine: Some(crate::tools::InstallMethod::new("binary", "selene")),
     alternatives: &[crate::tools::InstallMethod::new("cargo", "selene")],
     prefer: None,
+    sandbox_writable: &[],
+    needs_network: false,
 } }

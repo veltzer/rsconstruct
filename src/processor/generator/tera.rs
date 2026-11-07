@@ -1036,11 +1036,12 @@ inventory::submit! { crate::tools::ToolInfo {
     name: "sh", runtime: "system",
     project: None,
     machine: Some(crate::tools::InstallMethod::new("apt", "dash")),
-    alternatives: &[], prefer: None,
+    alternatives: &[], prefer: None, sandbox_writable: &[], needs_network: false,
 } }
 inventory::submit! { crate::tools::ToolInfo {
     name: "git", runtime: "system",
     project: None,
     machine: Some(crate::tools::InstallMethod::new("apt", "git")),
-    alternatives: &[], prefer: None,
+    // Read-only commands still refresh the index's stat cache.
+    alternatives: &[], prefer: None, sandbox_writable: &[".git"], needs_network: false,
 } }

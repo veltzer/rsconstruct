@@ -42,4 +42,6 @@ inventory::submit! { crate::tools::ToolInfo {
         crate::tools::InstallMethod::new("apt", "yq"),
     ],
     prefer: None,
+    sandbox_writable: &[],
+    needs_network: false,
 } }

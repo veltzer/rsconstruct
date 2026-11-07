@@ -72,5 +72,5 @@ inventory::submit! { crate::tools::ToolInfo {
     name: "google-chrome", runtime: "system",
     project: None,
     machine: Some(crate::tools::InstallMethod::new("binary", "google-chrome-stable")),
-    alternatives: &[], prefer: None,
+    alternatives: &[], prefer: None, sandbox_writable: &[], needs_network: false,
 } }

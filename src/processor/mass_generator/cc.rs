@@ -764,5 +764,5 @@ inventory::submit! { crate::tools::ToolInfo {
     name: "ar", runtime: "system",
     project: None,
     machine: Some(crate::tools::InstallMethod::new("apt", "binutils")),
-    alternatives: &[], prefer: None,
+    alternatives: &[], prefer: None, sandbox_writable: &[], needs_network: false,
 } }

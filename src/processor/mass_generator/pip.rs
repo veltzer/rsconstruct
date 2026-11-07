@@ -164,5 +164,7 @@ inventory::submit! { crate::tools::ToolInfo {
     name: "pip", runtime: "python",
     project: None,
     machine: Some(crate::tools::InstallMethod::new("apt", "python3-pip")),
-    alternatives: &[], prefer: None,
+    // pip downloads packages and installs them into the active environment,
+    // the project's `.venv`.
+    alternatives: &[], prefer: None, sandbox_writable: &[".venv", "**/__pycache__"], needs_network: true,
 } }

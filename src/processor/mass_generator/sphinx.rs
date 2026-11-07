@@ -525,7 +525,7 @@ inventory::submit! { crate::tools::ToolInfo {
     name: "sphinx-build", runtime: "python",
     project: Some(crate::tools::InstallMethod::new("pip", "sphinx")),
     machine: Some(crate::tools::InstallMethod::new("pip", "sphinx")),
-    alternatives: &[], prefer: None,
+    alternatives: &[], prefer: None, sandbox_writable: &["**/__pycache__"], needs_network: false,
 } }
 
 #[cfg(test)]

@@ -36,7 +36,7 @@ inventory::submit! { crate::registries::ProcessorPlugin {
         ".markdownlint-cli2.jsonc", ".markdownlint-cli2.yaml", ".markdownlint-cli2.yml",
         ".markdownlint.json", ".markdownlint.jsonc", ".markdownlint.yaml", ".markdownlint.yml",
         "markdownlint.json", "markdownlint.jsonc", "markdownlint.yaml",
-    ], sandbox_writable: &[".rumdl_cache"], ..crate::config::ProcessorDefaults::EMPTY }),
+    ], ..crate::config::ProcessorDefaults::EMPTY }),
     defconfig_json: crate::registries::default_config_json::<crate::config::StandardConfig>,
     keywords: &["markdown", "md", "linter", "rust"],
     description: "Lint Markdown files using rumdl",
@@ -53,4 +53,6 @@ inventory::submit! { crate::tools::ToolInfo {
     machine: Some(crate::tools::InstallMethod::new("binary", "rumdl")),
     alternatives: &[crate::tools::InstallMethod::new("cargo", "rumdl")],
     prefer: None,
+    sandbox_writable: &[".rumdl_cache"],
+    needs_network: false,
 } }

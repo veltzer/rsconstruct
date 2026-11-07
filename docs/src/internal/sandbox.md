@@ -110,12 +110,35 @@ bwrap --die-with-parent --ro-bind / / --bind $HOME $HOME --bind /tmp /tmp \
   `rename`, not a copy; the kernel accepts an upper directory below the
   lower one.
 - **No network** (`--unshare-net`: a fresh network namespace with only
-  loopback), unless the processor sets `sandbox_network = true`.
-- **State directories passed through.** Each `sandbox_writable` entry is
-  created if missing and bind-mounted read-write on top of the overlay, so
-  the tool's incremental state persists and is not inspected. Plugin
-  defaults set it where a tool's state lives in the tree: `target` for the
-  clippy checker and the cargo mass generator, `.rumdl_cache` for rumdl.
+  loopback), unless a tool the processor runs declares that it needs it
+  (`ToolInfo::needs_network`: `cargo-deny` for its advisory database,
+  `taplo` for its schemas, and the installers `npm`, `pip`, `uv`,
+  `bundle`), or the processor sets `sandbox_network = true` (for a
+  script that downloads, whose tool rsconstruct does not know). cargo
+  itself is `false`: it builds from its registry cache in `$HOME`, and a
+  run that has to download a crate first is the finding the sandbox is
+  for. `cargo deny` counts as `cargo-deny` only when it runs from the
+  project's tool directory, which is how the fleet installs it; a machine
+  running a global `cargo-deny` needs `sandbox_network = true` on that
+  stanza.
+- **Tool state allowed.** Every tool declares where it writes its own
+  state in the project (`ToolInfo::sandbox_writable` in `src/tools.rs` or
+  in the processor file that owns the tool): `target` for cargo,
+  `.ruff_cache`, `.pytest_cache`, `.mypy_cache`, `.rumdl_cache`,
+  `.jekyll-cache`, `.cpcache` for clojure, `.git` for git (read-only git
+  commands still refresh the index), `.venv` for uv and pip,
+  `node_modules` for npm, and `**/__pycache__` for every tool that runs a
+  Python interpreter, which writes bytecode beside each module it
+  imports, the project's `.venv` included. A sandboxed processor may
+  write the places of every tool in its `required_tools`, plus its own
+  `sandbox_writable` config (for a script, whose tool is unknown). An
+  entry is a root-relative path or `**/NAME`. A path that already exists
+  is bind-mounted read-write on top of the overlay, so a large incremental
+  state such as `target` is written in place, without copy-up. Anything
+  else in an allowed place is captured by the overlay and moved into the
+  tree after a successful run, like an output. Nothing is created in
+  advance: an empty `.git` would turn a directory into a broken
+  repository.
 
 ### After the tool exits
 
@@ -137,9 +160,18 @@ Then:
 
 1. If the tool failed (non-zero exit, spawn error, timeout, interrupt),
    everything is discarded: a failed product leaves no partial outputs.
-2. If any change is outside the product's declared outputs and output
-   directories, the product fails with a message naming the processor and
-   each path (`wrote    stray.log`), and everything is discarded.
+2. If any change is outside the product's declared outputs, output
+   directories and its tools' state places, the product fails with a
+   message naming the processor and each path (`wrote    stray.log`), and
+   everything is discarded. A removed or replaced directory is judged by
+   the files the real tree held beneath it, each checked on its own: a
+   tool that runs `rm -rf docx` and writes `docx/` anew passes when every
+   file `docx` held is a declared output, and each one that is not is
+   reported as `removed`. A mass generator's staging and doctrees
+   directories under `.rsconstruct/mass_generator/` count as output
+   directories of the running product (`fresh_state_dir` declares them
+   through `sandbox::declare_output_dir`); `install_staged` then checks
+   their contents against the plan.
 3. Otherwise removals are applied first (so a replaced directory is
    emptied), then written files are renamed into the real tree.
 4. The run directory is removed. overlayfs leaves `work/work` with mode
@@ -173,9 +205,10 @@ added later as a second backend, chosen at run time (no `#[cfg]`).
   `src/config/settings.rs`) is copied onto the `BuildContext` with the other
   build-wide settings. The per-processor `execution_model`,
   `sandbox_network` and `sandbox_writable` are universal `StandardConfig`
-  fields, listed in `STANDARD_EXTRA_FIELDS`; `sandbox_writable` also has a
-  `ProcessorDefaults` entry. None is part of the cache key. A misspelled
-  `execution_model` is a config error.
+  fields, listed in `STANDARD_EXTRA_FIELDS`. The tools' own places come
+  from `ToolInfo::sandbox_writable` (`sandbox::writable_for`). None is part
+  of the cache key. A misspelled `execution_model` or a malformed
+  `sandbox_writable` entry is a config error.
 - **Which product is running.** The executor sets a thread-local
   `sandbox::Spec` (declared outputs, output directories, network,
   writable directories) around `execute` and `execute_batch`, next to the
@@ -224,8 +257,8 @@ A forced cold build of this repository (187 products) with `execution_model
 2. **With it:** 185 of 187 products pass. The two failures:
    - `processor.checker.clippy.deny`: `cargo deny` fetches the RustSec
      advisory database from GitHub at build time. A correct finding: its
-     result depends on the network. The fix is `sandbox_network = true` on
-     that instance.
+     result depends on the network. Fixed by `cargo-deny` declaring
+     `needs_network`.
    - `processor.checker.clippy.nextest`: one test,
      `build::svg_change_rebuilds_marp_and_ipdfunite`, runs marp, whose
      Chromium cannot start inside the sandbox (see open question 1).
@@ -270,8 +303,9 @@ Product-level results otherwise matched the native build.
    milliseconds; batching amortizes it for checkers. Not yet measured on a
    large fleet build.
 6. **Cargo's target directory** is `target` relative to the project root by
-   default; a crate in a subdirectory, or a `CARGO_TARGET_DIR`, needs its
-   own `sandbox_writable` entry.
+   default, which is what cargo declares; a crate in a subdirectory, or a
+   `CARGO_TARGET_DIR` inside the project, needs its own `sandbox_writable`
+   entry.
 
 ## Rollout
 

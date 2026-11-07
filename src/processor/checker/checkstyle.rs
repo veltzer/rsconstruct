@@ -37,5 +37,5 @@ inventory::submit! { crate::tools::ToolInfo {
     name: "checkstyle", runtime: "jvm",
     project: None,
     machine: Some(crate::tools::InstallMethod::new("apt", "checkstyle")),
-    alternatives: &[], prefer: None,
+    alternatives: &[], prefer: None, sandbox_writable: &[], needs_network: false,
 } }

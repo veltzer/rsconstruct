@@ -37,5 +37,5 @@ inventory::submit! { crate::tools::ToolInfo {
     name: "xmllint", runtime: "system",
     project: None,
     machine: Some(crate::tools::InstallMethod::new("apt", "libxml2-utils")),
-    alternatives: &[], prefer: None,
+    alternatives: &[], prefer: None, sandbox_writable: &[], needs_network: false,
 } }

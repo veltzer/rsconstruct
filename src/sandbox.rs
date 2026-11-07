@@ -54,9 +54,71 @@ pub struct Spec {
     pub output_dirs: Vec<PathBuf>,
     /// Whether the tool may reach the network.
     pub network: bool,
-    /// State directories the tool writes directly, relative to the project
-    /// root: bind-mounted read-write over the overlay, never inspected.
-    pub writable: Vec<PathBuf>,
+    /// Where the tools may write their own state: the `sandbox_writable`
+    /// entries of every tool the processor runs plus its own config, as
+    /// written (parsed by [`Writable::parse`] in [`prepare`]).
+    pub writable: Vec<String>,
+}
+
+/// A place a sandboxed tool may write its own state.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Writable {
+    /// A path relative to the project root: it and everything beneath it.
+    /// When it already exists it is bind-mounted over the overlay, so the
+    /// tool writes the real tree directly (no copy-up of a large `target`);
+    /// when it does not, what the tool creates there is moved into the tree
+    /// after a successful run like an output.
+    Path(PathBuf),
+    /// `**/NAME`: every directory called NAME, anywhere in the tree
+    /// (`**/__pycache__`). What the tool writes beneath one is moved into
+    /// the tree after a successful run.
+    Named(String),
+}
+
+impl Writable {
+    /// Parse one `sandbox_writable` entry: a relative path without `..` or
+    /// wildcards, or `**/NAME` with NAME a single wildcard-free component.
+    pub fn parse(entry: &str) -> std::result::Result<Self, String> {
+        let bad = |why: &str| Err(format!("sandbox_writable entry '{entry}': {why}"));
+        if let Some(name) = entry.strip_prefix("**/") {
+            if name.is_empty() || name.contains('/') || name.contains('*') {
+                return bad("after '**/' must come one directory name, without '/' or '*'");
+            }
+            return Ok(Self::Named(name.to_string()));
+        }
+        if entry.is_empty() {
+            return bad("empty");
+        }
+        if entry.contains('*') {
+            return bad("wildcards are only allowed as a leading '**/'");
+        }
+        let path = Path::new(entry);
+        if path.is_absolute() {
+            return bad("must be relative to the project root");
+        }
+        if path
+            .components()
+            .any(|c| matches!(c, std::path::Component::ParentDir))
+        {
+            return bad("must not contain '..'");
+        }
+        let clean: PathBuf = path
+            .components()
+            .filter(|c| !matches!(c, std::path::Component::CurDir))
+            .collect();
+        if clean.as_os_str().is_empty() {
+            return bad("names the project root itself");
+        }
+        Ok(Self::Path(clean))
+    }
+
+    /// Whether `path` (relative to the project root) lies in this place.
+    fn covers(&self, path: &Path) -> bool {
+        match self {
+            Self::Path(p) => path.starts_with(p),
+            Self::Named(name) => path.components().any(|c| c.as_os_str() == name.as_str()),
+        }
+    }
 }
 
 thread_local! {
@@ -68,6 +130,20 @@ thread_local! {
 /// `execute_batch`, next to the declared-tools record.
 pub fn set_spec(spec: Option<Spec>) {
     SPEC.with(|s| *s.borrow_mut() = spec);
+}
+
+/// Add `dir` to the output directories of the product running on this
+/// thread, if it runs sandboxed. For the private directories rsconstruct
+/// itself gives a tool to write into during a product — a mass
+/// generator's staging and doctrees directories under `.rsconstruct/` —
+/// whose contents rsconstruct checks against its own plan afterwards. A
+/// no-op natively and outside a product.
+pub fn declare_output_dir(dir: &Path) {
+    SPEC.with(|s| {
+        if let Some(spec) = s.borrow_mut().as_mut() {
+            spec.output_dirs.push(dir.to_path_buf());
+        }
+    });
 }
 
 fn current_spec() -> Option<Spec> {
@@ -131,12 +207,42 @@ pub fn is_sandboxed(standard: &StandardConfig, build_default: ExecutionModel) ->
     standard.execution_model.unwrap_or(build_default) == ExecutionModel::Sandbox
 }
 
+/// The `sandbox_writable` entries a processor running `tools` gets: what
+/// each tool declares (`ToolInfo::sandbox_writable`), then the processor's
+/// own config, without duplicates.
+pub fn writable_for(standard: &StandardConfig, tools: &[String]) -> Vec<String> {
+    let mut out: Vec<String> = Vec::new();
+    let declared = tools
+        .iter()
+        .filter_map(|t| crate::tools::tool_info(t))
+        .flat_map(|info| info.sandbox_writable.iter().map(|s| (*s).to_string()));
+    for entry in declared.chain(standard.sandbox_writable.iter().cloned()) {
+        if !out.contains(&entry) {
+            out.push(entry);
+        }
+    }
+    out
+}
+
+/// Whether a processor running `tools` gets the network: when any of them
+/// declares that it needs it (`ToolInfo::needs_network`), or when its
+/// config says so (`sandbox_network`, for a script whose tool is unknown).
+pub fn network_for(standard: &StandardConfig, tools: &[String]) -> bool {
+    standard.sandbox_network
+        || tools
+            .iter()
+            .filter_map(|t| crate::tools::tool_info(t))
+            .any(|info| info.needs_network)
+}
+
 /// The spec for running `products` (one, or a batch) of a processor whose
-/// config is `standard`, or `None` when the processor runs natively.
+/// config is `standard` and which runs `tools`, or `None` when the
+/// processor runs natively.
 pub fn spec_for(
     standard: &StandardConfig,
     build_default: ExecutionModel,
     products: &[&crate::graph::Product],
+    tools: &[String],
 ) -> Option<Spec> {
     if !is_sandboxed(standard, build_default) {
         return None;
@@ -157,12 +263,8 @@ pub fn spec_for(
         label,
         outputs,
         output_dirs,
-        network: standard.sandbox_network,
-        writable: standard
-            .sandbox_writable
-            .iter()
-            .map(PathBuf::from)
-            .collect(),
+        network: network_for(standard, tools),
+        writable: writable_for(standard, tools),
     })
 }
 
@@ -175,6 +277,8 @@ pub struct Run {
     dir: PathBuf,
     upper: PathBuf,
     spec: Spec,
+    /// `spec.writable`, parsed.
+    writable: Vec<Writable>,
 }
 
 /// Wrap `cmd` for the product running on this thread, or return `None`
@@ -191,6 +295,11 @@ pub fn prepare(cmd: &Command) -> Result<Option<Run>> {
         .iter()
         .map(|p| relative_to(&root, p))
         .collect();
+    let writable = spec
+        .writable
+        .iter()
+        .map(|entry| Writable::parse(entry).map_err(|e| anyhow::anyhow!("[{}] {e}", spec.label)))
+        .collect::<Result<Vec<_>>>()?;
 
     static NEXT_RUN: AtomicU64 = AtomicU64::new(0);
     let dir = root.join(SANDBOX_DIR).join(format!(
@@ -230,13 +339,18 @@ pub fn prepare(cmd: &Command) -> Result<Option<Run>> {
         .arg(&upper)
         .arg(&work)
         .arg(&root);
-    // State directories go on top of the overlay, straight to the real
-    // tree. A bind needs its target to exist, so they are created first.
-    for writable in &spec.writable {
-        let dir = root.join(writable);
-        fs::create_dir_all(&dir)
-            .with_context(|| format!("Failed to create sandbox_writable {}", dir.display()))?;
-        command.arg("--bind").arg(&dir).arg(&dir);
+    // A state path that already exists goes on top of the overlay, straight
+    // to the real tree. One that does not is left to the overlay: creating
+    // it here would leave an empty directory in the tree (an empty `.git`
+    // turns a directory into a broken repository), and what the tool
+    // creates there is moved in after the run like an output.
+    for place in &writable {
+        if let Writable::Path(rel) = place {
+            let path = root.join(rel);
+            if fs::symlink_metadata(&path).is_ok() {
+                command.arg("--bind").arg(&path).arg(&path);
+            }
+        }
     }
     // `join` keeps an absolute current_dir as is and anchors a relative one
     // at the root, which is where a native run would resolve it too.
@@ -259,6 +373,7 @@ pub fn prepare(cmd: &Command) -> Result<Option<Run>> {
         dir,
         upper,
         spec,
+        writable,
     }))
 }
 
@@ -309,16 +424,44 @@ impl Run {
     fn declares(&self, path: &Path) -> bool {
         self.spec.outputs.iter().any(|o| o == path)
             || self.spec.output_dirs.iter().any(|d| path.starts_with(d))
+            || self.writable.iter().any(|w| w.covers(path))
+    }
+
+    /// What `change` touched that the product does not declare, described.
+    /// A removed or replaced directory touched every file the real tree had
+    /// beneath it, so each of those is checked rather than the directory's
+    /// own path: a tool that runs `rm -rf docx` and writes `docx/` anew
+    /// changes nothing undeclared when every file `docx` held is a declared
+    /// output. The new contents of a replaced directory are separate
+    /// `Written` changes.
+    fn undeclared_in(&self, change: &Change) -> Result<Vec<String>> {
+        let path = change.path();
+        if self.declares(path) {
+            return Ok(Vec::new());
+        }
+        let (Change::Removed(_) | Change::Replaced(_)) = change else {
+            return Ok(vec![change.describe()]);
+        };
+        let real = self.root.join(path);
+        if !fs::symlink_metadata(&real).is_ok_and(|m| m.is_dir()) {
+            return Ok(vec![change.describe()]);
+        }
+        let mut files = Vec::new();
+        real_files_under(&self.root, path, &mut files)?;
+        Ok(files
+            .into_iter()
+            .filter(|f| !self.declares(f))
+            .map(|f| Change::Removed(f).describe())
+            .collect())
     }
 
     fn apply(&self) -> Result<()> {
         let mut changes = Vec::new();
         collect_changes(&self.upper, Path::new(""), &self.root, &mut changes)?;
-        let undeclared: Vec<String> = changes
-            .iter()
-            .filter(|c| !self.declares(c.path()))
-            .map(Change::describe)
-            .collect();
+        let mut undeclared: Vec<String> = Vec::new();
+        for change in &changes {
+            undeclared.extend(self.undeclared_in(change)?);
+        }
         if !undeclared.is_empty() {
             anyhow::bail!(
                 "[{}] the tool changed paths its product does not declare (execution_model = \"sandbox\"):\n  {}\n\
@@ -386,6 +529,29 @@ fn collect_changes(upper: &Path, rel: &Path, root: &Path, out: &mut Vec<Change>)
             collect_changes(upper, &child, root, out)?;
         } else {
             out.push(Change::Written(child));
+        }
+    }
+    Ok(())
+}
+
+/// Every file and symlink of the real tree beneath directory `rel`
+/// (relative to `root`), as root-relative paths, sorted. Directories
+/// themselves are not listed: removing an empty one changes no file.
+fn real_files_under(root: &Path, rel: &Path, out: &mut Vec<PathBuf>) -> Result<()> {
+    let dir = root.join(rel);
+    let mut entries: Vec<_> = fs::read_dir(&dir)
+        .with_context(|| format!("Failed to read directory {}", dir.display()))?
+        .collect::<std::io::Result<_>>()
+        .with_context(|| format!("Failed to read directory {}", dir.display()))?;
+    entries.sort_by_key(fs::DirEntry::file_name);
+    for entry in entries {
+        let child = rel.join(entry.file_name());
+        let meta = fs::symlink_metadata(entry.path())
+            .with_context(|| format!("Failed to stat {}", entry.path().display()))?;
+        if meta.is_dir() {
+            real_files_under(root, &child, out)?;
+        } else {
+            out.push(child);
         }
     }
     Ok(())
@@ -508,7 +674,158 @@ mod tests {
                 network: false,
                 writable: Vec::new(),
             },
+            writable: Vec::new(),
         }
+    }
+
+    #[test]
+    fn writable_entries_parse_as_paths_or_named_directories() {
+        assert_eq!(
+            Writable::parse("target"),
+            Ok(Writable::Path(PathBuf::from("target")))
+        );
+        assert_eq!(
+            Writable::parse("./sub/.cache"),
+            Ok(Writable::Path(PathBuf::from("sub/.cache")))
+        );
+        assert_eq!(
+            Writable::parse("**/__pycache__"),
+            Ok(Writable::Named("__pycache__".into()))
+        );
+        for bad in [
+            "", ".", "/abs", "../up", "a/../b", "*.pyc", "a/**/b", "**/", "**/a/b", "**/*",
+        ] {
+            assert!(Writable::parse(bad).is_err(), "{bad:?} must be rejected");
+        }
+    }
+
+    #[test]
+    fn writable_places_are_declared() {
+        let mut run = run_with(&["out/a"], &[]);
+        run.writable = vec![
+            Writable::Path(PathBuf::from("target")),
+            Writable::Named("__pycache__".into()),
+        ];
+        assert!(run.declares(Path::new("target/debug/x")));
+        assert!(run.declares(Path::new(
+            ".venv/lib/python3/site-packages/m/__pycache__/m.pyc"
+        )));
+        assert!(run.declares(Path::new("__pycache__/a.pyc")));
+        assert!(!run.declares(Path::new("targets/x")));
+        assert!(!run.declares(Path::new("src/m.py")));
+    }
+
+    /// Every tool's declared state places must parse; a bad entry would
+    /// otherwise fail every sandboxed run of every processor using it.
+    #[test]
+    fn every_tool_declares_valid_writable_places() {
+        for tool in crate::tools::all_tools() {
+            for entry in tool.sandbox_writable {
+                assert!(
+                    Writable::parse(entry).is_ok(),
+                    "tool {}: {:?}",
+                    tool.name,
+                    Writable::parse(entry)
+                );
+            }
+        }
+    }
+
+    /// A processor gets the places of every tool it runs, then its config.
+    #[test]
+    fn writable_for_unions_tools_and_config() {
+        let standard = StandardConfig {
+            sandbox_writable: vec!["extra".into(), "target".into()],
+            ..Default::default()
+        };
+        let tools = [
+            "cargo".to_string(),
+            "python".to_string(),
+            "no-such-tool".to_string(),
+        ];
+        assert_eq!(
+            writable_for(&standard, &tools),
+            ["target", "**/__pycache__", "extra"]
+        );
+    }
+
+    /// The network comes from a tool that declares it needs it, or from the
+    /// processor's config; otherwise it is cut off.
+    #[test]
+    fn network_comes_from_the_tools_or_the_config() {
+        let standard = StandardConfig::default();
+        let tools = |names: &[&str]| names.iter().map(|s| (*s).to_string()).collect::<Vec<_>>();
+        assert!(!network_for(&standard, &tools(&["cargo", "ruff"])));
+        assert!(network_for(&standard, &tools(&["cargo", "cargo-deny"])));
+        assert!(network_for(&standard, &tools(&["taplo"])));
+        let configured = StandardConfig {
+            sandbox_network: true,
+            ..Default::default()
+        };
+        assert!(network_for(&configured, &tools(&[])));
+    }
+
+    /// The tools that reach the network are exactly the ones that install
+    /// packages or fetch remote data on every run.
+    #[test]
+    fn network_tools_are_the_installers_and_fetchers() {
+        let mut names: Vec<&str> = crate::tools::all_tools()
+            .filter(|t| t.needs_network)
+            .map(|t| t.name)
+            .collect();
+        names.sort_unstable();
+        assert_eq!(names, ["bundle", "cargo-deny", "npm", "pip", "taplo", "uv"]);
+    }
+
+    /// A mass generator's staging directory becomes an output directory of
+    /// the running product, and only while a sandboxed product runs.
+    #[test]
+    fn declared_output_dirs_join_the_running_spec() {
+        declare_output_dir(Path::new(".rsconstruct/mass_generator/x.staging"));
+        assert!(
+            current_spec().is_none(),
+            "no product running: nothing to join"
+        );
+        set_spec(Some(run_with(&[], &[]).spec));
+        declare_output_dir(Path::new(".rsconstruct/mass_generator/x.staging"));
+        let spec = current_spec().unwrap();
+        set_spec(None);
+        assert_eq!(
+            spec.output_dirs,
+            [PathBuf::from(".rsconstruct/mass_generator/x.staging")]
+        );
+    }
+
+    /// A removed or replaced directory is judged by the real files it held:
+    /// fine when each is a declared output, refused for the ones that are not.
+    #[test]
+    fn replaced_directory_is_checked_file_by_file() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path().to_path_buf();
+        fs::create_dir_all(root.join("docx/sub")).unwrap();
+        fs::write(root.join("docx/a.docx"), "a").unwrap();
+        fs::write(root.join("docx/sub/b.docx"), "b").unwrap();
+        let mut run = run_with(&["docx/a.docx", "docx/sub/b.docx"], &[]);
+        run.root = root.clone();
+        let replaced = Change::Replaced(PathBuf::from("docx"));
+        let none: Vec<String> = Vec::new();
+        assert_eq!(run.undeclared_in(&replaced).unwrap(), none);
+        assert_eq!(
+            run.undeclared_in(&Change::Removed(PathBuf::from("docx")))
+                .unwrap(),
+            none
+        );
+        fs::write(root.join("docx/notes.txt"), "n").unwrap();
+        assert_eq!(
+            run.undeclared_in(&replaced).unwrap(),
+            ["removed  docx/notes.txt"]
+        );
+        // A removed file is its own path.
+        assert_eq!(
+            run.undeclared_in(&Change::Removed(PathBuf::from("other")))
+                .unwrap(),
+            ["removed  other"]
+        );
     }
 
     #[test]

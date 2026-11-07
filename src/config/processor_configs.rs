@@ -66,11 +66,11 @@ pub struct StandardConfig {
     /// the network (pip, npm, cargo fetching packages). Ignored natively.
     #[serde(default)]
     pub sandbox_network: bool,
-    /// Under the sandbox execution model, directories (relative to the
-    /// project root) the tool keeps its own state in -- cargo's `target`,
-    /// a linter's cache -- passed through to the real tree read-write and
-    /// not checked. Without this every run would start from a cold cache.
-    /// Ignored natively.
+    /// Under the sandbox execution model, state directories this processor
+    /// may write beyond those its tools declare (`ToolInfo::sandbox_writable`):
+    /// paths relative to the project root, or `**/NAME` for a directory
+    /// named NAME anywhere. Needed for a user-supplied command (a script),
+    /// whose tool rsconstruct does not know. Ignored natively.
     #[serde(default)]
     pub sandbox_writable: Vec<String>,
     // --- Scan fields (file discovery) ---

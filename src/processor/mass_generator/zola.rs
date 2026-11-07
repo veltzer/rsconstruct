@@ -1516,7 +1516,7 @@ inventory::submit! { crate::tools::ToolInfo {
     name: "zola", runtime: "rust",
     project: Some(crate::tools::InstallMethod::new("binary", "zola")),
     machine: Some(crate::tools::InstallMethod::new("binary", "zola")),
-    alternatives: &[], prefer: None,
+    alternatives: &[], prefer: None, sandbox_writable: &[], needs_network: false,
 } }
 
 #[cfg(test)]

@@ -89,11 +89,11 @@ inventory::submit! { crate::tools::ToolInfo {
     name: "libreoffice", runtime: "system",
     project: None,
     machine: Some(crate::tools::InstallMethod::new("apt", "libreoffice")),
-    alternatives: &[], prefer: None,
+    alternatives: &[], prefer: None, sandbox_writable: &[], needs_network: false,
 } }
 inventory::submit! { crate::tools::ToolInfo {
     name: "flock", runtime: "system",
     project: None,
     machine: Some(crate::tools::InstallMethod::new("apt", "util-linux")),
-    alternatives: &[], prefer: None,
+    alternatives: &[], prefer: None, sandbox_writable: &[], needs_network: false,
 } }

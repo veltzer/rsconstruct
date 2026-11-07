@@ -39,5 +39,5 @@ inventory::submit! { crate::tools::ToolInfo {
     name: "cpplint", runtime: "python",
     project: Some(crate::tools::InstallMethod::new("pip", "cpplint")),
     machine: Some(crate::tools::InstallMethod::new("pip", "cpplint")),
-    alternatives: &[], prefer: None,
+    alternatives: &[], prefer: None, sandbox_writable: &["**/__pycache__"], needs_network: false,
 } }

@@ -401,7 +401,7 @@ inventory::submit! { crate::tools::ToolInfo {
     name: "mdbook", runtime: "rust",
     project: Some(crate::tools::InstallMethod::new("cargo", "mdbook")),
     machine: Some(crate::tools::InstallMethod::new("cargo", "mdbook")),
-    alternatives: &[], prefer: None,
+    alternatives: &[], prefer: None, sandbox_writable: &[], needs_network: false,
 } }
 
 #[cfg(test)]

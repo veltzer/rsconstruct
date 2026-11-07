@@ -41,5 +41,5 @@ inventory::submit! { crate::tools::ToolInfo {
     name: "luacheck", runtime: "system",
     project: None,
     machine: Some(crate::tools::InstallMethod::new("apt", "lua-check")),
-    alternatives: &[], prefer: None,
+    alternatives: &[], prefer: None, sandbox_writable: &[], needs_network: false,
 } }

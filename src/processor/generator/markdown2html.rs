@@ -69,5 +69,5 @@ inventory::submit! { crate::tools::ToolInfo {
     name: "markdown", runtime: "perl",
     project: None,
     machine: Some(crate::tools::InstallMethod::new("apt", "markdown")),
-    alternatives: &[], prefer: None,
+    alternatives: &[], prefer: None, sandbox_writable: &[], needs_network: false,
 } }

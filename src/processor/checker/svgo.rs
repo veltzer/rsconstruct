@@ -42,5 +42,5 @@ inventory::submit! { crate::tools::ToolInfo {
     name: "svgo", runtime: "node",
     project: Some(crate::tools::InstallMethod::new("npm", "svgo")),
     machine: Some(crate::tools::InstallMethod::new("npm", "svgo")),
-    alternatives: &[], prefer: None,
+    alternatives: &[], prefer: None, sandbox_writable: &[], needs_network: false,
 } }

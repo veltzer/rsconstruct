@@ -37,5 +37,5 @@ inventory::submit! { crate::tools::ToolInfo {
     name: "jq", runtime: "system",
     project: Some(crate::tools::InstallMethod::new("binary", "jq")),
     machine: Some(crate::tools::InstallMethod::new("apt", "jq")),
-    alternatives: &[], prefer: None,
+    alternatives: &[], prefer: None, sandbox_writable: &[], needs_network: false,
 } }

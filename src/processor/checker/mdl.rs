@@ -172,5 +172,5 @@ inventory::submit! { crate::tools::ToolInfo {
     name: "mdl", runtime: "ruby",
     project: Some(crate::tools::InstallMethod::new("gem", "mdl")),
     machine: Some(crate::tools::InstallMethod::new("gem", "mdl")),
-    alternatives: &[], prefer: None,
+    alternatives: &[], prefer: None, sandbox_writable: &[], needs_network: false,
 } }

@@ -40,5 +40,5 @@ inventory::submit! { crate::tools::ToolInfo {
     name: "pyrefly", runtime: "python",
     project: Some(crate::tools::InstallMethod::new("pip", "pyrefly")),
     machine: Some(crate::tools::InstallMethod::new("pip", "pyrefly")),
-    alternatives: &[], prefer: None,
+    alternatives: &[], prefer: None, sandbox_writable: &[], needs_network: false,
 } }

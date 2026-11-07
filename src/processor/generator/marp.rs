@@ -235,7 +235,7 @@ inventory::submit! { crate::tools::ToolInfo {
     name: "marp", runtime: "node",
     project: Some(crate::tools::InstallMethod::new("npm", "@marp-team/marp-cli")),
     machine: Some(crate::tools::InstallMethod::new("npm", "@marp-team/marp-cli")),
-    alternatives: &[], prefer: None,
+    alternatives: &[], prefer: None, sandbox_writable: &[], needs_network: false,
 } }
 
 /// CI cap for marp: GitHub Actions runners (and similar 2-vCPU CI hosts) OOM

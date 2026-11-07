@@ -288,8 +288,8 @@ pub const STANDARD_EXTRA_FIELDS: &[&str] = &[
     SANDBOX_WRITABLE,
 ];
 
-/// The universal field naming the state directories a sandboxed tool may
-/// write directly (see `StandardConfig::sandbox_writable`).
+/// The universal field naming state directories a sandboxed processor may
+/// write beyond those its tools declare (see `StandardConfig::sandbox_writable`).
 pub const SANDBOX_WRITABLE: &str = "sandbox_writable";
 
 /// The universal field overriding `[build] execution_model` for one
@@ -400,9 +400,6 @@ pub struct ProcessorDefaults {
     /// rather than `command`, which must then be empty: for processors that
     /// run `python -m <module>` or a Python program on the interpreter.
     pub python_command: bool,
-    /// Default `sandbox_writable`: the directories the tool keeps its own
-    /// state in, relative to the project root.
-    pub sandbox_writable: &'static [&'static str],
 }
 
 impl ProcessorDefaults {
@@ -418,7 +415,6 @@ impl ProcessorDefaults {
         output_depends_on_input_name: false,
         hash_python_env: false,
         python_command: false,
-        sandbox_writable: &[],
     };
 }
 
@@ -542,7 +538,7 @@ pub const SHARED_FIELD_DESCRIPTIONS: &[(&str, &str)] = &[
     ),
     (
         SANDBOX_WRITABLE,
-        "Under the sandbox execution model, state directories the tool writes directly (cargo's target, a linter's cache), not checked",
+        "Under the sandbox execution model, state directories this processor may write beyond those its tools declare (a path, or **/NAME for a directory named NAME anywhere)",
     ),
 ];
 

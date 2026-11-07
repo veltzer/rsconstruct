@@ -1629,6 +1629,29 @@ pub struct ToolInfo {
     /// project if the tool has a project install, else the machine; see
     /// [`ToolInfo::preferred_target`]). Set only to override that default.
     pub prefer: Option<InstallTarget>,
+    /// Where the tool writes its own state inside the project when it runs:
+    /// caches, bytecode, build directories — files that are not a product's
+    /// outputs but that the tool writes every time. Under `execution_model =
+    /// "sandbox"` a processor may write the folders of every tool it runs
+    /// (its `required_tools`) plus its own `sandbox_writable` config, and
+    /// nothing else besides its declared outputs; see `src/sandbox.rs`.
+    ///
+    /// Each entry is a path relative to the project root (`target`,
+    /// `.ruff_cache`), or `**/NAME` for a directory called NAME anywhere in
+    /// the tree (`**/__pycache__`, which Python writes beside every module
+    /// it imports, the project's `.venv` included). Empty for a tool that
+    /// writes nothing but its outputs.
+    pub sandbox_writable: &'static [&'static str],
+    /// Whether the tool reaches the network as part of its ordinary work
+    /// (a package manager installing, a checker fetching an advisory
+    /// database or a schema). Under `execution_model = "sandbox"` a
+    /// processor gets the network when any tool it runs (its
+    /// `required_tools`) needs it, or when its config sets
+    /// `sandbox_network = true`; otherwise the network is cut off, and a
+    /// tool that reaches for it fails. `false` for a tool that only needs
+    /// what is already on the machine, even if it can download (cargo
+    /// builds from its registry cache; fetching is the install step's job).
+    pub needs_network: bool,
 }
 
 /// The tools no single processor owns: language runtimes and compilers that
@@ -1649,6 +1672,10 @@ pub static TOOLS: &[ToolInfo] = &[
         machine: Some(InstallMethod::new("pip", "uv")),
         alternatives: &[],
         prefer: None,
+        // `uv sync` builds the project's environment.
+        sandbox_writable: &[".venv"],
+        // `uv sync` downloads the packages it installs.
+        needs_network: true,
     },
     ToolInfo {
         name: "python",
@@ -1658,6 +1685,8 @@ pub static TOOLS: &[ToolInfo] = &[
         machine: Some(InstallMethod::new("apt", "python-is-python3")),
         alternatives: &[],
         prefer: None,
+        sandbox_writable: &["**/__pycache__"],
+        needs_network: false,
     },
     // The interpreter under the name `[build] python = "python3"` requires.
     ToolInfo {
@@ -1667,6 +1696,8 @@ pub static TOOLS: &[ToolInfo] = &[
         machine: Some(InstallMethod::new("apt", "python3")),
         alternatives: &[],
         prefer: None,
+        sandbox_writable: &["**/__pycache__"],
+        needs_network: false,
     },
     // Node
     // The project's own Node.js, npm included: its release tree goes into
@@ -1679,6 +1710,8 @@ pub static TOOLS: &[ToolInfo] = &[
         machine: Some(InstallMethod::new("apt", "nodejs")),
         alternatives: &[],
         prefer: None,
+        sandbox_writable: &[],
+        needs_network: false,
     },
     // Ruby
     ToolInfo {
@@ -1688,6 +1721,8 @@ pub static TOOLS: &[ToolInfo] = &[
         machine: Some(InstallMethod::new("apt", "ruby")),
         alternatives: &[],
         prefer: None,
+        sandbox_writable: &[],
+        needs_network: false,
     },
     // Rust
     // The machine gets rustup, never a distro cargo: Ubuntu's rustup package
@@ -1703,6 +1738,9 @@ pub static TOOLS: &[ToolInfo] = &[
         machine: Some(InstallMethod::new("apt", "rustup")),
         alternatives: &[],
         prefer: None,
+        // Cargo's build directory, at its default place.
+        sandbox_writable: &["target"],
+        needs_network: false,
     },
     // Perl
     ToolInfo {
@@ -1712,6 +1750,8 @@ pub static TOOLS: &[ToolInfo] = &[
         machine: Some(InstallMethod::new("apt", "perl")),
         alternatives: &[],
         prefer: None,
+        sandbox_writable: &[],
+        needs_network: false,
     },
     ToolInfo {
         name: "perltidy",
@@ -1720,6 +1760,8 @@ pub static TOOLS: &[ToolInfo] = &[
         machine: Some(InstallMethod::new("apt", "perltidy")),
         alternatives: &[],
         prefer: None,
+        sandbox_writable: &[],
+        needs_network: false,
     },
     // System
     // Run by rsconstruct itself under `execution_model = "sandbox"`
@@ -1731,6 +1773,8 @@ pub static TOOLS: &[ToolInfo] = &[
         machine: Some(InstallMethod::new("apt", "bubblewrap")),
         alternatives: &[],
         prefer: None,
+        sandbox_writable: &[],
+        needs_network: false,
     },
     // Run by a project's own scripts (a generic processor's
     // `required_tools`), not by any one processor.
@@ -1741,6 +1785,8 @@ pub static TOOLS: &[ToolInfo] = &[
         machine: Some(InstallMethod::new("apt", "ffmpeg")),
         alternatives: &[],
         prefer: None,
+        sandbox_writable: &[],
+        needs_network: false,
     },
     ToolInfo {
         name: "lilypond",
@@ -1749,6 +1795,8 @@ pub static TOOLS: &[ToolInfo] = &[
         machine: Some(InstallMethod::new("apt", "lilypond")),
         alternatives: &[],
         prefer: None,
+        sandbox_writable: &[],
+        needs_network: false,
     },
     // ARM bare-metal cross toolchain. Debian splits it the same way as the
     // native one: the compiler driver comes from gcc-arm-none-eabi, while ar
@@ -1760,6 +1808,8 @@ pub static TOOLS: &[ToolInfo] = &[
         machine: Some(InstallMethod::new("apt", "gcc-arm-none-eabi")),
         alternatives: &[],
         prefer: None,
+        sandbox_writable: &[],
+        needs_network: false,
     },
     ToolInfo {
         name: "arm-none-eabi-ar",
@@ -1768,6 +1818,8 @@ pub static TOOLS: &[ToolInfo] = &[
         machine: Some(InstallMethod::new("apt", "binutils-arm-none-eabi")),
         alternatives: &[],
         prefer: None,
+        sandbox_writable: &[],
+        needs_network: false,
     },
     ToolInfo {
         name: "arm-none-eabi-objcopy",
@@ -1776,6 +1828,8 @@ pub static TOOLS: &[ToolInfo] = &[
         machine: Some(InstallMethod::new("apt", "binutils-arm-none-eabi")),
         alternatives: &[],
         prefer: None,
+        sandbox_writable: &[],
+        needs_network: false,
     },
     ToolInfo {
         name: "gcc",
@@ -1784,6 +1838,8 @@ pub static TOOLS: &[ToolInfo] = &[
         machine: Some(InstallMethod::new("apt", "gcc")),
         alternatives: &[],
         prefer: None,
+        sandbox_writable: &[],
+        needs_network: false,
     },
     ToolInfo {
         name: "g++",
@@ -1792,6 +1848,8 @@ pub static TOOLS: &[ToolInfo] = &[
         machine: Some(InstallMethod::new("apt", "g++")),
         alternatives: &[],
         prefer: None,
+        sandbox_writable: &[],
+        needs_network: false,
     },
     ToolInfo {
         name: "clang",
@@ -1800,6 +1858,8 @@ pub static TOOLS: &[ToolInfo] = &[
         machine: Some(InstallMethod::new("apt", "clang")),
         alternatives: &[],
         prefer: None,
+        sandbox_writable: &[],
+        needs_network: false,
     },
     ToolInfo {
         name: "clang++",
@@ -1808,6 +1868,8 @@ pub static TOOLS: &[ToolInfo] = &[
         machine: Some(InstallMethod::new("apt", "clang")),
         alternatives: &[],
         prefer: None,
+        sandbox_writable: &[],
+        needs_network: false,
     },
     ToolInfo {
         name: "make",
@@ -1816,6 +1878,8 @@ pub static TOOLS: &[ToolInfo] = &[
         machine: Some(InstallMethod::new("apt", "make")),
         alternatives: &[],
         prefer: None,
+        sandbox_writable: &[],
+        needs_network: false,
     },
     ToolInfo {
         name: "pdflatex",
@@ -1824,6 +1888,8 @@ pub static TOOLS: &[ToolInfo] = &[
         machine: Some(InstallMethod::new("apt", "texlive-latex-base")),
         alternatives: &[],
         prefer: None,
+        sandbox_writable: &[],
+        needs_network: false,
     },
     ToolInfo {
         name: "dot",
@@ -1832,6 +1898,8 @@ pub static TOOLS: &[ToolInfo] = &[
         machine: Some(InstallMethod::new("apt", "graphviz")),
         alternatives: &[],
         prefer: None,
+        sandbox_writable: &[],
+        needs_network: false,
     },
     // Debian/Ubuntu package the Clojure CLI, which is what makes this
     // installable without the official shell installer; brew is the macOS
@@ -1843,6 +1911,9 @@ pub static TOOLS: &[ToolInfo] = &[
         machine: Some(InstallMethod::new("apt", "clojure")),
         alternatives: &[InstallMethod::new("brew", "clojure/tools/clojure")],
         prefer: None,
+        // The CLI caches the resolved classpath in the project.
+        sandbox_writable: &[".cpcache"],
+        needs_network: false,
     },
     // Built-in / coreutils
     ToolInfo {
@@ -1852,6 +1923,8 @@ pub static TOOLS: &[ToolInfo] = &[
         machine: Some(InstallMethod::new("apt", "coreutils")),
         alternatives: &[],
         prefer: None,
+        sandbox_writable: &[],
+        needs_network: false,
     },
 ];
 

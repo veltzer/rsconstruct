@@ -39,4 +39,7 @@ inventory::submit! { crate::tools::ToolInfo {
     machine: Some(crate::tools::InstallMethod::new("binary", "taplo")),
     alternatives: &[crate::tools::InstallMethod::new("cargo", "taplo-cli")],
     prefer: None,
+    sandbox_writable: &[],
+    // Fetches the JSON schemas its schema catalog associates with a file.
+    needs_network: true,
 } }

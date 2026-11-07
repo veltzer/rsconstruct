@@ -165,6 +165,12 @@ pub struct ToolListEntry {
     /// The target `tool install` uses for this tool ("project" or "machine").
     pub preferred: Option<String>,
     pub install_methods: Vec<ToolInstallMethodEntry>,
+    /// Where the tool writes its own state in the project, which a
+    /// sandboxed processor running it may write (`ToolInfo::sandbox_writable`).
+    pub sandbox_writable: Vec<String>,
+    /// Whether the tool reaches the network, which gives a sandboxed
+    /// processor running it the network (`ToolInfo::needs_network`).
+    pub needs_network: bool,
 }
 
 impl ToolListEntry {
@@ -180,6 +186,13 @@ impl ToolListEntry {
                 .and_then(crate::tools::ToolInfo::preferred_target)
                 .map(|t| t.as_str().to_string()),
             install_methods: info.map(ToolInstallMethodEntry::all).unwrap_or_default(),
+            sandbox_writable: info.map_or_else(Vec::new, |i| {
+                i.sandbox_writable
+                    .iter()
+                    .map(|s| (*s).to_string())
+                    .collect()
+            }),
+            needs_network: info.is_some_and(|i| i.needs_network),
         }
     }
 }

@@ -37,5 +37,5 @@ inventory::submit! { crate::tools::ToolInfo {
     name: "standard", runtime: "node",
     project: Some(crate::tools::InstallMethod::new("npm", "standard")),
     machine: Some(crate::tools::InstallMethod::new("npm", "standard")),
-    alternatives: &[], prefer: None,
+    alternatives: &[], prefer: None, sandbox_writable: &[], needs_network: false,
 } }

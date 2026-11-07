@@ -1526,7 +1526,7 @@ fn build_execution_model_defaults_to_native() {
 #[test]
 fn processor_sandbox_fields_validate() {
     let ok = toml_of(
-        "[processor.checker.ruff]\nexecution_model = \"sandbox\"\nsandbox_network = true\nsandbox_writable = [\".ruff_cache\"]\n",
+        "[processor.checker.ruff]\nexecution_model = \"sandbox\"\nsandbox_network = true\nsandbox_writable = [\".cache\", \"**/__pycache__\"]\n",
     );
     let errors = validate_processor_fields_raw(&ok);
     assert!(errors.is_empty(), "unexpected errors: {errors:?}");
@@ -1535,6 +1535,13 @@ fn processor_sandbox_fields_validate() {
     assert_eq!(errors.len(), 1, "{errors:?}");
     assert!(
         errors[0].contains("\"native\" or \"sandbox\""),
+        "{errors:?}"
+    );
+    let bad = toml_of("[processor.checker.ruff]\nsandbox_writable = [\"../up\", \"*.pyc\"]\n");
+    let errors = validate_processor_fields_raw(&bad);
+    assert_eq!(errors.len(), 2, "{errors:?}");
+    assert!(
+        errors[0].contains("'../up'") && errors[1].contains("'*.pyc'"),
         "{errors:?}"
     );
 }

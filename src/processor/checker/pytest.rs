@@ -37,5 +37,5 @@ inventory::submit! { crate::tools::ToolInfo {
     name: "pytest", runtime: "python",
     project: Some(crate::tools::InstallMethod::new("pip", "pytest")),
     machine: Some(crate::tools::InstallMethod::new("pip", "pytest")),
-    alternatives: &[], prefer: None,
+    alternatives: &[], prefer: None, sandbox_writable: &[".pytest_cache", "**/__pycache__"], needs_network: false,
 } }

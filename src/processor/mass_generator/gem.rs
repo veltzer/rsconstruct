@@ -196,7 +196,8 @@ inventory::submit! { crate::tools::ToolInfo {
     name: "bundle", runtime: "ruby",
     project: Some(crate::tools::InstallMethod::new("gem", "bundler")),
     machine: Some(crate::tools::InstallMethod::new("gem", "bundler")),
-    alternatives: &[], prefer: None,
+    // `bundle install` downloads the gems it installs.
+    alternatives: &[], prefer: None, sandbox_writable: &[], needs_network: true,
 } }
 
 #[cfg(test)]

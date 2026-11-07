@@ -919,6 +919,7 @@ impl Executor<'_> {
                 processor.scan_config(),
                 self.build_ctx.execution_model(),
                 &product_refs,
+                &processor.required_tools(),
             ));
             for attempt in 1..=max_attempts {
                 let refs: Vec<&crate::graph::Product> =
@@ -1109,6 +1110,7 @@ impl Executor<'_> {
                     processor.scan_config(),
                     self.build_ctx.execution_model(),
                     &[product],
+                    &processor.required_tools(),
                 ));
                 for attempt in 1..=max_attempts {
                     let outcome = guard_panic(

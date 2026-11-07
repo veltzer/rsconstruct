@@ -39,5 +39,5 @@ inventory::submit! { crate::tools::ToolInfo {
     name: "cmakelint", runtime: "python",
     project: Some(crate::tools::InstallMethod::new("pip", "cmakelint")),
     machine: Some(crate::tools::InstallMethod::new("pip", "cmakelint")),
-    alternatives: &[], prefer: None,
+    alternatives: &[], prefer: None, sandbox_writable: &["**/__pycache__"], needs_network: false,
 } }

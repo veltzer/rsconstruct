@@ -85,5 +85,5 @@ inventory::submit! { crate::tools::ToolInfo {
     name: "a2x", runtime: "python",
     project: None,
     machine: Some(crate::tools::InstallMethod::new("apt", "asciidoc")),
-    alternatives: &[], prefer: None,
+    alternatives: &[], prefer: None, sandbox_writable: &["**/__pycache__"], needs_network: false,
 } }

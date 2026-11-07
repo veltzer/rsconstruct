@@ -37,5 +37,5 @@ inventory::submit! { crate::tools::ToolInfo {
     name: "jsonlint", runtime: "python",
     project: Some(crate::tools::InstallMethod::new("pip", "demjson3")),
     machine: Some(crate::tools::InstallMethod::new("pip", "demjson3")),
-    alternatives: &[], prefer: None,
+    alternatives: &[], prefer: None, sandbox_writable: &["**/__pycache__"], needs_network: false,
 } }

@@ -37,5 +37,5 @@ inventory::submit! { crate::tools::ToolInfo {
     name: "checkpatch.pl", runtime: "perl",
     project: Some(crate::tools::InstallMethod::new("binary", "checkpatch.pl")),
     machine: Some(crate::tools::InstallMethod::new("binary", "checkpatch.pl")),
-    alternatives: &[], prefer: None,
+    alternatives: &[], prefer: None, sandbox_writable: &[], needs_network: false,
 } }

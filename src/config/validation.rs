@@ -174,6 +174,14 @@ pub(super) fn validate_single_processor(
             errors.push(format!(
                 "[{section_label}]: field '{key}' must be \"native\" or \"sandbox\", got {field_value}",
             ));
+        } else if key == super::SANDBOX_WRITABLE
+            && let Some(entries) = field_value.as_array()
+        {
+            for entry in entries.iter().filter_map(toml::Value::as_str) {
+                if let Err(e) = crate::sandbox::Writable::parse(entry) {
+                    errors.push(format!("[{section_label}]: {e}"));
+                }
+            }
         }
     }
 

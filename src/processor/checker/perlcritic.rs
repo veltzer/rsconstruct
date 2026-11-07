@@ -37,5 +37,5 @@ inventory::submit! { crate::tools::ToolInfo {
     name: "perlcritic", runtime: "perl",
     project: None,
     machine: Some(crate::tools::InstallMethod::new("apt", "libperl-critic-perl")),
-    alternatives: &[], prefer: None,
+    alternatives: &[], prefer: None, sandbox_writable: &[], needs_network: false,
 } }

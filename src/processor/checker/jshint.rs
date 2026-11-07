@@ -37,5 +37,5 @@ inventory::submit! { crate::tools::ToolInfo {
     name: "jshint", runtime: "node",
     project: Some(crate::tools::InstallMethod::new("npm", "jshint")),
     machine: Some(crate::tools::InstallMethod::new("npm", "jshint")),
-    alternatives: &[], prefer: None,
+    alternatives: &[], prefer: None, sandbox_writable: &[], needs_network: false,
 } }

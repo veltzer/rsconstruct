@@ -37,5 +37,5 @@ inventory::submit! { crate::tools::ToolInfo {
     name: "yamllint", runtime: "python",
     project: Some(crate::tools::InstallMethod::new("pip", "yamllint")),
     machine: Some(crate::tools::InstallMethod::new("pip", "yamllint")),
-    alternatives: &[], prefer: None,
+    alternatives: &[], prefer: None, sandbox_writable: &["**/__pycache__"], needs_network: false,
 } }
