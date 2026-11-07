@@ -82,6 +82,14 @@ pub struct ProcessorPlugin {
     /// write only a stamp, which the cache keeps while the installed packages
     /// may be gone. Shown by `processor list` as `Cache`.
     pub caches_outputs: bool,
+    /// Whether this processor can run under the sandbox execution model
+    /// (`execution_model = "sandbox"`, see `docs/src/internal/sandbox.md`).
+    /// `false` for a processor whose tool cannot work inside bubblewrap at
+    /// all — marp, mermaid, chromium and drawio launch Chromium, whose own
+    /// sandbox needs user namespaces that a bwrap child cannot create — so a
+    /// build that would sandbox it fails at the start instead of on every
+    /// product. Shown by `processor list` as `Sandbox`.
+    pub sandboxable: bool,
     /// Hard cap on parallel jobs for this processor. `None` means no cap.
     /// `Some(1)` means the processor must run one product at a time (e.g. package
     /// managers, whole-project aggregators). The effective `max_jobs` is

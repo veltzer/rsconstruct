@@ -280,6 +280,7 @@ inventory::submit! {
         // check its files one after another: products run in parallel instead.
         supports_batch: false,
         caches_outputs: true,
+        sandboxable: true,
         max_jobs_cap: None,
     }
 }

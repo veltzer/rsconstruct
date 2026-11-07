@@ -134,6 +134,7 @@ pub fn list_processors_no_config(verbose: bool, type_filter: Option<&str>) -> Re
                 processor_type: p.processor_type.as_str().to_string(),
                 supports_batch: p.supports_batch,
                 caches_outputs: p.caches_outputs,
+                sandboxable: p.sandboxable,
                 builtin: p.is_builtin,
                 rust: p.is_rust,
                 rust_alternatives: crate::registries::rust_alternatives(&p.pname())
@@ -158,6 +159,7 @@ pub fn list_processors_no_config(verbose: bool, type_filter: Option<&str>) -> Re
                 tables::yes_no(p.is_rust).to_string(),
                 tables::yes_no(p.supports_batch).to_string(),
                 tables::yes_no(p.caches_outputs).to_string(),
+                tables::yes_no(p.sandboxable).to_string(),
                 crate::registries::rust_alternatives(&p.pname())
                     .iter()
                     .map(|n| tables::short_processor_name(n))
@@ -622,6 +624,7 @@ pub fn processor_info(pname: Option<&str>) -> Result<()> {
                     "rust": p.is_rust,
                     "supports_batch": p.supports_batch,
                     "caches_outputs": p.caches_outputs,
+                    "sandboxable": p.sandboxable,
                     "max_jobs_cap": p.max_jobs_cap,
                     "tools": tools,
                     "fields": processor_fields(name),
@@ -642,11 +645,12 @@ pub fn processor_info(pname: Option<&str>) -> Result<()> {
             println!("  Keywords: {}", p.keywords.join(", "));
         }
         println!(
-            "  Builtin: {}  Rust: {}  Batch: {}  Cache: {}  Max jobs: {}  Version: {}",
+            "  Builtin: {}  Rust: {}  Batch: {}  Cache: {}  Sandbox: {}  Max jobs: {}  Version: {}",
             tables::yes_no(p.is_builtin),
             tables::yes_no(p.is_rust),
             tables::yes_no(p.supports_batch),
             tables::yes_no(p.caches_outputs),
+            tables::yes_no(p.sandboxable),
             p.max_jobs_cap
                 .map_or_else(|| "unlimited".to_string(), |n| n.to_string()),
             p.version,

@@ -149,6 +149,7 @@ pub mod defs {
             "Rust",
             "Batch",
             "Cache",
+            "Sandbox",
             "Rust alternative",
             "Description",
         ],

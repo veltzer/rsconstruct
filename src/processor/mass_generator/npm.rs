@@ -158,6 +158,7 @@ inventory::submit! {
         is_rust: false,
         supports_batch: false,
         caches_outputs: false,
+        sandboxable: true,
         max_jobs_cap: Some(1),
     }
 }

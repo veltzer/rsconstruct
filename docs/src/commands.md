@@ -553,7 +553,7 @@ rsconstruct processor graph --format mermaid # Mermaid format
 rsconstruct processor files --headers   # Show files with processor headers
 ```
 
-`list` prints one row per processor with its type and four flags: `Builtin`
+`list` prints one row per processor with its type and five flags: `Builtin`
 (pure Rust inside rsconstruct, or `external` when it runs another program),
 `Rust` (whether the code that does the work is written in Rust — every
 builtin processor, plus external ones whose tool is Rust: ruff, taplo, rumdl,
@@ -564,8 +564,11 @@ or marp cannot) and `Cache` (whether a cache hit stands in for a run: it
 restores a generator's outputs or proves a checker's pass, so nothing is
 lost by skipping the run; `No` for pip, npm and gem, which install into an
 environment and write only a stamp — the stamp is cached while the installed
-packages may be gone). The JSON form carries the same as `builtin`, `rust`,
-`supports_batch` and `caches_outputs` booleans. `rust` is what to read when
+packages may be gone), and `Sandbox` (whether the processor can run under
+`execution_model = "sandbox"`; `No` for marp, mermaid, chromium and drawio,
+which launch Chromium, whose own sandbox cannot start inside bubblewrap).
+The JSON form carries the same as `builtin`, `rust`, `supports_batch`,
+`caches_outputs` and `sandboxable` booleans. `rust` is what to read when
 the question is "how much of this project's toolchain is Rust"; `builtin` is
 what to read when the question is "which processors need no tool
 installed"; `supports_batch` is what decides whether a stanza's `batch` field

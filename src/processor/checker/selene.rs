@@ -38,6 +38,7 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     is_rust: true,
     supports_batch: true,
     caches_outputs: true,
+    sandboxable: true,
     max_jobs_cap: None,
 } }
 // selene is published as a zipped binary on its GitHub release and as a

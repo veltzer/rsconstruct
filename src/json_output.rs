@@ -115,6 +115,9 @@ pub struct ProcessorListEntry {
     pub supports_batch: bool,
     /// Whether a cache hit stands in for a run (see `ProcessorPlugin::caches_outputs`).
     pub caches_outputs: bool,
+    /// Whether the processor can run under `execution_model = "sandbox"`
+    /// (see `ProcessorPlugin::sandboxable`).
+    pub sandboxable: bool,
     pub builtin: bool,
     /// Whether the implementation (rsconstruct itself for a builtin processor,
     /// the external tool otherwise) is written in Rust.

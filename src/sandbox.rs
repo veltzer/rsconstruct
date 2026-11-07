@@ -74,6 +74,57 @@ fn current_spec() -> Option<Spec> {
     SPEC.with(|s| s.borrow().clone())
 }
 
+/// The enabled instances among `instances` that would run sandboxed under
+/// `build_default` although their processor is not `sandboxable`, sorted.
+/// Read from the raw instance tables, before any processor is created, so a
+/// build can refuse them before doing any work.
+pub fn unsandboxable_instances(
+    instances: &[crate::config::ProcessorInstance],
+    build_default: ExecutionModel,
+) -> Vec<String> {
+    let mut out: Vec<String> = instances
+        .iter()
+        .filter(|inst| {
+            let table = &inst.config_toml;
+            let enabled = table
+                .get("enabled")
+                .and_then(toml::Value::as_bool)
+                .unwrap_or(true);
+            let model = table
+                .get(crate::config::EXECUTION_MODEL)
+                .and_then(|v| v.clone().try_into::<ExecutionModel>().ok())
+                .unwrap_or(build_default);
+            enabled
+                && model == ExecutionModel::Sandbox
+                && crate::registries::find_plugin(&inst.pname).is_some_and(|p| !p.sandboxable)
+        })
+        .map(|inst| inst.instance_name.clone())
+        .collect();
+    out.sort();
+    out
+}
+
+/// Fail when any configured, enabled instance would run sandboxed although
+/// its processor cannot run in a sandbox. Called at the start of a build.
+pub fn check_sandboxable(
+    instances: &[crate::config::ProcessorInstance],
+    build_default: ExecutionModel,
+) -> Result<()> {
+    let bad = unsandboxable_instances(instances, build_default);
+    if bad.is_empty() {
+        return Ok(());
+    }
+    let msg = format!(
+        "These processors would run under execution_model = \"sandbox\" but cannot run in a sandbox:\n  {}\nSet execution_model = \"native\" on each of them, or disable them.",
+        bad.join("\n  ")
+    );
+    Err(crate::exit_code::RsconstructError::new(
+        crate::exit_code::RsconstructExitCode::ConfigError,
+        msg,
+    )
+    .into())
+}
+
 /// Whether a processor with this config runs sandboxed under the build-wide
 /// `build_default`.
 pub fn is_sandboxed(standard: &StandardConfig, build_default: ExecutionModel) -> bool {
@@ -368,6 +419,81 @@ fn remove_run_dir(dir: &Path) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn instance(
+        instance_name: &str,
+        pname: &str,
+        toml_src: &str,
+    ) -> crate::config::ProcessorInstance {
+        crate::config::ProcessorInstance {
+            instance_name: instance_name.into(),
+            pname: pname.into(),
+            config_toml: toml::from_str(toml_src).expect("instance toml"),
+            provenance: crate::config::ProvenanceMap::new(),
+        }
+    }
+
+    #[test]
+    fn unsandboxable_processors_are_refused_only_when_sandboxed() {
+        let marp = instance("processor.generator.marp", "processor.generator.marp", "");
+        let ruff = instance("processor.checker.ruff", "processor.checker.ruff", "");
+        let native_marp = instance(
+            "processor.generator.marp.a",
+            "processor.generator.marp",
+            "execution_model = \"native\"",
+        );
+        let disabled_marp = instance(
+            "processor.generator.marp.b",
+            "processor.generator.marp",
+            "enabled = false",
+        );
+        let sandboxed_marp = instance(
+            "processor.generator.marp.c",
+            "processor.generator.marp",
+            "execution_model = \"sandbox\"",
+        );
+        let all = [marp, ruff, native_marp, disabled_marp, sandboxed_marp];
+        // Build-wide sandbox: marp and its explicitly sandboxed instance are
+        // refused; ruff, the native override and the disabled one are not.
+        assert_eq!(
+            unsandboxable_instances(&all, ExecutionModel::Sandbox),
+            ["processor.generator.marp", "processor.generator.marp.c"]
+        );
+        // Build-wide native: only the instance that opts into the sandbox.
+        assert_eq!(
+            unsandboxable_instances(&all, ExecutionModel::Native),
+            ["processor.generator.marp.c"]
+        );
+        assert!(check_sandboxable(&all[1..3], ExecutionModel::Sandbox).is_ok());
+        let err = check_sandboxable(&all, ExecutionModel::Sandbox)
+            .unwrap_err()
+            .to_string();
+        assert!(
+            err.contains("processor.generator.marp")
+                && err.contains("execution_model = \"native\""),
+            "{err}"
+        );
+    }
+
+    /// The processors marked as unable to run in a sandbox are exactly the
+    /// ones that launch Chromium (measured: each aborts inside bwrap).
+    #[test]
+    fn only_chromium_launchers_are_unsandboxable() {
+        let mut names: Vec<String> = crate::registries::processor::all_plugins()
+            .filter(|p| !p.sandboxable)
+            .map(crate::registries::ProcessorPlugin::pname)
+            .collect();
+        names.sort();
+        assert_eq!(
+            names,
+            [
+                "processor.generator.chromium",
+                "processor.generator.drawio",
+                "processor.generator.marp",
+                "processor.generator.mermaid",
+            ]
+        );
+    }
 
     fn run_with(outputs: &[&str], dirs: &[&str]) -> Run {
         Run {

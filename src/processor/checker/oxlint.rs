@@ -39,6 +39,7 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     is_rust: true,
     supports_batch: true,
     caches_outputs: true,
+    sandboxable: true,
     max_jobs_cap: None,
 } }
 // oxlint is published three ways: a static binary on the oxc GitHub release,

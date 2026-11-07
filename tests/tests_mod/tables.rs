@@ -56,6 +56,7 @@ fn all_shows_every_column() {
             "Rust",
             "Batch",
             "Cache",
+            "Sandbox",
             "Rust alternative"
         ]
     );
@@ -69,6 +70,7 @@ fn all_shows_every_column() {
             "Rust",
             "Batch",
             "Cache",
+            "Sandbox",
             "Rust alternative",
             "Description"
         ]
@@ -96,6 +98,7 @@ fn fields_prints_names_only() {
             "Rust",
             "Batch",
             "Cache",
+            "Sandbox",
             "Rust alternative",
             "Description"
         ]
@@ -120,7 +123,7 @@ fn user_config_chooses_columns() {
     assert_eq!(chosen, ["Type", "Name", "Description"]);
 
     let all = header_cells(&processor_list(dir.path(), &["--all"], &env));
-    assert_eq!(all.len(), 8, "{all:?}");
+    assert_eq!(all.len(), 9, "{all:?}");
 
     let output = run_rsconstruct_with_env(dir.path(), &["processor", "types"], &env);
     assert!(output.status.success());

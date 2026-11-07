@@ -43,6 +43,7 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     is_rust: true,
     supports_batch: true,
     caches_outputs: true,
+    sandboxable: true,
     max_jobs_cap: None,
 } }
 // Binary first: biome's GitHub release ships a static Linux binary, so a

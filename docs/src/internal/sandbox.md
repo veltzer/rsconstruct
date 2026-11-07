@@ -189,6 +189,16 @@ added later as a second backend, chosen at run time (no `#[cfg]`).
   probes, `doctor` and `tool install`; they run natively by design.
 - **Preflight.** `check_required_tools` requires `bwrap` when any processor
   with external tools resolves to the sandbox.
+- **Processors that cannot be sandboxed.** Every plugin entry carries
+  `sandboxable` (`ProcessorPlugin` in `src/registries/processor.rs`),
+  shown by `processor list` as `Sandbox`. marp, mermaid, chromium and
+  drawio are `false` (open question 1). Before anything else, `build` calls
+  `sandbox::check_sandboxable` over the configured instances: an enabled
+  instance of a non-sandboxable processor that resolves to the sandbox is a
+  config error naming every such instance, so the build fails in
+  milliseconds instead of on each product. It reads the raw instance
+  tables, so it judges every configured instance, including one that
+  matches no file in this repo.
 
 ### Not covered
 
@@ -230,11 +240,15 @@ Product-level results otherwise matched the native build.
    back to the SUID helper, and aborts ("The SUID sandbox helper binary was
    found, but is not configured correctly"). Anything built on Chromium
    (marp, mermaid, chromium, puppeteer-based tools) therefore fails under
-   the sandbox on Ubuntu. Options: run those processors with
-   `execution_model = "native"`, pass Chromium `--no-sandbox` through the
-   tool's own config, or find a bwrap/AppArmor setup that permits nesting.
-   It is an environment limitation, not a correctness finding, and the
-   choice is open.
+   the sandbox on Ubuntu. Measured on 2026-11-07, outside any other
+   sandbox: marp and google-chrome work natively and abort inside bwrap;
+   drawio (Electron) aborts the same way. Those four processors are marked
+   `sandboxable: false`, and a build that would sandbox one fails up front
+   (see "Where it hooks in"); they run with `execution_model = "native"`.
+   Still open: passing Chromium `--no-sandbox` through the tool's own
+   config, or a bwrap/AppArmor setup that permits nesting, either of which
+   would let them be marked sandboxable. It is an environment limitation,
+   not a correctness finding.
 2. **Changes to the real tree during a run.** overlayfs documents changes
    to the lower layer while it is mounted as undefined behaviour. With
    `-j` > 1, other products move their outputs into the real tree while a

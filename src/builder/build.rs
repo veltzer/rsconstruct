@@ -429,6 +429,13 @@ impl Builder {
     ) -> Result<(), anyhow::Error> {
         self.apply_cli_overrides(ctx, opts);
 
+        // Before any work: a processor that cannot run in a sandbox must not
+        // be configured to run in one.
+        crate::sandbox::check_sandboxable(
+            &self.config.processor.instances,
+            self.config.build.execution_model,
+        )?;
+
         let BuildPlan {
             processors,
             mut graph,

@@ -182,6 +182,7 @@ inventory::submit! {
         is_rust: true,
         supports_batch: true,
         caches_outputs: true,
+        sandboxable: true,
         max_jobs_cap: None,
     }
 }

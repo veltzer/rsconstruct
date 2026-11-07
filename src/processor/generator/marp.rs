@@ -227,6 +227,8 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     is_rust: false,
     supports_batch: false,
     caches_outputs: true,
+    // marp renders through Chromium, whose own sandbox cannot start inside bwrap.
+    sandboxable: false,
     max_jobs_cap: None,
 } }
 inventory::submit! { crate::tools::ToolInfo {

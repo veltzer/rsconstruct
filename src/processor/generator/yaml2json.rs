@@ -60,5 +60,6 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     is_rust: true,
     supports_batch: false,
     caches_outputs: true,
+    sandboxable: true,
     max_jobs_cap: None,
 } }
