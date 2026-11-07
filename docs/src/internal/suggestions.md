@@ -34,6 +34,10 @@ Grades:
   and BuildXL handle it, why observation fits rsconstruct better than a
   sandbox, the candidate mechanisms (strace leading) and the open
   questions are in [Undeclared Reads](undeclared-reads.md).
+- **Designed 2026-11-07:** an opt-in sandbox for correctness (not
+  security) that keeps everything readable but catches undeclared writes
+  and network access, built on bwrap with an overlay over the project. See
+  [Sandboxed Execution](sandbox.md).
 - **Urgency**: medium (check mode) / low (full isolation) | **Complexity**: medium (check mode) / high (full isolation)
 
 ### Persistent daemon mode

@@ -54,7 +54,9 @@ upgrade.
 ### Hermetic / sandboxed execution
 Run each processor in a sandbox that only exposes its declared inputs, catching
 under-declared dependencies (the classic incremental-build bug). The graph
-already knows every product's exact input set.
+already knows every product's exact input set. An opt-in, correctness-only
+design (undeclared writes and network access, reads left to tracing) is in
+[Sandboxed Execution](internal/sandbox.md).
 
 ### Reproducibility verification mode
 The `BuildPolicy` trait doc explicitly mentions "deterministic-verification
