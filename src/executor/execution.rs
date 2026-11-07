@@ -260,15 +260,39 @@ pub(super) fn remove_stale_outputs(
     object_store: &ObjectStore,
     input_checksum: &str,
 ) -> anyhow::Result<()> {
+    for file in stale_outputs(product, object_store, input_checksum) {
+        fs::remove_file(&file)
+            .with_context(|| format!("Failed to remove stale output: {}", file.display()))?;
+    }
+    // Ensure output dirs still exist (the tool may assume they do)
+    for output_dir in &product.output_dirs {
+        fs::create_dir_all(output_dir.as_ref()).with_context(|| {
+            format!(
+                "Failed to create output directory: {}",
+                output_dir.display()
+            )
+        })?;
+    }
+    Ok(())
+}
+
+/// The files [`remove_stale_outputs`] removes, without removing them: the
+/// product's declared outputs, and for a tree product the files it owned
+/// in its previous run, that exist on disk. A product that runs sandboxed
+/// hands this list to the sandbox instead, which removes the files inside
+/// its overlay (see `crate::sandbox::Spec::stale`).
+pub(super) fn stale_outputs(
+    product: &Product,
+    object_store: &ObjectStore,
+    input_checksum: &str,
+) -> Vec<PathBuf> {
+    let mut stale: BTreeSet<PathBuf> = BTreeSet::new();
     if !product.output_dirs.is_empty() {
-        // A tree product: remove only files we owned in the previous run.
-        // Files that belong to other processors (sharing the same directory)
-        // are left alone and restored/rebuilt independently.
+        // A tree product: only files we owned in the previous run. Files
+        // that belong to other processors (sharing the same directory) are
+        // left alone and restored/rebuilt independently.
         let cache_key = product.descriptor_key(input_checksum);
-        let mut stale: BTreeSet<PathBuf> = object_store
-            .previous_tree_paths(&cache_key)
-            .into_iter()
-            .collect();
+        stale.extend(object_store.previous_tree_paths(&cache_key));
         match object_store.last_tree_key(&product.owner_key()) {
             Some(last_key) => stale.extend(object_store.previous_tree_paths(&last_key)),
             // No pointer: the outputs on disk predate the pointer table
@@ -276,30 +300,9 @@ pub(super) fn remove_stale_outputs(
             // a restore leaves behind that a tool cannot write over.
             None => stale.extend(restored_hardlinks_under(&product.output_dirs)),
         }
-        for file in stale {
-            if file.exists() {
-                fs::remove_file(&file).with_context(|| {
-                    format!("Failed to remove stale output: {}", file.display())
-                })?;
-            }
-        }
-        // Ensure output dirs still exist (the tool may assume they do)
-        for output_dir in &product.output_dirs {
-            fs::create_dir_all(output_dir.as_ref()).with_context(|| {
-                format!(
-                    "Failed to create output directory: {}",
-                    output_dir.display()
-                )
-            })?;
-        }
     }
-    for output in &product.outputs {
-        if output.exists() {
-            fs::remove_file(output)
-                .with_context(|| format!("Failed to remove stale output: {}", output.display()))?;
-        }
-    }
-    Ok(())
+    stale.extend(product.outputs.iter().cloned());
+    stale.into_iter().filter(|file| file.exists()).collect()
 }
 
 /// Files under `dirs` that a hardlink restore put there: read-only and
@@ -572,19 +575,27 @@ impl Executor<'_> {
     }
 
     /// Remove the outputs of every product that was predicted to change but
-    /// never ran: skipped because a dependency failed, or never reached
-    /// because the build stopped on an error or Ctrl+C. Its inputs changed,
-    /// so what is on disk is stale, and leaving it there would look like
-    /// the build succeeded. Outputs used to be removed for every predicted
-    /// change before the run started; removing them only now, for products
-    /// that did not run, is what lets a product whose dependency rebuilt to
-    /// identical bytes be skipped with its outputs intact.
+    /// never ran because the build was interrupted (Ctrl+C). Its inputs
+    /// changed, so what is on disk is stale, and leaving it there would
+    /// look like the build succeeded. Outputs used to be removed for every
+    /// predicted change before the run started; removing them only now, for
+    /// products that did not run, is what lets a product whose dependency
+    /// rebuilt to identical bytes be skipped with its outputs intact.
+    ///
+    /// When a product failed, nothing is removed: the products that never
+    /// ran are then the ones it blocked (its dependents, or everything left
+    /// when the build stops on the error), and a failure must not cost them
+    /// their outputs. The build is red, and the next build rebuilds them
+    /// anyway, since their inputs still differ from what was built.
     fn remove_outputs_never_rebuilt(
         graph: &BuildGraph,
         object_store: &ObjectStore,
         classification: &Classification,
         shared: &SharedState,
     ) -> Result<()> {
+        if !shared.failed_products.lock().is_empty() || !shared.errors.lock().is_empty() {
+            return Ok(());
+        }
         let attempted = shared.attempted.lock();
         for c in &classification.products {
             if c.action == ProductAction::Skip || attempted.contains(&c.id) {
@@ -745,6 +756,45 @@ impl Executor<'_> {
         }
     }
 
+    /// Whether the stale outputs of `proc_name`'s products are removed by the
+    /// sandbox, inside its overlay, instead of by the executor before the
+    /// run: the processor runs sandboxed and its work is done by an external
+    /// tool. A builtin writes the real tree from rsconstruct itself, and a
+    /// processor that replaces its own outputs has nothing removed at all.
+    fn sandbox_removes_stale(&self, proc_name: &str) -> bool {
+        self.processors.get(proc_name).is_some_and(|p| {
+            !p.replaces_own_outputs()
+                && !crate::registries::processor::is_builtin(proc_name)
+                && crate::sandbox::is_sandboxed(p.scan_config(), self.build_ctx.execution_model())
+        })
+    }
+
+    /// The sandbox spec for running `items` of `proc_name` (one product, or a
+    /// batch), or `None` when it runs natively: [`crate::sandbox::spec_for`]
+    /// plus the stale outputs the sandbox removes before the tool starts.
+    fn sandbox_spec(
+        &self,
+        proc_name: &str,
+        processor: &dyn crate::processor::Processor,
+        items: &[&WorkItem],
+        object_store: &ObjectStore,
+    ) -> Option<crate::sandbox::Spec> {
+        let products: Vec<&Product> = items.iter().map(|item| &item.product).collect();
+        let mut spec = crate::sandbox::spec_for(
+            processor.scan_config(),
+            self.build_ctx.execution_model(),
+            &products,
+            &processor.required_tools(),
+        )?;
+        if self.sandbox_removes_stale(proc_name) {
+            spec.stale = items
+                .iter()
+                .flat_map(|item| stale_outputs(&item.product, object_store, &item.input_checksum))
+                .collect();
+        }
+        Some(spec)
+    }
+
     /// Pre-check a work item: handle explain, skip-if-unchanged, and cache restore.
     ///
     /// Returns `Handled` if the item was fully processed (skip/restore/failed),
@@ -802,11 +852,19 @@ impl Executor<'_> {
         // swept at the end of the run (see `execute_parallel`). A processor
         // that replaces its own outputs (`Processor::replaces_own_outputs`)
         // is left alone: its tool run may already have written them.
+        //
+        // A product about to run sandboxed keeps them here too: the sandbox
+        // removes them inside its overlay before the tool starts, so a run
+        // that fails leaves the tree exactly as it was. A restore is not a
+        // sandboxed run, and clears them here as always.
         let replaces_own = self
             .processors
             .get(proc_name)
             .is_some_and(|p| p.replaces_own_outputs());
+        let sandbox_removes =
+            item.action == ProductAction::Build && self.sandbox_removes_stale(proc_name);
         if !replaces_own
+            && !sandbox_removes
             && let Err(e) = remove_stale_outputs(product, lctx.object_store, &item.input_checksum)
         {
             self.handle_error(&ctx, e, None);
@@ -896,8 +954,8 @@ impl Executor<'_> {
                 ));
             }
 
-            // Stale outputs were removed per product in try_skip_or_restore;
-            // just announce starts.
+            // Stale outputs were removed per product in try_skip_or_restore
+            // (or are removed by the sandbox); just announce starts.
             for p in &product_refs {
                 json_output::emit_product_start(&self.product_display(p), &p.processor);
             }
@@ -915,11 +973,11 @@ impl Executor<'_> {
             crate::processor::set_declared_tools(Some(processor.required_tools()));
             // A batched invocation may write the outputs of any product in
             // the chunk; retries re-run a subset, which the union covers.
-            crate::sandbox::set_spec(crate::sandbox::spec_for(
-                processor.scan_config(),
-                self.build_ctx.execution_model(),
-                &product_refs,
-                &processor.required_tools(),
+            crate::sandbox::set_spec(self.sandbox_spec(
+                proc_name,
+                processor.as_ref(),
+                chunk,
+                lctx.object_store,
             ));
             for attempt in 1..=max_attempts {
                 let refs: Vec<&crate::graph::Product> =
@@ -1106,11 +1164,11 @@ impl Executor<'_> {
                 let mut last_error = None;
                 let max_attempts = 1 + self.retry;
                 crate::processor::set_declared_tools(Some(processor.required_tools()));
-                crate::sandbox::set_spec(crate::sandbox::spec_for(
-                    processor.scan_config(),
-                    self.build_ctx.execution_model(),
-                    &[product],
-                    &processor.required_tools(),
+                crate::sandbox::set_spec(self.sandbox_spec(
+                    &product.processor,
+                    processor.as_ref(),
+                    &[item],
+                    lctx.object_store,
                 ));
                 for attempt in 1..=max_attempts {
                     let outcome = guard_panic(

@@ -156,6 +156,21 @@ directory up whenever something inside it changes, and an empty new
 directory is left alone. An opaque directory with nothing in the real tree
 beneath it is just a new directory.
 
+Before the tool starts, nothing in the real tree is touched. A native run
+first unlinks the product's stale outputs (a restored output is a
+read-only hardlink the tool could not overwrite; see
+[Stale outputs before a rebuild](cache.md#stale-outputs-before-a-rebuild))
+and creates its output directories. A sandboxed run does both inside the
+overlay instead: the command bwrap runs is a short `sh` prelude that
+removes those files and creates those directories, then `exec`s the tool
+(`sandbox::inner_command`). The removals become whiteouts like any other,
+are always allowed, and reach the real tree only with the rest of an
+accepted run. The first applied run of a product clears the list, so a
+second command of the same product does not remove what the first wrote;
+a failed attempt is discarded and the retry removes them again. A builtin
+processor writes the tree from rsconstruct itself, so its stale outputs
+are still removed natively.
+
 Then:
 
 1. If the tool failed (non-zero exit, spawn error, timeout, interrupt),
@@ -172,6 +187,8 @@ Then:
    directories of the running product (`fresh_state_dir` declares them
    through `sandbox::declare_output_dir`); `install_staged` then checks
    their contents against the plan.
+   In both cases the real tree is exactly as it was before the run,
+   previous outputs included.
 3. Otherwise removals are applied first (so a replaced directory is
    emptied), then written files are renamed into the real tree.
 4. The run directory is removed. overlayfs leaves `work/work` with mode

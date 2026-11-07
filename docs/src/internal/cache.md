@@ -229,6 +229,10 @@ Because the cache key incorporates input content, a changed input produces a dif
 
 Cache objects are read-only and a hardlink restore shares their inode, so a restored output cannot be overwritten in place by the tool that regenerates it. Before a product is built or restored, the files of its previous tree are unlinked. That tree cannot be found through the current key (the input changed, so the key did too): the `product_last_tree` table in `db.redb` maps a product's *owner key* — processor instance, primary input and output paths, nothing that changes with content or config — to the descriptor it last built or restored. Outputs left by an rsconstruct older than that table are recognised by the restore's own signature instead: read-only files with a link count above one.
 
+A product that runs under `execution_model = "sandbox"` does not unlink them beforehand: the sandbox removes them inside its overlay as the first step of the run, so a rejected or failed run leaves them in place (see the sandbox design notes, `internal/sandbox.md`).
+
+A product predicted to change that never ran has its stale outputs removed at the end of the run when the build was interrupted. When a product failed, nothing is removed: the products that never ran are the ones the failure blocked, and they keep their outputs. The build is red, and the next build rebuilds them.
+
 ## Config-aware caching
 
 Processor configuration is hashed into cache keys. Changing a config value triggers rebuilds even if source files haven't changed.

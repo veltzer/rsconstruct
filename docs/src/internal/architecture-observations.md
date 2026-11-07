@@ -510,9 +510,10 @@ skipped with stale outputs. **Fix:** entries hold a `platform::FileStamp`
 - ~~Products predicted to build only because a dependency changes still
   have their outputs unlinked up front, so an unchanged rebuild ends as a
   restore rather than a skip.~~ **Resolved:** stale outputs are removed per
-  product right before it restores or rebuilds, and at the end of the run
-  for predicted changes that never ran; an unchanged dependency now means a
-  skip.
+  product right before it restores or rebuilds, and at the end of an
+  interrupted run for predicted changes that never ran (not after a
+  failure: the products it blocked keep their outputs); an unchanged
+  dependency now means a skip.
 
 ## Summary of architectural recommendations
 

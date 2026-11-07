@@ -109,12 +109,12 @@ fn rebuilding_to_identical_bytes_skips_the_dependents() {
     assert_eq!(second.restored, 0, "{second:?}");
 }
 
-/// When a product fails, what depends on it never runs — and must not keep
-/// its stale output either, or the tree would look built. Outputs are no
-/// longer removed before the run, so this is checked at the end of it, for
-/// both a build that stops at the failure and one that keeps going.
+/// When a product fails, what depends on it never runs, and keeps its
+/// output: a failure must not cost the products it blocked their files.
+/// The build is red, and the next build rebuilds them. Checked for both a
+/// build that stops at the failure and one that keeps going.
 #[test]
-fn a_failed_dependency_leaves_no_stale_downstream_output() {
+fn a_failed_dependency_keeps_the_downstream_output() {
     for keep_going in [false, true] {
         let temp_dir = first_line_chain();
         let project = temp_dir.path();
@@ -129,8 +129,19 @@ fn a_failed_dependency_leaves_no_stale_downstream_output() {
         let second = build_with(project, args);
         assert!(!second.exit_success, "the first step must fail");
         assert!(
-            !downstream.exists(),
-            "keep_going = {keep_going}: the stale downstream output must be removed"
+            downstream.exists(),
+            "keep_going = {keep_going}: the blocked downstream output must be kept"
+        );
+
+        // Fixed, the chain rebuilds: the kept output is not mistaken for
+        // a current one.
+        fs::write(project.join("src/a.src"), "fixed\n").unwrap();
+        let third = build_with(project, args);
+        assert!(third.exit_success, "{:?}", third.errors);
+        assert_eq!(
+            status_of(&third, "processor.generator.generic.second"),
+            Some("success"),
+            "keep_going = {keep_going}: {third:?}"
         );
     }
 }

@@ -58,6 +58,13 @@ pub struct Spec {
     /// entries of every tool the processor runs plus its own config, as
     /// written (parsed by [`Writable::parse`] in [`prepare`]).
     pub writable: Vec<String>,
+    /// The outputs the previous build left, which must go before the tool
+    /// writes (a restored output is a read-only hardlink). A native run
+    /// removes them from the tree beforehand; a sandboxed run removes them
+    /// inside its overlay, as the first step of its first command, so that
+    /// a run that fails changes nothing. Cleared once a run is applied:
+    /// later commands of the same product must not remove what it wrote.
+    pub stale: Vec<PathBuf>,
 }
 
 /// A place a sandboxed tool may write its own state.
@@ -149,6 +156,24 @@ pub fn declare_output_dir(dir: &Path) {
 fn current_spec() -> Option<Spec> {
     SPEC.with(|s| s.borrow().clone())
 }
+
+/// Forget the stale outputs of the product running on this thread: a run
+/// that removed them was applied, so they are gone from the tree.
+fn clear_stale() {
+    SPEC.with(|s| {
+        if let Some(spec) = s.borrow_mut().as_mut() {
+            spec.stale.clear();
+        }
+    });
+}
+
+/// The shell script a sandboxed command runs before the tool, with its
+/// arguments: remove each stale output, create each output directory (a
+/// tool may assume they exist), then `exec` the tool. The paths are
+/// absolute, so none of them is the `--` that ends each list.
+const PRELUDE: &str = "while [ \"$1\" != -- ]; do rm -f -- \"$1\" || exit; shift; done; shift; \
+                       while [ \"$1\" != -- ]; do mkdir -p -- \"$1\" || exit; shift; done; shift; \
+                       exec \"$@\"";
 
 /// The enabled instances among `instances` that would run sandboxed under
 /// `build_default` although their processor is not `sandboxable`, sorted.
@@ -265,6 +290,7 @@ pub fn spec_for(
         output_dirs,
         network: network_for(standard, tools),
         writable: writable_for(standard, tools),
+        stale: Vec::new(),
     })
 }
 
@@ -295,6 +321,7 @@ pub fn prepare(cmd: &Command) -> Result<Option<Run>> {
         .iter()
         .map(|p| relative_to(&root, p))
         .collect();
+    spec.stale = spec.stale.iter().map(|p| relative_to(&root, p)).collect();
     let writable = spec
         .writable
         .iter()
@@ -358,10 +385,7 @@ pub fn prepare(cmd: &Command) -> Result<Option<Run>> {
         .get_current_dir()
         .map_or_else(|| root.clone(), |d| root.join(d));
     command.arg("--chdir").arg(&cwd);
-    command
-        .arg("--")
-        .arg(cmd.get_program())
-        .args(cmd.get_args());
+    command.arg("--").args(inner_command(&root, &spec, cmd));
     for (key, value) in cmd.get_envs() {
         if let Some(value) = value {
             command.env(key, value);
@@ -375,6 +399,27 @@ pub fn prepare(cmd: &Command) -> Result<Option<Run>> {
         spec,
         writable,
     }))
+}
+
+/// What bwrap runs inside the sandbox: `cmd`, behind [`PRELUDE`] when there
+/// are stale outputs to remove or output directories to create. Both happen
+/// inside the overlay, never in the real tree: a failed run changes nothing.
+fn inner_command(root: &Path, spec: &Spec, cmd: &Command) -> Vec<std::ffi::OsString> {
+    let mut args: Vec<std::ffi::OsString> = Vec::new();
+    if !spec.stale.is_empty() || !spec.output_dirs.is_empty() {
+        args.extend(["sh", "-c", PRELUDE, "sh"].map(Into::into));
+        args.extend(spec.stale.iter().map(|p| root.join(p).into_os_string()));
+        args.push("--".into());
+        args.extend(
+            spec.output_dirs
+                .iter()
+                .map(|d| root.join(d).into_os_string()),
+        );
+        args.push("--".into());
+    }
+    args.push(cmd.get_program().to_os_string());
+    args.extend(cmd.get_args().map(std::ffi::OsStr::to_os_string));
+    args
 }
 
 /// A path relative to the project root, as declared outputs are compared.
@@ -416,13 +461,19 @@ impl Run {
     /// run's directory.
     pub fn finish(self, tool_succeeded: bool) -> Result<()> {
         let applied = if tool_succeeded { self.apply() } else { Ok(()) };
+        if tool_succeeded && applied.is_ok() {
+            clear_stale();
+        }
         let cleaned = remove_run_dir(&self.dir);
         applied?;
         cleaned
     }
 
+    /// Whether the product may change `path`. The stale outputs are
+    /// included: removing them was rsconstruct's own first step.
     fn declares(&self, path: &Path) -> bool {
-        self.spec.outputs.iter().any(|o| o == path)
+        self.spec.stale.iter().any(|s| s == path)
+            || self.spec.outputs.iter().any(|o| o == path)
             || self.spec.output_dirs.iter().any(|d| path.starts_with(d))
             || self.writable.iter().any(|w| w.covers(path))
     }
@@ -673,6 +724,7 @@ mod tests {
                 output_dirs: dirs.iter().map(PathBuf::from).collect(),
                 network: false,
                 writable: Vec::new(),
+                stale: Vec::new(),
             },
             writable: Vec::new(),
         }
@@ -794,6 +846,104 @@ mod tests {
             spec.output_dirs,
             [PathBuf::from(".rsconstruct/mass_generator/x.staging")]
         );
+    }
+
+    /// The tool runs behind the prelude only when there is something for it
+    /// to do, with the stale outputs and output directories made absolute.
+    #[test]
+    fn the_prelude_runs_only_when_needed() {
+        let mut cmd = Command::new("tool");
+        cmd.args(["-x", "--", "in"]);
+        let root = Path::new("/p");
+        let mut spec = run_with(&[], &[]).spec;
+        assert_eq!(inner_command(root, &spec, &cmd), ["tool", "-x", "--", "in"]);
+
+        spec.stale = vec![PathBuf::from("out/a"), PathBuf::from("out/b")];
+        spec.output_dirs = vec![PathBuf::from("out")];
+        assert_eq!(
+            inner_command(root, &spec, &cmd),
+            [
+                "sh", "-c", PRELUDE, "sh", "/p/out/a", "/p/out/b", "--", "/p/out", "--", "tool",
+                "-x", "--", "in"
+            ]
+        );
+    }
+
+    /// The prelude removes the stale outputs (read-only ones too: a restored
+    /// output is a read-only hardlink), creates the output directories, and
+    /// runs the tool with its arguments untouched.
+    #[test]
+    fn the_prelude_clears_stale_outputs_then_runs_the_tool() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        fs::create_dir(root.join("out")).unwrap();
+        fs::write(root.join("out/old"), "old").unwrap();
+        fs::write(root.join("out/restored"), "restored").unwrap();
+        crate::platform::set_permissions_mode(&root.join("out/restored"), 0o444).unwrap();
+        let mut spec = run_with(&[], &["out", "made/here"]).spec;
+        spec.stale = vec![
+            PathBuf::from("out/old"),
+            PathBuf::from("out/restored"),
+            PathBuf::from("out/gone"),
+        ];
+        let mut tool = Command::new("sh");
+        tool.args([
+            "-c",
+            "printf '%s|' \"$@\" > out/ran",
+            "sh",
+            "a b",
+            "--",
+            "c",
+        ]);
+        let args = inner_command(root, &spec, &tool);
+        let status = Command::new(&args[0])
+            .args(&args[1..])
+            .current_dir(root)
+            .status()
+            .unwrap();
+        assert!(status.success());
+        assert!(!root.join("out/old").exists());
+        assert!(!root.join("out/restored").exists());
+        assert!(root.join("made/here").is_dir());
+        assert_eq!(
+            fs::read_to_string(root.join("out/ran")).unwrap(),
+            "a b|--|c|"
+        );
+    }
+
+    /// Removing a stale output is rsconstruct's own first step, so it is
+    /// never reported as undeclared.
+    #[test]
+    fn stale_outputs_may_be_removed() {
+        let mut run = run_with(&[], &[]);
+        assert!(!run.declares(Path::new("old/out.html")));
+        run.spec.stale = vec![PathBuf::from("old/out.html")];
+        assert!(run.declares(Path::new("old/out.html")));
+    }
+
+    /// The stale outputs are removed by the first run that is applied, and
+    /// by no run after it, which would remove what that run wrote. A run
+    /// that fails is discarded, so the next attempt must remove them again.
+    #[test]
+    fn stale_outputs_are_forgotten_once_a_run_is_applied() {
+        let settle = |succeeded: bool| {
+            let tmp = tempfile::tempdir().unwrap();
+            let mut run = run_with(&[], &[]);
+            run.root = tmp.path().to_path_buf();
+            run.dir = tmp.path().join("run");
+            run.upper = run.dir.join("upper");
+            fs::create_dir_all(&run.upper).unwrap();
+            let mut spec = run.spec.clone();
+            spec.stale = vec![PathBuf::from("out/old")];
+            set_spec(Some(spec));
+            run.finish(succeeded).unwrap();
+            let left = current_spec().unwrap().stale;
+            set_spec(None);
+            left
+        };
+        assert_eq!(settle(false), [PathBuf::from("out/old")]);
+        let none: Vec<PathBuf> = Vec::new();
+        assert_eq!(settle(true), none);
     }
 
     /// A removed or replaced directory is judged by the real files it held:
