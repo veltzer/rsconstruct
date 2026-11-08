@@ -254,8 +254,55 @@ Hardlinks work because blob objects contain raw file content (not wrapped in a d
 | `rsconstruct cache size` | Show cache size and object count |
 | `rsconstruct cache list` | List all cache entries as JSON |
 | `rsconstruct cache stats` | Show per-processor cache statistics |
+| `rsconstruct cache stale` | Show which cache entries are stale vs current |
+| `rsconstruct cache remove-stale` | Remove stale entries, then the blobs only they referenced |
 | `rsconstruct cache trim` | Remove unreferenced objects |
 | `rsconstruct cache clear` | Delete the entire cache |
+
+## Cache growth
+
+The cache only ever grows during a build. Nothing deletes old entries
+automatically: there is no size cap, no expiry and no garbage collection
+during `build`.
+
+A product's cache key includes its input content, so each input change gives
+a new descriptor key and a new set of blobs. The entry for the earlier inputs
+stays in place: it is *stale* (no current product computes its key), but its
+descriptor still references its blobs. For products whose outputs are small
+this does not matter. For products with large outputs that change on almost
+every edit, it adds up fast.
+
+**Observed 2026-11-08.** `.rsconstruct/` in this repo had reached 11 GB.
+Almost all of it was 46 blobs of about 237 MB each. Every one was a debug
+build of the `rsconstruct` binary produced by
+`processor.mass_generator.cargo` (profile `dev`): each code change makes a
+new binary, the old one stays referenced by its stale descriptor, and so
+45 out-of-date binaries had piled up. Across the fleet the same cleanup
+freed about 15 GB (book-openbook alone went from 8.4 GB to about 0.3 GB).
+
+**Cleaning up.** Run, in the project:
+
+```bash
+rsconstruct cache remove-stale   # drop stale descriptors and the blobs only they referenced
+rsconstruct cache trim           # drop any other unreferenced blobs
+```
+
+`cache trim` on its own frees nothing here: it removes only blobs that no
+descriptor references, and a stale descriptor still references its blobs.
+`remove-stale` is the step that releases them. Current entries are kept, so
+the next build still restores instead of rebuilding. Use `cache clear` only
+for a full reset; the next build starts cold.
+
+**Measuring.** `du -sh .rsconstruct` per repo is accurate for `objects/`, but
+`tools/` trees are hardlinked between repos, so adding up per-repo `du`
+results overcounts them many times. To measure real disk use across several
+repos, run a single `du -cs` over all of them.
+
+**Open issue.** Cleanup is manual, so a cache with large, often-changing
+outputs grows by one output-size per change until someone runs
+`remove-stale`. Possible lasting fixes: have `build` drop stale entries for
+the products it just rebuilt, or add a cache size limit to `BuildConfig`.
+Neither exists yet.
 
 ## Clean vs Clear
 
