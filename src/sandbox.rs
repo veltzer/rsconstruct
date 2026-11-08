@@ -294,6 +294,297 @@ pub fn spec_for(
     })
 }
 
+// ─── Builtin processors ──────────────────────────────────────────────────────
+//
+// A builtin processor does its work in rsconstruct's own code, not in a
+// tool, so there is no command to wrap. When one runs sandboxed, the build
+// runs rsconstruct itself under bwrap instead: the hidden `sandbox-run`
+// subcommand recreates the processor from the same config, executes the
+// products it is handed, and reports each one's result. Being an ordinary
+// command, it goes through the same sandbox as any tool: its writes land in
+// the overlay and are checked against the products' declared outputs.
+
+/// One builtin processor instance, as `sandbox-run` recreates it.
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct BuiltinInstance {
+    pub instance: String,
+    pub pname: String,
+    /// The instance's config table, overrides (`--iset`, `--pset`, CLI
+    /// flags) already applied.
+    pub config: toml::Value,
+}
+
+/// What `sandbox-run` needs besides its products: the same for every
+/// product of a build. Built from the build's config by the builder and
+/// handed to the executor.
+#[derive(Clone, Debug, Default, serde::Serialize, serde::Deserialize)]
+pub struct BuiltinSetup {
+    /// Every builtin processor instance of the build.
+    pub instances: Vec<BuiltinInstance>,
+    /// How the build walks the tree (`Config::file_index_walk_dirs`), so the
+    /// child's discovery sees the same files.
+    pub force_dirs: Vec<String>,
+    pub exclude_roots: Vec<String>,
+    pub warn_symlinks: bool,
+    /// `[build] python`.
+    pub python: String,
+    /// The settings the build puts on its `BuildContext`.
+    pub max_arg_len: usize,
+    pub command_timeout_secs: u64,
+}
+
+impl BuiltinSetup {
+    pub fn from_config(config: &crate::config::Config) -> Self {
+        let (exclude_roots, force_dirs) = config.file_index_walk_dirs();
+        Self {
+            instances: config
+                .processor
+                .instances
+                .iter()
+                .filter(|inst| crate::registries::processor::is_builtin(&inst.pname))
+                .map(|inst| BuiltinInstance {
+                    instance: inst.instance_name.clone(),
+                    pname: inst.pname.clone(),
+                    config: inst.config_toml.clone(),
+                })
+                .collect(),
+            force_dirs,
+            exclude_roots,
+            warn_symlinks: config.build.warn_symlinks,
+            python: config.build.python.clone(),
+            max_arg_len: config.build.max_arg_len,
+            command_timeout_secs: config.build.command_timeout_secs,
+        }
+    }
+}
+
+/// One product as `sandbox-run` receives it.
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+struct JobProduct {
+    id: usize,
+    inputs: Vec<PathBuf>,
+    outputs: Vec<PathBuf>,
+    output_dirs: Vec<PathBuf>,
+    variant: Option<String>,
+}
+
+/// What the build sends `sandbox-run` on its standard input.
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+struct BuiltinJob {
+    setup: BuiltinSetup,
+    instance: BuiltinInstance,
+    products: Vec<JobProduct>,
+    /// Run the products through `execute_batch` (one invocation, as the
+    /// executor would natively), not `execute`.
+    batch: bool,
+}
+
+/// The line `sandbox-run` prints before its results, so they can be told
+/// from whatever the processor printed to standard output before them.
+const RESULTS_MARKER: &str = "\u{1e}rsconstruct-sandbox-results\u{1e}";
+
+/// Execute `products` of the builtin processor instance `instance` in a
+/// sandbox, as `execute` (one product, `batch` false) or `execute_batch`
+/// would natively; one result per product, in order. The executor has set
+/// the sandbox spec for these products, so the command below runs wrapped.
+pub fn execute_builtin(
+    ctx: &crate::build_context::BuildContext,
+    setup: &BuiltinSetup,
+    instance: &str,
+    products: &[&crate::graph::Product],
+    batch: bool,
+) -> Vec<Result<()>> {
+    let all = |e: &anyhow::Error| {
+        products
+            .iter()
+            .map(|_| Err(anyhow::anyhow!("{e:#}")))
+            .collect()
+    };
+    match run_builtin_job(ctx, setup, instance, products, batch) {
+        Ok(results) => results
+            .into_iter()
+            .map(|r| r.map_or(Ok(()), |e| Err(anyhow::anyhow!(e))))
+            .collect(),
+        Err(e) => all(&e),
+    }
+}
+
+/// The parent's side of `execute_builtin`: send the job, relay what the
+/// child printed, read its results (`None` for a product that succeeded,
+/// its error otherwise).
+fn run_builtin_job(
+    ctx: &crate::build_context::BuildContext,
+    setup: &BuiltinSetup,
+    instance: &str,
+    products: &[&crate::graph::Product],
+    batch: bool,
+) -> Result<Vec<Option<String>>> {
+    let instance = setup
+        .instances
+        .iter()
+        .find(|i| i.instance == instance)
+        .cloned()
+        .with_context(|| format!("internal error: no config for builtin processor '{instance}'"))?;
+    let label = instance.instance.clone();
+    let job = BuiltinJob {
+        setup: BuiltinSetup {
+            instances: Vec::new(),
+            ..setup.clone()
+        },
+        instance,
+        products: products
+            .iter()
+            .map(|p| JobProduct {
+                id: p.id,
+                inputs: p.inputs.clone(),
+                outputs: p.outputs.clone(),
+                output_dirs: p.output_dirs.iter().map(|d| d.as_ref().clone()).collect(),
+                variant: p.variant.clone(),
+            })
+            .collect(),
+        batch,
+    };
+    let payload = serde_json::to_vec(&job).context("Failed to encode the sandboxed job")?;
+
+    let exe = std::env::current_exe().context("Failed to locate the rsconstruct executable")?;
+    let mut cmd = Command::new(&exe);
+    cmd.arg("--color")
+        .arg(if crate::runtime_flags::color_enabled() {
+            "always"
+        } else {
+            "never"
+        });
+    for (on, flag) in [
+        (crate::runtime_flags::json_mode(), "--json"),
+        (crate::runtime_flags::quiet(), "--quiet"),
+        (crate::runtime_flags::show_output(), "--show-output"),
+        (
+            crate::runtime_flags::show_child_processes(),
+            "--show-child-processes",
+        ),
+    ] {
+        if on {
+            cmd.arg(flag);
+        }
+    }
+    cmd.arg("sandbox-run");
+    let output = crate::processor::run_command_with_stdin(ctx, &cmd, &payload)?;
+
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let (printed, results) = match stdout.rfind(RESULTS_MARKER) {
+        Some(at) => (&stdout[..at], Some(&stdout[at + RESULTS_MARKER.len()..])),
+        None => (&*stdout, None),
+    };
+    relay(printed, &String::from_utf8_lossy(&output.stderr));
+    if !output.status.success() {
+        anyhow::bail!(
+            "[{label}] the sandboxed run of rsconstruct failed ({})",
+            output.status
+        );
+    }
+    let results = results.with_context(|| {
+        format!("[{label}] the sandboxed run of rsconstruct reported no results")
+    })?;
+    let results: Vec<Option<String>> = serde_json::from_str(results.trim())
+        .with_context(|| format!("[{label}] Failed to read the sandboxed run's results"))?;
+    anyhow::ensure!(
+        results.len() == products.len(),
+        "[{label}] the sandboxed run reported {} results for {} products",
+        results.len(),
+        products.len()
+    );
+    Ok(results)
+}
+
+/// Pass on what the child printed, as the processor would have printed it
+/// running in the build's own process.
+fn relay(stdout: &str, stderr: &str) {
+    use std::io::Write;
+    if !stdout.is_empty() {
+        let mut out = std::io::stdout().lock();
+        let _ = out.write_all(stdout.as_bytes());
+        let _ = out.flush();
+    }
+    if !stderr.is_empty() {
+        let _ = std::io::stderr().lock().write_all(stderr.as_bytes());
+    }
+}
+
+/// `rsconstruct sandbox-run`: the child's side of [`execute_builtin`]. Reads
+/// the job from standard input, recreates the processor and runs its
+/// discovery (a processor may keep state from it for execute: tera keeps
+/// the templates `{% include %}` can name), executes the products, and
+/// prints [`RESULTS_MARKER`] and their results. An error here (bad job,
+/// config the processor rejects) fails every product of the job.
+pub fn sandbox_run(ctx: &crate::build_context::BuildContext) -> Result<()> {
+    let input = std::io::read_to_string(std::io::stdin())
+        .context("Failed to read the sandboxed job from standard input")?;
+    let job: BuiltinJob =
+        serde_json::from_str(&input).context("Failed to decode the sandboxed job")?;
+    let setup = &job.setup;
+
+    // Inside the sandbox the build's own caches are out of reach (the
+    // parent holds them), and nothing here is sandboxed again: commands the
+    // processor runs execute directly, inside this sandbox. The webcache
+    // (`.rsconstruct/webcache.redb`, iyamlschema's schemas) is not used:
+    // storing into it would be a write the products do not declare, and
+    // children running side by side cannot share its lock. A TTL of 0 makes
+    // `webcache::fetch` download without reading or storing.
+    ctx.set_mtime_check(false);
+    ctx.set_max_arg_len(setup.max_arg_len);
+    ctx.set_command_timeout_secs(setup.command_timeout_secs);
+    ctx.set_webcache_ttl_secs(0);
+    crate::python_env::set_interpreter(&setup.python);
+
+    let processor =
+        crate::builder::create_processor_for_instance(&job.instance.pname, &job.instance.config)?
+            .with_context(|| format!("Unknown processor type: '{}'", job.instance.pname))?;
+    let force_refs: Vec<&str> = setup.force_dirs.iter().map(String::as_str).collect();
+    let file_index = crate::file_index::FileIndex::build_with_force_dirs(
+        &force_refs,
+        &setup.exclude_roots,
+        setup.warn_symlinks,
+    )?;
+    processor.discover(
+        &mut crate::graph::BuildGraph::new(),
+        &file_index,
+        &job.instance.instance,
+    )?;
+
+    let products: Vec<crate::graph::Product> = job
+        .products
+        .into_iter()
+        .map(|p| {
+            let mut product =
+                crate::graph::Product::new(p.inputs, p.outputs, &job.instance.instance, p.id, None);
+            product.output_dirs = p.output_dirs.into_iter().map(std::sync::Arc::new).collect();
+            product.variant = p.variant;
+            product
+        })
+        .collect();
+    let refs: Vec<&crate::graph::Product> = products.iter().collect();
+
+    crate::processor::set_declared_tools(Some(processor.required_tools()));
+    let results: Vec<Result<()>> = if job.batch {
+        processor.execute_batch(ctx, &refs)
+    } else {
+        refs.iter().map(|p| processor.execute(ctx, p)).collect()
+    };
+    crate::processor::set_declared_tools(None);
+
+    let results: Vec<Option<String>> = results
+        .into_iter()
+        .map(|r| r.err().map(|e| format!("{e:#}")))
+        .collect();
+    let encoded = serde_json::to_string(&results).context("Failed to encode the results")?;
+    use std::io::Write;
+    let mut out = std::io::stdout().lock();
+    writeln!(out, "{RESULTS_MARKER}{encoded}")
+        .and_then(|()| out.flush())
+        .context("Failed to write the sandboxed run's results")?;
+    Ok(())
+}
+
 /// A command wrapped for one sandboxed run, plus what is needed to settle
 /// the run afterwards.
 pub struct Run {

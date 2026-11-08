@@ -100,6 +100,117 @@ fn build_removes_leftover_sandbox_runs() {
     );
 }
 
+/// Run the hidden `sandbox-run` subcommand with `job` on its standard input,
+/// as a sandboxed build runs it under bwrap (here without bwrap: the child's
+/// half of the exchange does not depend on it). Returns its stdout split at
+/// the results marker: what the processor printed, and the results.
+fn sandbox_run(dir: &Path, job: &serde_json::Value) -> (String, serde_json::Value) {
+    use std::io::Write;
+    let mut child = crate::common::rsconstruct_command(dir)
+        .args(["--color", "never", "sandbox-run"])
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .unwrap();
+    child
+        .stdin
+        .take()
+        .unwrap()
+        .write_all(job.to_string().as_bytes())
+        .unwrap();
+    let output = child.wait_with_output().unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8(output.stdout).unwrap();
+    let marker = "\u{1e}rsconstruct-sandbox-results\u{1e}";
+    let at = stdout.rfind(marker).expect("results marker");
+    let results = serde_json::from_str(stdout[at + marker.len()..].trim()).unwrap();
+    (stdout[..at].to_string(), results)
+}
+
+fn sandbox_job(
+    pname: &str,
+    config: &serde_json::Value,
+    products: &[(&str, &str)],
+    batch: bool,
+) -> serde_json::Value {
+    serde_json::json!({
+        "setup": {
+            "instances": [],
+            "force_dirs": [],
+            "exclude_roots": [],
+            "warn_symlinks": false,
+            "python": "python",
+            "max_arg_len": 100_000,
+            "command_timeout_secs": 0,
+        },
+        "instance": { "instance": pname, "pname": pname, "config": config },
+        "products": products.iter().enumerate().map(|(id, (input, output))| serde_json::json!({
+            "id": id,
+            "inputs": [input],
+            "outputs": if output.is_empty() { vec![] } else { vec![*output] },
+            "output_dirs": [],
+            "variant": null,
+        })).collect::<Vec<_>>(),
+        "batch": batch,
+    })
+}
+
+/// A sandboxed builtin generator runs in the child: tera renders a template
+/// whose `{% include %}` names another template, which works only because
+/// the child repeats the processor's discovery (where tera collects the
+/// includable templates) before executing.
+#[test]
+fn sandbox_run_executes_a_builtin_generator() {
+    let temp_dir = setup_test_project();
+    let project_path = temp_dir.path();
+    fs::write(project_path.join("tera.templates/part.tera"), "from part\n").unwrap();
+    fs::write(
+        project_path.join("tera.templates/page.txt.tera"),
+        "{% include \"tera.templates/part.tera\" %}and the page\n",
+    )
+    .unwrap();
+    let job = sandbox_job(
+        "processor.generator.tera",
+        &serde_json::json!({ "src_dirs": ["tera.templates"] }),
+        &[("tera.templates/page.txt.tera", "page.txt")],
+        false,
+    );
+    let (_, results) = sandbox_run(project_path, &job);
+    assert_eq!(results, serde_json::json!([null]));
+    assert_eq!(
+        fs::read_to_string(project_path.join("page.txt")).unwrap(),
+        "from part\nand the page\n"
+    );
+}
+
+/// A batched builtin checker reports one result per product, in order: the
+/// failing file's error, nothing for the passing one.
+#[test]
+fn sandbox_run_reports_each_products_result() {
+    let temp_dir = setup_test_project();
+    let project_path = temp_dir.path();
+    fs::create_dir_all(project_path.join("yaml")).unwrap();
+    fs::write(project_path.join("yaml/good.yaml"), "---\na: 1\n").unwrap();
+    fs::write(project_path.join("yaml/bad.yaml"), "---\na: 1\na: 2\n").unwrap();
+    let job = sandbox_job(
+        "processor.checker.iyamllint",
+        &serde_json::json!({ "src_dirs": ["yaml"] }),
+        &[("yaml/good.yaml", ""), ("yaml/bad.yaml", "")],
+        true,
+    );
+    let (_, results) = sandbox_run(project_path, &job);
+    let results = results.as_array().unwrap();
+    assert_eq!(results.len(), 2);
+    assert!(results[0].is_null(), "{results:?}");
+    let error = results[1].as_str().unwrap();
+    assert!(error.contains("duplication of key \"a\""), "{error}");
+}
+
 #[test]
 fn no_color_env() {
     let temp_dir = setup_test_project();

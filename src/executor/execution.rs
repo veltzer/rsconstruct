@@ -758,15 +758,77 @@ impl Executor<'_> {
 
     /// Whether the stale outputs of `proc_name`'s products are removed by the
     /// sandbox, inside its overlay, instead of by the executor before the
-    /// run: the processor runs sandboxed and its work is done by an external
-    /// tool. A builtin writes the real tree from rsconstruct itself, and a
-    /// processor that replaces its own outputs has nothing removed at all.
+    /// run: the processor runs sandboxed. A processor that replaces its own
+    /// outputs has nothing removed at all.
     fn sandbox_removes_stale(&self, proc_name: &str) -> bool {
         self.processors.get(proc_name).is_some_and(|p| {
             !p.replaces_own_outputs()
-                && !crate::registries::processor::is_builtin(proc_name)
                 && crate::sandbox::is_sandboxed(p.scan_config(), self.build_ctx.execution_model())
         })
+    }
+
+    /// Whether `proc_name` runs in a sandboxed child rsconstruct
+    /// (`sandbox::execute_builtin`): a builtin processor, whose work is
+    /// rsconstruct's own code, under the sandbox execution model. Natively,
+    /// and for every processor that runs a tool, the processor executes in
+    /// this process (its tool, if sandboxed, is wrapped on its own).
+    fn runs_in_child(&self, proc_name: &str, processor: &dyn crate::processor::Processor) -> bool {
+        crate::registries::processor::is_builtin(proc_name)
+            && crate::sandbox::is_sandboxed(
+                processor.scan_config(),
+                self.build_ctx.execution_model(),
+            )
+    }
+
+    /// The tools `proc_name` may run, for the debug check on every command.
+    /// None when it runs in a child: the command here is rsconstruct itself,
+    /// and the child checks the processor's own commands.
+    fn declared_tools(
+        &self,
+        proc_name: &str,
+        processor: &dyn crate::processor::Processor,
+    ) -> Option<Vec<String>> {
+        (!self.runs_in_child(proc_name, processor)).then(|| processor.required_tools())
+    }
+
+    /// Execute one product: in this process, or in a sandboxed child for a
+    /// sandboxed builtin (see [`Self::runs_in_child`]).
+    fn execute_product(
+        &self,
+        proc_name: &str,
+        processor: &dyn crate::processor::Processor,
+        product: &Product,
+    ) -> anyhow::Result<()> {
+        if self.runs_in_child(proc_name, processor) {
+            let mut results = crate::sandbox::execute_builtin(
+                self.build_ctx,
+                &self.builtin_setup,
+                proc_name,
+                &[product],
+                false,
+            );
+            return results.remove(0);
+        }
+        processor.execute(self.build_ctx, product)
+    }
+
+    /// Execute a batch, like [`Self::execute_product`].
+    fn execute_products(
+        &self,
+        proc_name: &str,
+        processor: &dyn crate::processor::Processor,
+        products: &[&Product],
+    ) -> Vec<anyhow::Result<()>> {
+        if self.runs_in_child(proc_name, processor) {
+            return crate::sandbox::execute_builtin(
+                self.build_ctx,
+                &self.builtin_setup,
+                proc_name,
+                products,
+                true,
+            );
+        }
+        processor.execute_batch(self.build_ctx, products)
     }
 
     /// The sandbox spec for running `items` of `proc_name` (one product, or a
@@ -970,7 +1032,9 @@ impl Executor<'_> {
             let mut final_results: Vec<Option<anyhow::Result<()>>> =
                 (0..chunk.len()).map(|_| None).collect();
             let mut pending: Vec<usize> = (0..chunk.len()).collect();
-            crate::processor::set_declared_tools(Some(processor.required_tools()));
+            crate::processor::set_declared_tools(
+                self.declared_tools(proc_name, processor.as_ref()),
+            );
             // A batched invocation may write the outputs of any product in
             // the chunk; retries re-run a subset, which the union covers.
             crate::sandbox::set_spec(self.sandbox_spec(
@@ -984,7 +1048,7 @@ impl Executor<'_> {
                     pending.iter().map(|&i| product_refs[i]).collect();
                 let results = match guard_panic(
                     || format!("[{proc_name}] batch of {} products", refs.len()),
-                    || processor.execute_batch(self.build_ctx, &refs),
+                    || self.execute_products(proc_name, processor.as_ref(), &refs),
                 ) {
                     Ok(results) => results,
                     Err(e) => refs.iter().map(|_| Err(anyhow::anyhow!("{e:#}"))).collect(),
@@ -1163,7 +1227,9 @@ impl Executor<'_> {
                 let product_start = Instant::now();
                 let mut last_error = None;
                 let max_attempts = 1 + self.retry;
-                crate::processor::set_declared_tools(Some(processor.required_tools()));
+                crate::processor::set_declared_tools(
+                    self.declared_tools(&product.processor, processor.as_ref()),
+                );
                 crate::sandbox::set_spec(self.sandbox_spec(
                     &product.processor,
                     processor.as_ref(),
@@ -1173,7 +1239,7 @@ impl Executor<'_> {
                 for attempt in 1..=max_attempts {
                     let outcome = guard_panic(
                         || format!("[{}] {}", product.processor, self.product_display(product)),
-                        || processor.execute(self.build_ctx, product),
+                        || self.execute_product(&product.processor, processor.as_ref(), product),
                     )
                     .and_then(|r| r);
                     match outcome {

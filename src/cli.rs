@@ -243,6 +243,11 @@ pub enum Commands {
         #[command(subcommand)]
         action: ProductAction,
     },
+    /// Internal: run a builtin processor's products inside a sandbox. The
+    /// build invokes it under bwrap with the job on standard input (see
+    /// `sandbox::execute_builtin`); not for direct use.
+    #[command(hide = true)]
+    SandboxRun,
     /// Count source lines of code (SLOC) by language (no config needed)
     Sloc {
         /// Show COCOMO effort/cost estimation

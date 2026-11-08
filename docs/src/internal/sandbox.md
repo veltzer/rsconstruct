@@ -167,9 +167,9 @@ removes those files and creates those directories, then `exec`s the tool
 are always allowed, and reach the real tree only with the rest of an
 accepted run. The first applied run of a product clears the list, so a
 second command of the same product does not remove what the first wrote;
-a failed attempt is discarded and the retry removes them again. A builtin
-processor writes the tree from rsconstruct itself, so its stale outputs
-are still removed natively.
+a failed attempt is discarded and the retry removes them again. A
+sandboxed builtin processor (below) gets the same prelude in front of its
+child.
 
 Then:
 
@@ -260,17 +260,56 @@ added later as a second backend, chosen at run time (no `#[cfg]`).
   tables, so it judges every configured instance, including one that
   matches no file in this repo.
 
+### Builtin processors
+
+A builtin processor (`tera`, `iyamllint`, `ishellcheck`, ...) does its work
+in rsconstruct's own code, so there is no tool to wrap. Natively it runs in
+the build's process, as always. When it resolves to the sandbox (the
+build-wide or its own `execution_model = "sandbox"`, and only then), the
+executor runs rsconstruct itself instead, through the same sandbox as any
+tool (`sandbox::execute_builtin`):
+
+1. The command is the running executable with the hidden subcommand
+   `sandbox-run` and the build's output flags (`--color`, `--json`,
+   `--quiet`, `--show-output`, `--show-child-processes`). Its standard
+   input is a JSON job: the instance's resolved config (overrides
+   included), the products (inputs, outputs, output directories,
+   variant), whether to run them as one batch, and what the build sets
+   up around a processor (how it walks the tree, `[build] python`,
+   `max_arg_len`, `command_timeout_secs`).
+2. The child recreates the processor from that config and runs its
+   discovery on a scratch graph, because a processor may keep state from
+   discovery for execute (tera keeps the templates `{% include %}` can
+   name). It then executes the products, with `execute` or, for a batch,
+   `execute_batch`, exactly as the executor would natively.
+3. It prints whatever the processor printed, then a marker line and one
+   result per product (`null`, or the error). The parent passes the
+   printed text on and maps the results back to the products. A child
+   that fails outright (a config the processor rejects) fails every
+   product of the job.
+4. Being an ordinary sandboxed command, its writes land in the overlay and
+   are judged like a tool's: declared outputs are applied, anything else
+   fails the products and is discarded. Commands the processor runs (tera
+   runs `python`, `sh`, `git`) execute directly inside that sandbox.
+
+The child cannot use the build's caches, which the parent holds open: the
+mtime cache is off, and the webcache (`.rsconstruct/webcache.redb`) is not
+read or written, because a write to it would be undeclared and children
+running side by side cannot share its lock, so `iyamlschema` downloads its
+schemas on every sandboxed run. A builtin with no tool that still needs the
+network says so through its config default: `iyamlschema` defaults to
+`sandbox_network = true` (`ProcessorDefaults::sandbox_network`).
+
 ### Not covered
 
-- **Builtin processors** (`iyamllint`, `ishellcheck`, ...) run inside
-  rsconstruct's own process; there is no child to wrap.
 - **Undeclared reads.** Everything is readable by design; see
   [Undeclared Reads](undeclared-reads.md).
 - **Writes outside the project** (`$HOME`, `/tmp`) are allowed and not
   checked; see above.
-- **What processor code does in-process** between tool runs (renaming a
-  generated file, writing a manifest) is rsconstruct code and runs
-  natively.
+- **What a tool-running processor's own code does in-process** between
+  tool runs (renaming a generated file, writing a manifest) is rsconstruct
+  code and runs natively. Only builtin processors, whose whole work is
+  rsconstruct code, run in a sandboxed child.
 
 ## Measured on rsconstruct itself
 

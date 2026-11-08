@@ -554,6 +554,7 @@ impl Builder {
                 // Enable timings collection if trace output is requested
                 timings: opts.timings || opts.trace.is_some(),
                 worker_stack_bytes: self.config.build.worker_stack_mib * 1024 * 1024,
+                builtin_setup: crate::sandbox::BuiltinSetup::from_config(&self.config),
             },
         );
 

@@ -96,6 +96,9 @@ pub struct ExecutorOptions {
     pub timings: bool,
     /// Stack size of each worker thread, in bytes (`[build] worker_stack_mib`).
     pub worker_stack_bytes: usize,
+    /// What a sandboxed builtin processor's child run needs (see
+    /// `sandbox::execute_builtin`).
+    pub builtin_setup: crate::sandbox::BuiltinSetup,
 }
 
 /// Shared mutable state passed to product processing helpers.
@@ -239,6 +242,7 @@ pub struct Executor<'a> {
     keep_going: bool,
     timings: bool,
     worker_stack_bytes: usize,
+    builtin_setup: crate::sandbox::BuiltinSetup,
 }
 
 impl<'a> Executor<'a> {
@@ -266,6 +270,7 @@ impl<'a> Executor<'a> {
             keep_going: opts.keep_going,
             timings: opts.timings,
             worker_stack_bytes: opts.worker_stack_bytes,
+            builtin_setup: opts.builtin_setup,
         }
     }
 

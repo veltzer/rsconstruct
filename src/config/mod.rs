@@ -400,6 +400,10 @@ pub struct ProcessorDefaults {
     /// rather than `command`, which must then be empty: for processors that
     /// run `python -m <module>` or a Python program on the interpreter.
     pub python_command: bool,
+    /// Default `sandbox_network`: true for a builtin processor that reaches
+    /// the network from rsconstruct's own code (iyamlschema fetches JSON
+    /// schemas), which has no tool to declare it (`ToolInfo::needs_network`).
+    pub sandbox_network: bool,
 }
 
 impl ProcessorDefaults {
@@ -415,6 +419,7 @@ impl ProcessorDefaults {
         output_depends_on_input_name: false,
         hash_python_env: false,
         python_command: false,
+        sandbox_network: false,
     };
 }
 

@@ -276,7 +276,9 @@ inventory::submit! {
         ],
         omit_standard_fields: &["command", "formats", "args", "output_dir", "required_tools"],
         scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &[".yml", ".yaml"], src_exclude_dirs: &[] }),
-        defaults: None,
+        // It fetches the schemas each file names, from rsconstruct's own
+        // code, so a sandboxed run needs the network with no tool to say so.
+        defaults: Some(crate::config::ProcessorDefaults { sandbox_network: true, ..crate::config::ProcessorDefaults::EMPTY }),
         defconfig_json: crate::registries::default_config_json::<IyamlschemaConfig>,
         keywords: &["yaml", "yml", "schema", "validator"],
         description: "Validate YAML files against JSON schemas (in-process)",

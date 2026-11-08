@@ -483,6 +483,9 @@ fn run() -> (Result<()>, bool) {
                     }
                 }
             }
+            Commands::SandboxRun => {
+                crate::sandbox::sandbox_run(&ctx)?;
+            }
             Commands::Sloc { cocomo, salary } => {
                 // Generated files are not project code: exclude configured
                 // output roots from the count. Config::load falls back to
