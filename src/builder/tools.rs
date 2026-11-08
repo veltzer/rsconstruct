@@ -967,6 +967,17 @@ fn install_machine(
                 tools.extend(processors[pname].required_tools());
             }
         }
+        // A sandboxed build runs its processors through bwrap, and its
+        // preflight fails without it; install it with the rest.
+        if !crate::sandbox::sandboxed_processors(
+            processors,
+            is_enabled,
+            builder.config.build.execution_model,
+        )
+        .is_empty()
+        {
+            tools.insert(crate::sandbox::SANDBOX_TOOL.to_string());
+        }
         for tool in &tools {
             if !is_installable_tool_name(tool) {
                 continue;

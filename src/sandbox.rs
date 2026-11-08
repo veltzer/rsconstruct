@@ -252,6 +252,25 @@ pub fn is_sandboxed(standard: &StandardConfig, build_default: ExecutionModel) ->
     standard.execution_model.unwrap_or(build_default) == ExecutionModel::Sandbox
 }
 
+/// The enabled processors (by `is_enabled`) that run under the sandbox, so
+/// need [`SANDBOX_TOOL`], sorted. Builtin processors count too: a sandboxed
+/// builtin runs in a child rsconstruct inside bwrap (`execute_builtin`).
+/// Shared by the build's preflight and `tool install machine`, so the tool
+/// the build demands is the tool the install provides.
+pub fn sandboxed_processors(
+    processors: &crate::processor::ProcessorMap,
+    is_enabled: &dyn Fn(&str) -> bool,
+    build_default: ExecutionModel,
+) -> Vec<String> {
+    let mut names: Vec<String> = processors
+        .iter()
+        .filter(|(name, p)| is_enabled(name) && is_sandboxed(p.scan_config(), build_default))
+        .map(|(name, _)| name.clone())
+        .collect();
+    names.sort();
+    names
+}
+
 /// The `sandbox_writable` entries a processor running `tools` gets: what
 /// each tool declares (`ToolInfo::sandbox_writable`), then the processor's
 /// own config, without duplicates.

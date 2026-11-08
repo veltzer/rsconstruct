@@ -106,18 +106,13 @@ fn check_required_tools(
             }
         }
     }
-    // A processor that runs external tools under the sandbox execution
-    // model runs them through bwrap. Builtin processors run in-process and
-    // have nothing to wrap.
-    let sandboxed: Vec<String> = active_names
-        .iter()
-        .filter(|n| {
-            let p = &processors[**n];
-            !p.required_tools().is_empty()
-                && crate::sandbox::is_sandboxed(p.scan_config(), execution_model)
-        })
-        .map(|n| (*n).clone())
-        .collect();
+    // A processor under the sandbox execution model runs through bwrap: its
+    // tools, or for a builtin the child rsconstruct that does its work.
+    let sandboxed = crate::sandbox::sandboxed_processors(
+        processors,
+        &|name| active_names.iter().any(|n| n.as_str() == name),
+        execution_model,
+    );
     if !sandboxed.is_empty() && which::which(crate::sandbox::SANDBOX_TOOL).is_err() {
         missing.push((crate::sandbox::SANDBOX_TOOL.to_string(), sandboxed));
     }

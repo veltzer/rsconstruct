@@ -249,8 +249,12 @@ added later as a second backend, chosen at run time (no `#[cfg]`).
   `.output()` calls under `src/processor/` (the sphinx, jekyll, generic and
   zola planners) run during discovery, outside any product, as do version
   probes, `doctor` and `tool install`; they run natively by design.
-- **Preflight.** `check_required_tools` requires `bwrap` when any processor
-  with external tools resolves to the sandbox.
+- **Preflight.** `check_required_tools` requires `bwrap` when any enabled
+  processor resolves to the sandbox, builtins included (a sandboxed builtin
+  runs in a child inside bwrap). `tool install machine` installs `bwrap`
+  (apt `bubblewrap`) under the same condition, through the same
+  `sandbox::sandboxed_processors`, so a sandboxed repo's CI gets it from the
+  usual install step without listing it anywhere.
 - **Processors that cannot be sandboxed.** Every plugin entry carries
   `sandboxable` (`ProcessorPlugin` in `src/registries/processor.rs`),
   shown by `processor list` as `Sandbox`. marp, mermaid, chromium and

@@ -100,6 +100,39 @@ fn build_removes_leftover_sandbox_runs() {
     );
 }
 
+/// A builtin processor under the sandbox runs in a child inside bwrap, so a
+/// project whose only processor is a builtin still needs bwrap: without it
+/// on PATH the build fails up front, naming it, instead of on each product.
+#[test]
+fn sandboxed_builtin_needs_bwrap() {
+    let temp_dir = TempDir::new().unwrap();
+    let project = temp_dir.path();
+    fs::write(
+        project.join("rsconstruct.toml"),
+        "[build]\nexecution_model = \"sandbox\"\n\n\
+         [processor.checker.iyamllint]\nsrc_dirs = [\"y\"]\n",
+    )
+    .unwrap();
+    fs::create_dir_all(project.join("y")).unwrap();
+    fs::write(project.join("y/a.yaml"), "a: 1\n").unwrap();
+    let empty_path = TempDir::new().unwrap();
+    let output = run_rsconstruct_with_env(
+        project,
+        &["build"],
+        &[("PATH", empty_path.path().to_str().unwrap())],
+    );
+    let all = format!(
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(!output.status.success(), "{all}");
+    assert!(
+        all.contains("Missing required tools") && all.contains("bwrap"),
+        "{all}"
+    );
+}
+
 /// Run the hidden `sandbox-run` subcommand with `job` on its standard input,
 /// as a sandboxed build runs it under bwrap (here without bwrap: the child's
 /// half of the exchange does not depend on it). Returns its stdout split at
