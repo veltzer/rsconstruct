@@ -69,6 +69,37 @@ fn force_rebuild() {
     assert_eq!(result.skipped, 0, "Should not skip anything with --force");
 }
 
+/// A build removes the sandbox runs a killed build left in the project,
+/// including overlayfs's mode-000 `work/work`, and says so.
+#[test]
+fn build_removes_leftover_sandbox_runs() {
+    let temp_dir = setup_test_project();
+    let project_path = temp_dir.path();
+    let sandbox = project_path.join(".rsconstruct/sandbox");
+    let work = sandbox.join("4242-0/work/work");
+    fs::create_dir_all(&work).unwrap();
+    fs::create_dir_all(sandbox.join("4242-0/upper")).unwrap();
+    fs::write(sandbox.join("4242-0/upper/half.txt"), "half").unwrap();
+    fs::set_permissions(&work, std::os::unix::fs::PermissionsExt::from_mode(0o000)).unwrap();
+
+    let output = run_rsconstruct_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(!sandbox.exists(), "the leftover run must be removed");
+    let all = format!(
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(
+        all.contains("removed 1 sandbox run(s) left by an interrupted build"),
+        "{all}"
+    );
+}
+
 #[test]
 fn no_color_env() {
     let temp_dir = setup_test_project();

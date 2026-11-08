@@ -194,6 +194,16 @@ Then:
 4. The run directory is removed. overlayfs leaves `work/work` with mode
    000, so its mode is opened up first.
 
+A build killed mid-run (SIGKILL, the OOM killer, power loss) never gets to
+step 4. Every build therefore starts by removing whatever is under
+`.rsconstruct/sandbox/`, and the directory itself, whatever its execution
+model, and prints how many runs it removed
+(`sandbox::remove_leftover_runs`). Nothing there can be in use: the build
+holds the project's cache database open, which redb locks exclusively, so
+no other rsconstruct process is running in the project, and this one has
+not started a run yet. Nothing there is worth keeping either: a run
+reaches the tree only once it is accepted.
+
 For a batched invocation the declared set is the union of the chunk's
 products' outputs.
 

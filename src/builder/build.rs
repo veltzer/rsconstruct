@@ -436,6 +436,17 @@ impl Builder {
             self.config.build.execution_model,
         )?;
 
+        // Sandbox runs a killed build left behind. Done whatever the
+        // execution model: an earlier build may have been sandboxed.
+        let root = std::env::current_dir()
+            .context("Failed to determine the project root to clean the sandbox")?;
+        let leftovers = crate::sandbox::remove_leftover_runs(&root)?;
+        if leftovers > 0 {
+            crate::output::info(&format!(
+                "[build] removed {leftovers} sandbox run(s) left by an interrupted build"
+            ));
+        }
+
         let BuildPlan {
             processors,
             mut graph,
@@ -500,10 +511,11 @@ impl Builder {
             return Ok(());
         }
 
-        // Stale outputs are removed by the executor: per product right before
-        // it restores or rebuilds, and at the end of the run for products
-        // predicted to change that never ran (so a failed upstream still
-        // leaves no stale downstream output behind).
+        // Stale outputs are removed by the executor (or, for a sandboxed
+        // product, inside its sandbox): per product right before it restores
+        // or rebuilds, and at the end of an interrupted run for products
+        // predicted to change that never ran. After a failure the products
+        // it blocked keep their outputs.
 
         // Create executor with parallelism from command line, env var, or config
         let parallel = opts

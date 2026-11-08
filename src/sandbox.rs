@@ -623,6 +623,49 @@ fn remove_real(path: &Path) -> Result<()> {
 
 /// Remove a run's directory. overlayfs leaves `work/work` with mode 000,
 /// which must be opened up before it can be deleted.
+/// Remove what killed builds left under `.rsconstruct/sandbox/` in the
+/// project at `root`, and the directory itself; returns how many runs were
+/// removed. A run's directory normally goes when the run is settled, but a
+/// build killed mid-run (SIGKILL, OOM, power loss) leaves it behind, and
+/// overlayfs's `work/work` has mode 000, so a plain `rm -rf` fails on it.
+///
+/// Called at the start of a build, when nothing can be using them: the
+/// build holds the project's cache database open, which redb locks
+/// exclusively, so no other rsconstruct process is running in this project,
+/// and this one has not started a run yet. Nothing in a leftover run is
+/// worth keeping: a run reaches the tree only once it is accepted.
+pub fn remove_leftover_runs(root: &Path) -> Result<usize> {
+    let sandbox = root.join(SANDBOX_DIR);
+    let entries = match fs::read_dir(&sandbox) {
+        Ok(entries) => entries,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(0),
+        Err(e) => {
+            return Err(e).with_context(|| {
+                format!("Failed to read sandbox directory {}", sandbox.display())
+            });
+        }
+    };
+    let mut removed = 0;
+    for entry in entries {
+        let entry = entry
+            .with_context(|| format!("Failed to read sandbox directory {}", sandbox.display()))?;
+        let path = entry.path();
+        if fs::symlink_metadata(&path)
+            .with_context(|| format!("Failed to stat {}", path.display()))?
+            .is_dir()
+        {
+            remove_run_dir(&path)?;
+        } else {
+            fs::remove_file(&path)
+                .with_context(|| format!("Failed to remove {}", path.display()))?;
+        }
+        removed += 1;
+    }
+    fs::remove_dir(&sandbox)
+        .with_context(|| format!("Failed to remove sandbox directory {}", sandbox.display()))?;
+    Ok(removed)
+}
+
 fn remove_run_dir(dir: &Path) -> Result<()> {
     let inner = dir.join("work").join("work");
     if inner.exists() {
@@ -909,6 +952,27 @@ mod tests {
             fs::read_to_string(root.join("out/ran")).unwrap(),
             "a b|--|c|"
         );
+    }
+
+    /// A killed build's runs are removed, the mode-000 `work/work` that
+    /// overlayfs leaves included, and so is the sandbox directory; a project
+    /// without one is fine.
+    #[test]
+    fn leftover_runs_are_removed() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path();
+        assert_eq!(remove_leftover_runs(root).unwrap(), 0);
+
+        let run = root.join(SANDBOX_DIR).join("4242-0");
+        fs::create_dir_all(run.join("upper/out")).unwrap();
+        fs::write(run.join("upper/out/half.html"), "half").unwrap();
+        fs::create_dir_all(run.join("work/work")).unwrap();
+        crate::platform::set_permissions_mode(&run.join("work/work"), 0o000).unwrap();
+        fs::create_dir_all(root.join(SANDBOX_DIR).join("4242-1")).unwrap();
+
+        assert_eq!(remove_leftover_runs(root).unwrap(), 2);
+        assert!(!root.join(SANDBOX_DIR).exists());
+        assert!(root.join(".rsconstruct").is_dir(), "only the sandbox goes");
     }
 
     /// Removing a stale output is rsconstruct's own first step, so it is
