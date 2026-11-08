@@ -173,6 +173,14 @@ pub fn declare_replaced_outputs(paths: &[&Path]) -> bool {
     })
 }
 
+/// Whether the product running on this thread runs sandboxed. A processor
+/// whose tool runs Chromium asks this to turn Chromium's own sandbox off,
+/// which cannot start inside bwrap; natively it stays on. See
+/// docs/src/internal/sandbox-chromium.md.
+pub fn active() -> bool {
+    SPEC.with(|s| s.borrow().is_some())
+}
+
 fn current_spec() -> Option<Spec> {
     SPEC.with(|s| s.borrow().clone())
 }
@@ -195,13 +203,20 @@ const PRELUDE: &str = "while [ \"$1\" != -- ]; do rm -f -- \"$1\" || exit; shift
                        while [ \"$1\" != -- ]; do mkdir -p -- \"$1\" || exit; shift; done; shift; \
                        exec \"$@\"";
 
+/// Whether the processor named `pname` can run in a sandbox, by its plugin's
+/// `sandboxable` flag.
+fn plugin_is_sandboxable(pname: &str) -> bool {
+    crate::registries::find_plugin(pname).is_none_or(|p| p.sandboxable)
+}
+
 /// The enabled instances among `instances` that would run sandboxed under
-/// `build_default` although their processor is not `sandboxable`, sorted.
-/// Read from the raw instance tables, before any processor is created, so a
-/// build can refuse them before doing any work.
-pub fn unsandboxable_instances(
+/// `build_default` although `sandboxable` says their processor cannot,
+/// sorted. Read from the raw instance tables, before any processor is
+/// created, so a build can refuse them before doing any work.
+fn unsandboxable_instances(
     instances: &[crate::config::ProcessorInstance],
     build_default: ExecutionModel,
+    sandboxable: &dyn Fn(&str) -> bool,
 ) -> Vec<String> {
     let mut out: Vec<String> = instances
         .iter()
@@ -215,9 +230,7 @@ pub fn unsandboxable_instances(
                 .get(crate::config::EXECUTION_MODEL)
                 .and_then(|v| v.clone().try_into::<ExecutionModel>().ok())
                 .unwrap_or(build_default);
-            enabled
-                && model == ExecutionModel::Sandbox
-                && crate::registries::find_plugin(&inst.pname).is_some_and(|p| !p.sandboxable)
+            enabled && model == ExecutionModel::Sandbox && !sandboxable(&inst.pname)
         })
         .map(|inst| inst.instance_name.clone())
         .collect();
@@ -226,12 +239,24 @@ pub fn unsandboxable_instances(
 }
 
 /// Fail when any configured, enabled instance would run sandboxed although
-/// its processor cannot run in a sandbox. Called at the start of a build.
+/// its processor cannot run in a sandbox. Called at the start of a build. No
+/// processor is marked unsandboxable today (see
+/// docs/src/internal/sandbox-chromium.md); the check stays for one that is.
 pub fn check_sandboxable(
     instances: &[crate::config::ProcessorInstance],
     build_default: ExecutionModel,
 ) -> Result<()> {
-    let bad = unsandboxable_instances(instances, build_default);
+    check_sandboxable_by(instances, build_default, &plugin_is_sandboxable)
+}
+
+/// [`check_sandboxable`] with what counts as sandboxable given, so the
+/// refusal can be tested while every real processor is sandboxable.
+fn check_sandboxable_by(
+    instances: &[crate::config::ProcessorInstance],
+    build_default: ExecutionModel,
+    sandboxable: &dyn Fn(&str) -> bool,
+) -> Result<()> {
+    let bad = unsandboxable_instances(instances, build_default, sandboxable);
     if bad.is_empty() {
         return Ok(());
     }
@@ -1080,6 +1105,12 @@ mod tests {
         }
     }
 
+    /// No real processor is unsandboxable today, so the test treats marp as
+    /// one to exercise the refusal.
+    fn marp_is_unsandboxable(pname: &str) -> bool {
+        pname != "processor.generator.marp"
+    }
+
     #[test]
     fn unsandboxable_processors_are_refused_only_when_sandboxed() {
         let marp = instance("processor.generator.marp", "processor.generator.marp", "");
@@ -1103,16 +1134,19 @@ mod tests {
         // Build-wide sandbox: marp and its explicitly sandboxed instance are
         // refused; ruff, the native override and the disabled one are not.
         assert_eq!(
-            unsandboxable_instances(&all, ExecutionModel::Sandbox),
+            unsandboxable_instances(&all, ExecutionModel::Sandbox, &marp_is_unsandboxable),
             ["processor.generator.marp", "processor.generator.marp.c"]
         );
         // Build-wide native: only the instance that opts into the sandbox.
         assert_eq!(
-            unsandboxable_instances(&all, ExecutionModel::Native),
+            unsandboxable_instances(&all, ExecutionModel::Native, &marp_is_unsandboxable),
             ["processor.generator.marp.c"]
         );
-        assert!(check_sandboxable(&all[1..3], ExecutionModel::Sandbox).is_ok());
-        let err = check_sandboxable(&all, ExecutionModel::Sandbox)
+        assert!(
+            check_sandboxable_by(&all[1..3], ExecutionModel::Sandbox, &marp_is_unsandboxable)
+                .is_ok()
+        );
+        let err = check_sandboxable_by(&all, ExecutionModel::Sandbox, &marp_is_unsandboxable)
             .unwrap_err()
             .to_string();
         assert!(
@@ -1122,24 +1156,19 @@ mod tests {
         );
     }
 
-    /// The processors marked as unable to run in a sandbox are exactly the
-    /// ones that launch Chromium (measured: each aborts inside bwrap).
+    /// Every processor can run in a sandbox, the Chromium-based ones
+    /// included (they turn Chromium's own sandbox off when sandboxed; see
+    /// docs/src/internal/sandbox-chromium.md), and the real build check
+    /// refuses none of them.
     #[test]
-    fn only_chromium_launchers_are_unsandboxable() {
-        let mut names: Vec<String> = crate::registries::processor::all_plugins()
+    fn every_processor_is_sandboxable() {
+        let unsandboxable: Vec<String> = crate::registries::processor::all_plugins()
             .filter(|p| !p.sandboxable)
             .map(crate::registries::ProcessorPlugin::pname)
             .collect();
-        names.sort();
-        assert_eq!(
-            names,
-            [
-                "processor.generator.chromium",
-                "processor.generator.drawio",
-                "processor.generator.marp",
-                "processor.generator.mermaid",
-            ]
-        );
+        assert_eq!(unsandboxable, Vec::<String>::new());
+        let marp = instance("processor.generator.marp", "processor.generator.marp", "");
+        assert!(check_sandboxable(&[marp], ExecutionModel::Sandbox).is_ok());
     }
 
     fn run_with(outputs: &[&str], dirs: &[&str]) -> Run {

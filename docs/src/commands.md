@@ -565,8 +565,10 @@ restores a generator's outputs or proves a checker's pass, so nothing is
 lost by skipping the run; `No` for pip, npm and gem, which install into an
 environment and write only a stamp — the stamp is cached while the installed
 packages may be gone), and `Sandbox` (whether the processor can run under
-`execution_model = "sandbox"`; `No` for marp, mermaid, chromium and drawio,
-which launch Chromium, whose own sandbox cannot start inside bubblewrap).
+`execution_model = "sandbox"`; currently `Yes` for every processor: marp,
+mermaid, chromium and drawio, which launch Chromium, turn Chromium's own
+sandbox off when sandboxed, see
+[Sandboxing Chromium](internal/sandbox-chromium.md)).
 The JSON form carries the same as `builtin`, `rust`, `supports_batch`,
 `caches_outputs` and `sandboxable` booleans. `rust` is what to read when
 the question is "how much of this project's toolchain is Rust"; `builtin` is

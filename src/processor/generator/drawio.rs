@@ -30,6 +30,12 @@ fn execute_drawio(
         cmd.arg(arg);
     }
     cmd.arg(input);
+    // drawio is Electron: inside bwrap Chromium's own sandbox cannot start
+    // and the export aborts, so it is turned off there; bwrap confines the
+    // run instead. Natively it stays on.
+    if crate::sandbox::active() {
+        cmd.arg("--no-sandbox");
+    }
     let out = run_command(ctx, &cmd)?;
     check_command_output(&out, format_args!("drawio {}", input.display()))
 }
@@ -63,8 +69,8 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     is_rust: false,
     supports_batch: false,
     caches_outputs: true,
-    // drawio is an Electron app; Chromium's own sandbox cannot start inside bwrap.
-    sandboxable: false,
+    // Electron; sandboxed runs pass --no-sandbox (docs/src/internal/sandbox-chromium.md).
+    sandboxable: true,
     max_jobs_cap: None,
 } }
 inventory::submit! { crate::tools::ToolInfo {

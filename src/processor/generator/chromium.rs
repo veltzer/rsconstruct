@@ -64,8 +64,9 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     is_rust: false,
     supports_batch: false,
     caches_outputs: true,
-    // Chromium's own sandbox cannot start inside bwrap.
-    sandboxable: false,
+    // Always runs Chromium with --no-sandbox, so it also runs inside bwrap,
+    // where Chromium's own sandbox cannot start (docs/src/internal/sandbox-chromium.md).
+    sandboxable: true,
     max_jobs_cap: None,
 } }
 inventory::submit! { crate::tools::ToolInfo {

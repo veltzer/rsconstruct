@@ -257,8 +257,10 @@ added later as a second backend, chosen at run time (no `#[cfg]`).
   usual install step without listing it anywhere.
 - **Processors that cannot be sandboxed.** Every plugin entry carries
   `sandboxable` (`ProcessorPlugin` in `src/registries/processor.rs`),
-  shown by `processor list` as `Sandbox`. marp, mermaid, chromium and
-  drawio are `false` (open question 1). Before anything else, `build` calls
+  shown by `processor list` as `Sandbox`. Today every processor is `true`:
+  marp, mermaid, chromium and drawio were `false` until they learned to turn
+  Chromium's own sandbox off when sandboxed (open question 1,
+  [Sandboxing Chromium](sandbox-chromium.md)). Before anything else, `build` calls
   `sandbox::check_sandboxable` over the configured instances: an enabled
   instance of a non-sandboxable processor that resolves to the sandbox is a
   config error naming every such instance, so the build fails in
@@ -406,13 +408,12 @@ down from 6.78 s. The table above shows the numbers from before the fix.
    (marp, mermaid, chromium, puppeteer-based tools) therefore fails under
    the sandbox on Ubuntu. Measured on 2026-11-07, outside any other
    sandbox: marp and google-chrome work natively and abort inside bwrap;
-   drawio (Electron) aborts the same way. Those four processors are marked
-   `sandboxable: false`, and a build that would sandbox one fails up front
-   (see "Where it hooks in"); they run with `execution_model = "native"`.
-   Still open: passing Chromium `--no-sandbox` through the tool's own
-   config, or a bwrap/AppArmor setup that permits nesting, either of which
-   would let them be marked sandboxable. It is an environment limitation,
-   not a correctness finding.
+   drawio (Electron) aborts the same way. It is an environment limitation,
+   not a correctness finding. **Resolved on 2026-11-08:** when sandboxed,
+   each of the four turns Chromium's own sandbox off (`--no-sandbox`,
+   `CHROME_NO_SANDBOX=1`, or a puppeteer config) and bwrap confines the run
+   instead; all four are now `sandboxable: true`. Measurements and details:
+   [Sandboxing Chromium](sandbox-chromium.md).
 2. **Changes to the real tree during a run.** overlayfs documents changes
    to the lower layer while it is mounted as undefined behaviour. With
    `-j` > 1, other products move their outputs into the real tree while a
@@ -436,8 +437,9 @@ down from 6.78 s. The table above shows the numbers from before the fix.
    the runner, not just bwrap starting. bwrap was already on the runner
    image, so `tool install machine` did not need to install it there; on an
    image without it, the install step adds it (see "Preflight"). Not covered
-   by that run: Chromium-based processors (open question 1, still not
-   sandboxable) and a Python-heavy repo. There is still no end-to-end sandbox
+   by that run: the Chromium-based processors (made sandboxable after it,
+   see open question 1; no fleet repo uses them) and a Python-heavy repo.
+   There is still no end-to-end sandbox
    test in `tests/`: it would need bwrap on every machine that runs the
    suite.
 5. **Cost.** Measured; see "Cost" above. The slow case, non-batching

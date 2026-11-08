@@ -166,6 +166,13 @@ impl Processor for MarpProcessor {
 
             let mut cmd = Command::new(command);
             cmd.env("TMPDIR", &scratch);
+            // Inside bwrap Chromium's own sandbox cannot start and marp
+            // fails to launch the browser; marp-cli turns it off when
+            // CHROME_NO_SANDBOX is set. bwrap confines the run instead.
+            // Natively it stays on.
+            if crate::sandbox::active() {
+                cmd.env("CHROME_NO_SANDBOX", "1");
+            }
             if format != "html" {
                 cmd.arg(format!("--{format}"));
             }
@@ -227,8 +234,8 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     is_rust: false,
     supports_batch: false,
     caches_outputs: true,
-    // marp renders through Chromium, whose own sandbox cannot start inside bwrap.
-    sandboxable: false,
+    // Chromium-based; sandboxed runs set CHROME_NO_SANDBOX (docs/src/internal/sandbox-chromium.md).
+    sandboxable: true,
     max_jobs_cap: None,
 } }
 inventory::submit! { crate::tools::ToolInfo {
