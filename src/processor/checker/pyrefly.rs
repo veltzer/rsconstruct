@@ -36,9 +36,11 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     sandboxable: true,
     max_jobs_cap: None,
 } }
+// pyrefly runs the project's Python to find its site-packages, and that
+// interpreter writes bytecode at startup (setuptools' _distutils_hack .pth).
 inventory::submit! { crate::tools::ToolInfo {
     name: "pyrefly", runtime: "python",
     project: Some(crate::tools::InstallMethod::new("pip", "pyrefly")),
     machine: Some(crate::tools::InstallMethod::new("pip", "pyrefly")),
-    alternatives: &[], prefer: None, sandbox_writable: &[], needs_network: false,
+    alternatives: &[], prefer: None, sandbox_writable: &["**/__pycache__"], needs_network: false,
 } }
