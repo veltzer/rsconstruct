@@ -424,12 +424,22 @@ down from 6.78 s. The table above shows the numbers from before the fix.
    only on exit status 0; anything else discards what the tool wrote. A
    processor that accepts a non-zero status and still uses the outputs
    would lose them under the sandbox. None is known yet.
-4. **GitHub runners.** `ubuntu-24.04` runners need `bubblewrap` installed
-   (`scripts/ci-install-tools.sh`) and must allow it to create user
-   namespaces. Verify with a throwaway job before relying on it. If it does
-   not work there, the fix is in the environment setup, never in `ci.yml`.
-   For the same reason there is no end-to-end sandbox test in `tests/` yet:
-   it would need bwrap on every machine that runs the suite.
+4. **GitHub runners.** Answered for the fleet's runner on 2026-11-08 with
+   rsconstruct 0.9.158: a throwaway branch of demos-lang-shell set
+   `execution_model = "sandbox"` and changed nothing else, so the fleet's
+   unchanged `build.yml` ran it on `ubuntu-26.04`. All 23 products built
+   sandboxed (builtins `ishellcheck`, `iactionlint`, `iperlcritic`; tools
+   `taplo`, `rumdl`, `cppcheck`). A second commit added a probe stanza whose
+   script writes a declared output and an undeclared `stray.txt`; the run
+   failed with "the tool changed paths its product does not declare ... wrote
+   stray.txt", exactly as locally, so the overlay and the check are live on
+   the runner, not just bwrap starting. bwrap was already on the runner
+   image, so `tool install machine` did not need to install it there; on an
+   image without it, the install step adds it (see "Preflight"). Not covered
+   by that run: Chromium-based processors (open question 1, still not
+   sandboxable) and a Python-heavy repo. There is still no end-to-end sandbox
+   test in `tests/`: it would need bwrap on every machine that runs the
+   suite.
 5. **Cost.** Measured; see "Cost" above. The slow case, non-batching
    builtins, is grouped into children since that measurement.
 6. **Cargo's target directory** is `target` relative to the project root by
