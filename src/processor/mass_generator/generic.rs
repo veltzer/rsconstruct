@@ -237,14 +237,19 @@ impl MassGeneratorProcessor {
         // products are clean this build. A clean file may be a read-only
         // hardlink left by a cache restore, which the tool cannot open for
         // writing; unlinking first gives it a clear path. The executor leaves
-        // this processor's outputs to it (`replaces_own_outputs`).
-        for path in &predicted {
-            match std::fs::remove_file(path) {
-                Ok(()) => {}
-                Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
-                Err(e) => {
-                    return Err(anyhow::Error::from(e)
-                        .context(format!("Failed to remove stale output {}", path.display())));
+        // this processor's outputs to it (`replaces_own_outputs`). Sandboxed,
+        // this one run declares them all, and the sandbox unlinks them inside
+        // its overlay, so a rejected run leaves the tree as it was.
+        let paths: Vec<&Path> = predicted.iter().copied().collect();
+        if !crate::sandbox::declare_replaced_outputs(&paths) {
+            for path in &predicted {
+                match std::fs::remove_file(path) {
+                    Ok(()) => {}
+                    Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+                    Err(e) => {
+                        return Err(anyhow::Error::from(e)
+                            .context(format!("Failed to remove stale output {}", path.display())));
+                    }
                 }
             }
         }

@@ -117,10 +117,9 @@ bwrap --die-with-parent --ro-bind / / --bind $HOME $HOME --bind /tmp /tmp \
   script that downloads, whose tool rsconstruct does not know). cargo
   itself is `false`: it builds from its registry cache in `$HOME`, and a
   run that has to download a crate first is the finding the sandbox is
-  for. `cargo deny` counts as `cargo-deny` only when it runs from the
-  project's tool directory, which is how the fleet installs it; a machine
-  running a global `cargo-deny` needs `sandbox_network = true` on that
-  stanza.
+  for. `cargo deny` declares `cargo-deny` wherever it is installed: the
+  project's tool directory, which is how the fleet installs it, or a
+  global install that cargo finds.
 - **Tool state allowed.** Every tool declares where it writes its own
   state in the project (`ToolInfo::sandbox_writable` in `src/tools.rs` or
   in the processor file that owns the tool): `target` for cargo,
@@ -154,7 +153,10 @@ change there:
 A plain directory in the upper layer is not a change: overlayfs copies a
 directory up whenever something inside it changes, and an empty new
 directory is left alone. An opaque directory with nothing in the real tree
-beneath it is just a new directory.
+beneath it is just a new directory. Nor is a file identical to the real
+one, with the same bytes and mode (`sandbox::same_as_real`): overlayfs
+copies a file up as soon as a tool opens it for writing, even when it
+writes nothing, as Python's `shelve` does to read its database.
 
 Before the tool starts, nothing in the real tree is touched. A native run
 first unlinks the product's stale outputs (a restored output is a

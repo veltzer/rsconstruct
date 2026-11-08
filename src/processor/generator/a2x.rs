@@ -19,16 +19,23 @@ fn execute_a2x(
     let output = product.primary_output();
     ensure_output_dir(output)?;
     let command = config.require_command("a2x")?;
+    let out_dir = output
+        .parent()
+        .context("a2x output has no parent directory")?;
     let mut cmd = Command::new(command);
     for arg in &config.args {
         cmd.arg(arg);
     }
+    // Write into the output directory, not next to the input (a2x's
+    // default), so the source tree is never touched.
+    cmd.arg("-D").arg(out_dir);
     cmd.arg(input);
     let out = run_command(ctx, &cmd)?;
     check_command_output(&out, format_args!("a2x {}", input.display()))?;
-    // a2x generates the PDF next to the input file — move it to the output path
+    // a2x names the PDF after the input; move it to the output path when
+    // that is named differently.
     let stem = input.file_stem().context("a2x input has no file stem")?;
-    let generated = input.with_file_name(format!("{}.pdf", stem.to_string_lossy()));
+    let generated = out_dir.join(format!("{}.pdf", stem.to_string_lossy()));
     if generated != *output {
         // a2x exiting 0 without producing the PDF must fail here, not later
         // as a confusing cache-store error about a missing output.

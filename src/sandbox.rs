@@ -153,6 +153,26 @@ pub fn declare_output_dir(dir: &Path) {
     });
 }
 
+/// Declare `paths` as outputs of the product running on this thread and
+/// have the sandbox remove the previous copies inside its overlay before
+/// the tool starts, if it runs sandboxed. For a tool that writes the files
+/// of many products in one run (a mass generator's planned outputs): the
+/// run is one product's, but it rewrites them all. Returns false natively
+/// or outside a product, where the caller removes the old copies itself.
+pub fn declare_replaced_outputs(paths: &[&Path]) -> bool {
+    SPEC.with(|s| {
+        let mut spec = s.borrow_mut();
+        let Some(spec) = spec.as_mut() else {
+            return false;
+        };
+        for path in paths {
+            spec.outputs.push(path.to_path_buf());
+            spec.stale.push(path.to_path_buf());
+        }
+        true
+    })
+}
+
 fn current_spec() -> Option<Spec> {
     SPEC.with(|s| s.borrow().clone())
 }
@@ -848,6 +868,20 @@ impl Run {
 /// left alone. A directory marked opaque is a change only when the real
 /// tree has something there to replace.
 fn collect_changes(upper: &Path, rel: &Path, root: &Path, out: &mut Vec<Change>) -> Result<()> {
+    collect_changes_in(upper, rel, root, false, out)
+}
+
+/// [`collect_changes`], knowing whether `rel` lies in a directory that
+/// replaces a real one (`replacing`). Applying the replacement removes the
+/// real directory first, so every file in it must be moved in, even one
+/// identical to the real file it replaces.
+fn collect_changes_in(
+    upper: &Path,
+    rel: &Path,
+    root: &Path,
+    replacing: bool,
+    out: &mut Vec<Change>,
+) -> Result<()> {
     let dir = upper.join(rel);
     let mut entries: Vec<_> = fs::read_dir(&dir)
         .with_context(|| format!("Failed to read sandbox directory {}", dir.display()))?
@@ -865,15 +899,58 @@ fn collect_changes(upper: &Path, rel: &Path, root: &Path, out: &mut Vec<Change>)
             let opaque = crate::platform::get_xattr(&path, OPAQUE_XATTR)
                 .with_context(|| format!("Failed to read xattrs of {}", path.display()))?
                 .is_some_and(|v| v == b"y");
-            if opaque && fs::symlink_metadata(root.join(&child)).is_ok() {
+            let replaces = opaque && fs::symlink_metadata(root.join(&child)).is_ok();
+            if replaces {
                 out.push(Change::Replaced(child.clone()));
             }
-            collect_changes(upper, &child, root, out)?;
-        } else {
+            collect_changes_in(upper, &child, root, replacing || replaces, out)?;
+        } else if replacing || !same_as_real(&path, &meta, &root.join(&child))? {
             out.push(Change::Written(child));
         }
     }
     Ok(())
+}
+
+/// Whether the upper directory's file at `upper` is the real tree's file at
+/// `real` unchanged. overlayfs copies a file up as soon as a tool opens it
+/// for writing, even when it writes nothing (Python's `shelve` opens its
+/// database read-write to read it), and such a file changed nothing.
+fn same_as_real(upper: &Path, upper_meta: &fs::Metadata, real: &Path) -> Result<bool> {
+    let Ok(real_meta) = fs::symlink_metadata(real) else {
+        return Ok(false);
+    };
+    if !upper_meta.is_file()
+        || !real_meta.is_file()
+        || upper_meta.len() != real_meta.len()
+        || crate::platform::get_mode(upper_meta) != crate::platform::get_mode(&real_meta)
+    {
+        return Ok(false);
+    }
+    same_content(upper, real)
+}
+
+/// Whether two files of the same length hold the same bytes, read in
+/// chunks so a large file is never held whole.
+fn same_content(a: &Path, b: &Path) -> Result<bool> {
+    use std::io::Read;
+    let open =
+        |p: &Path| fs::File::open(p).with_context(|| format!("Failed to open {}", p.display()));
+    let (mut fa, mut fb) = (open(a)?, open(b)?);
+    let mut ba = vec![0u8; 64 * 1024];
+    let mut bb = vec![0u8; 64 * 1024];
+    loop {
+        let n = fa
+            .read(&mut ba)
+            .with_context(|| format!("Failed to read {}", a.display()))?;
+        if n == 0 {
+            return Ok(true);
+        }
+        fb.read_exact(&mut bb[..n])
+            .with_context(|| format!("Failed to read {}", b.display()))?;
+        if ba[..n] != bb[..n] {
+            return Ok(false);
+        }
+    }
 }
 
 /// Every file and symlink of the real tree beneath directory `rel`
@@ -1301,6 +1378,20 @@ mod tests {
         assert_eq!(settle(true), none);
     }
 
+    /// A run that rewrites other products' files declares them and leaves
+    /// their removal to the overlay; natively there is nothing to declare.
+    #[test]
+    fn replaced_outputs_are_declared_and_removed_in_the_overlay() {
+        set_spec(None);
+        assert!(!declare_replaced_outputs(&[Path::new("_site/a.html")]));
+        set_spec(Some(run_with(&["_site/a.html"], &[]).spec));
+        assert!(declare_replaced_outputs(&[Path::new("_site/b.html")]));
+        let spec = current_spec().unwrap();
+        set_spec(None);
+        assert!(spec.outputs.contains(&PathBuf::from("_site/b.html")));
+        assert_eq!(spec.stale, [PathBuf::from("_site/b.html")]);
+    }
+
     /// A removed or replaced directory is judged by the real files it held:
     /// fine when each is a declared output, refused for the ones that are not.
     #[test]
@@ -1390,6 +1481,47 @@ mod tests {
             vec![
                 Change::Written(PathBuf::from("out/sub/a.txt")),
                 Change::Written(PathBuf::from("stray")),
+            ]
+        );
+    }
+
+    /// A file copied up unchanged (opened for writing, nothing written) is
+    /// not a change; one whose bytes differ is.
+    #[test]
+    fn files_copied_up_unchanged_are_not_changes() {
+        let tmp = tempfile::tempdir().unwrap();
+        let upper = tmp.path().join("upper");
+        let root = tmp.path().join("root");
+        fs::create_dir_all(&upper).unwrap();
+        fs::create_dir_all(&root).unwrap();
+        for (name, real, written) in [("same", "abc", "abc"), ("edited", "abc", "abd")] {
+            fs::write(root.join(name), real).unwrap();
+            fs::write(upper.join(name), written).unwrap();
+        }
+        let mut changes = Vec::new();
+        collect_changes(&upper, Path::new(""), &root, &mut changes).unwrap();
+        assert_eq!(changes, vec![Change::Written(PathBuf::from("edited"))]);
+    }
+
+    /// In a directory that replaces a real one, an identical file is still
+    /// written: applying the replacement removes the real directory first.
+    #[test]
+    fn identical_files_in_a_replaced_directory_are_written() {
+        let tmp = tempfile::tempdir().unwrap();
+        let upper = tmp.path().join("upper");
+        let root = tmp.path().join("root");
+        fs::create_dir_all(upper.join("marp")).unwrap();
+        fs::create_dir_all(root.join("marp")).unwrap();
+        fs::write(root.join("marp/a.css"), "a").unwrap();
+        fs::write(upper.join("marp/a.css"), "a").unwrap();
+        xattr::set(upper.join("marp"), OPAQUE_XATTR, b"y").unwrap();
+        let mut changes = Vec::new();
+        collect_changes(&upper, Path::new(""), &root, &mut changes).unwrap();
+        assert_eq!(
+            changes,
+            vec![
+                Change::Replaced(PathBuf::from("marp")),
+                Change::Written(PathBuf::from("marp/a.css")),
             ]
         );
     }

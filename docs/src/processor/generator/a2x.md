@@ -7,7 +7,9 @@ Converts AsciiDoc files to PDF using [a2x](https://asciidoc-py.github.io/).
 ## How It Works
 
 Discovers `.txt` (AsciiDoc) files in the project and runs `a2x -f pdf` on each
-file. The output format is fixed to PDF; there is no format field.
+file, with `-D` naming the output's directory, so a2x writes the PDF there
+rather than next to the source (its default). The output format is fixed to
+PDF; there is no format field.
 
 ## Source Files
 

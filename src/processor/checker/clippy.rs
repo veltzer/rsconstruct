@@ -79,6 +79,29 @@ impl ClippyProcessor {
         let name = format!("cargo-{subcommand}");
         crate::tool_store::repo_tool(&name).map(|exe| (name, exe))
     }
+
+    /// The `cargo-<subcommand>` tool to declare: the project's own, or a
+    /// tool rsconstruct knows wherever it is installed (a global
+    /// cargo-deny still needs the network under the sandbox). A rustup
+    /// component such as `cargo-clippy` is not a known tool, so plain
+    /// `cargo clippy` declares only cargo.
+    fn subcommand_tool(&self) -> Option<String> {
+        if let Some((name, _)) = self.project_subcommand() {
+            return Some(name);
+        }
+        let subcommand = self
+            .config
+            .standard
+            .require_command(crate::processor::names::CLIPPY)
+            .ok()?;
+        known_subcommand_tool(subcommand)
+    }
+}
+
+/// `cargo-<subcommand>` when rsconstruct knows it as a tool.
+fn known_subcommand_tool(subcommand: &str) -> Option<String> {
+    let name = format!("cargo-{subcommand}");
+    crate::tools::tool_info(&name).map(|_| name)
 }
 
 /// The command for `cargo <subcommand>`. When the project's tool directory
@@ -114,12 +137,13 @@ impl Processor for ClippyProcessor {
         crate::processor::ProcessorBase::config_json(&self.config)
     }
 
-    /// cargo, plus the project's `cargo-<subcommand>` when that is what runs
-    /// — so it is declared, and its identity is part of the cache key: a
-    /// locked cargo-deny moving to a new release re-runs `cargo deny`.
+    /// cargo, plus the `cargo-<subcommand>` that runs (`subcommand_tool`)
+    /// — so it is declared, its identity is part of the cache key (a
+    /// cargo-deny moving to a new release re-runs `cargo deny`), and a
+    /// sandboxed run gets the network it declares.
     fn required_tools(&self) -> Vec<String> {
         let mut builtin = vec![self.config.cargo.clone()];
-        if let Some((name, _)) = self.project_subcommand() {
+        if let Some(name) = self.subcommand_tool() {
             builtin.push(name);
         }
         crate::processor::with_declared_tools(builtin, &self.config.standard)
@@ -155,7 +179,15 @@ impl Processor for ClippyProcessor {
 
 #[cfg(test)]
 mod tests {
-    use super::cargo_command;
+    use super::{cargo_command, known_subcommand_tool};
+
+    /// A known subcommand tool is declared wherever it is installed; a
+    /// rustup component is not a tool rsconstruct knows.
+    #[test]
+    fn known_subcommands_are_declared() {
+        assert_eq!(known_subcommand_tool("deny"), Some("cargo-deny".into()));
+        assert_eq!(known_subcommand_tool("clippy"), None);
+    }
 
     fn argv(cmd: &std::process::Command) -> Vec<String> {
         std::iter::once(cmd.get_program())
@@ -215,8 +247,9 @@ inventory::submit! {
         max_jobs_cap: None,
     }
 }
-// `cargo deny`, run through this processor when the project's tool
-// directory holds it (`project_subcommand`). It fetches the RustSec
+// `cargo deny`, run through this processor: the project's own when its
+// tool directory holds one (`project_subcommand`), otherwise the one cargo
+// finds. Either way it is declared (`subcommand_tool`). It fetches the RustSec
 // advisory database on every run.
 inventory::submit! { crate::tools::ToolInfo {
     name: "cargo-deny", runtime: "rust",
