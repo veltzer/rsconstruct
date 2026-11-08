@@ -171,6 +171,7 @@ The chapters below cover the internal design and implementation of rsconstruct. 
 - [Routing Generated Files](internal/output-routing.md)
 - [Undeclared Reads](internal/undeclared-reads.md)
 - [Sandboxed Execution](internal/sandbox.md)
+- [Orphan Outputs](internal/orphan-outputs.md)
 - [Per-Processor Statistics](internal/per-processor-stats.md)
 - [Profiling](internal/profiling.md)
 - [Fast `stat` on Linux](internal/fast-stat.md)

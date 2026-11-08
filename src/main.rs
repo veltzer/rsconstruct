@@ -87,6 +87,7 @@ mod graph;
 mod graph_render;
 mod json_output;
 mod object_store;
+mod orphans;
 mod output;
 mod phases;
 mod platform;

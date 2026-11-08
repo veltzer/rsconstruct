@@ -2495,3 +2495,48 @@ fn excluded_producer_drops_its_consumers() {
         assert!(!project.join("out/second/a.c").exists());
     }
 }
+
+/// `[build] remove_orphan_outputs`: a full build removes the output of a
+/// template that was deleted, and the directory that leaves empty; a build
+/// narrowed with `-p` does not, since it does not see every product. On by
+/// default; set to false, the output stays.
+#[test]
+fn orphan_outputs_are_removed_by_a_full_build_only_when_enabled() {
+    for (setting, enabled) in [
+        ("", true),
+        ("[build]\nremove_orphan_outputs = true\n\n", true),
+        ("[build]\nremove_orphan_outputs = false\n\n", false),
+    ] {
+        let temp_dir = setup_test_project();
+        let project = temp_dir.path();
+        fs::write(
+            project.join("rsconstruct.toml"),
+            format!("{setting}[processor.generator.tera]\nsrc_dirs = [\"tera.templates\"]\n"),
+        )
+        .unwrap();
+        fs::create_dir_all(project.join("tera.templates/gen")).unwrap();
+        fs::write(project.join("tera.templates/gen/gone.txt.tera"), "gone\n").unwrap();
+        fs::write(project.join("tera.templates/kept.txt.tera"), "kept\n").unwrap();
+        let output = run_rsconstruct(project, &["build"]);
+        assert!(output.status.success(), "{output:?}");
+        assert!(project.join("gen/gone.txt").exists());
+
+        fs::remove_file(project.join("tera.templates/gen/gone.txt.tera")).unwrap();
+        let output = run_rsconstruct(project, &["build", "-p", "processor.generator.tera"]);
+        assert!(output.status.success(), "{output:?}");
+        assert!(
+            project.join("gen/gone.txt").exists(),
+            "a narrowed build removes nothing"
+        );
+
+        let output = run_rsconstruct(project, &["build"]);
+        assert!(output.status.success(), "{output:?}");
+        assert_eq!(
+            project.join("gen").exists(),
+            !enabled,
+            "{setting:?}: {}",
+            String::from_utf8_lossy(&output.stdout)
+        );
+        assert!(project.join("kept.txt").exists());
+    }
+}

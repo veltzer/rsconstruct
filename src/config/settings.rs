@@ -165,6 +165,26 @@ pub struct BuildConfig {
     /// this with its own `execution_model` field.
     #[serde(default)]
     pub execution_model: ExecutionModel,
+    /// How many sandboxed children share the products of a builtin
+    /// processor that does not batch (`icheckstyle`, `ishellcheck`, ...)
+    /// when it runs under the sandbox. Each child costs a bwrap start and an
+    /// rsconstruct start-up, tens of milliseconds, so one child per product
+    /// makes a thousand-file checker several times slower than natively;
+    /// the products ready at once are split into this many children, each
+    /// checking its share one product after another. 0 (the default) means
+    /// one child per parallel job.
+    #[serde(default)]
+    pub sandbox_builtin_children: usize,
+    /// When true (the default), a full build removes the output files an
+    /// earlier full build produced that no product declares any more: the
+    /// outputs of a deleted source, a disabled processor, a moved
+    /// `output_dir`. A file changed since that build wrote it, or tracked by
+    /// git, is kept and reported. Builds narrowed with `-p`, `-x`, targets,
+    /// `--iset` or `--pset` neither remove nor record anything. Set to false
+    /// to keep every output, as before. See
+    /// docs/src/internal/orphan-outputs.md.
+    #[serde(default = "default_remove_orphan_outputs")]
+    pub remove_orphan_outputs: bool,
 }
 
 /// How a processor's external tools are run (`[build] execution_model`
@@ -220,6 +240,10 @@ const fn default_reject_dot_src_dirs() -> bool {
     false
 }
 
+const fn default_remove_orphan_outputs() -> bool {
+    true
+}
+
 const fn default_worker_stack_mib() -> usize {
     256
 }
@@ -248,6 +272,8 @@ impl Default for BuildConfig {
             worker_stack_mib: default_worker_stack_mib(),
             python: default_python(),
             execution_model: ExecutionModel::Native,
+            sandbox_builtin_children: 0,
+            remove_orphan_outputs: default_remove_orphan_outputs(),
         }
     }
 }

@@ -294,6 +294,26 @@ tool (`sandbox::execute_builtin`):
    fails the products and is discarded. Commands the processor runs (tera
    runs `python`, `sh`, `git`) execute directly inside that sandbox.
 
+**How products are grouped into children.** A builtin that batches
+(`supports_batch`, such as `ixmllint`) sends each batch to one child and the
+child runs `execute_batch`, as it would natively. A builtin that does not
+batch (`icheckstyle`, `ishellcheck`) is still grouped under the sandbox:
+`supports_batch: false` means "no start-up cost for a batch to share", which
+is true in process and false here, where each child costs a bwrap and an
+rsconstruct start-up (about 40 ms, see "Cost"). The executor splits its
+ready products into `[build] sandbox_builtin_children` children (0, the
+default, means one per parallel job), and each child runs `execute` on its
+share in turn (`Executor::groups_children`). This needs no per-processor
+flag: it follows from the processor being builtin and sandboxed. It is
+independent of `batch_size`, which is about tools that take many files at
+once. Every product keeps its own result and cache entry, so one failing
+file fails only its own product. The cost: the products of one child share
+one overlay, so a write none of them declares fails the whole child, and the
+error cannot say which product made it; a product can also write another
+product's declared output in the same child without that being caught. The
+checkers grouped this way write nothing, so neither has been seen; rerun the
+products natively to tell which one did it.
+
 The child cannot use the build's caches, which the parent holds open: the
 mtime cache is off, and the webcache (`.rsconstruct/webcache.redb`) is not
 read or written, because a write to it would be undeclared and children
@@ -333,6 +353,45 @@ A forced cold build of this repository (187 products) with `execution_model
 
 Product-level results otherwise matched the native build.
 
+## Cost
+
+Measured on 2026-11-08 with rsconstruct 0.9.157 on a 16-core Linux machine.
+Each repository got four forced builds (`rsconstruct build --force -j 8`),
+alternating native and sandboxed, in the repository's own venv. The
+sandboxed builds set `execution_model = "sandbox"` through a throwaway user
+config, so the repositories themselves were unchanged. Every build
+succeeded. Times are the mean of the two runs of each mode.
+
+| Repository        | Products | Native  | Sandbox | Extra          |
+|-------------------|---------:|--------:|--------:|---------------:|
+| pyawskit          |       90 |  0.89 s |  0.98 s | +0.09 s (+10%) |
+| demos-lang-python |     2230 |  5.20 s |  5.24 s | +0.04 s (+1%)  |
+| teaching-syllabi  |     4791 | 143.1 s | 146.9 s | +3.8 s (+3%)   |
+| demos-os-linux    |     6659 |  86.7 s |  96.4 s | +9.7 s (+11%)  |
+| demos-lang-java   |     1306 |  1.19 s |  6.78 s | +5.6 s (+470%) |
+
+Each sandboxed run pays a fixed cost, so the overhead grows with the number
+of runs, not with the size of the work:
+
+- **External tools:** one bwrap start-up plus an overlay mount per tool
+  invocation, a few milliseconds each. A batched checker pays it once per
+  batch, which is why demos-lang-python, almost all batched checkers,
+  barely moves. demos-os-linux pays it on every compiler, cppcheck and
+  clang-tidy run, which is the 11%. Where the tools do real work, as in
+  teaching-syllabi's pandoc runs, it disappears into the run time.
+- **Builtin processors** are where the sandbox costs the most. Natively they
+  run in-process, in well under a millisecond per product. Sandboxed, each
+  job is a fresh rsconstruct child inside bwrap (see "Builtin processors"),
+  which also recreates the processor and reruns its discovery. Measured
+  with `--timings`, a non-batched builtin goes from 0.000 s to 0.033–0.044 s
+  per product. demos-lang-java is that case: about 1150 `icheckstyle`
+  products, at about 38 ms each across 8 jobs, are the whole 5.6 s.
+
+That last case is now fixed: a non-batching builtin's products are grouped
+into one child per job (see "Builtin processors"). Measured the same way
+afterwards, demos-lang-java builds in 1.28 s natively and 1.33 s sandboxed,
+down from 6.78 s. The table above shows the numbers from before the fix.
+
 ## Open questions
 
 1. **Chromium inside the sandbox.** Ubuntu's `bwrap-userns-restrict`
@@ -367,9 +426,8 @@ Product-level results otherwise matched the native build.
    not work there, the fix is in the environment setup, never in `ci.yml`.
    For the same reason there is no end-to-end sandbox test in `tests/` yet:
    it would need bwrap on every machine that runs the suite.
-5. **Cost.** bwrap start-up plus an overlay mount per invocation is a few
-   milliseconds; batching amortizes it for checkers. Not yet measured on a
-   large fleet build.
+5. **Cost.** Measured; see "Cost" above. The slow case, non-batching
+   builtins, is grouped into children since that measurement.
 6. **Cargo's target directory** is `target` relative to the project root by
    default, which is what cargo declares; a crate in a subdirectory, or a
    `CARGO_TARGET_DIR` inside the project, needs its own `sandbox_writable`

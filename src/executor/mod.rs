@@ -99,6 +99,9 @@ pub struct ExecutorOptions {
     /// What a sandboxed builtin processor's child run needs (see
     /// `sandbox::execute_builtin`).
     pub builtin_setup: crate::sandbox::BuiltinSetup,
+    /// Children a sandboxed non-batching builtin's ready products are split
+    /// into (`[build] sandbox_builtin_children`, 0 = one per parallel job).
+    pub sandbox_builtin_children: usize,
 }
 
 /// Shared mutable state passed to product processing helpers.
@@ -243,6 +246,7 @@ pub struct Executor<'a> {
     timings: bool,
     worker_stack_bytes: usize,
     builtin_setup: crate::sandbox::BuiltinSetup,
+    sandbox_builtin_children: usize,
 }
 
 impl<'a> Executor<'a> {
@@ -271,6 +275,7 @@ impl<'a> Executor<'a> {
             timings: opts.timings,
             worker_stack_bytes: opts.worker_stack_bytes,
             builtin_setup: opts.builtin_setup,
+            sandbox_builtin_children: opts.sandbox_builtin_children,
         }
     }
 

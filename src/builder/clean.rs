@@ -81,6 +81,7 @@ impl Builder {
                 worker_stack_bytes: self.config.build.worker_stack_mib * 1024 * 1024,
                 // Cleaning executes no product.
                 builtin_setup: crate::sandbox::BuiltinSetup::default(),
+                sandbox_builtin_children: 0,
             },
         );
         let stats = executor.clean(&graph, verbose)?;
@@ -230,6 +231,7 @@ impl Builder {
                 worker_stack_bytes: self.config.build.worker_stack_mib * 1024 * 1024,
                 // Cleaning executes no product.
                 builtin_setup: crate::sandbox::BuiltinSetup::default(),
+                sandbox_builtin_children: 0,
             },
         );
         let stats = executor.clean(&graph, verbose)?;

@@ -555,6 +555,7 @@ impl Builder {
                 timings: opts.timings || opts.trace.is_some(),
                 worker_stack_bytes: self.config.build.worker_stack_mib * 1024 * 1024,
                 builtin_setup: crate::sandbox::BuiltinSetup::from_config(&self.config),
+                sandbox_builtin_children: self.config.build.sandbox_builtin_children,
             },
         );
 
@@ -588,11 +589,28 @@ impl Builder {
             .into());
         }
 
+        // Outputs earlier full builds produced that no product declares any
+        // more (`[build] remove_orphan_outputs`). After the build, so files
+        // this build read stay put until it is done; skipped when the build
+        // stopped on an internal error, and on a narrowed build, which does
+        // not see every product.
+        let orphans_dur =
+            if result.is_ok() && self.config.build.remove_orphan_outputs && is_full_build(opts) {
+                let t = Instant::now();
+                remove_orphan_outputs(ctx, &graph)?;
+                Some(t.elapsed())
+            } else {
+                None
+            };
+
         let mut stats = result?;
         flushed?;
 
         // Add phase timings to stats
         phase_timings.push(("build".to_string(), build_dur));
+        if let Some(dur) = orphans_dur {
+            phase_timings.push(("orphans".to_string(), dur));
+        }
         stats.phase_timings = phase_timings;
 
         // Print summary
@@ -614,7 +632,61 @@ impl Builder {
 
         Ok(())
     }
+}
 
+/// Whether the build sees every product: not narrowed by `-p`, `-x`,
+/// targets, `--iset` or `--pset`. Only such a build may judge an output as no
+/// longer produced.
+const fn is_full_build(opts: &BuildOptions) -> bool {
+    opts.processor_filter.is_none()
+        && opts.exclude_filter.is_none()
+        && opts.targets.is_none()
+        && opts.iset.is_empty()
+        && opts.pset.is_empty()
+}
+
+/// Remove the outputs no product declares any more, report them, and record
+/// this build's outputs for the next build (see `crate::orphans`).
+fn remove_orphan_outputs(
+    ctx: &crate::build_context::BuildContext,
+    graph: &crate::graph::BuildGraph,
+) -> Result<()> {
+    let root = std::path::Path::new("");
+    let current = crate::orphans::tracked(graph.products().iter().flat_map(|p| &p.outputs));
+    let removal =
+        crate::orphans::remove_orphans(root, &current, || crate::orphans::git_tracked(ctx))?;
+    let list = |paths: &[std::path::PathBuf]| {
+        paths
+            .iter()
+            .map(|p| p.display().to_string())
+            .collect::<Vec<_>>()
+            .join(", ")
+    };
+    if !removal.removed.is_empty() {
+        crate::output::info(&format!(
+            "[build] removed {} output(s) no longer produced: {}",
+            removal.removed.len(),
+            list(&removal.removed)
+        ));
+    }
+    if !removal.changed.is_empty() {
+        crate::output::warn(&format!(
+            "[build] kept {} output(s) no longer produced, changed since they were built: {}",
+            removal.changed.len(),
+            list(&removal.changed)
+        ));
+    }
+    if !removal.tracked.is_empty() {
+        crate::output::warn(&format!(
+            "[build] kept {} output(s) no longer produced, tracked by git: {}",
+            removal.tracked.len(),
+            list(&removal.tracked)
+        ));
+    }
+    crate::orphans::write_record(root, &current)
+}
+
+impl Builder {
     /// Show what a build with these options would do, without executing
     /// anything: the same plan (`-p`, `-x`, `--target`, overrides) and the
     /// same prediction (`classify_products`) as [`build`](Self::build), so a

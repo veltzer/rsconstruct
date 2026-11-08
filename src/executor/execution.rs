@@ -89,6 +89,14 @@ fn batch_chunk_size(batch_size: usize, n_items: usize) -> usize {
     }
 }
 
+/// Chunk size that splits `n_items` products of a sandboxed non-batching
+/// builtin into `children` children (`[build] sandbox_builtin_children`, 0 =
+/// one per parallel job). Never returns 0 — `chunks(0)` panics.
+fn child_chunk_size(children: usize, parallel: usize, n_items: usize) -> usize {
+    let children = if children == 0 { parallel } else { children };
+    n_items.div_ceil(children.max(1)).max(1)
+}
+
 /// Whether a processor's items take the batch path. Batching requires an
 /// explicit batch size (`batch_size: None` disables it entirely), a
 /// processor that supports it, and more than one item actually rebuilding.
@@ -724,11 +732,15 @@ impl Executor<'_> {
                 .into_iter()
                 .partition(|item| item.action == ProductAction::Build);
             units.extend(settled.into_iter().map(Unit::Single));
-            let chunk_size = batch_chunk_size(
-                self.batch_size
-                    .expect("batch groups only form when batching is enabled"),
-                to_run.len(),
-            );
+            let chunk_size = if self.groups_children(&processor) {
+                child_chunk_size(self.sandbox_builtin_children, self.parallel, to_run.len())
+            } else {
+                batch_chunk_size(
+                    self.batch_size
+                        .expect("batch groups only form when batching is enabled"),
+                    to_run.len(),
+                )
+            };
             let mut to_run = to_run.into_iter().peekable();
             while to_run.peek().is_some() {
                 let chunk: Vec<WorkItem> = to_run.by_ref().take(chunk_size).collect();
@@ -780,6 +792,21 @@ impl Executor<'_> {
             )
     }
 
+    /// Whether `proc_name`'s products are grouped into shared sandboxed
+    /// children: a builtin that runs in a child ([`Self::runs_in_child`]) but
+    /// does not batch. Natively such a processor checks each product in
+    /// process at no start-up cost, so separate products are right; in the
+    /// sandbox every child costs a bwrap and rsconstruct start-up, so its
+    /// products are split into `[build] sandbox_builtin_children` children,
+    /// each running `execute` on its share in turn. Independent of
+    /// `batch_size`, which is about tools that take many files at once.
+    fn groups_children(&self, proc_name: &str) -> bool {
+        self.processors.get(proc_name).is_some_and(|p| {
+            !effective_supports_batch(proc_name, p.as_ref())
+                && self.runs_in_child(proc_name, p.as_ref())
+        })
+    }
+
     /// The tools `proc_name` may run, for the debug check on every command.
     /// None when it runs in a child: the command here is rsconstruct itself,
     /// and the child checks the processor's own commands.
@@ -812,7 +839,9 @@ impl Executor<'_> {
         processor.execute(self.build_ctx, product)
     }
 
-    /// Execute a batch, like [`Self::execute_product`].
+    /// Execute a batch, like [`Self::execute_product`]. In a child, a
+    /// processor that does not batch runs `execute` on each product in turn
+    /// (see [`Self::groups_children`]).
     fn execute_products(
         &self,
         proc_name: &str,
@@ -825,7 +854,7 @@ impl Executor<'_> {
                 &self.builtin_setup,
                 proc_name,
                 products,
-                true,
+                effective_supports_batch(proc_name, processor),
             );
         }
         processor.execute_batch(self.build_ctx, products)
@@ -972,11 +1001,9 @@ impl Executor<'_> {
         let proc_total = items.len();
         let mut proc_current = items.len() - to_execute.len();
 
-        let chunk_size = batch_chunk_size(
-            self.batch_size
-                .expect("batch groups only form when batching is enabled"),
-            to_execute.len(),
-        );
+        // `units_of` already cut the group to its chunk size, and skipping
+        // or restoring only shrinks it, so this is one chunk.
+        let chunk_size = to_execute.len();
 
         // Process in chunks
         for chunk in to_execute.chunks(chunk_size) {
@@ -1520,7 +1547,9 @@ impl Executor<'_> {
                 .filter(|item| item.action != ProductAction::Skip)
                 .count();
 
-            if should_batch(batching_enabled, supports_batch, rebuild_count) {
+            if should_batch(batching_enabled, supports_batch, rebuild_count)
+                || (self.groups_children(&proc_name) && rebuild_count > 1)
+            {
                 batch_groups.insert(proc_name, items);
             } else {
                 non_batch_items.extend(items);
@@ -1575,6 +1604,26 @@ mod tests {
     #[test]
     fn batch_chunk_size_never_zero() {
         assert_eq!(batch_chunk_size(0, 0), 1);
+    }
+
+    /// A sandboxed non-batching builtin's products are split into one child
+    /// per job by default, or into the configured number of children; the
+    /// size never reaches 0.
+    #[test]
+    fn child_chunk_size_decision_table() {
+        assert_eq!(
+            child_chunk_size(0, 8, 1147),
+            144,
+            "0 means one child per job"
+        );
+        assert_eq!(child_chunk_size(4, 8, 1147), 287, "explicit count wins");
+        assert_eq!(child_chunk_size(0, 8, 3), 1, "fewer products than jobs");
+        assert_eq!(
+            child_chunk_size(0, 0, 5),
+            5,
+            "a zero job count is one child"
+        );
+        assert_eq!(child_chunk_size(0, 8, 0), 1, "never 0");
     }
 
     /// Batching needs all three conditions; in particular a single rebuilding
