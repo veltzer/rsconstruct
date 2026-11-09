@@ -1742,7 +1742,11 @@ pub static TOOLS: &[ToolInfo] = &[
         // real tree), the one of a crate in a subdirectory, and the lockfile
         // cargo writes when there is none or updates when the manifest moved.
         sandbox_writable: &["target", "**/target", "**/Cargo.lock"],
-        needs_network: false,
+        // cargo downloads the crates a build needs that are not in
+        // ~/.cargo yet, as npm and pip do; cut off, a cold build fails
+        // ("Could not resolve host: index.crates.io", seen on four rs*
+        // repos in the 2026-11-09 fleet run).
+        needs_network: true,
     },
     // Perl
     ToolInfo {

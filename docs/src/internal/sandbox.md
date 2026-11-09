@@ -153,6 +153,17 @@ bwrap --die-with-parent --ro-bind / / --bind $HOME $HOME --bind /tmp /tmp \
   tree after a successful run, like an output. Nothing is created in
   advance: an empty `.git` would turn a directory into a broken
   repository.
+  Two places are writable for every sandboxed run, whatever its tools
+  (`ALWAYS_WRITABLE`): `**/__pycache__`, since any script may run Python
+  without rsconstruct knowing, and `.rsconstruct/tools`, the project's
+  tool installs, where LilyPond keeps its fontconfig cache. Both came from
+  the first fleet-wide sandboxed run (see "Fleet run, 2026-11-09").
+  A writable place a run created itself, because it did not exist when
+  the run started, may exist in the real tree by the time the run ends,
+  made by a parallel run that is still writing into it (cargo's `target`).
+  It is merged into, never emptied and replaced.
+- **Runtime directory writable.** `$XDG_RUNTIME_DIR`, when set, is bound
+  read-write like `/tmp`: dotnet makes its named mutexes there.
 
 ### After the tool exits
 
@@ -472,6 +483,42 @@ down from 6.78 s. The table above shows the numbers from before the fix.
    root (bound straight to the real tree) and `**/target`, the directory of
    a crate in a subdirectory. A `CARGO_TARGET_DIR` elsewhere inside the
    project still needs its own `sandbox_writable` entry.
+
+## Fleet run, 2026-11-09
+
+Right after 0.9.163 made the sandbox the default, the latest CI run of
+every fleet repo was re-run on GitHub: 197 `build.yml` repos, with their
+Actions caches deleted first so each built cold rather than restoring
+products, and the test job of the 20 other rs* repos (`ci.yml`, which
+always builds cold). 192 passed, 25 failed.
+
+Fixed in rsconstruct (0.9.164):
+
+| Failure | Repos | Fix |
+|---|---|---|
+| "Failed to remove target: Directory not empty" | rsear, rstype | a writable place a run created is merged into the real one a parallel run made, not replaced |
+| cargo cannot resolve index.crates.io | rsimagetag, rsshell, rssite, rstube | cargo declares `needs_network` |
+| `__pycache__` written by scripts whose tool is not known as Python, in `.venv` and beside sources | teaching-animations, teaching-slides, teaching-syllabi, veltzer.github.io, web-schemas | `**/__pycache__` is writable for every run |
+| LilyPond's fontconfig cache in its install prefix | book-openbook, demos-lang-lilypond | `.rsconstruct/tools` is writable for every run |
+| dotnet: `mkdtemp("/run/user/1001/...")`: EROFS | demos-lang-cs | `$XDG_RUNTIME_DIR` is writable |
+
+Real findings, for each repo's own config (a script that downloads needs
+`sandbox_network = true`; a tool writing beside its output needs the
+file declared or its scratch moved):
+
+| Repo | What the sandbox caught |
+|---|---|
+| demos-hw-stm32 | a build script `git clone`s STM32CubeWL from GitHub |
+| demos-lang-haskell | ghc writes `out/Main.o` and `out/Main.hi` beside the declared output |
+| demos-lang-python | the `make` checker builds SWIG extensions in the source tree |
+| demos-lang-python-ds | notebooks download seaborn's datasets |
+| demos-lang-rust | `cargo_build.py` makes rustup download the pinned toolchain |
+| myworld-gwt, myworld-pf | `mvn_package.py`: maven downloads its plugins |
+| embeddings | the `web` stanza downloads into `download/` (already failing before the run) |
+
+Unrelated to the sandbox: pyblueprint and pypathutil hit HTTP 500s from
+GitHub while downloading, and rscontacts fails `cargo deny` on a new
+advisory against `libsqlite3-sys`.
 
 ## Running the tests
 

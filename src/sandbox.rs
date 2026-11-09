@@ -339,16 +339,34 @@ pub fn sandboxed_processors(
     names
 }
 
+/// What every sandboxed run may write, whatever its tools: state no build
+/// output ever is, which any tool can write without rsconstruct knowing it
+/// runs the program that does.
+///
+/// - `**/__pycache__`: Python's bytecode cache. Any script may run Python
+///   (a generic stanza's `scripts/x.py`, manim, a checker importing from
+///   `.venv`), and a tool rsconstruct does not know as Python declares
+///   nothing. Found by the 2026-11-09 fleet run: five repos failed on it.
+/// - `.rsconstruct/tools`: the project's tool installs (`tool_store`). A
+///   tool may keep a cache in its own install prefix, as lilypond does with
+///   its fontconfig cache; it is rsconstruct's tool state, not the
+///   project's.
+const ALWAYS_WRITABLE: &[&str] = &["**/__pycache__", crate::tool_store::REPO_TOOLS_DIR];
+
 /// The `sandbox_writable` entries a processor running `tools` gets: what
 /// each tool declares (`ToolInfo::sandbox_writable`), then the processor's
-/// own config, without duplicates.
+/// own config, then [`ALWAYS_WRITABLE`], without duplicates.
 pub fn writable_for(standard: &StandardConfig, tools: &[String]) -> Vec<String> {
     let mut out: Vec<String> = Vec::new();
     let declared = tools
         .iter()
         .filter_map(|t| crate::tools::tool_info(t))
         .flat_map(|info| info.sandbox_writable.iter().map(|s| (*s).to_string()));
-    for entry in declared.chain(standard.sandbox_writable.iter().cloned()) {
+    let always = ALWAYS_WRITABLE.iter().map(|s| (*s).to_string());
+    for entry in declared
+        .chain(standard.sandbox_writable.iter().cloned())
+        .chain(always)
+    {
         if !out.contains(&entry) {
             out.push(entry);
         }
@@ -778,6 +796,14 @@ pub fn prepare(cmd: &Command) -> Result<Option<Run>> {
     if let Some(home) = std::env::var_os("HOME").filter(|h| !h.is_empty()) {
         command.arg("--bind").arg(&home).arg(&home);
     }
+    // The user's runtime directory is per-user scratch space like /tmp:
+    // dotnet makes its named mutexes there, and failed with EROFS on a
+    // GitHub runner when it was read-only.
+    if let Some(runtime) =
+        std::env::var_os("XDG_RUNTIME_DIR").filter(|d| !d.is_empty() && Path::new(d).is_dir())
+    {
+        command.arg("--bind").arg(&runtime).arg(&runtime);
+    }
     command.args([
         "--bind",
         "/tmp",
@@ -958,8 +984,20 @@ impl Run {
         // Removals first, so a replaced directory is emptied before the new
         // contents are moved in.
         for change in &changes {
-            if let Change::Removed(p) | Change::Replaced(p) = change {
-                remove_real(&self.root.join(p))?;
+            match change {
+                Change::Removed(p) => remove_real(&self.root.join(p))?,
+                // A writable place (cargo's `target`) is shared state that
+                // runs alongside this one may be writing into: a run that
+                // started before it existed created its own, which overlayfs
+                // marks opaque, and by now another run may have made the
+                // real one and be bound to it. Emptying it would pull it out
+                // from under that run ("Directory not empty" when cargo
+                // writes while it is removed), so this run's files are
+                // merged into it instead, as a native run's would be.
+                Change::Replaced(p) if !self.writable.iter().any(|w| w.covers(p)) => {
+                    remove_real(&self.root.join(p))?;
+                }
+                Change::Replaced(_) | Change::Written(_) => {}
             }
         }
         for change in &changes {
@@ -1339,8 +1377,13 @@ mod tests {
                 "**/target",
                 "**/Cargo.lock",
                 "**/__pycache__",
-                "extra"
+                "extra",
+                ".rsconstruct/tools"
             ]
+        );
+        assert_eq!(
+            writable_for(&StandardConfig::default(), &[]),
+            ["**/__pycache__", ".rsconstruct/tools"]
         );
     }
 
@@ -1350,8 +1393,9 @@ mod tests {
     fn network_comes_from_the_tools_or_the_config() {
         let standard = StandardConfig::default();
         let tools = |names: &[&str]| names.iter().map(|s| (*s).to_string()).collect::<Vec<_>>();
-        assert!(!network_for(&standard, &tools(&["cargo", "ruff"])));
-        assert!(network_for(&standard, &tools(&["cargo", "cargo-deny"])));
+        assert!(!network_for(&standard, &tools(&["python", "ruff"])));
+        assert!(network_for(&standard, &tools(&["python", "cargo-deny"])));
+        assert!(network_for(&standard, &tools(&["cargo"])));
         assert!(network_for(&standard, &tools(&["taplo"])));
         let configured = StandardConfig {
             sandbox_network: true,
@@ -1369,7 +1413,10 @@ mod tests {
             .map(|t| t.name)
             .collect();
         names.sort_unstable();
-        assert_eq!(names, ["bundle", "cargo-deny", "npm", "pip", "taplo", "uv"]);
+        assert_eq!(
+            names,
+            ["bundle", "cargo", "cargo-deny", "npm", "pip", "taplo", "uv"]
+        );
     }
 
     /// A mass generator's staging directory becomes an output directory of
@@ -1656,5 +1703,34 @@ mod tests {
                 Change::Written(PathBuf::from("marp/a.css")),
             ]
         );
+    }
+
+    /// A run that started before `target` existed made its own, opaque in
+    /// the overlay; meanwhile another run created the real one and wrote
+    /// into it. Applying merges into the shared writable place instead of
+    /// emptying it (seen on GitHub runners: cargo's parallel products failed
+    /// with "Failed to remove target: Directory not empty"). A replaced
+    /// directory that is a declared output is still emptied first.
+    #[test]
+    fn replaced_writable_place_is_merged_not_emptied() {
+        let tmp = tempfile::tempdir().unwrap();
+        let upper = tmp.path().join("upper");
+        let root = tmp.path().join("root");
+        for dir in ["target", "docs"] {
+            fs::create_dir_all(upper.join(dir)).unwrap();
+            fs::create_dir_all(root.join(dir)).unwrap();
+            fs::write(root.join(dir).join("theirs"), "t").unwrap();
+            fs::write(upper.join(dir).join("mine"), "m").unwrap();
+            xattr::set(upper.join(dir), OPAQUE_XATTR, b"y").unwrap();
+        }
+        let mut run = run_with(&[], &["docs"]);
+        run.root = root.clone();
+        run.upper = upper;
+        run.writable = vec![Writable::parse("target").unwrap()];
+        run.apply().unwrap();
+        assert!(root.join("target/theirs").exists());
+        assert!(root.join("target/mine").exists());
+        assert!(!root.join("docs/theirs").exists());
+        assert!(root.join("docs/mine").exists());
     }
 }
