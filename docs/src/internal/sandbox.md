@@ -520,6 +520,20 @@ Unrelated to the sandbox: pyblueprint and pypathutil hit HTTP 500s from
 GitHub while downloading, and rscontacts fails `cargo deny` on a new
 advisory against `libsqlite3-sys`.
 
+Second round, with 0.9.164: the eight repo fixes were pushed with their
+caches deleted, and the 16 repos the rsconstruct fixes covered were re-run
+cold. 22 of 24 passed. The two failures were gaps the first round could
+not reach, because those builds had died earlier:
+
+| Repo | What the sandbox caught | Fix |
+|---|---|---|
+| demos-hw-stm32 | the HAL library script keeps compiled objects in `exercises/common/.rsc_hal_obj_<core>` as an incremental cache | the cache directory is in `sandbox_writable` |
+| demos-lang-cs | `dotnet build` restores its packages from nuget.org (hidden in round one by the `$XDG_RUNTIME_DIR` failure) | `sandbox_network = true` |
+
+Both passed after the fix, so every repo that failed in the first round
+now builds sandboxed on GitHub except rscontacts, whose failure is the
+`cargo deny` advisory.
+
 ## Running the tests
 
 `cargo nextest run` runs the suite under the default, `sandbox`, so it
@@ -570,11 +584,12 @@ hides.
 1. ~~Route every product's tool runs through one spawn point.~~ Already the
    case; the remaining direct spawns are discovery-time.
 2. ~~Implement the opt-in write and network sandbox.~~ Done.
-3. Run cold fleet builds with `execution_model = "sandbox"` and count
-   violations per processor and repository (started: rsconstruct itself,
-   above).
-4. Fix the violations: declare outputs, add `sandbox_writable` defaults,
-   set `sandbox_network` where a download is the point.
+3. ~~Run cold fleet builds with `execution_model = "sandbox"` and count
+   violations per processor and repository.~~ Done; see "Fleet run,
+   2026-11-09".
+4. ~~Fix the violations: declare outputs, add `sandbox_writable` defaults,
+   set `sandbox_network` where a download is the point.~~ Done in 0.9.164
+   and in the repos' own configs.
 5. ~~Make the sandbox the default.~~ Done in 0.9.163, failing outright
    where `bwrap` is missing.
 6. Separately, add the strace-based undeclared-reads report.
