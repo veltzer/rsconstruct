@@ -1505,19 +1505,19 @@ fn build_python_defaults_to_python_and_is_switchable() {
     assert!(err.contains("[build] python"), "{err}");
 }
 
-/// `[build] execution_model` is `native` unless set; `sandbox` is the one
-/// other value. Sandboxing is an option, never the default.
+/// `[build] execution_model` is `sandbox` unless set; `native` is the one
+/// other value.
 #[test]
-fn build_execution_model_defaults_to_native() {
+fn build_execution_model_defaults_to_sandbox() {
     use super::ExecutionModel;
     let absent: super::BuildConfig = toml::from_str("").unwrap();
-    assert_eq!(absent.execution_model, ExecutionModel::Native);
+    assert_eq!(absent.execution_model, ExecutionModel::Sandbox);
     assert_eq!(
         super::BuildConfig::default().execution_model,
-        ExecutionModel::Native
+        ExecutionModel::Sandbox
     );
-    let set: super::BuildConfig = toml::from_str("execution_model = \"sandbox\"\n").unwrap();
-    assert_eq!(set.execution_model, ExecutionModel::Sandbox);
+    let set: super::BuildConfig = toml::from_str("execution_model = \"native\"\n").unwrap();
+    assert_eq!(set.execution_model, ExecutionModel::Native);
     assert!(toml::from_str::<super::BuildConfig>("execution_model = \"docker\"\n").is_err());
 }
 

@@ -106,7 +106,7 @@ reads per processor. If most processors read nothing undeclared, the check
 can fail by default with a small allow-list; if many do (config files,
 caches), it starts as a report.
 
-See also [Sandboxed Execution](sandbox.md) (the opt-in sandbox that
+See also [Sandboxed Execution](sandbox.md) (the sandbox, on by default, that
 covers undeclared writes and network access, leaving reads to this
 check), [Suggestions](suggestions.md) ("Sandboxed execution") and
 [Strictness](strictness.md).

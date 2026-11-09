@@ -1,6 +1,6 @@
 use crate::common::{
-    make_executable, run_rsconstruct, run_rsconstruct_json, run_rsconstruct_json_with_env,
-    run_rsconstruct_with_env, setup_test_project, write_file,
+    make_executable, rsconstruct_command, run_rsconstruct, run_rsconstruct_json,
+    run_rsconstruct_json_with_env, run_rsconstruct_with_env, setup_test_project, write_file,
 };
 use std::fs;
 #[allow(unused_imports)]
@@ -116,11 +116,14 @@ fn sandboxed_builtin_needs_bwrap() {
     fs::create_dir_all(project.join("y")).unwrap();
     fs::write(project.join("y/a.yaml"), "a: 1\n").unwrap();
     let empty_path = TempDir::new().unwrap();
-    let output = run_rsconstruct_with_env(
-        project,
-        &["build"],
-        &[("PATH", empty_path.path().to_str().unwrap())],
-    );
+    // A top-level build: when this suite itself runs inside a sandboxed
+    // build, the inherited marker would make it a nested one.
+    let output = rsconstruct_command(project)
+        .args(["build"])
+        .env("PATH", empty_path.path())
+        .env_remove(IN_SANDBOX_ENV)
+        .output()
+        .expect("Failed to execute rsconstruct");
     let all = format!(
         "{}{}",
         String::from_utf8_lossy(&output.stdout),
@@ -131,6 +134,49 @@ fn sandboxed_builtin_needs_bwrap() {
         all.contains("Missing required tools") && all.contains("bwrap"),
         "{all}"
     );
+}
+
+/// What every sandboxed run's environment carries (`sandbox::INSIDE_ENV`).
+const IN_SANDBOX_ENV: &str = "RSCONSTRUCT_IN_SANDBOX";
+
+/// An rsconstruct started inside a sandboxed run (a test under a sandboxed
+/// `cargo nextest`) cannot start bwrap again, so it runs its products
+/// natively: an undeclared write is the outer run's to judge, not this
+/// build's. Sandboxed, the same build fails on `stray.txt`.
+#[test]
+fn nested_build_runs_natively() {
+    let temp_dir = TempDir::new().unwrap();
+    let project = temp_dir.path();
+    fs::write(
+        project.join("rsconstruct.toml"),
+        "[build]\nexecution_model = \"sandbox\"\n\n\
+         [processor.explicit.generic.stray]\n\
+         command = \"./gen.sh\"\n\
+         inputs = [\"in.txt\"]\n\
+         output_files = [\"out.txt\"]\n",
+    )
+    .unwrap();
+    fs::write(project.join("in.txt"), "in\n").unwrap();
+    let script = project.join("gen.sh");
+    fs::write(
+        &script,
+        "#!/bin/sh\necho out > out.txt\necho stray > stray.txt\n",
+    )
+    .unwrap();
+    make_executable(&script);
+    let output = rsconstruct_command(project)
+        .args(["build"])
+        .env(IN_SANDBOX_ENV, "1")
+        .output()
+        .expect("Failed to execute rsconstruct");
+    let all = format!(
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(output.status.success(), "{all}");
+    assert!(project.join("out.txt").exists(), "{all}");
+    assert!(project.join("stray.txt").exists(), "{all}");
 }
 
 /// Run the hidden `sandbox-run` subcommand with `job` on its standard input,

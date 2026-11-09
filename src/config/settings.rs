@@ -157,12 +157,14 @@ pub struct BuildConfig {
     /// `python` (no `python-is-python3`, no venv).
     #[serde(default = "default_python")]
     pub python: String,
-    /// How processors run their external tools: `native` (the default)
-    /// runs them directly in the project tree; `sandbox` runs each one
-    /// under bubblewrap, catching files it writes that its product does not
-    /// declare and any network access. A correctness check, not a security
-    /// boundary; see docs/src/internal/sandbox.md. A processor can override
-    /// this with its own `execution_model` field.
+    /// How processors run their external tools: `sandbox` (the default)
+    /// runs each one under bubblewrap, catching files it writes that its
+    /// product does not declare and any network access; `native` runs them
+    /// directly in the project tree. A build that runs anything sandboxed
+    /// fails when bwrap is missing (no falling back to native). A
+    /// correctness check, not a security boundary; see
+    /// docs/src/internal/sandbox.md. A processor can override this with its
+    /// own `execution_model` field.
     #[serde(default)]
     pub execution_model: ExecutionModel,
     /// How many sandboxed children share the products of a builtin
@@ -193,10 +195,10 @@ pub struct BuildConfig {
 #[serde(rename_all = "lowercase")]
 pub enum ExecutionModel {
     /// Run the tool directly in the project tree.
-    #[default]
     Native,
     /// Run the tool under bubblewrap with the project tree behind an
     /// overlay; only declared outputs reach the real tree.
+    #[default]
     Sandbox,
 }
 
@@ -271,7 +273,7 @@ impl Default for BuildConfig {
             command_timeout_secs: 0,
             worker_stack_mib: default_worker_stack_mib(),
             python: default_python(),
-            execution_model: ExecutionModel::Native,
+            execution_model: ExecutionModel::Sandbox,
             sandbox_builtin_children: 0,
             remove_orphan_outputs: default_remove_orphan_outputs(),
         }

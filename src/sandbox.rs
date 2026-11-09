@@ -298,8 +298,25 @@ fn check_sandboxable_by(
 }
 
 /// Whether a processor with this config runs sandboxed under the build-wide
-/// `build_default`.
+/// `build_default`: when its execution model resolves to `sandbox`, and
+/// this rsconstruct is not itself running inside a sandboxed run.
+///
+/// An rsconstruct started inside bwrap (a test run by a sandboxed
+/// `cargo nextest`, a script that calls `rsconstruct build`) cannot sandbox
+/// its products: bwrap cannot start inside bwrap where unprivileged user
+/// namespaces are restricted, as on Ubuntu ("No permissions to create a new
+/// namespace"). It runs them natively, which loses nothing that matters:
+/// the outer run's overlay already holds every write the nested build
+/// makes, and the outer product's declared outputs are what is checked.
+/// This is not a fallback for a missing bwrap; a top-level build without
+/// bwrap still fails in the preflight.
 pub fn is_sandboxed(standard: &StandardConfig, build_default: ExecutionModel) -> bool {
+    std::env::var_os(INSIDE_ENV).is_none() && resolves_to_sandbox(standard, build_default)
+}
+
+/// Whether a processor's execution model, its own or else `build_default`,
+/// is `sandbox`.
+fn resolves_to_sandbox(standard: &StandardConfig, build_default: ExecutionModel) -> bool {
     standard.execution_model.unwrap_or(build_default) == ExecutionModel::Sandbox
 }
 
@@ -1571,12 +1588,12 @@ mod tests {
     #[test]
     fn native_unless_the_processor_or_the_build_says_sandbox() {
         let mut standard = StandardConfig::default();
-        assert!(!is_sandboxed(&standard, ExecutionModel::Native));
-        assert!(is_sandboxed(&standard, ExecutionModel::Sandbox));
+        assert!(!resolves_to_sandbox(&standard, ExecutionModel::Native));
+        assert!(resolves_to_sandbox(&standard, ExecutionModel::Sandbox));
         standard.execution_model = Some(ExecutionModel::Native);
-        assert!(!is_sandboxed(&standard, ExecutionModel::Sandbox));
+        assert!(!resolves_to_sandbox(&standard, ExecutionModel::Sandbox));
         standard.execution_model = Some(ExecutionModel::Sandbox);
-        assert!(is_sandboxed(&standard, ExecutionModel::Native));
+        assert!(resolves_to_sandbox(&standard, ExecutionModel::Native));
     }
 
     #[test]

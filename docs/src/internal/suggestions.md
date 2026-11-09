@@ -35,9 +35,10 @@ Grades:
   sandbox, the candidate mechanisms (strace leading) and the open
   questions are in [Undeclared Reads](undeclared-reads.md).
 - **First version implemented 2026-11-07:** `[build] execution_model =
-  "sandbox"`, an opt-in sandbox for correctness (not security) that keeps
+  "sandbox"`, a sandbox for correctness (not security) that keeps
   everything readable but catches undeclared writes and network access,
-  built on bwrap with an overlay over the project. See
+  built on bwrap with an overlay over the project. The default since
+  0.9.163. See
   [Sandboxed Execution](sandbox.md).
 - **Urgency**: medium (check mode) / low (full isolation) | **Complexity**: medium (check mode) / high (full isolation)
 

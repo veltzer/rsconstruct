@@ -11,21 +11,22 @@ fn no_user_config_dir() -> std::path::PathBuf {
     std::env::temp_dir().join("rsconstruct-tests-no-user-config")
 }
 
-/// Set to run the whole suite with `execution_model = "sandbox"`: every
-/// test's rsconstruct then reads a user config that turns the sandbox on,
-/// instead of none. A fixture's own `execution_model` still wins. See
-/// docs/src/internal/sandbox.md, "Running the tests sandboxed".
-const SANDBOX_SUITE_ENV: &str = "RSCONSTRUCT_TEST_SANDBOX";
+/// Set to run the whole suite with `execution_model = "native"`: every
+/// test's rsconstruct then reads a user config that turns the sandbox off,
+/// instead of none (the default, `sandbox`). A fixture's own
+/// `execution_model` still wins. See docs/src/internal/sandbox.md,
+/// "Running the tests natively".
+const NATIVE_SUITE_ENV: &str = "RSCONSTRUCT_TEST_NATIVE";
 
 /// The user config directory every test's rsconstruct reads: none, or with
-/// [`SANDBOX_SUITE_ENV`] set, one whose config turns the sandbox on.
+/// [`NATIVE_SUITE_ENV`] set, one whose config turns the sandbox off.
 fn test_user_config_dir() -> std::path::PathBuf {
-    if std::env::var_os(SANDBOX_SUITE_ENV).is_none() {
+    if std::env::var_os(NATIVE_SUITE_ENV).is_none() {
         return no_user_config_dir();
     }
-    let dir = std::env::temp_dir().join("rsconstruct-tests-sandbox-user-config");
+    let dir = std::env::temp_dir().join("rsconstruct-tests-native-user-config");
     let config = dir.join("rsconstruct/config.toml");
-    fs::create_dir_all(config.parent().unwrap()).expect("Failed to create sandbox user config dir");
+    fs::create_dir_all(config.parent().unwrap()).expect("Failed to create native user config dir");
     // Tests run in parallel: write a private file and rename it into place,
     // so a reader never sees a half-written config.
     let tmp = config.with_extension(format!(
@@ -33,9 +34,9 @@ fn test_user_config_dir() -> std::path::PathBuf {
         std::process::id(),
         std::thread::current().id()
     ));
-    fs::write(&tmp, "[build]\nexecution_model = \"sandbox\"\n")
-        .expect("Failed to write sandbox user config");
-    fs::rename(&tmp, &config).expect("Failed to move sandbox user config into place");
+    fs::write(&tmp, "[build]\nexecution_model = \"native\"\n")
+        .expect("Failed to write native user config");
+    fs::rename(&tmp, &config).expect("Failed to move native user config into place");
     dir
 }
 

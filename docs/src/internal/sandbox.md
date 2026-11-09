@@ -44,27 +44,42 @@ The mistakes it is meant to catch:
 Undeclared *reads* are left to tracing (see
 [Undeclared Reads](undeclared-reads.md)).
 
-## Sandboxing is an option, not a requirement
+## Sandboxing is the default
 
-Sandboxing is **opt-in** and must stay optional:
+Since 0.9.163 (2026-11-09) the sandbox is **on by default**. Until then it
+was opt-in; it became the default once the whole test suite and the fleet's
+GitHub runners passed sandboxed (see open question 4 and "Running the
+tests").
 
-- `[build] execution_model = "native"` is the default. A build without the
-  setting runs exactly as it always has.
-- A project turns the sandbox on for the whole build with `[build]
-  execution_model = "sandbox"`, and any processor can override the
-  build-wide value with its own `execution_model` field.
-- A machine without `bwrap` (macOS, a minimal container) can still build
-  every project that leaves the sandbox off. Only a build that asks for the
-  sandbox needs `bwrap`; that build fails in the tool preflight with
-  "Missing required tools: bwrap" and an install hint, instead of silently
-  running unsandboxed (strict by default).
+- `[build] execution_model = "sandbox"` is the default. A project turns it
+  off for the whole build with `[build] execution_model = "native"`, and
+  any processor can override the build-wide value with its own
+  `execution_model` field.
+- **A missing `bwrap` fails the build; it never falls back to native.** A
+  build in which anything runs sandboxed fails in the tool preflight with
+  "Missing required tools: bwrap" and an install hint (strict by default,
+  and a fallback would make the check silently disappear on exactly the
+  machines nobody looks at). `tool install machine` installs it on Linux.
+  A machine that cannot have it (macOS, a minimal container) builds by
+  setting `execution_model = "native"`, in the project or in the user
+  config.
+- **A nested build runs natively.** An rsconstruct started inside a
+  sandboxed run (a test under a sandboxed `cargo nextest`, a script that
+  calls `rsconstruct build`) sees `RSCONSTRUCT_IN_SANDBOX` and runs its
+  products natively (`sandbox::is_sandboxed`). It has to: bwrap cannot
+  start inside bwrap where unprivileged user namespaces are restricted
+  (Ubuntu: "No permissions to create a new namespace"), which is what
+  rsconstruct's own gate hit when the default changed, since its test suite
+  starts builds from inside the sandboxed `nextest` product. Nothing is
+  lost: the outer run's overlay holds every write the nested build makes,
+  and the outer product's declared outputs are what get checked. This is
+  not a fallback for a missing bwrap; a top-level build still needs it.
 - The sandbox never changes what a successful product produces, so it is
   not part of any cache key. A product cached by a sandboxed build is valid
   for an unsandboxed one and the other way round.
 
-The intended use is as a **check**: turn it on in CI, or locally while
-adding a processor. Even if it later becomes the recommended setting for the
-fleet, it remains a setting, not a precondition for using rsconstruct.
+It stays a **check**, not a security boundary, and it stays a setting:
+`native` builds exactly as rsconstruct always has.
 
 ## Why not a Bazel-style sandbox
 
@@ -449,9 +464,8 @@ down from 6.78 s. The table above shows the numbers from before the fix.
    `stray.txt`, and the run failed with the same "does not declare" error.
    The build's `deploy` job failed only because Pages accepts deploys from
    `master` alone.
-   The test suite can now run entirely sandboxed (see "Running the tests
-   sandboxed"); it does not by default, since that needs bwrap on every
-   machine that runs it.
+   The test suite runs sandboxed by default since the sandbox became the
+   build default (see "Running the tests").
 5. **Cost.** Measured; see "Cost" above. The slow case, non-batching
    builtins, is grouped into children since that measurement.
 6. **Cargo's target directory.** cargo declares `target` at the project
@@ -459,13 +473,19 @@ down from 6.78 s. The table above shows the numbers from before the fix.
    a crate in a subdirectory. A `CARGO_TARGET_DIR` elsewhere inside the
    project still needs its own `sandbox_writable` entry.
 
-## Running the tests sandboxed
+## Running the tests
 
-`RSCONSTRUCT_TEST_SANDBOX=1 cargo nextest run` runs the whole suite with
-`execution_model = "sandbox"`. The harness (`tests/common/mod.rs`) points
-every test's rsconstruct at a user config that turns the sandbox on,
+`cargo nextest run` runs the suite under the default, `sandbox`, so it
+needs `bwrap`. `RSCONSTRUCT_TEST_NATIVE=1 cargo nextest run` runs it with
+`execution_model = "native"`: the harness (`tests/common/mod.rs`) points
+every test's rsconstruct at a user config that turns the sandbox off,
 instead of at an empty one. A fixture that sets its own `execution_model`
-still wins.
+still wins. Both runs must pass. (Before the default changed, the switch
+was the other way round, `RSCONSTRUCT_TEST_SANDBOX=1`.) Run by
+`rsconstruct build`, the suite is itself a sandboxed product, so the builds
+its tests start are nested and run natively (see "Sandboxing is the
+default"); the sandboxed suite is the one run directly with `cargo nextest
+run`.
 
 The first sandboxed run, on 2026-11-09, failed 62 of 1399 tests. The fixes
 fell into three groups.
@@ -507,7 +527,7 @@ hides.
    violations per processor and repository (started: rsconstruct itself,
    above).
 4. Fix the violations: declare outputs, add `sandbox_writable` defaults,
-   set `sandbox_network` where a download is the point. The sandbox stays
-   opt-in; whether the fleet's shared config turns it on is a separate
-   decision.
-5. Separately, add the strace-based undeclared-reads report.
+   set `sandbox_network` where a download is the point.
+5. ~~Make the sandbox the default.~~ Done in 0.9.163, failing outright
+   where `bwrap` is missing.
+6. Separately, add the strace-based undeclared-reads report.
