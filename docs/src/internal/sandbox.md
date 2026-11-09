@@ -438,7 +438,17 @@ down from 6.78 s. The table above shows the numbers from before the fix.
    image, so `tool install machine` did not need to install it there; on an
    image without it, the install step adds it (see "Preflight"). Not covered
    by that run: the Chromium-based processors (made sandboxable after it,
-   see open question 1; no fleet repo uses them) and a Python-heavy repo.
+   see open question 1; no fleet repo uses them).
+   A Python-heavy repo followed on 2026-11-09 with rsconstruct 0.9.159: the
+   same kind of throwaway branch of pytconf ran cold and sandboxed on
+   `ubuntu-26.04`. All 85 products built: `ruff` (17), `pyrefly` (17),
+   `pytest` (3), the `sphinx` mass generator (40 pages, autodoc importing the
+   package), `taplo`, `rumdl` and the builtins `tera`, `iactionlint` and
+   `iluacheck`. None of them tripped the undeclared-write check. A
+   second commit added a Python probe script that writes an undeclared
+   `stray.txt`, and the run failed with the same "does not declare" error.
+   The build's `deploy` job failed only because Pages accepts deploys from
+   `master` alone.
    There is still no end-to-end sandbox
    test in `tests/`: it would need bwrap on every machine that runs the
    suite.
