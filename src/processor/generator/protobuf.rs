@@ -40,7 +40,8 @@ fn create_protobuf(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processo
                 extra_tools: &[],
                 extra_tools_fn: None,
                 source_filter: None,
-                discover_mode: DiscoverMode::SingleFormat("pb.cc"),
+                // `--cpp_out` always writes the header beside the source.
+                discover_mode: DiscoverMode::SingleFormatWithCompanions("pb.cc", &["pb.h"]),
                 execute_fn: execute_protobuf,
                 is_builtin: false,
             },

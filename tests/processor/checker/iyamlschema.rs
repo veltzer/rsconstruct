@@ -83,6 +83,57 @@ fn iyamlschema_valid_file() {
     );
 }
 
+/// Serve `body` over HTTP on 127.0.0.1 to exactly one request, then stop;
+/// returns the URL.
+fn serve_once(body: &'static str) -> String {
+    use std::io::{Read, Write};
+    let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    let url = format!("http://{}/schema.json", listener.local_addr().unwrap());
+    std::thread::spawn(move || {
+        let (mut stream, _) = listener.accept().unwrap();
+        let mut request = [0u8; 4096];
+        let _ = stream.read(&mut request).unwrap();
+        let response = format!(
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{body}",
+            body.len()
+        );
+        stream.write_all(response.as_bytes()).unwrap();
+    });
+    url
+}
+
+/// A schema fetched over the network is stored in the webcache, so a later
+/// build, with the server gone, still validates. Under the sandbox the
+/// fetch happens in a sandboxed child, which only reads the cache; the build
+/// stores what the child downloaded once its products are done.
+#[test]
+fn iyamlschema_downloaded_schema_is_stored_in_the_webcache() {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let project_path = temp_dir.path();
+    let url = serve_once(SCHEMA);
+
+    fs::write(
+        project_path.join("rsconstruct.toml"),
+        "[processor.checker.iyamlschema]\nsrc_dirs = [\".\"]\n",
+    )
+    .unwrap();
+    fs::write(
+        project_path.join("data.yaml"),
+        format!("$schema: \"{url}\"\nname: Alice\nage: 30\n"),
+    )
+    .unwrap();
+
+    for args in [["build", "-v"], ["build", "-f"]] {
+        let output = run_rsconstruct_with_env(project_path, &args, &[("NO_COLOR", "1")]);
+        assert!(
+            output.status.success(),
+            "{args:?} should succeed (the second one from the webcache): stdout={}, stderr={}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr),
+        );
+    }
+}
+
 #[test]
 fn iyamlschema_invalid_data_fails() {
     let temp_dir = TempDir::new().expect("Failed to create temp dir");

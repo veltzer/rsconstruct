@@ -161,8 +161,14 @@ fn sandbox_run(dir: &Path, job: &serde_json::Value) -> (String, serde_json::Valu
     let stdout = String::from_utf8(output.stdout).unwrap();
     let marker = "\u{1e}rsconstruct-sandbox-results\u{1e}";
     let at = stdout.rfind(marker).expect("results marker");
-    let results = serde_json::from_str(stdout[at + marker.len()..].trim()).unwrap();
-    (stdout[..at].to_string(), results)
+    let mut reported: serde_json::Value =
+        serde_json::from_str(stdout[at + marker.len()..].trim()).unwrap();
+    assert_eq!(
+        reported["fetched"],
+        serde_json::json!([]),
+        "nothing downloaded"
+    );
+    (stdout[..at].to_string(), reported["results"].take())
 }
 
 fn sandbox_job(
@@ -180,6 +186,8 @@ fn sandbox_job(
             "python": "python",
             "max_arg_len": 100_000,
             "command_timeout_secs": 0,
+            "webcache_ttl_secs": 0,
+            "worker_stack_mib": 256,
         },
         "instance": { "instance": pname, "pname": pname, "config": config },
         "products": products.iter().enumerate().map(|(id, (input, output))| serde_json::json!({
@@ -354,8 +362,9 @@ fn keep_going_continues_after_failure() {
     // The good template should still have been processed (verify via output)
     let stdout = String::from_utf8_lossy(&output.stdout);
     // With --keep-going, both files should be attempted to be processed
+    // ("Processing:" each, or one "Processing batch:" for a sandboxed group)
     assert!(
-        stdout.contains("Processing:"),
+        stdout.contains("Processing:") || stdout.contains("Processing batch:"),
         "Files should be processed with --keep-going"
     );
 }
@@ -655,12 +664,22 @@ fn deterministic_build_order() {
                 String::from_utf8_lossy(&output.stderr)
             );
 
-            // Extract the target name from "Processing: <name>" lines
+            // Extract the target names from "Processing: <name>" lines, or
+            // from "Processing batch: N files: <a>, <b>, ..." when they run
+            // as one group (a builtin under the sandbox).
             let stdout = String::from_utf8_lossy(&output.stdout);
             let processing_names: Vec<String> = stdout
                 .lines()
-                .filter(|l| l.contains("Processing:"))
-                .filter_map(|l| l.split("Processing:").nth(1).map(|s| s.trim().to_string()))
+                .flat_map(|l| {
+                    if let Some(rest) = l.split("Processing batch:").nth(1) {
+                        let files = rest.split_once("files:").map_or("", |(_, f)| f);
+                        files.split(',').map(|s| s.trim().to_string()).collect()
+                    } else if let Some(rest) = l.split("Processing:").nth(1) {
+                        vec![rest.trim().to_string()]
+                    } else {
+                        Vec::new()
+                    }
+                })
                 .collect();
             assert_eq!(
                 processing_names.len(),
@@ -1292,6 +1311,7 @@ src_extensions = [".txt"]
 src_dirs = ["inputs"]
 max_jobs = 2
 batch = false
+sandbox_writable = [".concurrency_counter", ".concurrency_peak", ".concurrency_lock"]
 "#,
         script = script_path.display(),
     );
@@ -1310,6 +1330,9 @@ batch = false
     // Initialize counter files
     fs::write(project_path.join(".concurrency_counter"), "0").unwrap();
     fs::write(project_path.join(".concurrency_peak"), "0").unwrap();
+    // Exists beforehand so a sandboxed run locks the real file
+    // (`sandbox_writable`), the one every other run locks.
+    fs::write(project_path.join(".concurrency_lock"), "").unwrap();
 
     // Run build with -j8 global parallelism
     let result = run_rsconstruct_json_with_env(
@@ -1396,6 +1419,7 @@ args = ["{script}"]
 src_extensions = [".txt"]
 src_dirs = ["inputs"]
 batch = false
+sandbox_writable = [".concurrency_counter", ".concurrency_peak", ".concurrency_lock"]
 "#,
         script = script_path.display(),
     );
@@ -1412,6 +1436,9 @@ batch = false
 
     fs::write(project_path.join(".concurrency_counter"), "0").unwrap();
     fs::write(project_path.join(".concurrency_peak"), "0").unwrap();
+    // Exists beforehand so a sandboxed run locks the real file
+    // (`sandbox_writable`), the one every other run locks.
+    fs::write(project_path.join(".concurrency_lock"), "").unwrap();
 
     let result = run_rsconstruct_json_with_env(
         project_path,

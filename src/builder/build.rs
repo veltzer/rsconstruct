@@ -575,6 +575,9 @@ impl Builder {
         // Written even when the build failed: its products were still
         // hashed. Reported after the build's own outcome, which matters more.
         let flushed = crate::checksum::flush_mtime_cache(ctx);
+        // What sandboxed children downloaded (iyamlschema's schemas), now
+        // that none is running and holding the webcache open.
+        let stored = crate::webcache::store_pending();
         let build_dur = t.elapsed();
         print_graph_stats(GraphSnapshot::AfterExecute, &graph);
 
@@ -603,6 +606,7 @@ impl Builder {
 
         let mut stats = result?;
         flushed?;
+        stored?;
 
         // Add phase timings to stats
         phase_timings.push(("build".to_string(), build_dur));

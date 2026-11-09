@@ -59,7 +59,25 @@ pub struct GemProcessor {
 }
 
 impl GemProcessor {
-    pub const fn new(config: GemConfig) -> Self {
+    pub fn new(mut config: GemConfig) -> Self {
+        // `bundle install` puts the gems in `gem_home`, resolved in each
+        // Gemfile's directory: tool state, writable under the sandbox like
+        // npm's `node_modules`. A plain name may sit beside any Gemfile; a
+        // longer relative path is taken as written. An absolute one is
+        // outside the project, where the sandbox has no overlay.
+        let home = Path::new(&config.gem_home);
+        let entry = if home.is_absolute() {
+            None
+        } else if home.components().count() == 1 {
+            Some(format!("**/{}", config.gem_home))
+        } else {
+            Some(config.gem_home.clone())
+        };
+        if let Some(entry) = entry
+            && !config.standard.sandbox_writable.contains(&entry)
+        {
+            config.standard.sandbox_writable.push(entry);
+        }
         Self { config }
     }
 
@@ -196,8 +214,10 @@ inventory::submit! { crate::tools::ToolInfo {
     name: "bundle", runtime: "ruby",
     project: Some(crate::tools::InstallMethod::new("gem", "bundler")),
     machine: Some(crate::tools::InstallMethod::new("gem", "bundler")),
-    // `bundle install` downloads the gems it installs.
-    alternatives: &[], prefer: None, sandbox_writable: &[], needs_network: true,
+    // `bundle install` downloads the gems it installs (into `gem_home`, which
+    // the gem processor adds itself), and writes `Gemfile.lock` when there
+    // is none or the Gemfile moved past it.
+    alternatives: &[], prefer: None, sandbox_writable: &["**/Gemfile.lock"], needs_network: true,
 } }
 
 #[cfg(test)]

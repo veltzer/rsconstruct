@@ -192,6 +192,25 @@ fn current_spec() -> Option<Spec> {
     SPEC.with(|s| s.borrow().clone())
 }
 
+/// Let the product running on this thread, when it runs sandboxed, write
+/// anything beneath `dirs`. A mass generator calls this with its
+/// `output_dirs`: it checks what its tool wrote there against its plan
+/// itself (an error, or a warning with `loose_manifest`), with a message
+/// that says which files are off the plan, so the sandbox leaves those
+/// directories to that check. pdflatex calls it with the scratch directory
+/// its passes share and it removes afterwards. Natively it does nothing.
+pub fn allow_output_dirs(dirs: &[PathBuf]) {
+    SPEC.with(|s| {
+        if let Some(spec) = s.borrow_mut().as_mut() {
+            for dir in dirs {
+                if !spec.output_dirs.contains(dir) {
+                    spec.output_dirs.push(dir.clone());
+                }
+            }
+        }
+    });
+}
+
 /// Forget the stale outputs of the product running on this thread: a run
 /// that removed them was applied, so they are gone from the tree.
 fn clear_stale() {
@@ -402,6 +421,12 @@ pub struct BuiltinSetup {
     /// The settings the build puts on its `BuildContext`.
     pub max_arg_len: usize,
     pub command_timeout_secs: u64,
+    /// `[cache] webcache_ttl_secs`.
+    pub webcache_ttl_secs: u64,
+    /// `[build] worker_stack_mib`: the child runs its products on a thread
+    /// with this stack, as the build's workers do natively, so a deeply
+    /// nested file that a worker checks does not overflow the child.
+    pub worker_stack_mib: usize,
 }
 
 impl BuiltinSetup {
@@ -425,8 +450,20 @@ impl BuiltinSetup {
             python: config.build.python.clone(),
             max_arg_len: config.build.max_arg_len,
             command_timeout_secs: config.build.command_timeout_secs,
+            webcache_ttl_secs: config.cache.webcache_ttl_secs,
+            worker_stack_mib: config.build.worker_stack_mib,
         }
     }
+}
+
+/// What `sandbox-run` reports after [`RESULTS_MARKER`].
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+struct JobResults {
+    /// One per product, in order: `None` for success, else its error.
+    results: Vec<Option<String>>,
+    /// What the child downloaded into no cache (see `crate::webcache`),
+    /// for the build to store.
+    fetched: Vec<crate::webcache::Download>,
 }
 
 /// One product as `sandbox-run` receives it.
@@ -556,8 +593,9 @@ fn run_builtin_job(
     let results = results.with_context(|| {
         format!("[{label}] the sandboxed run of rsconstruct reported no results")
     })?;
-    let results: Vec<Option<String>> = serde_json::from_str(results.trim())
+    let JobResults { results, fetched } = serde_json::from_str(results.trim())
         .with_context(|| format!("[{label}] Failed to read the sandboxed run's results"))?;
+    crate::webcache::defer_store(fetched);
     anyhow::ensure!(
         results.len() == products.len(),
         "[{label}] the sandboxed run reported {} results for {} products",
@@ -597,14 +635,15 @@ pub fn sandbox_run(ctx: &crate::build_context::BuildContext) -> Result<()> {
     // Inside the sandbox the build's own caches are out of reach (the
     // parent holds them), and nothing here is sandboxed again: commands the
     // processor runs execute directly, inside this sandbox. The webcache
-    // (`.rsconstruct/webcache.redb`, iyamlschema's schemas) is not used:
+    // (`.rsconstruct/webcache.redb`, iyamlschema's schemas) is only read:
     // storing into it would be a write the products do not declare, and
-    // children running side by side cannot share its lock. A TTL of 0 makes
-    // `webcache::fetch` download without reading or storing.
+    // children running side by side cannot share a writer's lock. What this
+    // child downloads goes back with its results for the build to store.
     ctx.set_mtime_check(false);
     ctx.set_max_arg_len(setup.max_arg_len);
     ctx.set_command_timeout_secs(setup.command_timeout_secs);
-    ctx.set_webcache_ttl_secs(0);
+    ctx.set_webcache_ttl_secs(setup.webcache_ttl_secs);
+    crate::webcache::set_child_mode();
     crate::python_env::set_interpreter(&setup.python);
 
     let processor =
@@ -635,18 +674,32 @@ pub fn sandbox_run(ctx: &crate::build_context::BuildContext) -> Result<()> {
         .collect();
     let refs: Vec<&crate::graph::Product> = products.iter().collect();
 
-    crate::processor::set_declared_tools(Some(processor.required_tools()));
-    let results: Vec<Result<()>> = if job.batch {
-        processor.execute_batch(ctx, &refs)
-    } else {
-        refs.iter().map(|p| processor.execute(ctx, p)).collect()
-    };
-    crate::processor::set_declared_tools(None);
+    let results: Vec<Result<()>> = std::thread::scope(|scope| {
+        std::thread::Builder::new()
+            .name("sandbox-run".to_string())
+            .stack_size(setup.worker_stack_mib * 1024 * 1024)
+            .spawn_scoped(scope, || {
+                crate::processor::set_declared_tools(Some(processor.required_tools()));
+                let results = if job.batch {
+                    processor.execute_batch(ctx, &refs)
+                } else {
+                    refs.iter().map(|p| processor.execute(ctx, p)).collect()
+                };
+                crate::processor::set_declared_tools(None);
+                results
+            })
+            .context("Failed to start the sandboxed run's worker thread")?
+            .join()
+            .map_err(|_| anyhow::anyhow!("the sandboxed run's worker thread panicked"))
+    })?;
 
-    let results: Vec<Option<String>> = results
-        .into_iter()
-        .map(|r| r.err().map(|e| format!("{e:#}")))
-        .collect();
+    let results = JobResults {
+        results: results
+            .into_iter()
+            .map(|r| r.err().map(|e| format!("{e:#}")))
+            .collect(),
+        fetched: crate::webcache::take_fetched(),
+    };
     let encoded = serde_json::to_string(&results).context("Failed to encode the results")?;
     use std::io::Write;
     let mut out = std::io::stdout().lock();
@@ -1264,7 +1317,13 @@ mod tests {
         ];
         assert_eq!(
             writable_for(&standard, &tools),
-            ["target", "**/__pycache__", "extra"]
+            [
+                "target",
+                "**/target",
+                "**/Cargo.lock",
+                "**/__pycache__",
+                "extra"
+            ]
         );
     }
 

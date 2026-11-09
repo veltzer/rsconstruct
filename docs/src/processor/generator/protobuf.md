@@ -13,14 +13,19 @@ Protocol Buffer compiler. Output is written to `out/processor.generator.protobuf
 
 ```text
 proto/hello.proto  →  out/processor.generator.protobuf/hello.pb.cc
+                       out/processor.generator.protobuf/hello.pb.h
 ```
+
+`--cpp_out` always writes the header beside the source file, and both are the
+product's outputs: both are cached, restored and cleaned. The `.pb.cc` is the
+primary output.
 
 The `--proto_path` is automatically set to the parent directory of each input file.
 
 ## Source Files
 
 - Input: `proto/**/*.proto`
-- Output: `out/processor.generator.protobuf/` with `.pb.cc` extension
+- Output: `out/processor.generator.protobuf/` with `.pb.cc` and `.pb.h` extensions
 
 ## Configuration
 

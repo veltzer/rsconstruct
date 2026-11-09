@@ -167,8 +167,13 @@ inventory::submit! { crate::tools::ToolInfo {
     name: "npm", runtime: "node",
     project: Some(crate::tools::InstallMethod::new("binary", "node")),
     machine: Some(crate::tools::InstallMethod::new("apt", "npm")),
-    // npm downloads the project's packages into `node_modules`.
-    alternatives: &[], prefer: None, sandbox_writable: &["node_modules"], needs_network: true,
+    // npm downloads the project's packages into `node_modules` (bound
+    // straight to the real tree at the root; beside each package.json for
+    // one in a subdirectory), and writes `package-lock.json` when there is
+    // none or package.json moved past it.
+    alternatives: &[], prefer: None,
+    sandbox_writable: &["node_modules", "**/node_modules", "**/package-lock.json"],
+    needs_network: true,
 } }
 
 #[cfg(test)]

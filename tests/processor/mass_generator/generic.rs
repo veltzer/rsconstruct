@@ -52,6 +52,7 @@ args = ["build"]
 predict_command = "./site.sh"
 predict_args = ["plan"]
 output_dirs = ["_site"]
+sandbox_writable = ["runs.log"]
 "#;
 
 fn setup_site_project(config: &str) -> TempDir {

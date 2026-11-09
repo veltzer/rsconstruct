@@ -100,13 +100,24 @@ message Clean {
             .exists()
     );
 
-    let output = run_rsconstruct(project_path, &["clean", "outputs"]);
-    assert!(output.status.success());
     assert!(
-        !project_path
-            .join("out/processor.generator.protobuf/clean.pb.cc")
+        project_path
+            .join("out/processor.generator.protobuf/clean.pb.h")
             .exists()
     );
+
+    // Both files are declared outputs, so clean removes the header too.
+    let output = run_rsconstruct(project_path, &["clean", "outputs"]);
+    assert!(output.status.success());
+    for file in ["clean.pb.cc", "clean.pb.h"] {
+        assert!(
+            !project_path
+                .join("out/processor.generator.protobuf")
+                .join(file)
+                .exists(),
+            "{file}"
+        );
+    }
 }
 
 #[test]

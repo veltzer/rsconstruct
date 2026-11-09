@@ -37,5 +37,9 @@ inventory::submit! { crate::tools::ToolInfo {
     name: "slidev", runtime: "node",
     project: Some(crate::tools::InstallMethod::new("npm", "@slidev/cli")),
     machine: Some(crate::tools::InstallMethod::new("npm", "@slidev/cli")),
-    alternatives: &[], prefer: None, sandbox_writable: &[], needs_network: false,
+    // `slidev build` writes the built deck to `dist/`. The processor is a
+    // checker, so nothing declares those files; natively they are written
+    // untracked, and this keeps that true under the sandbox. Its Vite build
+    // also keeps generated modules in `node_modules/.slidev`.
+    alternatives: &[], prefer: None, sandbox_writable: &["dist", "node_modules/.slidev"], needs_network: false,
 } }

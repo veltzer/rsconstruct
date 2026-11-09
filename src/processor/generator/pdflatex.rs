@@ -94,7 +94,7 @@ impl Processor for PdflatexProcessor {
             checksum_fields: crate::config::checksum_fields_of(instance_name),
             source_filter: None,
         };
-        super::discover_single_format(graph, file_index, &params, "pdf")
+        super::discover_single_format(graph, file_index, &params, "pdf", &[])
     }
 
     fn execute(&self, ctx: &crate::build_context::BuildContext, product: &Product) -> Result<()> {
@@ -130,6 +130,9 @@ impl Processor for PdflatexProcessor {
                 scratch.display()
             )
         })?;
+        // Every pass writes there and reads what the previous one wrote, so
+        // a sandboxed pass keeps its writes; the directory goes at the end.
+        crate::sandbox::allow_output_dirs(std::slice::from_ref(&scratch));
 
         // Run pdflatex N times into the scratch dir. Nothing is cleaned
         // between runs: the .aux/.toc written by run N is exactly what run

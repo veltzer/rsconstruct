@@ -449,15 +449,54 @@ down from 6.78 s. The table above shows the numbers from before the fix.
    `stray.txt`, and the run failed with the same "does not declare" error.
    The build's `deploy` job failed only because Pages accepts deploys from
    `master` alone.
-   There is still no end-to-end sandbox
-   test in `tests/`: it would need bwrap on every machine that runs the
-   suite.
+   The test suite can now run entirely sandboxed (see "Running the tests
+   sandboxed"); it does not by default, since that needs bwrap on every
+   machine that runs it.
 5. **Cost.** Measured; see "Cost" above. The slow case, non-batching
    builtins, is grouped into children since that measurement.
-6. **Cargo's target directory** is `target` relative to the project root by
-   default, which is what cargo declares; a crate in a subdirectory, or a
-   `CARGO_TARGET_DIR` inside the project, needs its own `sandbox_writable`
-   entry.
+6. **Cargo's target directory.** cargo declares `target` at the project
+   root (bound straight to the real tree) and `**/target`, the directory of
+   a crate in a subdirectory. A `CARGO_TARGET_DIR` elsewhere inside the
+   project still needs its own `sandbox_writable` entry.
+
+## Running the tests sandboxed
+
+`RSCONSTRUCT_TEST_SANDBOX=1 cargo nextest run` runs the whole suite with
+`execution_model = "sandbox"`. The harness (`tests/common/mod.rs`) points
+every test's rsconstruct at a user config that turns the sandbox on,
+instead of at an empty one. A fixture that sets its own `execution_model`
+still wins.
+
+The first sandboxed run, on 2026-11-09, failed 62 of 1399 tests. The fixes
+fell into three groups.
+
+**Real gaps** that would have failed real projects:
+
+| Processor | What it did | Fix |
+|---|---|---|
+| `protobuf` | `--cpp_out` writes `.pb.h` beside the declared `.pb.cc` | Both are outputs (`DiscoverMode::SingleFormatWithCompanions`); natively too, so the cache and `clean` know the header |
+| `sass` | Dart Sass writes `<output>.map` by default | `--no-source-map` unless `args` choose a source-map option |
+| `pdflatex` | its passes share a scratch directory under `out/` | the scratch directory is the product's (`sandbox::allow_output_dirs`) |
+| `linux_module` | kbuild builds in the source directory, and `make clean` removes the leftovers | the module directory is the product's for that run |
+| mass generators | the sandbox refused off-plan files before the plan check could judge them, so `loose_manifest = true` failed | `output_dirs` are the product's; the plan check decides (an error, or a warning when loose) |
+| `cargo`, `clippy` | write `Cargo.lock` when missing; a crate in a subdirectory writes its own `target/` | cargo declares `**/Cargo.lock` and `**/target` |
+| `gem` | writes `Gemfile.lock`, installs into `gem_home` | bundle declares `**/Gemfile.lock`; the processor adds `gem_home` |
+| `npm` | writes `package-lock.json`; `node_modules` beside a nested `package.json` | npm declares `**/package-lock.json` and `**/node_modules` |
+| `zspell` | `auto_add_words` writes the words file from inside the sandboxed child | the words file is writable when `auto_add_words` is on |
+| `slidev` | `slidev build` writes `dist/` and `node_modules/.slidev` | both are the tool's state, as natively (it is a checker, so nothing declares the deck) |
+| `iyamlschema` | a sandboxed child ignored the webcache: it downloaded every schema on every build and stored nothing | the child reads the cache read-only and reports what it downloaded; the build stores it after the products ran |
+| builtins | a sandboxed child ran its products on the main thread, 8 MiB of stack, so deeply nested input overflowed it | the child uses a `worker_stack_mib` thread, as the build's workers do |
+
+**Fixtures that write on purpose**: run counters and logs (`runs.log`,
+`invocations.log`, the concurrency counters) are declared with
+`sandbox_writable`. Counters that parallel runs share live exist before the
+build, so the sandbox binds them to the real tree.
+
+**Fixtures whose subject is native behavior** pin `execution_model =
+"native"`, with a comment saying why: a tool that edits its own input
+(standing in for a user's edit), and a product that waits for a file
+another product writes while it runs, an undeclared input a sandbox rightly
+hides.
 
 ## Rollout
 

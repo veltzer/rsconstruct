@@ -69,35 +69,135 @@ fn db_exists() -> bool {
     Path::new(DB_PATH).exists()
 }
 
+// ─── Sandboxed children ──────────────────────────────────────────────────────
+//
+// A builtin processor that runs sandboxed runs in a child rsconstruct under
+// bwrap (`sandbox::sandbox_run`). Several run side by side, and a write
+// into the project from inside the sandbox is one its products do not
+// declare. So a child only reads the cache, through a read-only handle
+// (redb lets several processes share one), and keeps what it downloads in
+// memory; it hands those entries back with its results, and the build
+// stores them all at its end (`store_pending`), when no child is running.
+
+/// Set in a sandboxed child: read the cache read-only, never store.
+static CHILD_MODE: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// What a child downloaded, or what the build has yet to store.
+static FETCHED: Mutex<Vec<Download>> = Mutex::new(Vec::new());
+
+/// One download made where the cache could not be written.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct Download {
+    pub url: String,
+    pub fetched_at_secs: u64,
+    pub body: String,
+}
+
+/// Make this process a sandboxed child: see the section comment above.
+pub fn set_child_mode() {
+    CHILD_MODE.store(true, std::sync::atomic::Ordering::Relaxed);
+}
+
+fn child_mode() -> bool {
+    CHILD_MODE.load(std::sync::atomic::Ordering::Relaxed)
+}
+
+/// In a child: the downloads made so far, to report to the build.
+pub fn take_fetched() -> Vec<Download> {
+    std::mem::take(&mut *FETCHED.lock().unwrap())
+}
+
+/// In the build: entries a child downloaded, stored by [`store_pending`].
+pub fn defer_store(entries: Vec<Download>) {
+    FETCHED.lock().unwrap().extend(entries);
+}
+
+/// In the build, after the products ran: store what the sandboxed children
+/// downloaded, then close the database, so the children of a later build
+/// in this process (`watch`) can open it again.
+pub fn store_pending() -> Result<()> {
+    let pending = std::mem::take(&mut *FETCHED.lock().unwrap());
+    if pending.is_empty() {
+        return Ok(());
+    }
+    with_db(|db| {
+        let write_txn = db
+            .begin_write()
+            .context("Failed to begin write transaction on webcache")?;
+        {
+            let mut table = write_txn
+                .open_table(TABLE)
+                .context("Failed to open webcache table for write")?;
+            for entry in &pending {
+                let stored = serde_json::to_vec(&StoredEntry {
+                    fetched_at_secs: entry.fetched_at_secs,
+                    body: entry.body.clone(),
+                })
+                .context("Failed to serialize webcache entry")?;
+                table
+                    .insert(entry.url.as_str(), stored.as_slice())
+                    .with_context(|| {
+                        format!("Failed to insert webcache entry for {}", entry.url)
+                    })?;
+            }
+        }
+        write_txn
+            .commit()
+            .context("Failed to commit webcache write")
+    })?;
+    close();
+    Ok(())
+}
+
+/// Drop the process-wide handle, releasing the database's lock.
+fn close() {
+    if let Some(cell) = DB.get() {
+        *cell.lock().unwrap() = None;
+    }
+}
+
+/// The body stored for `url` in `db`, if it was fetched less than `ttl_secs`
+/// ago.
+fn lookup(db: &impl ReadableDatabase, url: &str, ttl_secs: u64) -> Result<Option<String>> {
+    let read_txn = db
+        .begin_read()
+        .context("Failed to begin read transaction on webcache")?;
+    let Ok(table) = read_txn.open_table(TABLE) else {
+        return Ok(None);
+    };
+    let Some(raw) = table
+        .get(url)
+        .with_context(|| format!("Failed to read webcache entry for {url}"))?
+    else {
+        return Ok(None);
+    };
+    // A malformed entry is treated as a miss and re-fetched, rather than
+    // failing the build over a cache we can always rebuild.
+    let Ok(entry) = serde_json::from_slice::<StoredEntry>(raw.value()) else {
+        return Ok(None);
+    };
+    let age = now_secs().saturating_sub(entry.fetched_at_secs);
+    if age >= ttl_secs {
+        return Ok(None);
+    }
+    Ok(Some(entry.body))
+}
+
 /// Look up a still-fresh entry for `url`.
 fn get_fresh(url: &str, ttl_secs: u64) -> Result<Option<String>> {
     if ttl_secs == 0 || !db_exists() {
         return Ok(None);
     }
-    with_db(|db| {
-        let read_txn = db
-            .begin_read()
-            .context("Failed to begin read transaction on webcache")?;
-        let Ok(table) = read_txn.open_table(TABLE) else {
+    if child_mode() {
+        // Open per lookup and let go at once. A writer holding the lock
+        // (the build storing, or a native fetch) makes this a miss, which a
+        // download covers.
+        let Ok(db) = redb::ReadOnlyDatabase::open(DB_PATH) else {
             return Ok(None);
         };
-        let Some(raw) = table
-            .get(url)
-            .with_context(|| format!("Failed to read webcache entry for {url}"))?
-        else {
-            return Ok(None);
-        };
-        // A malformed entry is treated as a miss and re-fetched, rather than
-        // failing the build over a cache we can always rebuild.
-        let Ok(entry) = serde_json::from_slice::<StoredEntry>(raw.value()) else {
-            return Ok(None);
-        };
-        let age = now_secs().saturating_sub(entry.fetched_at_secs);
-        if age >= ttl_secs {
-            return Ok(None);
-        }
-        Ok(Some(entry.body))
-    })
+        return lookup(&db, url, ttl_secs);
+    }
+    with_db(|db| lookup(db, url, ttl_secs))
 }
 
 /// Fetch URL content, returning cached content when it is still within
@@ -120,6 +220,14 @@ pub fn fetch(url: &str, ttl_secs: u64) -> Result<String> {
     })?;
 
     if ttl_secs == 0 {
+        return Ok(body);
+    }
+    if child_mode() {
+        FETCHED.lock().unwrap().push(Download {
+            url: url.to_string(),
+            fetched_at_secs: now_secs(),
+            body: body.clone(),
+        });
         return Ok(body);
     }
 

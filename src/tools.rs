@@ -1738,8 +1738,10 @@ pub static TOOLS: &[ToolInfo] = &[
         machine: Some(InstallMethod::new("apt", "rustup")),
         alternatives: &[],
         prefer: None,
-        // Cargo's build directory, at its default place.
-        sandbox_writable: &["target"],
+        // Cargo's build directory at its default place (bound straight to the
+        // real tree), the one of a crate in a subdirectory, and the lockfile
+        // cargo writes when there is none or updates when the manifest moved.
+        sandbox_writable: &["target", "**/target", "**/Cargo.lock"],
         needs_network: false,
     },
     // Perl

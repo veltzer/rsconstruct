@@ -18,6 +18,15 @@ sass/components/button.scss  ->  out/processor.generator.sass/components/button.
 
 **Declare the [sass analyzer](../../analyzers/sass.md) alongside this processor.** It makes every file a stylesheet loads (`@use`, `@forward`, `@import`, transitively) an input of that stylesheet. Without it, editing a partial does **not** rebuild the stylesheets that use it, and they keep their old CSS. If you pass `--load-path` in `args`, give the analyzer the same directories in `load_paths`.
 
+**No source maps by default.** Dart Sass writes `<output>.css.map` beside the
+CSS unless told otherwise. The product declares only the CSS, so a map would
+be lost on a cache restore, left behind by `clean`, and refused by the
+sandbox as an undeclared write. rsconstruct therefore passes
+`--no-source-map`, unless `args` already choose a source-map option.
+`--embed-source-map` keeps the map inside the CSS and needs no extra output;
+`--source-map` brings the separate file back, which this processor does not
+declare.
+
 ## Source Files
 
 - Input: `sass/**/*{src_extensions}`

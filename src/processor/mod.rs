@@ -1351,6 +1351,10 @@ pub enum DiscoverMode {
     MultiFormat,
     /// Discover one product per source file with a fixed output extension.
     SingleFormat(&'static str),
+    /// Like `SingleFormat`, for a tool that always writes more than one
+    /// file per source: the product's outputs are the first extension's
+    /// file (its primary output), then one file per companion extension.
+    SingleFormatWithCompanions(&'static str, &'static [&'static str]),
 }
 
 /// Parameters for a [`SimpleGenerator`]. Each trivial generator file
@@ -1462,7 +1466,10 @@ where
                 generator::discover_multi_format(graph, file_index, &params, &scan.formats)
             }
             DiscoverMode::SingleFormat(ext) => {
-                generator::discover_single_format(graph, file_index, &params, ext)
+                generator::discover_single_format(graph, file_index, &params, ext, &[])
+            }
+            DiscoverMode::SingleFormatWithCompanions(ext, companions) => {
+                generator::discover_single_format(graph, file_index, &params, ext, companions)
             }
         }
     }

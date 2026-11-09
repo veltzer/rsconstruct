@@ -165,6 +165,20 @@ pub fn discover_multi_format(
     params: &DiscoverParams<'_, impl Serialize>,
     formats: &[String],
 ) -> Result<()> {
+    discover_formats(graph, file_index, params, formats, &[])
+}
+
+/// One product per scanned file and format, whose outputs are the format's
+/// file followed by one file per `companions` extension: what a tool that
+/// always writes several files per source produces (`protoc --cpp_out`
+/// writes `.pb.cc` and `.pb.h`).
+fn discover_formats(
+    graph: &mut BuildGraph,
+    file_index: &FileIndex,
+    params: &DiscoverParams<'_, impl Serialize>,
+    formats: &[String],
+    companions: &[&str],
+) -> Result<()> {
     let Some(files) = crate::processor::scan_or_skip(params.scan, file_index) else {
         return Ok(());
     };
@@ -180,7 +194,12 @@ pub fn discover_multi_format(
             continue;
         }
         for format in formats {
-            let output = output_path(source, src_dirs, params.output_dir, format);
+            let mut outputs = vec![output_path(source, src_dirs, params.output_dir, format)];
+            outputs.extend(
+                companions
+                    .iter()
+                    .map(|ext| output_path(source, src_dirs, params.output_dir, ext)),
+            );
 
             let mut inputs = Vec::with_capacity(1 + extra.len());
             inputs.push(source.clone());
@@ -188,7 +207,7 @@ pub fn discover_multi_format(
 
             graph.add_product_with(
                 inputs,
-                vec![output],
+                outputs,
                 params.processor_name,
                 hash.clone(),
                 Some(format),
@@ -207,7 +226,8 @@ pub fn discover_single_format(
     file_index: &FileIndex,
     params: &DiscoverParams<'_, impl Serialize>,
     extension: &str,
+    companions: &[&str],
 ) -> Result<()> {
     let format = extension.to_owned();
-    discover_multi_format(graph, file_index, params, &[format])
+    discover_formats(graph, file_index, params, &[format], companions)
 }

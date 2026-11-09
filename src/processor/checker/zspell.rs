@@ -63,7 +63,27 @@ pub struct ZspellProcessor {
 }
 
 impl ZspellProcessor {
-    pub fn new(config: ZspellConfig) -> Result<Self> {
+    pub fn new(mut config: ZspellConfig) -> Result<Self> {
+        // With auto_add_words the check writes the words file, on purpose.
+        // Sandboxed, zspell runs in a child under bwrap, so that write must
+        // be one it may make. A words file outside the project needs nothing:
+        // there is no overlay there.
+        let words_path = Path::new(&config.words_file);
+        if config.auto_add_words
+            && words_path.is_relative()
+            && !words_path
+                .components()
+                .any(|c| matches!(c, std::path::Component::ParentDir))
+            && !config
+                .standard
+                .sandbox_writable
+                .contains(&config.words_file)
+        {
+            config
+                .standard
+                .sandbox_writable
+                .push(config.words_file.clone());
+        }
         let words_path = Path::new(&config.words_file);
         // An unreadable words file is an error — treating it as empty would
         // report every allow-listed word as misspelled.

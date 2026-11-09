@@ -264,6 +264,10 @@ impl LinuxModuleProcessor {
         };
 
         Self::write_kbuild(&module_dir, module)?;
+        // kbuild builds in the source directory (`M=`), and the `make clean`
+        // below removes what it left there: a sandboxed `make modules` keeps
+        // its writes, so that `make clean` and the `.ko` read can see them.
+        crate::sandbox::allow_output_dirs(std::slice::from_ref(&anchor_dir.to_path_buf()));
         let built = Self::make_module(ctx, manifest, &kdir, &module_dir, module);
         let cleaned = Self::clean_module_dir(ctx, manifest, &kdir, &module_dir, module);
         let (ko_bytes, ko_mode) = match (built, cleaned) {

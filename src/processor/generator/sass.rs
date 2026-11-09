@@ -19,12 +19,26 @@ fn execute_sass(
     ensure_output_dir(output)?;
     let command = config.require_command("sass")?;
     let mut cmd = Command::new(command);
+    // Dart Sass writes `<output>.map` beside the CSS unless told not to.
+    // The product declares only the CSS, so that map would be missed by the
+    // cache (gone after a restore), by `clean`, and by the sandbox (an
+    // undeclared write). A user whose `args` pick a source-map option owns
+    // that choice.
+    if !chooses_source_map(&config.args) {
+        cmd.arg("--no-source-map");
+    }
     for arg in &config.args {
         cmd.arg(arg);
     }
     cmd.arg(input).arg(output);
     let out = run_command(ctx, &cmd)?;
     check_command_output(&out, format_args!("sass {}", input.display()))
+}
+
+/// Whether the user's `args` already say what to do about source maps
+/// (`--source-map`, `--no-source-map`, `--embed-source-map`, ...).
+fn chooses_source_map(args: &[String]) -> bool {
+    args.iter().any(|a| a.contains("source-map"))
 }
 
 fn create_sass(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processor::Processor>> {

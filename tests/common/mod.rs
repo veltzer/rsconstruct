@@ -11,6 +11,34 @@ fn no_user_config_dir() -> std::path::PathBuf {
     std::env::temp_dir().join("rsconstruct-tests-no-user-config")
 }
 
+/// Set to run the whole suite with `execution_model = "sandbox"`: every
+/// test's rsconstruct then reads a user config that turns the sandbox on,
+/// instead of none. A fixture's own `execution_model` still wins. See
+/// docs/src/internal/sandbox.md, "Running the tests sandboxed".
+const SANDBOX_SUITE_ENV: &str = "RSCONSTRUCT_TEST_SANDBOX";
+
+/// The user config directory every test's rsconstruct reads: none, or with
+/// [`SANDBOX_SUITE_ENV`] set, one whose config turns the sandbox on.
+fn test_user_config_dir() -> std::path::PathBuf {
+    if std::env::var_os(SANDBOX_SUITE_ENV).is_none() {
+        return no_user_config_dir();
+    }
+    let dir = std::env::temp_dir().join("rsconstruct-tests-sandbox-user-config");
+    let config = dir.join("rsconstruct/config.toml");
+    fs::create_dir_all(config.parent().unwrap()).expect("Failed to create sandbox user config dir");
+    // Tests run in parallel: write a private file and rename it into place,
+    // so a reader never sees a half-written config.
+    let tmp = config.with_extension(format!(
+        "{}-{:?}.tmp",
+        std::process::id(),
+        std::thread::current().id()
+    ));
+    fs::write(&tmp, "[build]\nexecution_model = \"sandbox\"\n")
+        .expect("Failed to write sandbox user config");
+    fs::rename(&tmp, &config).expect("Failed to move sandbox user config into place");
+    dir
+}
+
 /// The tool store tests install into, never the developer's own.
 fn test_tool_store() -> std::path::PathBuf {
     std::env::temp_dir().join("rsconstruct-tests-tool-store")
@@ -72,7 +100,7 @@ pub fn setup_test_project() -> TempDir {
 pub fn rsconstruct_command(dir: &Path) -> Command {
     let rsconstruct_path = env!("CARGO_BIN_EXE_rsconstruct");
     let mut cmd = Command::new(rsconstruct_path);
-    cmd.env("XDG_CONFIG_HOME", no_user_config_dir());
+    cmd.env("XDG_CONFIG_HOME", test_user_config_dir());
     cmd.env("RSCONSTRUCT_TOOL_STORE", test_tool_store());
     cmd.env_remove("CI");
     cmd.current_dir(dir);

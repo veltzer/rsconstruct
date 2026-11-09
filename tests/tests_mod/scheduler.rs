@@ -50,10 +50,14 @@ fn a_product_does_not_wait_for_unrelated_products() {
          done\n\
          cp \"$1\" \"$2\"\n",
     );
+    // Native: `slow` watches for a file another product writes while it
+    // runs, an input it does not declare. A sandboxed run sees the tree as
+    // it was when it started, rightly, and would wait forever.
     fs::write(
         project.join("rsconstruct.toml"),
         r#"[build]
 hash_tool_versions = false
+execution_model = "native"
 
 [processor.generator.generic.slow]
 command = "wait_for_flag"
@@ -129,10 +133,17 @@ fn jobs_cap_every_invocation_and_max_jobs_caps_a_processor() {
              output_extension = \"out\"\n\
              batch = {batch}\n\
              src_extensions = [\".{ext}\"]\n\
-             src_dirs = [\"src\"]\n{}\n",
+             src_dirs = [\"src\"]\n\
+             sandbox_writable = [\"running\", \"concurrency.all\", \"concurrency.{name}\"]\n{}\n",
             max_jobs.map_or(String::new(), |n| format!("max_jobs = {n}\n"))
         )
     };
+    // The counters exist before the build, so a sandboxed run writes them
+    // in the real tree (`sandbox_writable`) where every other run sees them.
+    for dir in ["all", "left", "right", "single"] {
+        fs::create_dir_all(project.join("running").join(dir)).unwrap();
+        fs::write(project.join(format!("concurrency.{dir}")), "").unwrap();
+    }
     fs::write(
         project.join("rsconstruct.toml"),
         format!(
@@ -202,6 +213,7 @@ src_dirs = ["src"]
 command = "count_args"
 src_extensions = [".chk"]
 src_dirs = ["src", "gen"]
+sandbox_writable = ["invocations.log"]
 "#,
     )
     .unwrap();

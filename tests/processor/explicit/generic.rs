@@ -56,6 +56,7 @@ fn generic_upstream_generated_literal_input_with_output_dirs_only() {
 command = "./gen.sh"
 inputs = ["gen.txt"]
 output_dirs = ["outdir"]
+sandbox_writable = ["runs.log"]
 "#,
     );
     let root = temp_dir.path();
@@ -93,6 +94,7 @@ fn generic_mixed_literal_inputs_with_output_dirs_only_is_one_product() {
 command = "./gen.sh"
 inputs = ["gen.txt", "a.txt"]
 output_dirs = ["outdir"]
+sandbox_writable = ["runs.log"]
 "#,
     );
     let root = temp_dir.path();
@@ -126,6 +128,7 @@ fn generic_input_globs_matching_only_upstream_outputs_wait_a_round() {
 command = "./gen.sh"
 input_globs = ["gen*.txt"]
 output_dirs = ["outdir"]
+sandbox_writable = ["runs.log"]
 "#,
     );
     let root = temp_dir.path();
@@ -150,6 +153,7 @@ fn generic_missing_literal_input_is_a_config_error() {
 command = "./gen.sh"
 inputs = ["gen.txt", "a.txt", "nope.txt"]
 output_dirs = ["outdir"]
+sandbox_writable = ["runs.log"]
 "#,
     );
     let root = temp_dir.path();
@@ -197,6 +201,7 @@ fn generic_input_list_change_is_a_config_change() {
 command = "./gen.sh"
 inputs = ["gen.txt", "a.txt"]
 output_dirs = ["outdir"]
+sandbox_writable = ["runs.log"]
 "#,
     );
     let root = temp_dir.path();
@@ -215,6 +220,7 @@ src_dirs = ["tera.templates"]
 command = "./gen.sh"
 inputs = ["a.txt", "gen.txt"]
 output_dirs = ["outdir"]
+sandbox_writable = ["runs.log"]
 "#,
     );
     let second = run_rsconstruct_json_with_env(root, &["build"], &[("NO_COLOR", "1")]);

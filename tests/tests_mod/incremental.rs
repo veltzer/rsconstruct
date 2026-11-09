@@ -581,7 +581,9 @@ fn input_edited_while_running_is_not_cached() {
     let project = temp_dir.path();
 
     // Copies its input, then edits it — standing in for a user saving the
-    // file while the build runs.
+    // file while the build runs. Native: the tool itself does the editing
+    // here, and a sandboxed tool that writes its input fails, rightly; a
+    // real user's edit comes from outside the sandbox.
     write_tool(
         project,
         "copy_then_touch",
@@ -591,6 +593,7 @@ fn input_edited_while_running_is_not_cached() {
         project.join("rsconstruct.toml"),
         r#"[build]
 hash_tool_versions = false
+execution_model = "native"
 
 [processor.generator.generic]
 command = "copy_then_touch"

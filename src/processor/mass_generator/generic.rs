@@ -256,6 +256,8 @@ impl MassGeneratorProcessor {
 
         let output_dirs = self.output_dirs();
         let before = snapshot_mtimes(&output_dirs)?;
+        // The plan check below judges everything the tool writes there.
+        crate::sandbox::allow_output_dirs(&output_dirs);
 
         let command = self.config.standard.require_command(instance_name)?;
         let mut cmd = Command::new(command);
