@@ -173,12 +173,19 @@ pub fn declare_replaced_outputs(paths: &[&Path]) -> bool {
     })
 }
 
-/// Whether the product running on this thread runs sandboxed. A processor
+/// Set in the environment of every sandboxed run, so everything it starts,
+/// however deep, knows it is inside bwrap.
+const INSIDE_ENV: &str = "RSCONSTRUCT_IN_SANDBOX";
+
+/// Whether the product running on this thread runs inside bwrap: it runs
+/// sandboxed, or this whole process does (an rsconstruct started by a
+/// sandboxed tool, such as a test run by a sandboxed `cargo nextest`, runs
+/// its own products natively but still inside the outer bwrap). A processor
 /// whose tool runs Chromium asks this to turn Chromium's own sandbox off,
 /// which cannot start inside bwrap; natively it stays on. See
 /// docs/src/internal/sandbox-chromium.md.
 pub fn active() -> bool {
-    SPEC.with(|s| s.borrow().is_some())
+    SPEC.with(|s| s.borrow().is_some()) || std::env::var_os(INSIDE_ENV).is_some()
 }
 
 fn current_spec() -> Option<Spec> {
@@ -741,6 +748,7 @@ pub fn prepare(cmd: &Command) -> Result<Option<Run>> {
         .map_or_else(|| root.clone(), |d| root.join(d));
     command.arg("--chdir").arg(&cwd);
     command.arg("--").args(inner_command(&root, &spec, cmd));
+    command.env(INSIDE_ENV, "1");
     for (key, value) in cmd.get_envs() {
         if let Some(value) = value {
             command.env(key, value);

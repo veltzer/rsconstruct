@@ -65,11 +65,14 @@ src_files = ["Cargo.toml"]
 command = "deny"
 args = ["check"]
 
-# cargo nextest run: the test suite, with .config/nextest.toml's profile
+# cargo nextest run: the test suite, with .config/nextest.toml's profile.
+# Some tests reach the network (the gem tests install from rubygems.org), so
+# a sandboxed build must not cut it off.
 [processor.checker.clippy.nextest]
 src_files = ["Cargo.toml"]
 command = "nextest"
 args = ["run"]
+sandbox_network = true
 
 # No doctest instance: nextest does not run doctests, but `cargo test --doc`
 # errors outright on a binary-only crate, and this crate has no src/lib.rs.

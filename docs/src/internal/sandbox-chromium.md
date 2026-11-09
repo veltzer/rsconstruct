@@ -81,8 +81,16 @@ which has always passed `--no-sandbox`.
 ## What the processors do
 
 `crate::sandbox::active()` tells a processor whether the product running on
-this thread runs sandboxed (the executor sets the sandbox spec around each
-execute). Each processor turns Chromium's sandbox off only then:
+this thread runs inside bwrap. That is true when the product runs sandboxed
+(the executor sets the sandbox spec around each execute), and also when the
+whole process is inside an outer sandbox: every sandboxed run sets
+`RSCONSTRUCT_IN_SANDBOX=1`, which everything it starts inherits. The second
+case was found on 2026-11-09, the first time rsconstruct's own gate ran
+sandboxed. A sandboxed `cargo nextest` runs the integration tests. A test
+starts rsconstruct, which builds a marp product natively, but still inside
+the outer bwrap, and Chromium aborted exactly as in "Why Chromium fails
+inside bwrap". Each processor turns Chromium's sandbox off only when
+`active()` is true:
 
 - **chromium** (`src/processor/generator/chromium.rs`): already passes
   `--no-sandbox` on every run, natively too, so it needed no code change, only

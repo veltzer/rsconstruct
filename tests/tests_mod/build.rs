@@ -1,6 +1,6 @@
 use crate::common::{
-    run_rsconstruct, run_rsconstruct_json, run_rsconstruct_json_with_env, run_rsconstruct_with_env,
-    setup_test_project,
+    make_executable, run_rsconstruct, run_rsconstruct_json, run_rsconstruct_json_with_env,
+    run_rsconstruct_with_env, setup_test_project, write_file,
 };
 use std::fs;
 #[allow(unused_imports)]
@@ -2572,4 +2572,38 @@ fn orphan_outputs_are_removed_by_a_full_build_only_when_enabled() {
         );
         assert!(project.join("kept.txt").exists());
     }
+}
+
+/// The files an explicit stanza wrote into its `output_dirs` are orphans
+/// once the stanza is gone, and a full build removes them. A file put into
+/// the same directory by hand was never the stanza's, so it stays, and so
+/// does the directory holding it.
+#[test]
+fn orphan_files_in_output_dirs_are_removed() {
+    let temp_dir = TempDir::new().unwrap();
+    let project = temp_dir.path();
+    write_file(
+        project,
+        "gen.sh",
+        "#!/bin/bash\nset -e\nmkdir -p site/sub\necho one > site/sub/one.txt\necho two > site/two.txt\n",
+    );
+    make_executable(&project.join("gen.sh"));
+    write_file(project, "a.txt", "aaa\n");
+    write_file(
+        project,
+        "rsconstruct.toml",
+        "[processor.explicit.generic.site]\ncommand = \"./gen.sh\"\ninputs = [\"a.txt\"]\noutput_dirs = [\"site\"]\n",
+    );
+    let output = run_rsconstruct(project, &["build"]);
+    assert!(output.status.success(), "{output:?}");
+    assert!(project.join("site/sub/one.txt").exists());
+    write_file(project, "site/hand.txt", "mine\n");
+
+    write_file(project, "rsconstruct.toml", "");
+    let output = run_rsconstruct(project, &["build"]);
+    assert!(output.status.success(), "{output:?}");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(!project.join("site/sub").exists(), "{stdout}");
+    assert!(!project.join("site/two.txt").exists(), "{stdout}");
+    assert!(project.join("site/hand.txt").exists(), "{stdout}");
 }

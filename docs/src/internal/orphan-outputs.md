@@ -97,10 +97,28 @@ recorded.
   so a normal build runs no extra process. Outside a git work tree nothing
   counts as tracked.
 
+### Files inside `output_dirs`
+
+An explicit stanza with `output_dirs` declares directories, not files. Its
+files are the tree the object store recorded the last time the stanza was
+built or restored, the same list the executor uses to clear a tree product's
+stale files before it reruns (`last_tree_key`, `previous_tree_paths`). Those
+files go into the record with the declared outputs. The tree leaves out files
+other products put in the same directory, so a shared directory works too.
+When the stanza goes away, its files are orphans like any others. A file
+someone put into the directory by hand was never in the tree, so it stays, and
+so does the directory holding it.
+
+While the stanza stays, a file its tool stopped writing is not an orphan
+here: the executor already removes the previous tree's files before each run.
+
+Reading the trees costs one object-store lookup per such stanza. On
+veltzer.github.io (120 files from `_site/logos`, 3160 recorded in all) the
+orphans phase measured 14 ms steady state on 2026-11-09, in line with the
+figure in "Cost" below.
+
 ### Not covered
 
-- Files inside an explicit stanza's `output_dirs`: only declared output files
-  are recorded.
 - Outputs that were never in a record: those from before the first build with
   this version, or produced only while it was off.
 
@@ -152,5 +170,6 @@ Run in a scratch clone of demos-lang-python with three extra tera templates:
 5. The following no-op build and a `-p` build reported nothing.
 
 `orphan_outputs_are_removed_by_a_full_build_only_when_enabled` in
-`tests/tests_mod/build.rs` covers the full-build, `-p` and disabled cases;
+`tests/tests_mod/build.rs` covers the full-build, `-p` and disabled cases,
+and `orphan_files_in_output_dirs_are_removed` covers `output_dirs`;
 the unit tests in `src/orphans.rs` cover the record and the guards.

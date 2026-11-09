@@ -592,7 +592,7 @@ impl Builder {
         let orphans_dur =
             if result.is_ok() && self.config.build.remove_orphan_outputs && is_full_build(opts) {
                 let t = Instant::now();
-                remove_orphan_outputs(ctx, &graph)?;
+                remove_orphan_outputs(ctx, &graph, &self.object_store)?;
                 Some(t.elapsed())
             } else {
                 None
@@ -645,9 +645,17 @@ const fn is_full_build(opts: &BuildOptions) -> bool {
 fn remove_orphan_outputs(
     ctx: &crate::build_context::BuildContext,
     graph: &crate::graph::BuildGraph,
+    object_store: &crate::object_store::ObjectStore,
 ) -> Result<()> {
     let root = std::path::Path::new("");
-    let current = crate::orphans::tracked(graph.products().iter().flat_map(|p| &p.outputs));
+    let tree_files = output_dir_files(graph, object_store);
+    let current = crate::orphans::tracked(
+        graph
+            .products()
+            .iter()
+            .flat_map(|p| &p.outputs)
+            .chain(&tree_files),
+    );
     let removal =
         crate::orphans::remove_orphans(root, &current, || crate::orphans::git_tracked(ctx))?;
     let list = |paths: &[std::path::PathBuf]| {
@@ -679,6 +687,23 @@ fn remove_orphan_outputs(
         ));
     }
     crate::orphans::write_record(root, &current)
+}
+
+/// The files inside the `output_dirs` of explicit stanzas that each one
+/// owns: the tree it last built or restored, as the object store recorded
+/// it. That tree leaves out files other products put in the same
+/// directory, so it names exactly what the stanza is responsible for.
+fn output_dir_files(
+    graph: &crate::graph::BuildGraph,
+    object_store: &crate::object_store::ObjectStore,
+) -> Vec<std::path::PathBuf> {
+    graph
+        .products()
+        .iter()
+        .filter(|p| p.has_output_dirs())
+        .filter_map(|p| object_store.last_tree_key(&p.owner_key()))
+        .flat_map(|key| object_store.previous_tree_paths(&key))
+        .collect()
 }
 
 impl Builder {

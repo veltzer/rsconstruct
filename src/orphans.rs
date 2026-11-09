@@ -13,8 +13,9 @@
 //! source) is kept, reported once, and dropped from the record. Directories
 //! the removals leave empty go too.
 //!
-//! Only output files are tracked: the files inside an explicit stanza's
-//! `output_dirs` are not. Only relative paths inside the project are, so
+//! The caller says which files are current: the declared outputs, plus,
+//! for an explicit stanza's `output_dirs`, the files of the tree it last
+//! built or restored. Only relative paths inside the project are tracked, so
 //! nothing outside it can be removed. Paths are relative to `root`, the
 //! project root (the build passes `""`, the current directory). See
 //! docs/src/internal/orphan-outputs.md.
