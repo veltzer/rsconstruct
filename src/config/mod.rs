@@ -281,12 +281,17 @@ pub const SCAN_CONFIG_FIELDS: &[&str] = &[
 /// and to the defconfig display table — individual processors don't need to repeat them.
 pub const STANDARD_EXTRA_FIELDS: &[&str] = &[
     "enabled",
+    ENABLED_IF_DIR_EXISTS,
     OUTPUT_DEPENDS_ON_INPUT_NAME,
     HASH_PYTHON_ENV,
     EXECUTION_MODEL,
     SANDBOX_NETWORK,
     SANDBOX_WRITABLE,
 ];
+
+/// The universal field that turns a processor off on a machine where a
+/// directory is missing (see `StandardConfig::enabled_if_dir_exists`).
+pub const ENABLED_IF_DIR_EXISTS: &str = "enabled_if_dir_exists";
 
 /// The universal field naming state directories a sandboxed processor may
 /// write beyond those its tools declare (see `StandardConfig::sandbox_writable`).
@@ -524,6 +529,10 @@ pub const SHARED_FIELD_DESCRIPTIONS: &[(&str, &str)] = &[
     (
         "enabled",
         "Set to false to disable this processor without removing the stanza",
+    ),
+    (
+        ENABLED_IF_DIR_EXISTS,
+        "Run only on a machine where this directory exists (~/ expands to home); elsewhere the processor is off, as with enabled = false",
     ),
     (
         OUTPUT_DEPENDS_ON_INPUT_NAME,
@@ -1014,6 +1023,7 @@ impl Config {
             .processor
             .apply_output_dir_defaults(&config.build.output_dir);
         config.apply_span_map(&span_map, &local_span_map);
+        config.apply_dir_conditions();
         validate_dep_auto_exist(&config.processor.instances, &config.build)?;
         validate_no_dot_src_dirs(&config.processor.instances, &config.build)?;
         config.populate_global_provenance(&global_span_map, &local_global_span_map)?;
@@ -1078,9 +1088,60 @@ impl Config {
                 errors.join("\n")
             )));
         }
+        // An override may have set `enabled = true` or a new
+        // `enabled_if_dir_exists`; the condition still has the last word.
+        self.apply_dir_conditions();
         validate_dep_auto_exist(&self.processor.instances, &self.build)?;
         validate_no_dot_src_dirs(&self.processor.instances, &self.build)?;
         Ok(())
+    }
+
+    /// Turn off every enabled instance whose `enabled_if_dir_exists` names a
+    /// directory that does not exist on this machine. The instance then
+    /// behaves exactly as with `enabled = false` everywhere `enabled` is
+    /// read, and the provenance of `enabled` records why, which is how
+    /// [`Self::dir_condition_skips`] finds it for the build and `processor
+    /// used` to report.
+    pub(crate) fn apply_dir_conditions(&mut self) {
+        for inst in &mut self.processor.instances {
+            let Some(table) = inst.config_toml.as_table_mut() else {
+                continue;
+            };
+            let Some(dir) = table
+                .get(ENABLED_IF_DIR_EXISTS)
+                .and_then(toml::Value::as_str)
+                .map(str::to_string)
+            else {
+                continue;
+            };
+            if table.get("enabled").and_then(toml::Value::as_bool) == Some(false) {
+                continue;
+            }
+            if Path::new(&crate::platform::expand_tilde(&dir)).is_dir() {
+                continue;
+            }
+            table.insert("enabled".to_string(), toml::Value::Boolean(false));
+            inst.provenance
+                .insert("enabled".to_string(), FieldProvenance::DirMissing { dir });
+        }
+    }
+
+    /// The instances `apply_dir_conditions` turned off, with the directory
+    /// each one is waiting for, sorted by instance name.
+    pub(crate) fn dir_condition_skips(&self) -> Vec<(String, String)> {
+        let mut skips: Vec<(String, String)> = self
+            .processor
+            .instances
+            .iter()
+            .filter_map(|inst| match inst.provenance.get("enabled") {
+                Some(FieldProvenance::DirMissing { dir }) => {
+                    Some((inst.instance_name.clone(), dir.clone()))
+                }
+                _ => None,
+            })
+            .collect();
+        skips.sort();
+        skips
     }
 
     /// Seed `global_provenance` for every top-level section. Every field

@@ -89,6 +89,7 @@ pub(super) fn expected_field_type(processor: &str, field: &str) -> Option<FieldT
         "required_tools" => return Some(FieldType::StringArray),
         "max_jobs" => return Some(FieldType::Integer),
         "enabled" => return Some(FieldType::Bool),
+        super::ENABLED_IF_DIR_EXISTS => return Some(FieldType::String),
         super::OUTPUT_DEPENDS_ON_INPUT_NAME => return Some(FieldType::Bool),
         super::HASH_PYTHON_ENV => return Some(FieldType::Bool),
         super::EXECUTION_MODEL => return Some(FieldType::String),

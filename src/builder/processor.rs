@@ -703,8 +703,12 @@ impl Builder {
                 unreachable!("handled before Builder is constructed")
             }
             ProcessorAction::Used => {
+                // Turned off on this machine by `enabled_if_dir_exists`: not
+                // used, but shown, so a missing directory never hides a
+                // processor silently.
+                let skips = self.config.dir_condition_skips();
                 if crate::json_output::is_json_mode() {
-                    let entries: Vec<serde_json::Value> = enabled_names.iter().map(|name| {
+                    let mut entries: Vec<serde_json::Value> = enabled_names.iter().map(|name| {
                         let proc = &processors[name.as_str()];
                         serde_json::json!({
                             "name": name,
@@ -713,6 +717,14 @@ impl Builder {
                             "description": crate::registries::processor::description_of(name.as_str()),
                         })
                     }).collect();
+                    entries.extend(skips.iter().map(|(name, dir)| {
+                        serde_json::json!({
+                            "name": name,
+                            "type": crate::registries::processor::processor_type_of(name.as_str()).as_str(),
+                            "skipped": format!("{dir} does not exist"),
+                            "description": crate::registries::processor::description_of(name.as_str()),
+                        })
+                    }));
                     println!("{}", serde_json::to_string_pretty(&entries)?);
                 } else {
                     let rows: Vec<Vec<String>> = enabled_names
@@ -732,6 +744,9 @@ impl Builder {
                         })
                         .collect();
                     tables::print(&tables::defs::PROCESSOR_USED, verbose, &rows);
+                    for (name, dir) in &skips {
+                        println!("Skipped on this machine: {name} ({dir} does not exist)");
+                    }
                 }
             }
             ProcessorAction::Config { ref iname, diff } => {

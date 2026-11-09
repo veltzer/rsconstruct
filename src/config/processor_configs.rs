@@ -36,6 +36,16 @@ pub struct StandardConfig {
     /// removing the stanza from rsconstruct.toml.
     #[serde(default = "default_true")]
     pub enabled: bool,
+    /// Run this processor only on a machine where this directory exists
+    /// (`~/` expands to the home directory). Resolved once at config load
+    /// (`Config::apply_dir_conditions`): when the directory is missing the
+    /// instance is turned off exactly as `enabled = false` would, and the
+    /// build and `processor used` report it as skipped. For a processor whose job is a
+    /// side effect on the local machine (mirroring files into a synced
+    /// folder) rather than a build output. Not part of the cache key: it
+    /// decides whether the processor runs, not what it produces.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub enabled_if_dir_exists: Option<String>,
     /// The result depends on the input files' paths, not only their
     /// content: the output names its input (`// Generated from foo.c`), or
     /// a checker applies per-path rules (ruff's `per-file-ignores`). Adds
@@ -101,6 +111,7 @@ impl Default for StandardConfig {
             batch: true,
             max_jobs: None,
             enabled: true,
+            enabled_if_dir_exists: None,
             output_depends_on_input_name: false,
             hash_python_env: None,
             execution_model: None,

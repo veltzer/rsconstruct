@@ -28,7 +28,7 @@ pub fn run(config: &SymlinkInstallConfig) -> Result<()> {
     let mut total_unchanged = 0usize;
 
     for (source, target) in config.sources.iter().zip(&config.targets) {
-        let target = expand_tilde(target);
+        let target = crate::platform::expand_tilde(target);
         println!("{} → {}", color::bold(source), color::bold(&target));
         let (c, u, n) = install_dir(Path::new(source), Path::new(&target), Path::new(source))?;
         total_created += c;
@@ -43,16 +43,6 @@ pub fn run(config: &SymlinkInstallConfig) -> Result<()> {
         ))
     );
     Ok(())
-}
-
-/// Expand ~ to the user's home directory.
-fn expand_tilde(path: &str) -> String {
-    if let Some(rest) = path.strip_prefix("~/")
-        && let Ok(home) = std::env::var("HOME")
-    {
-        return format!("{home}/{rest}");
-    }
-    path.to_string()
 }
 
 /// Recursively symlink all files from `source_dir` to `target_root`,

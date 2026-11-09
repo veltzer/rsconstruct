@@ -479,6 +479,9 @@ impl Builder {
         let t = Instant::now();
         let order = graph.topological_sort()?;
         if crate::json_output::human_output_enabled() {
+            for (name, dir) in self.config.dir_condition_skips() {
+                println!("[build] {name} skipped: {dir} does not exist");
+            }
             println!("[build] {} products to check for updates", order.len());
         }
         let policy = crate::executor::IncrementalPolicy;

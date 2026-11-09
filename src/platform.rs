@@ -63,6 +63,17 @@ pub fn set_env(key: &str, value: &std::ffi::OsStr) {
     unsafe { std::env::set_var(key, value) }
 }
 
+/// Expand a leading `~/` to the user's home directory (`$HOME`). Any other
+/// path, and `~/…` when `HOME` is unset, is returned unchanged.
+pub fn expand_tilde(path: &str) -> String {
+    if let Some(rest) = path.strip_prefix("~/")
+        && let Ok(home) = std::env::var("HOME")
+    {
+        return format!("{home}/{rest}");
+    }
+    path.to_string()
+}
+
 /// Create a symbolic link to a file.
 pub fn symlink_file(original: &std::path::Path, link: &std::path::Path) -> std::io::Result<()> {
     std::os::unix::fs::symlink(original, link)

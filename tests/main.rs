@@ -11,6 +11,8 @@ mod cache;
 mod clean_all;
 #[path = "tests_mod/complete.rs"]
 mod complete;
+#[path = "tests_mod/dir_condition.rs"]
+mod dir_condition;
 #[path = "tests_mod/doctor.rs"]
 mod doctor;
 #[path = "tests_mod/dry_run.rs"]

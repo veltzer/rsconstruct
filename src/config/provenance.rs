@@ -5,13 +5,22 @@ use toml_edit::{Document, Item, Table};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum FieldProvenance {
-    UserToml { line: usize },
-    LocalToml { line: usize },
+    UserToml {
+        line: usize,
+    },
+    LocalToml {
+        line: usize,
+    },
     ProcessorDefault,
     ScanDefault,
     OutputDirDefault,
     SerdeDefault,
     CliOverride,
+    /// `enabled` was turned off at load because the directory named by
+    /// `enabled_if_dir_exists` does not exist on this machine.
+    DirMissing {
+        dir: String,
+    },
 }
 
 impl fmt::Display for FieldProvenance {
@@ -24,6 +33,7 @@ impl fmt::Display for FieldProvenance {
             Self::OutputDirDefault => write!(f, "output dir default"),
             Self::SerdeDefault => write!(f, "serde default"),
             Self::CliOverride => write!(f, "CLI override"),
+            Self::DirMissing { dir } => write!(f, "off: {dir} does not exist"),
         }
     }
 }
