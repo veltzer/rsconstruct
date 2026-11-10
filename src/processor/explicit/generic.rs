@@ -1,5 +1,5 @@
 use anyhow::{Context, Result};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use serde::{Deserialize, Serialize};
@@ -73,6 +73,32 @@ impl ExplicitProcessor {
         }
         Ok(resolved)
     }
+
+    /// The `command` as a project file, when it is one (`scripts/build.py`,
+    /// `./gen.sh`), not a program looked up on PATH. Its contents are part
+    /// of what the stanza runs, so the product depends on it: editing the
+    /// script rebuilds the product even when `inputs` does not list it.
+    fn command_file(&self) -> Option<PathBuf> {
+        let command = Path::new(&self.config.standard.command);
+        if command.is_absolute() || command.components().count() < 2 || !command.is_file() {
+            return None;
+        }
+        Some(command.strip_prefix(".").unwrap_or(command).to_path_buf())
+    }
+
+    /// Whether `path` is among the inputs the stanza configures: a literal
+    /// `inputs` entry or an `input_globs` match. Those are passed to the
+    /// command; the command file added by [`Self::command_file`] is not.
+    fn is_configured_input(&self, path: &Path) -> bool {
+        self.config.inputs.iter().any(|i| {
+            let i = Path::new(i);
+            i.strip_prefix(".").unwrap_or(i) == path
+        }) || self
+            .config
+            .input_globs
+            .iter()
+            .any(|g| glob::Pattern::new(g).is_ok_and(|p| p.matches(&path.to_string_lossy())))
+    }
 }
 
 impl Processor for ExplicitProcessor {
@@ -111,9 +137,14 @@ impl Processor for ExplicitProcessor {
         // stanza waits — a later round of fixed-point discovery may inject
         // the upstream outputs it is after. A product with no inputs has no
         // primary input, and adding one here used to panic the build.
-        let inputs = self.resolve_inputs(file_index)?;
+        let mut inputs = self.resolve_inputs(file_index)?;
         if inputs.is_empty() {
             return Ok(());
+        }
+        if let Some(script) = self.command_file()
+            && !inputs.contains(&script)
+        {
+            inputs.push(script);
         }
 
         let output_files: Vec<PathBuf> =
@@ -147,7 +178,16 @@ impl Processor for ExplicitProcessor {
             cmd.arg(arg);
         }
         cmd.arg("--inputs");
-        for input in &product.inputs {
+        // The command file is an input only so that editing it rebuilds the
+        // product; the script is not handed itself unless `inputs` lists it.
+        let script = self
+            .command_file()
+            .filter(|script| !self.is_configured_input(script));
+        for input in product
+            .inputs
+            .iter()
+            .filter(|i| Some(*i) != script.as_ref())
+        {
             cmd.arg(input);
         }
         if !self.config.output_files.is_empty() {

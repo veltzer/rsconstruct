@@ -82,15 +82,18 @@ patterns stand out:
    a YAML of labels or themes, `rust-toolchain.toml`). The fix is
    `dep_inputs` in the repository's config, or the processor learning the
    file as a default input.
-2. **A generic stanza's own command.** `processor.explicit.generic` does not
-   make its `command` an input, so a stanza that does not list its script
-   in `inputs` never rebuilds when the script changes. Several repositories
-   list it; demos-lang-rust's cargo stanza does not.
+2. **A generic stanza's own command.** `processor.explicit.generic` did not
+   make its `command` an input, so a stanza that did not list its script
+   in `inputs` never rebuilt when the script changed. Several repositories
+   listed it; demos-lang-rust's cargo stanza did not. Fixed in 0.9.166: a
+   command that is a project file is an input (see the explicit
+   processor's page).
 
 ## Next steps
 
-1. Fix the findings above in their repositories, and decide whether a
-   generic stanza's `command` should be an input by default.
+1. ~~Fix the findings above in their repositories, and make a generic
+   stanza's `command` an input.~~ Done (0.9.166 and the repositories'
+   configs).
 2. Measure more of the fleet, then decide whether a finding should fail
    the product (`undeclared_reads = "fail"`), which needs an allow-list
    field for reads that are known and accepted.

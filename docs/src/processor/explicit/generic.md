@@ -52,6 +52,18 @@ inputs updates the product rather than adding a second one — which matters
 for a stanza with `output_dirs` only, whose product has no output files to be
 recognised by.
 
+### The command script
+
+When `command` names a file in the project (`scripts/build.py`, `./gen.sh`:
+a relative path with a directory part, not a program looked up on `PATH`),
+that file is an input of the product too, whether or not `inputs` lists it:
+editing the script reruns the stanza. Unless `inputs` or `input_globs`
+names it, it is not passed in `--inputs`, so the script still receives
+exactly the list the stanza configures. Before 0.9.166 an unlisted script
+was not an input at all, and editing it rebuilt nothing; the
+[undeclared-reads report](../../internal/undeclared-reads.md) found such a
+stanza in the fleet.
+
 ### Missing inputs
 
 Every literal `inputs` entry must name a file that exists, or a path some

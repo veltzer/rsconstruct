@@ -231,3 +231,59 @@ sandbox_writable = ["runs.log"]
         "--inputs a.txt gen.txt --output-dirs outdir"
     );
 }
+
+/// A `command` that is a project file is an input of the product even when
+/// `inputs` does not list it: editing the script reruns the stanza. It is
+/// not handed to the script in `--inputs`, which keeps the configured list.
+#[test]
+fn generic_command_file_is_an_input_but_not_an_argument() {
+    let temp_dir = setup(
+        r#"[processor.explicit.generic.collect]
+command = "./gen.sh"
+inputs = ["a.txt"]
+output_dirs = ["outdir"]
+sandbox_writable = ["runs.log"]
+"#,
+    );
+    let root = temp_dir.path();
+    let first = run_rsconstruct_json_with_env(root, &["build"], &[("NO_COLOR", "1")]);
+    assert!(first.exit_success, "{first:?}");
+    assert_eq!(runs(root), 1);
+    assert_eq!(
+        argv_recorded(root).trim(),
+        "--inputs a.txt --output-dirs outdir"
+    );
+
+    let unchanged = run_rsconstruct_json_with_env(root, &["build"], &[("NO_COLOR", "1")]);
+    assert!(unchanged.exit_success, "{unchanged:?}");
+    assert_eq!(runs(root), 1, "nothing changed, nothing reruns");
+
+    write_file(root, "gen.sh", &format!("{RECORD_SCRIPT}# edited\n"));
+    let edited = run_rsconstruct_json_with_env(root, &["build"], &[("NO_COLOR", "1")]);
+    assert!(edited.exit_success, "{edited:?}");
+    assert_eq!(
+        runs(root),
+        2,
+        "editing the command script reruns the stanza"
+    );
+}
+
+/// A command script that `inputs` does list is still passed, as before.
+#[test]
+fn generic_listed_command_file_stays_an_argument() {
+    let temp_dir = setup(
+        r#"[processor.explicit.generic.collect]
+command = "./gen.sh"
+inputs = ["gen.sh", "a.txt"]
+output_dirs = ["outdir"]
+sandbox_writable = ["runs.log"]
+"#,
+    );
+    let root = temp_dir.path();
+    let first = run_rsconstruct_json_with_env(root, &["build"], &[("NO_COLOR", "1")]);
+    assert!(first.exit_success, "{first:?}");
+    assert_eq!(
+        argv_recorded(root).trim(),
+        "--inputs gen.sh a.txt --output-dirs outdir"
+    );
+}
