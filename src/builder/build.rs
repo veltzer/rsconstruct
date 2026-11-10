@@ -81,8 +81,9 @@ fn check_required_tools(
     processors: &ProcessorMap,
     processor_filter: Option<&[String]>,
     only: Option<&std::collections::HashSet<&str>>,
-    execution_model: crate::config::ExecutionModel,
+    build: &crate::config::BuildConfig,
 ) -> Result<()> {
+    let execution_model = build.execution_model;
     let active_names: Vec<&String> = processors
         .keys()
         .filter(|k| processor_filter.is_none_or(|filter| filter.iter().any(|f| f == *k)))
@@ -115,6 +116,11 @@ fn check_required_tools(
     );
     if !sandboxed.is_empty() && which::which(crate::sandbox::SANDBOX_TOOL).is_err() {
         missing.push((crate::sandbox::SANDBOX_TOOL.to_string(), sandboxed));
+    }
+    // The undeclared-reads report runs every external tool under strace.
+    let traced = crate::read_trace::traced_processors(processors, &active_names, build);
+    if !traced.is_empty() && which::which(crate::read_trace::TRACE_TOOL).is_err() {
+        missing.push((crate::read_trace::TRACE_TOOL.to_string(), traced));
     }
     if !missing.is_empty() {
         missing.sort_by(|a, b| a.0.cmp(&b.0));
@@ -306,6 +312,7 @@ impl Builder {
         ctx.set_max_arg_len(self.config.build.max_arg_len);
         ctx.set_command_timeout_secs(self.config.build.command_timeout_secs);
         ctx.set_execution_model(self.config.build.execution_model);
+        ctx.set_undeclared_reads(self.config.build.undeclared_reads);
     }
 
     /// Discover → filter → validate: everything between "we have a config" and
@@ -376,12 +383,7 @@ impl Builder {
             .iter()
             .map(|p| p.processor.as_str())
             .collect();
-        check_required_tools(
-            &processors,
-            None,
-            Some(&with_products),
-            self.config.build.execution_model,
-        )?;
+        check_required_tools(&processors, None, Some(&with_products), &self.config.build)?;
 
         // The lock check (CI, or --verify-tool-versions) judges the same
         // set: the tools of the processors that build here must be locked

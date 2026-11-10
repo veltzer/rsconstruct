@@ -179,6 +179,63 @@ fn nested_build_runs_natively() {
     assert!(project.join("stray.txt").exists(), "{all}");
 }
 
+/// A project whose generic stanza's script reads its declared input and
+/// `extra.txt`, which it does not declare, with `build_section` as the
+/// `[build]` table. Returns the build's combined output.
+fn build_reading_extra(build_section: &str) -> (bool, String) {
+    let temp_dir = TempDir::new().unwrap();
+    let project = temp_dir.path();
+    fs::write(
+        project.join("rsconstruct.toml"),
+        format!(
+            "[build]\n{build_section}\n\n\
+             [processor.explicit.generic.reader]\n\
+             command = \"./gen.sh\"\n\
+             inputs = [\"gen.sh\", \"in.txt\"]\n\
+             output_files = [\"out.txt\"]\n"
+        ),
+    )
+    .unwrap();
+    fs::write(project.join("in.txt"), "in\n").unwrap();
+    fs::write(project.join("extra.txt"), "extra\n").unwrap();
+    let script = project.join("gen.sh");
+    fs::write(&script, "#!/bin/sh\ncat in.txt extra.txt > out.txt\n").unwrap();
+    make_executable(&script);
+    let output = rsconstruct_command(project)
+        .args(["--color", "never", "build"])
+        .output()
+        .expect("Failed to execute rsconstruct");
+    let all = format!(
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    (output.status.success(), all)
+}
+
+/// `undeclared_reads = "report"` warns about the file the tool read without
+/// declaring it, and only that one: not the declared input, nor the script.
+#[test]
+fn undeclared_read_is_reported() {
+    let (ok, all) = build_reading_extra("undeclared_reads = \"report\"");
+    assert!(ok, "{all}");
+    assert!(
+        all.contains("the tool read files its product does not declare"),
+        "{all}"
+    );
+    assert!(all.contains("read     extra.txt"), "{all}");
+    assert!(!all.contains("read     in.txt"), "{all}");
+    assert!(!all.contains("read     gen.sh"), "{all}");
+}
+
+/// Off by default: the same build says nothing about reads.
+#[test]
+fn undeclared_reads_are_not_watched_by_default() {
+    let (ok, all) = build_reading_extra("");
+    assert!(ok, "{all}");
+    assert!(!all.contains("does not declare"), "{all}");
+}
+
 /// Run the hidden `sandbox-run` subcommand with `job` on its standard input,
 /// as a sandboxed build runs it under bwrap (here without bwrap: the child's
 /// half of the exchange does not depend on it). Returns its stdout split at

@@ -978,6 +978,10 @@ fn install_machine(
         {
             tools.insert(crate::sandbox::SANDBOX_TOOL.to_string());
         }
+        // Likewise strace, for the undeclared-reads report.
+        if builder.config.build.undeclared_reads == crate::config::UndeclaredReads::Report {
+            tools.insert(crate::read_trace::TRACE_TOOL.to_string());
+        }
         for tool in &tools {
             if !is_installable_tool_name(tool) {
                 continue;

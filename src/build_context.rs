@@ -48,6 +48,8 @@ pub struct BuildContext {
     /// `[build] execution_model == "sandbox"`: the default for processors
     /// that do not set their own `execution_model`.
     sandbox_by_default: AtomicBool,
+    /// `[build] undeclared_reads == "report"`.
+    report_undeclared_reads: AtomicBool,
     /// Every path some product of the current graph declares as an output.
     /// Filled by the executor before the first product runs. A processor
     /// that inspects a shared output directory after its tool ran (the
@@ -81,6 +83,7 @@ impl BuildContext {
             webcache_ttl_secs: std::sync::atomic::AtomicU64::new(7 * 24 * 60 * 60),
             command_timeout_secs: std::sync::atomic::AtomicU64::new(0),
             sandbox_by_default: AtomicBool::new(false),
+            report_undeclared_reads: AtomicBool::new(false),
             declared_outputs: Mutex::new(HashSet::new()),
             declared_output_dirs: Mutex::new(Vec::new()),
             combined_memo: Mutex::new(crate::checksum::CombinedMemo::default()),
@@ -126,6 +129,19 @@ impl BuildContext {
         } else {
             crate::config::ExecutionModel::Native
         }
+    }
+
+    pub(crate) fn set_undeclared_reads(&self, mode: crate::config::UndeclaredReads) {
+        self.report_undeclared_reads.store(
+            mode == crate::config::UndeclaredReads::Report,
+            Ordering::Relaxed,
+        );
+    }
+
+    /// Whether `[build] undeclared_reads = "report"`: each product's tools
+    /// run under strace (see `crate::read_trace`).
+    pub(crate) fn reports_undeclared_reads(&self) -> bool {
+        self.report_undeclared_reads.load(Ordering::Relaxed)
     }
 
     pub(crate) fn set_command_timeout_secs(&self, n: u64) {

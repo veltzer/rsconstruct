@@ -120,7 +120,7 @@ impl Writable {
     }
 
     /// Whether `path` (relative to the project root) lies in this place.
-    fn covers(&self, path: &Path) -> bool {
+    pub fn covers(&self, path: &Path) -> bool {
         match self {
             Self::Path(p) => path.starts_with(p),
             Self::Named(name) => path.components().any(|c| c.as_os_str() == name.as_str()),

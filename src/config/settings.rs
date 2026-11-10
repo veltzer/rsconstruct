@@ -187,6 +187,29 @@ pub struct BuildConfig {
     /// docs/src/internal/orphan-outputs.md.
     #[serde(default = "default_remove_orphan_outputs")]
     pub remove_orphan_outputs: bool,
+    /// Whether to watch which project files each tool reads and report the
+    /// ones its product does not declare as inputs: `off` (the default) or
+    /// `report`, which runs every external tool of a product under strace
+    /// (slower; the build fails when strace is missing) and warns, per
+    /// product, about each project file it read that is not an input, an
+    /// output or a place the tool keeps its own state. Only products that
+    /// run are watched, so use it on a cold build. See
+    /// docs/src/internal/undeclared-reads.md.
+    #[serde(default)]
+    pub undeclared_reads: UndeclaredReads,
+}
+
+/// What a build does about files a tool reads without its product
+/// declaring them (`[build] undeclared_reads`).
+#[derive(Debug, Deserialize, Serialize, Clone, Copy, Default, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum UndeclaredReads {
+    /// Do not watch reads.
+    #[default]
+    Off,
+    /// Run each external tool under strace and warn about each project file
+    /// it read that its product does not declare.
+    Report,
 }
 
 /// How a processor's external tools are run (`[build] execution_model`
@@ -276,6 +299,7 @@ impl Default for BuildConfig {
             execution_model: ExecutionModel::Sandbox,
             sandbox_builtin_children: 0,
             remove_orphan_outputs: default_remove_orphan_outputs(),
+            undeclared_reads: UndeclaredReads::Off,
         }
     }
 }

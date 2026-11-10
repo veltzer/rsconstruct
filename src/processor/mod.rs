@@ -200,6 +200,10 @@ fn run_command_inner(
     // discarded) once the tool has exited.
     let sandbox = crate::sandbox::prepare(cmd)?;
     let cmd = sandbox.as_ref().map_or(cmd, |run| &run.command);
+    // With the undeclared-reads report on, strace goes outermost: it
+    // follows the tool into bwrap and logs what it opens there.
+    let trace = crate::read_trace::prepare(cmd)?;
+    let cmd = trace.as_ref().map_or(cmd, |t| &t.command);
 
     let program = cmd.get_program().to_os_string();
     let args: Vec<_> = cmd.get_args().map(std::ffi::OsStr::to_os_string).collect();
@@ -311,13 +315,16 @@ fn run_command_inner(
         } }
     });
 
+    let succeeded = matches!(&result, Ok(output) if output.status.success());
+    let traced = trace.map_or(Ok(()), |t| t.finish(succeeded));
     let Some(run) = sandbox else {
+        traced?;
         return result;
     };
-    let succeeded = matches!(&result, Ok(output) if output.status.success());
     let finished = run.finish(succeeded);
     let output = result?;
     finished?;
+    traced?;
     Ok(output)
 }
 

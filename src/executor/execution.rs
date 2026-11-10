@@ -886,6 +886,28 @@ impl Executor<'_> {
         Some(spec)
     }
 
+    /// The undeclared-reads spec for running `items` of `proc_name`, or
+    /// `None` when the report is off or the processor is a builtin, whose
+    /// work is rsconstruct's own code, not a tool's.
+    fn read_trace_spec(
+        &self,
+        proc_name: &str,
+        processor: &dyn crate::processor::Processor,
+        items: &[&WorkItem],
+    ) -> Option<crate::read_trace::Spec> {
+        if !self.build_ctx.reports_undeclared_reads()
+            || crate::registries::processor::is_builtin(proc_name)
+        {
+            return None;
+        }
+        let products: Vec<&Product> = items.iter().map(|item| &item.product).collect();
+        Some(crate::read_trace::spec_for(
+            processor.scan_config(),
+            &products,
+            &processor.required_tools(),
+        ))
+    }
+
     /// Pre-check a work item: handle explain, skip-if-unchanged, and cache restore.
     ///
     /// Returns `Handled` if the item was fully processed (skip/restore/failed),
@@ -1070,6 +1092,7 @@ impl Executor<'_> {
                 chunk,
                 lctx.object_store,
             ));
+            crate::read_trace::set_spec(self.read_trace_spec(proc_name, processor.as_ref(), chunk));
             for attempt in 1..=max_attempts {
                 let refs: Vec<&crate::graph::Product> =
                     pending.iter().map(|&i| product_refs[i]).collect();
@@ -1126,6 +1149,7 @@ impl Executor<'_> {
             }
             crate::processor::set_declared_tools(None);
             crate::sandbox::set_spec(None);
+            crate::read_trace::set_spec(None);
             let batch_duration = batch_start.elapsed();
 
             // Process per-product results
@@ -1263,6 +1287,11 @@ impl Executor<'_> {
                     &[item],
                     lctx.object_store,
                 ));
+                crate::read_trace::set_spec(self.read_trace_spec(
+                    &product.processor,
+                    processor.as_ref(),
+                    &[item],
+                ));
                 for attempt in 1..=max_attempts {
                     let outcome = guard_panic(
                         || format!("[{}] {}", product.processor, self.product_display(product)),
@@ -1344,6 +1373,7 @@ impl Executor<'_> {
                 }
                 crate::processor::set_declared_tools(None);
                 crate::sandbox::set_spec(None);
+                crate::read_trace::set_spec(None);
                 Self::inc_progress(lctx.pb, lctx.shared);
             }
         }

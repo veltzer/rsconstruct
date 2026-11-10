@@ -1782,6 +1782,18 @@ pub static TOOLS: &[ToolInfo] = &[
         sandbox_writable: &[],
         needs_network: false,
     },
+    // Run by rsconstruct itself under `undeclared_reads = "report"`
+    // (src/read_trace.rs), around every external tool a product runs.
+    ToolInfo {
+        name: "strace",
+        runtime: "system",
+        project: None,
+        machine: Some(InstallMethod::new("apt", "strace")),
+        alternatives: &[],
+        prefer: None,
+        sandbox_writable: &[],
+        needs_network: false,
+    },
     // Run by a project's own scripts (a generic processor's
     // `required_tools`), not by any one processor.
     ToolInfo {

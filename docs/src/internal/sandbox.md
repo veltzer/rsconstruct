@@ -592,4 +592,6 @@ hides.
    and in the repos' own configs.
 5. ~~Make the sandbox the default.~~ Done in 0.9.163, failing outright
    where `bwrap` is missing.
-6. Separately, add the strace-based undeclared-reads report.
+6. ~~Separately, add the strace-based undeclared-reads report.~~ Done:
+   `[build] undeclared_reads = "report"`; see
+   [Undeclared Reads](undeclared-reads.md).

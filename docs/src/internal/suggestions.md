@@ -34,6 +34,11 @@ Grades:
   and BuildXL handle it, why observation fits rsconstruct better than a
   sandbox, the candidate mechanisms (strace leading) and the open
   questions are in [Undeclared Reads](undeclared-reads.md).
+- **Report mode implemented 2026-11-10:** `[build] undeclared_reads =
+  "report"` traces each product's tools with strace and warns about every
+  project file read that the product does not declare. Opt-in; a failing
+  mode waits on more fleet measurements (see
+  [Undeclared Reads](undeclared-reads.md)).
 - **First version implemented 2026-11-07:** `[build] execution_model =
   "sandbox"`, a sandbox for correctness (not security) that keeps
   everything readable but catches undeclared writes and network access,
