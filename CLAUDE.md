@@ -3,6 +3,7 @@
 A fast, incremental build tool written in Rust with tera support, Python linting, and parallel execution.
 
 Detailed documentation is in `docs/src/`. Key references:
+- Orientation map (source tree, build flow, where to look for a task): `doc/ARCHITECTURE.md` — read this first
 - Commands: `docs/src/commands.md`
 - Configuration: `docs/src/configuration.md`
 - Architecture (subprocess execution, path handling, caching): `docs/src/internal/architecture.md`
