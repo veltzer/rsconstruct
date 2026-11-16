@@ -119,6 +119,7 @@ mod processor {
         pub mod taplo;
         pub mod terms;
         pub mod tidy;
+        pub mod vnu;
         pub mod xmllint;
         pub mod yamllint;
         pub mod yq;

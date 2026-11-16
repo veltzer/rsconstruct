@@ -1560,6 +1560,22 @@ fn binary_recipe(pkg: &str) -> Option<BinaryRecipe> {
             archive: ArchiveKind::Raw,
             dest: "checkpatch.pl",
         }),
+        // The Nu Html Checker's jar, from the npm registry: the checker's
+        // GitHub releases are one tag, `latest`, whose assets are replaced
+        // in place on every upstream commit, so a locked hash of them
+        // (the self-contained vnu.linux.zip included) would break within
+        // days. The registry keeps every version of the `vnu-jar` package
+        // under a permanent URL; the package is the jar plus a launcher
+        // script that is not used. Run with `java -jar`. New versions
+        // follow the HTML standard and can report new errors, so bump this
+        // deliberately.
+        "vnu.jar" => Some(BinaryRecipe {
+            url: "https://registry.npmjs.org/vnu-jar/-/vnu-jar-26.11.14.tgz",
+            archive: ArchiveKind::TarGz {
+                inner: "package/build/dist/vnu.jar",
+            },
+            dest: "vnu.jar",
+        }),
         // drawio ships an official .deb but has no apt repo, and its snap
         // needs a running snapd — unavailable in containers and flaky on CI
         // runners, which made this the one tool `--all` could not provision.

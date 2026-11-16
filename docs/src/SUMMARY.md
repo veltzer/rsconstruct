@@ -89,6 +89,7 @@
         - [Taplo](processor/checker/taplo.md)
         - [Terms](processor/checker/terms.md)
         - [Tidy](processor/checker/tidy.md)
+        - [Vnu](processor/checker/vnu.md)
         - [XMLLint](processor/checker/xmllint.md)
         - [Yamllint](processor/checker/yamllint.md)
         - [YQ](processor/checker/yq.md)

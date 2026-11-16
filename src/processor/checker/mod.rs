@@ -35,6 +35,7 @@ mod svglint;
 mod svgo;
 mod taplo;
 mod tidy;
+mod vnu;
 mod xmllint;
 mod yamllint;
 mod yq;
