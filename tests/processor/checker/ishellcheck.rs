@@ -281,6 +281,34 @@ fn ishellcheck_rcfile_edit_rechecks() {
     );
 }
 
+/// The engine reads the `.shellcheckrc` of the script's own directory, so
+/// that file is an input of the script: editing it re-checks. Only the
+/// project root's rc file used to be tracked.
+#[test]
+fn ishellcheck_nested_shellcheckrc_edit_rechecks() {
+    let temp_dir = setup_project(
+        CONFIG,
+        &[
+            ("src/bad.sh", "#!/bin/bash\necho $1\n"),
+            ("src/.shellcheckrc", "disable=SC2086\n"),
+        ],
+    );
+    assert_passes(
+        &build(temp_dir.path()),
+        "an unquoted expansion while src/.shellcheckrc disables SC2086",
+    );
+    fs::write(
+        temp_dir.path().join("src/.shellcheckrc"),
+        "# nothing disabled\n",
+    )
+    .unwrap();
+    assert_fails_with(
+        &build(temp_dir.path()),
+        "the same script once its directory's rc file disables nothing",
+        "src/bad.sh:2:6: note: Double quote to prevent globbing and word splitting. [SC2086]",
+    );
+}
+
 /// An `rcfile` that does not exist fails the build naming it, rather than
 /// warning and checking with the defaults as `shellcheck --rcfile` does.
 #[test]

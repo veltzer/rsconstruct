@@ -903,7 +903,6 @@ fn every_plugin_has_docs_and_tests() {
         "processor.generator.imarkdown2html",
         "processor.generator.ipdfunite",
         "processor.checker.itaplo",
-        "processor.checker.marp_images",
         "processor.generator.objdump",
         "processor.checker.prettier",
         "processor.generator.yaml2json",
@@ -1394,6 +1393,34 @@ source = { registry = "https://pypi.org/simple" }
     .unwrap();
     let pins = crate::config::uv_lock_pinned_deps(&lock).expect("should parse");
     assert_eq!(pins, vec!["flask==3.1.0", "gunicorn==23.0.0"]);
+}
+
+/// Only `editable = "."` is the project. An editable package elsewhere is a
+/// dependency, and one this function cannot pin: an error, not a silent
+/// omission from the pins.
+#[test]
+fn uv_lock_pinned_deps_rejects_an_editable_package_that_is_not_the_project() {
+    let tmp = tempfile::TempDir::new().unwrap();
+    let lock = tmp.path().join("uv.lock");
+    std::fs::write(
+        &lock,
+        r#"
+version = 1
+
+[[package]]
+name = "demo"
+version = "0.1.0"
+source = { editable = "." }
+
+[[package]]
+name = "sibling"
+version = "0.1.0"
+source = { editable = "../sibling" }
+"#,
+    )
+    .unwrap();
+    let err = crate::config::uv_lock_pinned_deps(&lock).unwrap_err();
+    assert!(err.to_string().contains("sibling"), "{err}");
 }
 
 #[test]

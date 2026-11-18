@@ -52,7 +52,7 @@ impl SassDepAnalyzer {
     fn resolve(&self, url: &str, including_dir: &Path, file_index: &FileIndex) -> Option<PathBuf> {
         std::iter::once(including_dir.to_path_buf())
             .chain(self.config.load_paths.iter().map(PathBuf::from))
-            .find_map(|dir| resolve_in(&dir.join(url), file_index))
+            .find_map(|dir| resolve_in(&super::lexical_normalize(&dir.join(url)), file_index))
     }
 
     /// Scan `source` and everything it loads. Rescanned on every build (see

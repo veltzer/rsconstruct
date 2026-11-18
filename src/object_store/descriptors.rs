@@ -271,7 +271,7 @@ impl ObjectStore {
                 "Expected output directory not produced: {}",
                 dir.display()
             );
-            for file_path in walk_files(dir) {
+            for file_path in walk_files(dir)? {
                 if is_foreign(&file_path) {
                     continue;
                 }

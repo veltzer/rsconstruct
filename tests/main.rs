@@ -98,6 +98,7 @@ mod processor {
         pub mod luacheck;
         pub mod make;
         pub mod markdownlint;
+        pub mod marp_images;
         pub mod mdl;
         pub mod mypy;
         pub mod oxlint;

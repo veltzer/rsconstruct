@@ -287,9 +287,12 @@ impl Builder {
             "Removing build directories..."
         }));
 
-        // The configured output root, not a hardcoded "out".
-        let out_dir = std::path::PathBuf::from(&self.config.build.output_dir);
-        for dir in [std::path::PathBuf::from(".rsconstruct"), out_dir] {
+        // The configured output root, not a hardcoded "out" — when it is a
+        // directory that holds nothing but outputs (see
+        // `removable_output_root`).
+        let mut dirs = vec![std::path::PathBuf::from(".rsconstruct")];
+        dirs.extend(removable_output_root(&self.config.build.output_dir)?);
+        for dir in dirs {
             if !dir.exists() {
                 continue;
             }
@@ -513,6 +516,34 @@ impl Builder {
 /// upward toward the project root. `fs::remove_dir` only succeeds on empty
 /// directories, so non-empty ones (and their ancestors) are left intact.
 /// Returns the number of directories removed.
+/// The `[build] output_dir` as a directory `clean all` may remove
+/// wholesale, or `None` when outputs are written in place.
+///
+/// `""` and `"."` mean in-place output at the project root: there is no
+/// output directory, and removing "it" would remove the project. Any other
+/// value must name a directory strictly inside the project: an absolute
+/// path, one with `..`, or one that is the git or rsconstruct state
+/// directory is refused, because `remove_dir_all` on it destroys things
+/// this tool did not make.
+fn removable_output_root(output_dir: &str) -> Result<Option<PathBuf>> {
+    use std::path::Component;
+    let path: PathBuf = std::path::Path::new(output_dir)
+        .components()
+        .filter(|c| !matches!(c, Component::CurDir))
+        .collect();
+    if path.as_os_str().is_empty() {
+        return Ok(None);
+    }
+    let inside = path.components().all(|c| matches!(c, Component::Normal(_)));
+    if !inside || path.starts_with(".git") || path.starts_with(".rsconstruct") {
+        bail!(
+            "[build] output_dir = \"{output_dir}\" is not a directory inside the project that clean may remove; \
+             remove it by hand, or use `clean outputs` to remove the declared output files"
+        );
+    }
+    Ok(Some(path))
+}
+
 fn remove_empty_ancestors(candidates: &HashSet<PathBuf>, verbose: bool) -> usize {
     let mut all: HashSet<PathBuf> = HashSet::new();
     for dir in candidates {
@@ -540,4 +571,34 @@ fn remove_empty_ancestors(candidates: &HashSet<PathBuf>, verbose: bool) -> usize
         }
     }
     removed
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn only_a_directory_inside_the_project_is_a_removable_output_root() {
+        assert_eq!(
+            removable_output_root("out").unwrap(),
+            Some(PathBuf::from("out"))
+        );
+        assert_eq!(
+            removable_output_root("./build/gen/").unwrap(),
+            Some(PathBuf::from("build/gen"))
+        );
+        for in_place in ["", ".", "./"] {
+            assert_eq!(removable_output_root(in_place).unwrap(), None, "{in_place}");
+        }
+        for refused in [
+            "..",
+            "../other",
+            "out/../..",
+            "/tmp/out",
+            ".git",
+            ".rsconstruct/x",
+        ] {
+            assert!(removable_output_root(refused).is_err(), "{refused}");
+        }
+    }
 }

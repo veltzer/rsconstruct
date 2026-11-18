@@ -19,28 +19,44 @@ use crate::remote_cache::RemoteCache;
 pub const CHECKSUM_PREFIX_LEN: usize = 2;
 
 /// Iteratively collect all files under a directory.
-pub fn walk_files(dir: &Path) -> Vec<PathBuf> {
+///
+/// A directory that cannot be read is an error, not an empty one: the
+/// callers decide from this list what a cached tree holds and which objects
+/// nothing references, so a silently skipped subdirectory would cache a
+/// tree with files missing, or collect live objects as garbage. Only a
+/// directory that does not exist (the root, or one removed while walking)
+/// contributes nothing.
+pub fn walk_files(dir: &Path) -> Result<Vec<PathBuf>> {
     let mut result = Vec::new();
     let mut stack = vec![dir.to_path_buf()];
     while let Some(current) = stack.pop() {
-        if let Ok(entries) = fs::read_dir(&current) {
-            for entry in entries.flatten() {
-                let path = entry.path();
-                if path.is_dir() {
-                    stack.push(path);
-                } else if path.is_file() {
-                    // Temp files (temp-then-rename in flight, or orphaned by
-                    // a crash) are included deliberately: `trim` collects
-                    // them as unreferenced garbage — a filter here once made
-                    // crash-orphaned temp files permanently unreclaimable by
-                    // every management command. redb's exclusive lock means
-                    // no second process is mid-write while we walk.
-                    result.push(path);
-                }
+        let entries = match fs::read_dir(&current) {
+            Ok(entries) => entries,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => continue,
+            Err(e) => {
+                return Err(e)
+                    .with_context(|| format!("Failed to read directory {}", current.display()));
+            }
+        };
+        for entry in entries {
+            let entry = entry.with_context(|| {
+                format!("Failed to read an entry of directory {}", current.display())
+            })?;
+            let path = entry.path();
+            if path.is_dir() {
+                stack.push(path);
+            } else if path.is_file() {
+                // Temp files (temp-then-rename in flight, or orphaned by
+                // a crash) are included deliberately: `trim` collects
+                // them as unreferenced garbage — a filter here once made
+                // crash-orphaned temp files permanently unreclaimable by
+                // every management command. redb's exclusive lock means
+                // no second process is mid-write while we walk.
+                result.push(path);
             }
         }
     }
-    result
+    Ok(result)
 }
 
 /// Reject descriptor entry paths with `..` components — they could write

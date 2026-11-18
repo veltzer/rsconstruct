@@ -604,9 +604,20 @@ impl ProcessorConfig {
     /// provenance is upgraded to `OutputDirDefault` so `config show` can explain why
     /// the value differs from the processor's own default.
     pub(crate) fn apply_output_dir_defaults(&mut self, global_output_dir: &str) {
+        // `output_dir = ""` (or ".") means in-place output at the project
+        // root: there is no prefix to put in front, and joining with "/"
+        // would produce an absolute path at the filesystem root.
+        let global_trimmed = global_output_dir.trim_end_matches('/');
+        let under_global = |rest: &str| {
+            if global_trimmed.is_empty() || global_trimmed == "." {
+                rest.to_string()
+            } else {
+                format!("{global_trimmed}/{rest}")
+            }
+        };
         for inst in &mut self.instances {
             let type_default_prefix = format!("out/{}", inst.pname);
-            let instance_prefix = format!("{}/{}", global_output_dir, inst.instance_name);
+            let instance_prefix = under_global(&inst.instance_name);
 
             for field in &["output_dir", "output"] {
                 // A user-set or CLI-set value is explicitly chosen — never
@@ -644,7 +655,7 @@ impl ProcessorConfig {
                     && let Some(rest) = val.strip_prefix("out/")
                 {
                     // Global output dir override: remap out/ → {global}/
-                    format!("{global_output_dir}/{rest}")
+                    under_global(rest)
                 } else {
                     continue;
                 };

@@ -106,6 +106,7 @@ impl IcppDepAnalyzer {
                     .iter()
                     .map(|dir| dir.join(include)),
             )
+            .map(|candidate| super::lexical_normalize(&candidate))
             .collect();
         let found = candidates
             .iter()

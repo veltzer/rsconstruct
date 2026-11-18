@@ -75,7 +75,10 @@ impl MarkdownDepAnalyzer {
 
             // Try resolving relative to the source file's directory first,
             // then relative to the project root (cwd)
-            let candidates = [source_dir.join(path_str), PathBuf::from(path_str)];
+            let candidates = [
+                super::lexical_normalize(&source_dir.join(path_str)),
+                super::lexical_normalize(Path::new(path_str)),
+            ];
             let found = candidates
                 .iter()
                 .find(|c| c.is_file() || file_index.contains(c));

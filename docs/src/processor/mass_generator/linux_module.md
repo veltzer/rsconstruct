@@ -56,8 +56,15 @@ modules:
     extra_cflags: [-DDEBUG]   # Extra CFLAGS (optional, becomes ccflags-y)
 
   - name: mydriver
-    sources: [mydriver.c, utils.c]
+    sources: [driver_main.c, src/utils.c]
 ```
+
+A source keeps its directory in the generated `Kbuild` (`src/utils.c`
+builds `src/utils.o`). A module built from several sources must not have a
+source named after itself (`mydriver.c` in `mydriver`): kbuild links the
+sources into `mydriver.o`, the same file that source would compile to, so
+that is rejected. A module built from the single source that carries its
+name (`hello` from `hello.c`) is fine.
 
 ### Minimal Example
 

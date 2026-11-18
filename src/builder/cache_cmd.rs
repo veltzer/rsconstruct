@@ -26,7 +26,7 @@ pub fn handle(ctx: &crate::build_context::BuildContext, action: CacheAction) -> 
         }
         CacheAction::Size => {
             let builder = Builder::new(ctx)?;
-            let (bytes, count) = builder.object_store().size();
+            let (bytes, count) = builder.object_store().size()?;
             if json_output::is_json_mode() {
                 let out = serde_json::json!({ "bytes": bytes, "objects": count });
                 println!("{}", serde_json::to_string_pretty(&out)?);
@@ -81,12 +81,12 @@ pub fn handle(ctx: &crate::build_context::BuildContext, action: CacheAction) -> 
         }
         CacheAction::List => {
             let builder = Builder::new(ctx)?;
-            let entries = builder.object_store().list();
+            let entries = builder.object_store().list()?;
             println!("{}", serde_json::to_string_pretty(&entries)?);
         }
         CacheAction::Stats => {
             let builder = Builder::new(ctx)?;
-            let stats = builder.object_store().stats_by_processor();
+            let stats = builder.object_store().stats_by_processor()?;
 
             if stats.is_empty() {
                 println!("Cache is empty.");
@@ -121,7 +121,7 @@ pub fn handle(ctx: &crate::build_context::BuildContext, action: CacheAction) -> 
         CacheAction::Stale => {
             let builder = Builder::new(ctx)?;
             let valid_keys = builder.valid_cache_keys(ctx)?;
-            let entries = builder.object_store().list();
+            let entries = builder.object_store().list()?;
             let mut current_count = 0usize;
             let mut stale_count = 0usize;
             if json_output::is_json_mode() {

@@ -3,7 +3,7 @@ use std::fs;
 use std::path::Path;
 
 use crate::tables;
-use anyhow::Result;
+use anyhow::{Context, Result};
 
 use crate::file_index::FileIndex;
 use crate::json_output::{self, SlocCocomoEstimate, SlocLanguageEntry, SlocOutput, SlocTotals};
@@ -180,14 +180,13 @@ struct LineCounts {
     code: usize,
 }
 
-fn count_lines(path: &Path, comment: &CommentStyle) -> LineCounts {
-    let Ok(content) = fs::read_to_string(path) else {
-        return LineCounts {
-            blank: 0,
-            comment: 0,
-            code: 0,
-        };
-    };
+/// Count the lines of one file. A file that cannot be read is an error: it
+/// used to be counted as a file with no lines, which understated the totals
+/// without a word. Bytes that are not UTF-8 are replaced, not rejected, so
+/// a Latin-1 source is still counted.
+fn count_lines(path: &Path, comment: &CommentStyle) -> Result<LineCounts> {
+    let bytes = fs::read(path).with_context(|| format!("Failed to read {}", path.display()))?;
+    let content = String::from_utf8_lossy(&bytes);
 
     let mut blank = 0usize;
     let mut comment_lines = 0usize;
@@ -238,11 +237,11 @@ fn count_lines(path: &Path, comment: &CommentStyle) -> LineCounts {
         code += 1;
     }
 
-    LineCounts {
+    Ok(LineCounts {
         blank,
         comment: comment_lines,
         code,
-    }
+    })
 }
 
 struct LanguageStats {
@@ -275,7 +274,7 @@ pub fn run_sloc(file_index: &FileIndex, cocomo: bool, salary: u64) -> Result<()>
 
         let Some(info) = info else { continue };
 
-        let counts = count_lines(path, info.comment);
+        let counts = count_lines(path, info.comment)?;
 
         let entry = stats.entry(info.name).or_insert(LanguageStats {
             files: 0,
@@ -289,9 +288,10 @@ pub fn run_sloc(file_index: &FileIndex, cocomo: bool, salary: u64) -> Result<()>
         entry.code += counts.code;
     }
 
-    // Sort by code lines descending
+    // Sort by code lines descending, then by name: `stats` is a HashMap, so
+    // languages with equal counts would otherwise change places between runs.
     let mut sorted: Vec<(&str, &LanguageStats)> = stats.iter().map(|(k, v)| (*k, v)).collect();
-    sorted.sort_by_key(|(_, stats)| std::cmp::Reverse(stats.code));
+    sorted.sort_by_key(|(name, stats)| (std::cmp::Reverse(stats.code), *name));
 
     // Totals
     let total_files: usize = sorted.iter().map(|(_, s)| s.files).sum();

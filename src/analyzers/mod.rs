@@ -656,6 +656,32 @@ pub fn is_cpp_source(path: &Path) -> bool {
 /// The paths a search probed before `found`: every candidate up to (not
 /// including) the first that matched, or all of them when none did. These
 /// are a scan's `absent` paths — any of them appearing changes the answer.
+/// `path` with `.` components dropped and each `..` folded into the
+/// component before it. Purely lexical: no filesystem access.
+///
+/// A reference such as `#include "../gen/x.h"` in `src/a.c` joins to
+/// `src/../gen/x.h`. The file index and the build graph compare paths
+/// literally, so that never equals the `gen/x.h` another product declares:
+/// the reference to a generated file went unresolved, or resolved (once the
+/// file was on disk) to a path no producer owns, so no ordering edge was
+/// made. A leading `..` that would leave the project is kept as written.
+pub fn lexical_normalize(path: &Path) -> PathBuf {
+    use std::path::Component;
+    let mut result = PathBuf::new();
+    for component in path.components() {
+        match component {
+            Component::CurDir => {}
+            Component::ParentDir
+                if matches!(result.components().next_back(), Some(Component::Normal(_))) =>
+            {
+                result.pop();
+            }
+            other => result.push(other),
+        }
+    }
+    result
+}
+
 pub fn probed_before(candidates: &[PathBuf], found: Option<&PathBuf>) -> Vec<PathBuf> {
     candidates
         .iter()
@@ -699,6 +725,25 @@ mod tests {
         CppAnalyzerConfig, IcppAnalyzerConfig, KnownFields, MarkdownAnalyzerConfig,
         PythonAnalyzerConfig, SassAnalyzerConfig, TeraAnalyzerConfig,
     };
+
+    #[test]
+    fn lexical_normalize_folds_dot_and_dotdot() {
+        for (written, normal) in [
+            ("src/../gen/x.h", "gen/x.h"),
+            ("./a/./b/../c.md", "a/c.md"),
+            ("a/b/../../c", "c"),
+            ("plain/x.h", "plain/x.h"),
+            ("../outside/x.h", "../outside/x.h"),
+            ("a/../../x.h", "../x.h"),
+            ("/abs/a/../b", "/abs/b"),
+        ] {
+            assert_eq!(
+                lexical_normalize(Path::new(written)),
+                PathBuf::from(normal),
+                "{written}"
+            );
+        }
+    }
 
     /// Fields that only choose which sources get scanned never enter the
     /// fingerprint: toggling them keeps every cached entry valid.

@@ -99,6 +99,23 @@ fn should_ignore(path: &Path, ignored: &IgnoredDirs) -> bool {
     false
 }
 
+/// Whether an event means a watched file may have changed.
+///
+/// Access events (a file was opened, or closed) are not changes. They must
+/// be dropped: every build opens rsconstruct.toml and the sources it reads,
+/// each open is reported, and treating it as a change made watch mode
+/// rebuild in a loop for as long as it ran. A write is reported on its own
+/// as a modify, create or remove event.
+///
+/// An event that names no path (the kernel queue overflowed, events were
+/// lost) is a change: something happened that cannot be ruled out.
+fn is_change(event: &Event, ignored: &IgnoredDirs) -> bool {
+    if event.kind.is_access() {
+        return false;
+    }
+    event.paths.is_empty() || !event.paths.iter().all(|p| should_ignore(p, ignored))
+}
+
 /// Register watch paths with the watcher, returning the list of paths being watched.
 fn register_watches(watcher: &mut impl Watcher, paths: &[PathBuf]) {
     for path in paths {
@@ -151,8 +168,7 @@ pub fn watch(ctx: &crate::build_context::BuildContext, opts: &BuildOptions) -> R
             }
             match rx.recv_timeout(poll_interval) {
                 Ok(Ok(event)) => {
-                    let all_ignored = event.paths.iter().all(|p| should_ignore(p, &ignored));
-                    if all_ignored {
+                    if !is_change(&event, &ignored) {
                         continue;
                     }
                     break true;
@@ -206,9 +222,14 @@ pub fn watch(ctx: &crate::build_context::BuildContext, opts: &BuildOptions) -> R
                     println!("{}", color::red(&format!("Build error: {e}")));
                 }
 
-                // Update watches if paths changed (e.g., new scan dirs in config)
+                // Update watches if paths changed (e.g., new scan dirs in
+                // config). A watch on a single file is registered again
+                // every time: it follows the inode, and an editor that
+                // saves by renaming a new file into place leaves it on a
+                // file that no longer exists, so later saves of
+                // rsconstruct.toml would go unnoticed.
                 for path in &new_paths {
-                    if !watch_paths.contains(path) {
+                    if !watch_paths.contains(path) || !path.is_dir() {
                         register_watches(&mut watcher, std::slice::from_ref(path));
                     }
                 }

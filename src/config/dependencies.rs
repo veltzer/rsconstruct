@@ -300,8 +300,15 @@ pub fn uv_lock_pinned_deps(lock: &Path) -> Result<Vec<String>> {
             .and_then(toml::Value::as_str)
             .with_context(|| format!("{}: package entry without a name", lock.display()))?;
         let source = pkg.get("source").and_then(toml::Value::as_table);
-        let is_project =
-            source.is_some_and(|s| s.contains_key("editable") || s.contains_key("virtual"));
+        // Only `editable = "."` and `virtual = "."` are the project; an
+        // editable or virtual source elsewhere (`"../other"`, a workspace
+        // member) is a dependency this function does not read, and falls
+        // through to the error below instead of vanishing from the pins.
+        let is_project = source.is_some_and(|s| {
+            ["editable", "virtual"]
+                .iter()
+                .any(|kind| s.get(*kind).and_then(toml::Value::as_str) == Some("."))
+        });
         if is_project {
             continue;
         }

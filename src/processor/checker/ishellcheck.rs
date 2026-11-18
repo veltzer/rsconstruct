@@ -199,10 +199,54 @@ impl crate::processor::Processor for IshellcheckProcessor {
         Ok(named.into_iter().collect())
     }
 
-    /// One product per scanned file (the default `discover`), plus the
-    /// rcfile read from disk.
+    /// One product per scanned file, plus the rc files read from disk.
     fn discovery(&self) -> crate::processor::Discovery {
         crate::processor::Discovery::PerFile
+    }
+
+    /// One product per script. Besides the shared inputs, each product
+    /// takes the rc files the engine would find for that script: unless
+    /// `rcfile` names one or `norc` is set, it looks for `.shellcheckrc`
+    /// and `shellcheckrc` in the script's directory and every directory
+    /// above it. Only the project root's `.shellcheckrc` used to be an
+    /// input (through `dep_auto`), so editing `scripts/.shellcheckrc` left
+    /// the cached verdicts of the scripts below it in place. The files the
+    /// engine also reads outside the project (`$HOME`) are not tracked.
+    fn discover(
+        &self,
+        graph: &mut crate::graph::BuildGraph,
+        file_index: &crate::file_index::FileIndex,
+        instance_name: &str,
+    ) -> Result<()> {
+        let files = file_index.scan(&self.config.standard, true);
+        if files.is_empty() {
+            return Ok(());
+        }
+        let hash = Some(crate::config::output_config_hash(
+            &self.config,
+            &crate::config::checksum_fields_of(instance_name),
+        ));
+        let mut dep_inputs = self.config.standard.dep_inputs.clone();
+        dep_inputs.extend(self.extra_dep_inputs()?);
+        let shared =
+            crate::processor::resolve_dep_inputs(&dep_inputs, &self.config.standard.dep_auto)?;
+        let searches_for_rc = self.config.rcfile.is_empty() && !self.config.norc;
+        for file in files {
+            let mut inputs = vec![file.clone()];
+            inputs.extend_from_slice(&shared);
+            if searches_for_rc {
+                for dir in file.ancestors().skip(1) {
+                    for name in [".shellcheckrc", "shellcheckrc"] {
+                        let rc = dir.join(name);
+                        if rc.is_file() && !inputs.contains(&rc) {
+                            inputs.push(rc);
+                        }
+                    }
+                }
+            }
+            graph.add_product(inputs, vec![], instance_name, hash.clone())?;
+        }
+        Ok(())
     }
 
     fn required_tools(&self) -> Vec<String> {

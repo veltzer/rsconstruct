@@ -8,7 +8,7 @@ use super::{
 
 impl ObjectStore {
     /// Get cache size in bytes and number of objects (blobs + descriptors)
-    pub fn size(&self) -> (u64, usize) {
+    pub fn size(&self) -> Result<(u64, usize)> {
         let mut total_bytes = 0u64;
         let mut object_count = 0usize;
 
@@ -16,15 +16,15 @@ impl ObjectStore {
             if !dir.exists() {
                 continue;
             }
-            for path in walk_files(dir) {
-                if let Ok(metadata) = fs::metadata(&path) {
-                    total_bytes += metadata.len();
-                    object_count += 1;
-                }
+            for path in walk_files(dir)? {
+                let metadata = fs::metadata(&path)
+                    .with_context(|| format!("Failed to stat cache file {}", path.display()))?;
+                total_bytes += metadata.len();
+                object_count += 1;
             }
         }
 
-        (total_bytes, object_count)
+        Ok((total_bytes, object_count))
     }
 
     /// Trim cache by removing blob objects not referenced by any descriptor.
@@ -41,7 +41,26 @@ impl ObjectStore {
         // would garbage-collect every blob it references as "unreferenced".
         let mut referenced: std::collections::HashSet<String> = std::collections::HashSet::new();
         if self.descriptors_dir.exists() {
-            for path in walk_files(&self.descriptors_dir) {
+            for path in walk_files(&self.descriptors_dir)? {
+                // A temp file a crashed write left behind (`store_descriptor`
+                // writes `.tmp-<pid>-<n>`, then renames) is not a
+                // descriptor and may be truncated: parsing it would abort
+                // every trim until someone removed it by hand. It is
+                // garbage, so it is collected here. redb's exclusive lock
+                // means no other process is mid-write.
+                if path
+                    .file_name()
+                    .and_then(|n| n.to_str())
+                    .is_some_and(|n| n.starts_with(".tmp-"))
+                {
+                    fs::remove_file(&path).with_context(|| {
+                        format!(
+                            "Failed to remove leftover descriptor temp file: {}",
+                            path.display()
+                        )
+                    })?;
+                    continue;
+                }
                 let data = fs::read(&path).with_context(|| {
                     format!("Failed to read descriptor during trim: {}", path.display())
                 })?;
@@ -67,7 +86,7 @@ impl ObjectStore {
 
         // Find and remove unreferenced blob objects
         let mut to_remove = Vec::new();
-        for path in walk_files(&self.objects_dir) {
+        for path in walk_files(&self.objects_dir)? {
             if let (Some(prefix), Some(rest)) = (
                 path.parent()
                     .and_then(|p| p.file_name())
@@ -150,7 +169,7 @@ impl ObjectStore {
             return Ok(0);
         }
 
-        for path in walk_files(&self.descriptors_dir) {
+        for path in walk_files(&self.descriptors_dir)? {
             // Reconstruct descriptor key from path
             if let (Some(prefix), Some(rest)) = (
                 path.parent()
@@ -188,12 +207,12 @@ impl ObjectStore {
     }
 
     /// List all cache descriptors
-    pub fn list(&self) -> Vec<CacheListEntry> {
+    pub fn list(&self) -> Result<Vec<CacheListEntry>> {
         if !self.descriptors_dir.exists() {
-            return Vec::new();
+            return Ok(Vec::new());
         }
 
-        let mut entries: Vec<CacheListEntry> = walk_files(&self.descriptors_dir)
+        let mut entries: Vec<CacheListEntry> = walk_files(&self.descriptors_dir)?
             .into_iter()
             .filter_map(|path| {
                 let data = fs::read(&path).ok()?;
@@ -226,19 +245,19 @@ impl ObjectStore {
             .collect();
 
         entries.sort_by(|a, b| a.cache_key.cmp(&b.cache_key));
-        entries
+        Ok(entries)
     }
 
     /// Get per-processor cache statistics.
     /// Extracts processor name by scanning descriptor keys.
-    pub fn stats_by_processor(&self) -> BTreeMap<String, ProcessorCacheStats> {
+    pub fn stats_by_processor(&self) -> Result<BTreeMap<String, ProcessorCacheStats>> {
         let mut stats: BTreeMap<String, ProcessorCacheStats> = BTreeMap::new();
 
         if !self.descriptors_dir.exists() {
-            return stats;
+            return Ok(stats);
         }
 
-        for path in walk_files(&self.descriptors_dir) {
+        for path in walk_files(&self.descriptors_dir)? {
             let Ok(data) = fs::read(&path) else { continue };
             let Ok(desc) = serde_json::from_slice::<CacheDescriptor>(&data) else {
                 continue;
@@ -265,6 +284,6 @@ impl ObjectStore {
             }
         }
 
-        stats
+        Ok(stats)
     }
 }

@@ -143,26 +143,54 @@ impl LinuxModuleProcessor {
 
     /// Generate a Kbuild file for building a kernel module.
     fn write_kbuild(module_dir: &Path, module: &LinuxModuleModuleDef) -> Result<()> {
+        let content = Self::kbuild_content(module)?;
+        fs::write(module_dir.join("Kbuild"), &content)
+            .with_context(|| format!("Failed to write Kbuild in {}", module_dir.display()))?;
+        Ok(())
+    }
+
+    /// The text of a module's Kbuild file.
+    ///
+    /// Each source's object keeps the source's directory (`src/foo.c` is
+    /// `src/foo.o`): kbuild looks for the source next to the object, so
+    /// dropping the directory made it search the module directory for a
+    /// file that is not there.
+    ///
+    /// A module built from the one source that carries its name
+    /// (`hello` from `hello.c`) gets no `hello-objs` line: `obj-m` alone
+    /// builds it, and `hello-objs := hello.o` would make `hello.o` depend
+    /// on itself. With several sources that same clash cannot be written in
+    /// kbuild at all, so it is an error here.
+    fn kbuild_content(module: &LinuxModuleModuleDef) -> Result<String> {
         let mut content = format!("obj-m := {}.o\n", module.name);
 
         let objs: Vec<String> = module
             .sources
             .iter()
             .map(|s| {
-                let p = Path::new(s);
-                let stem = p.file_stem().unwrap_or_default().to_string_lossy();
-                format!("{stem}.o")
+                Path::new(s)
+                    .with_extension("o")
+                    .to_string_lossy()
+                    .into_owned()
             })
             .collect();
-        let _ = writeln!(content, "{}-objs := {}", module.name, objs.join(" "));
+        let module_obj = format!("{}.o", module.name);
+        if objs.as_slice() != [module_obj.clone()] {
+            if objs.contains(&module_obj) {
+                anyhow::bail!(
+                    "module '{name}' lists the source {name}.c next to other sources: kbuild links \
+                     them into {name}.o, which the source would also compile to. Rename the source \
+                     or the module",
+                    name = module.name,
+                );
+            }
+            let _ = writeln!(content, "{}-objs := {}", module.name, objs.join(" "));
+        }
 
         if !module.extra_cflags.is_empty() {
             let _ = writeln!(content, "ccflags-y := {}", module.extra_cflags.join(" "));
         }
-
-        fs::write(module_dir.join("Kbuild"), &content)
-            .with_context(|| format!("Failed to write Kbuild in {}", module_dir.display()))?;
-        Ok(())
+        Ok(content)
     }
 
     /// The kbuild invocation `make -C <kdir> [ARCH=..] [CROSS_COMPILE=..]
@@ -459,3 +487,40 @@ inventory::submit! { crate::tools::ToolInfo {
     machine: Some(crate::tools::InstallMethod::new("apt", "coreutils")),
     alternatives: &[], prefer: None, sandbox_writable: &[], needs_network: false,
 } }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn module(name: &str, sources: &[&str]) -> LinuxModuleModuleDef {
+        LinuxModuleModuleDef {
+            name: name.to_string(),
+            sources: sources.iter().map(ToString::to_string).collect(),
+            extra_cflags: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn kbuild_objects_keep_the_source_directory() {
+        let content =
+            LinuxModuleProcessor::kbuild_content(&module("hello", &["main.c", "src/util.c"]))
+                .unwrap();
+        assert_eq!(
+            content,
+            "obj-m := hello.o\nhello-objs := main.o src/util.o\n"
+        );
+    }
+
+    #[test]
+    fn kbuild_of_a_module_named_after_its_only_source_has_no_objs_line() {
+        let content = LinuxModuleProcessor::kbuild_content(&module("hello", &["hello.c"])).unwrap();
+        assert_eq!(content, "obj-m := hello.o\n");
+    }
+
+    #[test]
+    fn kbuild_rejects_a_source_named_like_a_multi_source_module() {
+        let err =
+            LinuxModuleProcessor::kbuild_content(&module("drv", &["drv.c", "util.c"])).unwrap_err();
+        assert!(err.to_string().contains("Rename"), "{err}");
+    }
+}

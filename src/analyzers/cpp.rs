@@ -191,8 +191,9 @@ impl CppDepAnalyzer {
                         None
                     }
                 } else {
-                    // Relative paths are assumed to be project-local
-                    Some(path)
+                    // Relative paths are assumed to be project-local. gcc
+                    // prints them as it built them (`src/../gen/x.h`).
+                    Some(super::lexical_normalize(&path))
                 }
             })
             .collect()

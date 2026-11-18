@@ -215,12 +215,19 @@ pub fn load_terms(dir_path: &str) -> Result<HashSet<String>> {
         std::collections::HashMap::new();
     let mut duplicates = Vec::new();
 
-    let mut entries: Vec<_> = crate::errors::ctx(
-        fs::read_dir(dir),
-        &format!("Failed to read terms directory {}", dir.display()),
-    )?
-    .filter_map(std::result::Result::ok)
-    .collect();
+    // An entry that cannot be read is an error: dropping it would drop the
+    // terms of a file from the check without a word.
+    let mut entries: Vec<std::fs::DirEntry> = crate::errors::ctx(
+        crate::errors::ctx(
+            fs::read_dir(dir),
+            &format!("Failed to read terms directory {}", dir.display()),
+        )?
+        .collect::<std::io::Result<_>>(),
+        &format!(
+            "Failed to read an entry of terms directory {}",
+            dir.display()
+        ),
+    )?;
     entries.sort_by_key(std::fs::DirEntry::path);
 
     for entry in &entries {

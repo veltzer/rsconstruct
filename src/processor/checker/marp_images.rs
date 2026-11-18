@@ -25,6 +25,25 @@ impl MarpImagesProcessor {
         self.check_files(&[product.primary_input()])
     }
 
+    /// The local image references of a markdown text, as (1-based line,
+    /// path as written). External URLs and data URIs are not files.
+    fn image_refs(content: &str) -> Vec<(usize, String)> {
+        let mut refs = Vec::new();
+        for (line_num, line) in content.lines().enumerate() {
+            for cap in IMAGE_RE.captures_iter(line) {
+                let image_path = &cap[1];
+                if image_path.starts_with("http://")
+                    || image_path.starts_with("https://")
+                    || image_path.starts_with("data:")
+                {
+                    continue;
+                }
+                refs.push((line_num + 1, image_path.to_string()));
+            }
+        }
+        refs
+    }
+
     fn check_files(&self, files: &[&Path]) -> Result<()> {
         let mut errors = Vec::new();
 
@@ -35,25 +54,15 @@ impl MarpImagesProcessor {
             )?;
             let dir = crate::processor::parent_dir(file);
 
-            for (line_num, line) in content.lines().enumerate() {
-                for cap in IMAGE_RE.captures_iter(line) {
-                    let image_path = &cap[1];
-                    // Skip external URLs and data URIs
-                    if image_path.starts_with("http://")
-                        || image_path.starts_with("https://")
-                        || image_path.starts_with("data:")
-                    {
-                        continue;
-                    }
-                    let resolved = dir.join(image_path);
-                    if !resolved.exists() {
-                        errors.push(format!(
-                            "{}:{}: missing image: {}",
-                            file.display(),
-                            line_num + 1,
-                            image_path,
-                        ));
-                    }
+            for (line, image_path) in Self::image_refs(&content) {
+                let resolved = dir.join(&image_path);
+                if !resolved.exists() {
+                    errors.push(format!(
+                        "{}:{}: missing image: {}",
+                        file.display(),
+                        line,
+                        image_path,
+                    ));
                 }
             }
         }
@@ -71,9 +80,58 @@ impl crate::processor::Processor for MarpImagesProcessor {
         &self.config.standard
     }
 
-    /// One product per scanned file (the default `discover`).
+    /// One product per scanned file.
     fn discovery(&self) -> crate::processor::Discovery {
         crate::processor::Discovery::PerFile
+    }
+
+    /// One product per markdown file, whose inputs are the file, the
+    /// configured dep files, and every image it references that exists.
+    ///
+    /// The verdict depends on those images, so they must be inputs: with
+    /// the markdown file as the only one, deleting an image left the cached
+    /// pass in place. A referenced image that is missing is not an input;
+    /// the check then fails, and a failure is never cached.
+    fn discover(
+        &self,
+        graph: &mut crate::graph::BuildGraph,
+        file_index: &crate::file_index::FileIndex,
+        instance_name: &str,
+    ) -> Result<()> {
+        let files = file_index.scan(&self.config.standard, true);
+        if files.is_empty() {
+            return Ok(());
+        }
+        let hash = Some(crate::config::output_config_hash(
+            &self.config,
+            &crate::config::checksum_fields_of(instance_name),
+        ));
+        let extra = crate::processor::resolve_dep_inputs(
+            &self.config.standard.dep_inputs,
+            &self.config.standard.dep_auto,
+        )?;
+        for file in files {
+            let mut inputs = vec![file.clone()];
+            inputs.extend_from_slice(&extra);
+            // A markdown file another product generates is not on disk
+            // yet; its images are found when it is.
+            if file.is_file() {
+                let content = crate::errors::ctx(
+                    std::fs::read_to_string(&file),
+                    &format!("Failed to read {}", file.display()),
+                )?;
+                let dir = crate::processor::parent_dir(&file);
+                for (_, image_path) in Self::image_refs(&content) {
+                    let image = crate::analyzers::lexical_normalize(&dir.join(&image_path));
+                    if (image.is_file() || file_index.contains(&image)) && !inputs.contains(&image)
+                    {
+                        inputs.push(image);
+                    }
+                }
+            }
+            graph.add_product(inputs, vec![], instance_name, hash.clone())?;
+        }
+        Ok(())
     }
 
     fn required_tools(&self) -> Vec<String> {

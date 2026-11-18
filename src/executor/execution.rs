@@ -37,6 +37,12 @@ use super::{
 #[derive(Debug)]
 pub struct BuildFailures {
     pub messages: Vec<String>,
+    /// What the build did before it stopped, for the JSON summary: a
+    /// fail-fast build that ran 500 products and failed one used to report
+    /// zero of each.
+    pub processed: usize,
+    pub skipped: usize,
+    pub restored: usize,
 }
 
 impl std::fmt::Display for BuildFailures {
@@ -320,7 +326,19 @@ pub(super) fn stale_outputs(
 fn restored_hardlinks_under(dirs: &[Arc<PathBuf>]) -> Vec<PathBuf> {
     use std::os::unix::fs::MetadataExt;
     dirs.iter()
-        .flat_map(|dir| crate::object_store::walk_files(dir))
+        .flat_map(|dir| {
+            // This scan is a heuristic for outputs an older rsconstruct
+            // left behind; a directory it cannot read is reported and
+            // contributes no candidates, and the tool then fails on any
+            // read-only file left in it.
+            crate::object_store::walk_files(dir).unwrap_or_else(|e| {
+                crate::output::warn(&format!(
+                    "cannot look for restored hardlinks under {}: {e:#}",
+                    dir.display()
+                ));
+                Vec::new()
+            })
+        })
         .filter(|file| {
             fs::metadata(file).is_ok_and(|m| m.permissions().readonly() && m.nlink() > 1)
         })
@@ -420,16 +438,19 @@ impl Executor<'_> {
                 // build's error carries its product failures one by one;
                 // any other error is the build's single failure.
                 let duration = build_start.elapsed();
-                let messages: Vec<String> = match e.downcast_ref::<BuildFailures>() {
+                let failures = e.downcast_ref::<BuildFailures>();
+                let messages: Vec<String> = match failures {
                     Some(failures) => failures.messages.clone(),
                     None => vec![format!("{e:#}")],
                 };
+                let (processed, skipped, restored) =
+                    failures.map_or((0, 0, 0), |f| (f.processed, f.skipped, f.restored));
                 json_output::emit_build_summary(
                     order.len(),
-                    0,
+                    processed,
                     messages.len(),
-                    0,
-                    0,
+                    skipped,
+                    restored,
                     duration,
                     &messages,
                 );
@@ -1450,6 +1471,9 @@ impl Executor<'_> {
             if !errs.is_empty() {
                 return Err(BuildFailures {
                     messages: errs.iter().map(|e| format!("{e:#}")).collect(),
+                    processed: stats.total_processed(),
+                    skipped: stats.total_skipped(),
+                    restored: stats.total_restored(),
                 }
                 .into());
             }

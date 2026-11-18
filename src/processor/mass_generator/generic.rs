@@ -401,7 +401,7 @@ fn parse_manifest(json: &[u8], output_dirs: &[PathBuf]) -> Result<Vec<PlannedOut
 fn snapshot_mtimes(dirs: &[PathBuf]) -> Result<BTreeMap<PathBuf, SystemTime>> {
     let mut snapshot = BTreeMap::new();
     for dir in dirs {
-        for path in crate::object_store::walk_files(dir) {
+        for path in crate::object_store::walk_files(dir)? {
             if let Some(mtime) = mtime_if_present(&path)? {
                 snapshot.insert(path, mtime);
             }
