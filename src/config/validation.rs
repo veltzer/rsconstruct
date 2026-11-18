@@ -6,8 +6,8 @@ use anyhow::Result;
 use std::path::Path;
 
 use super::{
-    BuildConfig, FieldProvenance, ProcessorConfig, ProcessorInstance, SCAN_CONFIG_FIELDS,
-    STANDARD_EXTRA_FIELDS, SectionShape, find_registry_entry, is_builtin_type,
+    BuildConfig, CacheConfig, FieldProvenance, ProcessorConfig, ProcessorInstance, RestoreMethod,
+    SCAN_CONFIG_FIELDS, STANDARD_EXTRA_FIELDS, SectionShape, find_registry_entry, is_builtin_type,
 };
 use crate::registries::{self as registry, ProcessorPlugin};
 
@@ -234,6 +234,21 @@ pub(super) fn validate_build_config(build: &BuildConfig) -> Result<()> {
     if build.python.trim().is_empty() {
         return Err(crate::exit_code::config_error(
             "[build] python must name an interpreter (e.g. \"python\" or \"python3\")".to_string(),
+        ));
+    }
+    Ok(())
+}
+
+/// Cross-field checks on `[cache]`. Here rather than where the object store
+/// is built, so `toml check` rejects what every building command rejects.
+pub(super) fn validate_cache_config(cache: &CacheConfig) -> Result<()> {
+    // A hardlinked output shares the cached object's bytes, and a compressed
+    // object's bytes are not the output's.
+    if cache.compression && cache.restore_method.resolve() == RestoreMethod::Hardlink {
+        return Err(crate::exit_code::config_error(
+            "[cache] compression cannot be used with the hardlink restore method. \
+             Set restore_method = \"copy\" or disable compression."
+                .to_string(),
         ));
     }
     Ok(())

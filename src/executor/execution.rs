@@ -679,7 +679,38 @@ impl Executor<'_> {
                 }
             }
             if tracker.in_flight == 0 {
-                return Ok(());
+                // Nothing is running and nothing can start. Unless the
+                // build is stopping, every product must have finished by
+                // now: one that has not is waiting on something that will
+                // never release it, and returning success here would
+                // report a build that silently skipped it.
+                let stuck = if stopping {
+                    Vec::new()
+                } else {
+                    tracker.unfinished()
+                };
+                if stuck.is_empty() {
+                    return Ok(());
+                }
+                let g = graph.read();
+                let names: Vec<String> = g
+                    .products()
+                    .iter()
+                    .filter(|product| stuck.contains(&product.id))
+                    .take(5)
+                    .map(|product| {
+                        format!(
+                            "[{}] {}",
+                            product.processor,
+                            product.primary_input().display()
+                        )
+                    })
+                    .collect();
+                anyhow::bail!(
+                    "internal error: the scheduler stalled with {} product(s) never run, starting with: {}",
+                    stuck.len(),
+                    names.join("; ")
+                );
             }
 
             // Wait for a unit to finish, then take every other report that

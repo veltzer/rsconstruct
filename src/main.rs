@@ -915,12 +915,12 @@ fn init_project() -> Result<()> {
     let config_content = r#"# RSConstruct Build Tool Configuration
 # Uncomment [processor.TYPE.NAME] sections to enable processors.
 # Each section declares a processor instance; removing it disables the processor.
-# For multiple instances: [processor.pylint.core] and [processor.pylint.tests]
+# For multiple instances: [processor.checker.pylint.core] and [processor.checker.pylint.tests]
 
 [build]
 # Number of parallel jobs (0 = auto-detect CPU cores, 1 = sequential)
 # parallel = 0
-# Max files per batch for batch-capable processors (0 = no limit, omit to disable batching)
+# Max files per batch for batch-capable processors (0 = no limit, the default; batching is on unless --batch-size -1)
 # batch_size = 0
 
 [cache]
@@ -929,7 +929,6 @@ fn init_project() -> Result<()> {
 # Uncomment processors you want to use:
 
 # [processor.generator.tera]
-# strict = true
 # src_dirs = ["tera.templates"]
 # src_extensions = [".tera"]
 
@@ -953,7 +952,7 @@ fn init_project() -> Result<()> {
 # args = []
 
 # [processor.checker.make]
-# make = "make"
+# target = "all"
 
 # [processor.mass_generator.cargo]
 # cargo = "cargo"

@@ -339,7 +339,8 @@ impl Builder {
     }
 
     /// Remove files not tracked by git and not known as `RSConstruct` build outputs.
-    /// Dry-run by default (lists files); use `force` to actually delete.
+    /// Lists them when `force` is false, deletes them when it is true. The
+    /// CLI deletes unless `--dry-run` is given.
     pub fn clean_unknown(
         &self,
         ctx: &crate::build_context::BuildContext,
@@ -348,7 +349,6 @@ impl Builder {
         respect_gitignore: bool,
     ) -> Result<()> {
         use ignore::WalkBuilder;
-        use std::process::Command;
 
         if !std::path::Path::new(".git").exists() {
             bail!("Not a git repository. clean unknown requires a git repository.");
@@ -370,19 +370,11 @@ impl Builder {
             }
         }
 
-        // Get git-tracked files
-        let mut cmd = Command::new("git");
-        cmd.args(["ls-files", "--cached"]);
-        let output = crate::processor::run_command_capture(ctx, &cmd)
-            .context("Failed to run git ls-files")?;
-        if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            bail!("git ls-files failed:\n{stderr}");
-        }
-        let git_tracked: HashSet<PathBuf> = String::from_utf8_lossy(&output.stdout)
-            .lines()
-            .map(PathBuf::from)
-            .collect();
+        // Get git-tracked files. `git_tracked` reads `ls-files -z`: the
+        // line-oriented form quotes and octal-escapes any name with a
+        // non-ASCII or special character, which then matches no walked path
+        // and gets a tracked file deleted as "unknown".
+        let git_tracked = crate::orphans::git_tracked(ctx)?;
 
         // Walk the project tree, respecting .gitignore so that intentionally
         // ignored files (IDE configs, virtualenvs, *.pyc, etc.) are not flagged
@@ -416,6 +408,18 @@ impl Builder {
 
             // Skip git-tracked files
             if git_tracked.contains(&path) {
+                continue;
+            }
+
+            // Skip everything below a tracked path. A tracked path with
+            // files under it is a submodule: git lists only its gitlink, so
+            // none of its files are in the tracked set, and they belong to
+            // that repository, not to this one.
+            if path
+                .ancestors()
+                .skip(1)
+                .any(|dir| git_tracked.contains(dir))
+            {
                 continue;
             }
 

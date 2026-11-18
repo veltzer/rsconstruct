@@ -127,3 +127,44 @@ fn make_required_tools_present_builds() {
         String::from_utf8_lossy(&output.stderr)
     );
 }
+
+/// Every file under the Makefile's directory is an input, whatever its
+/// name: editing a source next to the Makefile re-runs make. The sibling
+/// filter used to match no file at all, leaving the Makefile as the only
+/// input.
+#[test]
+fn make_reruns_when_a_file_beside_the_makefile_changes() {
+    require_tool("make");
+
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let project_path = temp_dir.path();
+    fs::create_dir_all(project_path.join("proj/src")).unwrap();
+    fs::write(
+        project_path.join("rsconstruct.toml"),
+        "[processor.checker.make]\nsrc_dirs = [\".\"]\n",
+    )
+    .unwrap();
+    fs::write(
+        project_path.join("proj/Makefile"),
+        ".PHONY: all\nall:\n\t@cat src/data\n",
+    )
+    .unwrap();
+    fs::write(project_path.join("proj/src/data"), "one\n").unwrap();
+
+    let first = run_rsconstruct_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    assert!(
+        first.status.success(),
+        "{}",
+        String::from_utf8_lossy(&first.stderr)
+    );
+
+    fs::write(project_path.join("proj/src/data"), "two\n").unwrap();
+    let second =
+        run_rsconstruct_with_env(project_path, &["build", "--verbose"], &[("NO_COLOR", "1")]);
+    assert!(second.status.success());
+    let stdout = String::from_utf8_lossy(&second.stdout);
+    assert!(
+        !stdout.contains("[processor.checker.make] Skipping (unchanged):"),
+        "make must re-run after a sibling file changed: {stdout}"
+    );
+}

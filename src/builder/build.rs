@@ -1004,7 +1004,9 @@ impl Builder {
                 ExplainAction::Rebuild(_) => 2,
             };
 
-            if opts.verbose {
+            // Not under --json: stdout then carries the JSON object below
+            // and nothing else (`build --dry-run` is always verbose).
+            if opts.verbose && !crate::json_output::is_json_mode() {
                 println!(
                     "{} [{}] {}{}",
                     status_labels[status_idx], product.processor, display, reason

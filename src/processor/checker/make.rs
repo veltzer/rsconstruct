@@ -82,7 +82,7 @@ impl Processor for MakeProcessor {
                 cfg_hash: &self.config,
                 checksum_fields: crate::config::checksum_fields_of(instance_name),
                 siblings: &SiblingFilter {
-                    extensions: &[""],
+                    extensions: &[],
                     excludes: &["/.git/", "/out/", "/.rsconstruct/"],
                 },
                 processor_name: instance_name,

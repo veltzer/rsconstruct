@@ -897,6 +897,25 @@ pub struct SharedBuildArgs {
     pub pset: Vec<String>,
 }
 
+/// The target glob for a `--dir` value: every file below that directory.
+///
+/// Product inputs are project-relative paths with no `./` prefix and no
+/// doubled slashes, and the glob matches `/` literally, so the directory is
+/// brought to that form first. `src/` (what shell completion types) would
+/// otherwise become `src//**` and `.` become `./**`, each matching nothing
+/// and leaving a build that runs no product and reports success.
+fn dir_glob(dir: &str) -> String {
+    let mut dir = dir.trim_end_matches('/');
+    while let Some(rest) = dir.strip_prefix("./") {
+        dir = rest.trim_start_matches('/');
+    }
+    if dir.is_empty() || dir == "." {
+        "**".to_string()
+    } else {
+        format!("{dir}/**")
+    }
+}
+
 impl SharedBuildArgs {
     /// Convert to `BuildOptions` with the given overrides for build-only fields.
     pub fn to_build_options(
@@ -910,10 +929,10 @@ impl SharedBuildArgs {
         let targets = match (&self.targets, &self.dirs) {
             (None, None) => None,
             (Some(t), None) => Some(t.clone()),
-            (None, Some(d)) => Some(d.iter().map(|dir| format!("{dir}/**")).collect()),
+            (None, Some(d)) => Some(d.iter().map(|dir| dir_glob(dir)).collect()),
             (Some(t), Some(d)) => {
                 let mut merged = t.clone();
-                merged.extend(d.iter().map(|dir| format!("{dir}/**")));
+                merged.extend(d.iter().map(|dir| dir_glob(dir)));
                 Some(merged)
             }
         };
@@ -1289,6 +1308,16 @@ _rsconstruct_analyzer_inames() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn dir_glob_normalizes_the_directory() {
+        assert_eq!(dir_glob("src"), "src/**");
+        assert_eq!(dir_glob("src/"), "src/**");
+        assert_eq!(dir_glob("./src//"), "src/**");
+        assert_eq!(dir_glob("a/b/"), "a/b/**");
+        assert_eq!(dir_glob("."), "**");
+        assert_eq!(dir_glob("./"), "**");
+    }
 
     /// The bash iname injection locates its patch points in `clap_complete`'s
     /// generated script by exact string matching. clap-complete owns that

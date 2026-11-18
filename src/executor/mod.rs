@@ -528,6 +528,16 @@ impl ReadyTracker {
         ready
     }
 
+    /// The products that have not finished, in id order.
+    fn unfinished(&self) -> Vec<usize> {
+        self.state
+            .iter()
+            .enumerate()
+            .filter(|(_, state)| **state != ProductState::Done)
+            .map(|(id, _)| id)
+            .collect()
+    }
+
     /// Record that a handed-out product finished; its dependents with no
     /// unfinished dependency left become ready. The dependents of a run's
     /// product wait for the run's last product.

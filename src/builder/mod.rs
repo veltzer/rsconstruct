@@ -254,13 +254,7 @@ impl Builder {
         // Resolve auto restore method based on environment
         let restore_method = config.cache.restore_method.resolve();
 
-        // Validate: compression and hardlink restore are incompatible
-        if config.cache.compression && restore_method == crate::config::RestoreMethod::Hardlink {
-            anyhow::bail!(
-                "Cannot use cache compression with hardlink restore method. \
-                Set restore_method = \"copy\" or disable compression."
-            );
-        }
+        // (Compression with hardlink restore is rejected by `Config::load`.)
 
         // Create remote cache backend if configured
         let remote_backend = match &config.cache.remote {
@@ -690,9 +684,20 @@ impl Builder {
             if after == before {
                 break;
             }
+            let outputs: Vec<PathBuf> = graph.products()[before..after]
+                .iter()
+                .flat_map(|p| p.outputs.iter().cloned())
+                .collect();
+            let added = file_index.add_virtual_files(&outputs);
+            if added.is_empty() {
+                break;
+            }
             if pass + 1 >= max_passes {
-                // Still adding products on the final pass: the graph would be
-                // silently truncated. Fail loudly and name the culprits.
+                // The final pass declared files no later pass will route:
+                // the graph would be silently truncated. Fail loudly and
+                // name the culprits. (Products that declare no new file end
+                // discovery above and are not an error, whichever pass adds
+                // them.)
                 let mut culprits: Vec<&str> = graph.products()[before..after]
                     .iter()
                     .map(|p| p.processor.as_str())
@@ -702,18 +707,10 @@ impl Builder {
                 return Err(crate::exit_code::RsconstructError::new(
                     crate::exit_code::RsconstructExitCode::GraphError,
                     format!(
-                        "discovery did not converge after {max_passes} passes; still adding products on the final pass: {} (raise [build] max_discovery_passes if this chain is intentional)",
+                        "discovery did not converge after {max_passes} passes; still declaring new files on the final pass: {} (raise [build] max_discovery_passes if this chain is intentional)",
                         culprits.join(", ")
                     ),
                 ).into());
-            }
-            let outputs: Vec<PathBuf> = graph.products()[before..after]
-                .iter()
-                .flat_map(|p| p.outputs.iter().cloned())
-                .collect();
-            let added = file_index.add_virtual_files(&outputs);
-            if added.is_empty() {
-                break;
             }
             if debug {
                 eprintln!(

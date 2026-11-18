@@ -702,6 +702,49 @@ programs:
     assert!(run_output.status.success(), "Executable should return 0");
 }
 
+/// `include_dirs` in a manifest are relative to the manifest, like its
+/// `sources`. The compiler runs from the project root, so a manifest in a
+/// subdirectory used to get `-Iinclude` pointing at a directory that does
+/// not exist there.
+#[test]
+fn cc_include_dirs_are_relative_to_a_nested_manifest() {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let project_path = temp_dir.path();
+
+    write_project_file(
+        project_path,
+        "rsconstruct.toml",
+        "[processor.mass_generator.cc]\nsrc_dirs = [\".\"]\n",
+    );
+    write_project_file(
+        project_path,
+        "sub/cc.yaml",
+        r#"
+include_dirs: [include]
+
+programs:
+  - name: nested
+    sources: [src/main.c]
+    include_dirs: [extra]
+"#,
+    );
+    write_project_file(project_path, "sub/include/a.h", "#define A 0\n");
+    write_project_file(project_path, "sub/extra/b.h", "#define B 0\n");
+    write_project_file(
+        project_path,
+        "sub/src/main.c",
+        "#include \"a.h\"\n#include \"b.h\"\nint main(void) { return A + B; }\n",
+    );
+
+    let output = run_rsconstruct_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    assert!(
+        output.status.success(),
+        "a nested manifest's include dirs must resolve against its directory: stdout={}, stderr={}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
 /// Single-invocation mode used to pass only the global language flags:
 /// the manifest's and the program's `include_dirs` and the program's own
 /// flags were dropped. Both programs here compile only with them: the C

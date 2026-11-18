@@ -94,6 +94,26 @@ fn ijinja2_jinja2_filter_arguments() {
     );
 }
 
+/// A negative string keeps its sign in every base, as Python's `int()` does.
+#[test]
+fn ijinja2_int_keeps_the_sign_of_a_negative_string() {
+    let temp_dir = setup_project();
+    let project = temp_dir.path();
+    fs::write(
+        project.join("templates.jinja2/n.txt.j2"),
+        "{{ '-5' | int }}|{{ '+5' | int }}|{{ '-5.7' | int }}|{{ '-0x1f' | int(0, 16) }}|{{ ' -12 ' | int }}",
+    )
+    .unwrap();
+    let output = build(project, &[]);
+    assert!(
+        output.status.success(),
+        "rsconstruct build failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let content = fs::read_to_string(project.join("n.txt")).expect("output written");
+    assert_eq!(content, "-5|5|-5|-31|-12");
+}
+
 #[test]
 fn ijinja2_reports_template_errors() {
     let temp_dir = setup_project();

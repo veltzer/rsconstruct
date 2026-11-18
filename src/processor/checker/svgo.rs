@@ -1,5 +1,5 @@
 //! svgo checker — registered as a {`SimpleChecker`}.
-//! Runs `svgo --quiet -o - -i <file>` to validate SVG files; stdout is
+//! Runs `svgo --quiet -o - [args] <file>` to validate SVG files; stdout is
 //! discarded and we only care about svgo's exit code (non-zero = malformed SVG).
 //! Batch is disabled: svgo requires matching input/output counts, so N inputs
 //! with the single `-o -` would be rejected. (`-o -` writes to stdout, which
@@ -15,7 +15,10 @@ fn create_svgo(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processor::P
             SimpleCheckerParams {
                 description: "Validate SVG files using svgo (stdout discarded; non-zero exit = malformed SVG)",
                 subcommand: None,
-                prepend_args: &["--quiet", "-o", "-", "-i"],
+                // No trailing `-i`: the user's `args` are inserted after
+                // these, so `-i` would take the first of them as the input
+                // file. svgo reads its input from the positional argument.
+                prepend_args: &["--quiet", "-o", "-"],
                 extra_tools: &[],
             },
         ))

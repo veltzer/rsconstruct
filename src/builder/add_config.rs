@@ -189,6 +189,25 @@ fn toml_value_string(v: &serde_json::Value) -> String {
     }
 }
 
+/// Whether the config text already holds a table at the dotted `header`
+/// path, in any spelling: `[a.b] # note`, `[ a.b ]`, a dotted key, or a
+/// table that only holds instances (`[a.b.core]`). The document is parsed
+/// rather than its lines compared, because appending a second `[a.b]` to a
+/// file that already has one leaves a config that no longer loads.
+fn section_exists(content: &str, header: &str) -> Result<bool> {
+    let doc: toml_edit::DocumentMut = content
+        .parse()
+        .with_context(|| format!("Failed to parse {CONFIG_FILE}"))?;
+    let mut current: &toml_edit::Item = doc.as_item();
+    for key in header.split('.') {
+        match current.get(key) {
+            Some(item) => current = item,
+            None => return Ok(false),
+        }
+    }
+    Ok(true)
+}
+
 fn apply_snippet(header: &str, snippet: &str, dry_run: bool) -> Result<()> {
     if dry_run {
         print!("{snippet}");
@@ -205,8 +224,7 @@ fn apply_snippet(header: &str, snippet: &str, dry_run: bool) -> Result<()> {
     let content =
         fs::read_to_string(path).with_context(|| format!("Failed to read {CONFIG_FILE}"))?;
 
-    let header_line = format!("[{header}]");
-    if content.lines().any(|l| l.trim_start() == header_line) {
+    if section_exists(&content, header)? {
         bail!(
             "Section [{header}] already exists in {CONFIG_FILE}. Edit it manually or remove it first."
         );
@@ -225,4 +243,33 @@ fn apply_snippet(header: &str, snippet: &str, dry_run: bool) -> Result<()> {
 
     println!("Added [{header}] to {CONFIG_FILE}.");
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The section is found however it is spelled, and so is one that only
+    /// holds instances; a sibling is not mistaken for it.
+    #[test]
+    fn section_exists_reads_the_document_not_its_lines() {
+        let header = "processor.checker.ruff";
+        for present in [
+            "[processor.checker.ruff]\n",
+            "[processor.checker.ruff] # note\n",
+            "[ processor.checker.ruff ]\n",
+            "[processor.checker]\nruff = { args = [] }\n",
+            "[processor.checker.ruff.core]\nargs = []\n",
+        ] {
+            assert!(section_exists(present, header).unwrap(), "{present}");
+        }
+        for absent in [
+            "",
+            "[build]\n",
+            "[processor.checker.ruff_extra]\n",
+            "# [processor.checker.ruff]\n",
+        ] {
+            assert!(!section_exists(absent, header).unwrap(), "{absent}");
+        }
+    }
 }

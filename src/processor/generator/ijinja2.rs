@@ -197,18 +197,19 @@ mod filters {
                     .unwrap_or(digits),
                 _ => digits,
             };
-            let parsed = i64::from_str_radix(digits, base).ok().or_else(|| {
-                if base == 10 {
-                    t.parse::<f64>().ok().map(|f| f as i64)
-                } else {
-                    None
-                }
-            });
-            return Value::from(match parsed {
-                Some(n) if negative && base != 10 => -n,
-                Some(n) => n,
-                None => default,
-            });
+            // `digits` has lost its sign, so the integer parse puts it back;
+            // the float fallback parses the signed text `t` and keeps it.
+            let parsed = i64::from_str_radix(digits, base)
+                .ok()
+                .map(|n| if negative { -n } else { n })
+                .or_else(|| {
+                    if base == 10 {
+                        t.parse::<f64>().ok().map(|f| f as i64)
+                    } else {
+                        None
+                    }
+                });
+            return Value::from(parsed.unwrap_or(default));
         }
         match value.kind() {
             ValueKind::Number => Value::from(f64::try_from(value).map_or(0, |f| f as i64)),

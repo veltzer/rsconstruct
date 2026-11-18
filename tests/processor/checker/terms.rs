@@ -209,6 +209,40 @@ fn terms_fix_fails_when_no_terms_found() {
     );
 }
 
+/// A `dir_terms_unambiguous` that does not exist (a typo) used to declare no
+/// products, so the check passed without checking anything.
+#[test]
+fn terms_build_fails_when_the_terms_directory_is_missing() {
+    let temp_dir = setup_test_project();
+    let project_path = temp_dir.path();
+
+    fs::write(
+        project_path.join("README.md"),
+        "# Doc\n\nWe deploy on Kubernetes.\n",
+    )
+    .unwrap();
+    fs::write(
+        project_path.join("rsconstruct.toml"),
+        "[processor.checker.terms]\ndir_terms_unambiguous = \"terms.unambigous\"\nsrc_dirs = [\".\"]\n",
+    )
+    .unwrap();
+
+    let output = run_rsconstruct_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    assert!(
+        !output.status.success(),
+        "build must fail when the terms directory does not exist"
+    );
+    let combined = format!(
+        "{}{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(
+        combined.contains("is not a directory"),
+        "Error must name the missing directory: {combined}",
+    );
+}
+
 #[test]
 fn terms_build_fails_when_no_terms_found() {
     let temp_dir = setup_test_project();

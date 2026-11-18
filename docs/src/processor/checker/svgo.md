@@ -6,7 +6,7 @@ Checks that SVG files are well-formed, using [svgo](https://svgo.dev/)'s parser.
 
 ## How It Works
 
-Runs `svgo --quiet -o - -i <file>` for each file. svgo optimizes the file and writes the result to stdout, which is discarded; the source file is never modified. Only the exit code matters: svgo fails when it cannot parse the file, and that fails the product:
+Runs `svgo --quiet -o - [args] <file>` for each file. svgo optimizes the file and writes the result to stdout, which is discarded; the source file is never modified. Only the exit code matters: svgo fails when it cannot parse the file, and that fails the product:
 
 ```text
 SvgoParserError: img/bad.svg:1:14: Unexpected close tag

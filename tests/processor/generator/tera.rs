@@ -892,6 +892,49 @@ fn tera_grep_count_invalidates_when_regex_changes() {
     );
 }
 
+/// `{% extends %}` and `{% import %}` name other .tera files. Tera resolves
+/// both when a template is registered, so the parent and the macro file
+/// must be registered together with the template that names them.
+#[test]
+fn tera_extends_and_import_resolve_project_templates() {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let p = temp_dir.path();
+    fs::create_dir_all(p.join("tera.templates")).unwrap();
+    fs::create_dir_all(p.join("tera.layouts")).unwrap();
+    fs::write(
+        p.join("rsconstruct.toml"),
+        "[processor.generator.tera]\nsrc_dirs = [\"tera.templates\"]\n",
+    )
+    .unwrap();
+    fs::write(
+        p.join("tera.layouts/base.tera"),
+        "<{% block body %}default{% endblock body %}>\n",
+    )
+    .unwrap();
+    fs::write(
+        p.join("tera.layouts/macros.tera"),
+        "{% macro shout(text) %}{{ text | upper }}{% endmacro shout %}",
+    )
+    .unwrap();
+    fs::write(
+        p.join("tera.templates/page.txt.tera"),
+        "{% extends \"tera.layouts/base.tera\" %}\n{% import \"tera.layouts/macros.tera\" as m %}\n{% block body %}{{ m::shout(text=\"hi\") }}{% endblock body %}\n",
+    )
+    .unwrap();
+
+    let out = run_rsconstruct_with_env(p, &["build"], &[("NO_COLOR", "1")]);
+    assert!(
+        out.status.success(),
+        "build failed: stdout={} stderr={}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert_eq!(
+        fs::read_to_string(p.join("page.txt")).unwrap().trim(),
+        "<HI>"
+    );
+}
+
 #[test]
 fn tera_glob_in_included_snippet_is_tracked() {
     // The function call lives in an included snippet, not the top-level

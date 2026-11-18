@@ -210,13 +210,23 @@ pub fn enable(name: &str) -> Result<()> {
     Ok(())
 }
 
+/// The names in sorted order. Sections are written in the order they are
+/// added, and a `HashSet` iterates in a different order on every run, so
+/// adding straight from the set wrote the same config in a different stanza
+/// order each time.
+fn sorted(names: &HashSet<String>) -> Vec<&String> {
+    let mut names: Vec<&String> = names.iter().collect();
+    names.sort();
+    names
+}
+
 /// Enable only processors whose files are detected in the project.
 pub fn enable_detected(detected: &HashSet<String>) -> Result<()> {
     let mut doc = load_doc()?;
     let table = processor_table(&mut doc)?;
     let mut count = 0;
 
-    for name in detected {
+    for name in sorted(detected) {
         if add_section(table, "processor", name)? {
             count += 1;
         }
@@ -255,7 +265,8 @@ pub fn minimal(detected: &HashSet<String>) -> Result<()> {
     let mut doc = load_doc()?;
     let table = processor_table(&mut doc)?;
     remove_all_sections(table);
-    for name in detected {
+    let names = sorted(detected);
+    for name in &names {
         add_section(table, "processor", name)?;
     }
 
@@ -263,8 +274,6 @@ pub fn minimal(detected: &HashSet<String>) -> Result<()> {
     if detected.is_empty() {
         println!("No processors detected.");
     } else {
-        let mut names: Vec<&String> = detected.iter().collect();
-        names.sort();
         println!(
             "Minimal config: {}",
             names
@@ -290,7 +299,7 @@ pub fn auto(available: &HashSet<String>) -> Result<()> {
     let table = processor_table(&mut doc)?;
     let mut added = Vec::new();
 
-    for name in available {
+    for name in sorted(available) {
         if add_section(table, "processor", name)? {
             added.push(name.as_str());
         }

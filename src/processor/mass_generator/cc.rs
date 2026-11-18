@@ -126,8 +126,34 @@ struct CcManifestRaw {
 
 impl CcManifest {
     /// Parse cc.yaml content, inheriting unset fields from the config.
-    pub fn parse(content: &str, defaults: &CcConfig) -> Result<Self, serde_norway::Error> {
-        let raw: CcManifestRaw = serde_norway::from_str(content)?;
+    ///
+    /// Every `include_dirs` entry written in the manifest (global or per
+    /// target) is relative to the manifest's directory, `anchor_dir`, like
+    /// its `sources`; the compiler runs from the project root, so the
+    /// entries are resolved here. `include_dirs` inherited from
+    /// `rsconstruct.toml` are already relative to the project root.
+    pub fn parse(
+        content: &str,
+        defaults: &CcConfig,
+        anchor_dir: &Path,
+    ) -> Result<Self, serde_norway::Error> {
+        let mut raw: CcManifestRaw = serde_norway::from_str(content)?;
+        let anchored = |dirs: &mut Vec<String>| {
+            for dir in dirs {
+                *dir = crate::processor::resolve_anchor_path(anchor_dir, dir)
+                    .to_string_lossy()
+                    .into_owned();
+            }
+        };
+        if let Some(dirs) = &mut raw.include_dirs {
+            anchored(dirs);
+        }
+        for lib in &mut raw.libraries {
+            anchored(&mut lib.include_dirs);
+        }
+        for program in &mut raw.programs {
+            anchored(&mut program.include_dirs);
+        }
         Ok(Self {
             cc: raw.cc.unwrap_or_else(|| defaults.cc.clone()),
             cxx: raw.cxx.unwrap_or_else(|| defaults.cxx.clone()),
@@ -260,7 +286,8 @@ impl CcProcessor {
     fn parse_manifest(&self, yaml_path: &Path) -> Result<CcManifest> {
         let content = fs::read_to_string(yaml_path)
             .with_context(|| format!("Failed to read {}", yaml_path.display()))?;
-        let manifest = CcManifest::parse(&content, &self.config)
+        let anchor_dir = crate::processor::parent_dir_or_empty(yaml_path);
+        let manifest = CcManifest::parse(&content, &self.config, anchor_dir)
             .with_context(|| format!("Failed to parse {}", yaml_path.display()))?;
         Ok(manifest)
     }

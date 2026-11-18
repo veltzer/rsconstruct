@@ -134,3 +134,71 @@ fn clean_all_without_processors_removes_the_directories() {
     );
     assert!(!dir.path().join(".rsconstruct").exists());
 }
+
+fn git(dir: &std::path::Path, args: &[&str]) {
+    let out = std::process::Command::new("git")
+        .current_dir(dir)
+        .args(args)
+        .output()
+        .expect("git invocation failed");
+    assert!(
+        out.status.success(),
+        "git {args:?} failed: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+}
+
+fn git_init(dir: &std::path::Path) {
+    git(dir, &["init", "-q", "-b", "main"]);
+    git(dir, &["config", "user.email", "test@example.com"]);
+    git(dir, &["config", "user.name", "Test"]);
+}
+
+/// `clean unknown` removes untracked files only. A tracked file whose name
+/// git would quote in line-oriented output (`"caf\303\251.txt"`) is still
+/// tracked, and the files of a nested repository git records as a gitlink
+/// belong to that repository: both used to be deleted.
+#[test]
+fn clean_unknown_keeps_tracked_files_git_would_quote_and_nested_repositories() {
+    let dir = project();
+    let root = dir.path();
+    write_file(root, "café.txt", "tracked");
+    write_file(root, "sub/inner.txt", "owned by the nested repository");
+    git_init(&root.join("sub"));
+    git(&root.join("sub"), &["add", "-A"]);
+    git(&root.join("sub"), &["commit", "-q", "-m", "inner"]);
+
+    git_init(root);
+    // The default, made explicit so a developer's global setting cannot
+    // hide the regression.
+    git(root, &["config", "core.quotePath", "true"]);
+    git(
+        root,
+        &[
+            "add",
+            "rsconstruct.toml",
+            "tera.templates",
+            "café.txt",
+            "sub",
+        ],
+    );
+    git(root, &["commit", "-q", "-m", "init"]);
+    write_file(root, "junk.txt", "untracked");
+
+    let out = run_rsconstruct(root, &["clean", "unknown"]);
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(!root.join("junk.txt").exists(), "untracked file must go");
+    assert!(root.join("café.txt").exists(), "tracked file must stay");
+    assert!(
+        root.join("sub/inner.txt").exists(),
+        "a nested repository's files must stay"
+    );
+    assert!(
+        root.join("sub/.git").exists(),
+        "a nested repository's .git must stay"
+    );
+}

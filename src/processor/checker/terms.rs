@@ -129,8 +129,19 @@ impl crate::processor::Processor for TermsProcessor {
         file_index: &FileIndex,
         instance_name: &str,
     ) -> Result<()> {
+        // A missing term directory with files to check is an error, not
+        // "nothing to do": a typo in `dir_terms_unambiguous` would otherwise
+        // declare no products and pass. With no files there is nothing the
+        // terms could be checked against.
         if !Path::new(&self.config.dir_terms_unambiguous).is_dir() {
-            return Ok(());
+            if file_index.scan(&self.config.standard, true).is_empty() {
+                return Ok(());
+            }
+            anyhow::bail!(
+                "[{instance_name}] dir_terms_unambiguous = \"{}\" is not a directory — the terms processor has no terms to check; \
+                 create it with one .txt file of terms, or fix the setting",
+                self.config.dir_terms_unambiguous
+            );
         }
         // Collect all .txt files from both term directories as extra inputs
         let mut dep_inputs = self.config.standard.dep_inputs.clone();

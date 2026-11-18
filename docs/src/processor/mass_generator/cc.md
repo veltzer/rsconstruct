@@ -159,7 +159,7 @@ cxx = "g++"               # Default C++ compiler (default: "g++")
 cflags = []               # Additional global C flags
 cxxflags = []             # Additional global C++ flags
 ldflags = []              # Additional global linker flags
-include_dirs = []         # Additional global -I paths
+include_dirs = []         # Additional global -I paths (relative to the project root)
 single_invocation = false # Use single-invocation mode (default: false)
 dep_inputs = []           # Extra files that trigger rebuilds
 ```

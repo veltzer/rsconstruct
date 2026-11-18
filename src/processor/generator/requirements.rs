@@ -5,7 +5,7 @@
 //! remaining import name to its `PyPI` distribution name, and writes the sorted
 //! result to `requirements.txt`.
 
-use std::collections::{BTreeSet, HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::fs;
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -35,8 +35,11 @@ pub struct RequirementsConfig {
     #[serde(default = "crate::config::default_true")]
     pub header: bool,
     /// User-supplied import→distribution mapping overrides. Wins over the built-in table.
+    /// A `BTreeMap`, not a `HashMap`: this field is part of the config hash,
+    /// and a `HashMap` serializes in a per-process random order, which gave
+    /// the product a new cache key on every run.
     #[serde(default)]
-    pub mapping: HashMap<String, String>,
+    pub mapping: BTreeMap<String, String>,
     /// Distribution names to always include in the output, even when no
     /// `import` statement references them. Use this for transitive runtime
     /// dependencies that an upstream package needs at import time but fails
@@ -69,7 +72,7 @@ impl Default for RequirementsConfig {
             exclude: Vec::new(),
             sorted: true,
             header: true,
-            mapping: HashMap::new(),
+            mapping: BTreeMap::new(),
             extra: Vec::new(),
             python_paths: Vec::new(),
             standard: StandardConfig::default(),

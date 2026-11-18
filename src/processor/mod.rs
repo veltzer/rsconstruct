@@ -621,6 +621,10 @@ pub fn clean_outputs(product: &Product, label: &str, verbose: bool) -> Result<us
 /// Options for filtering sibling files in directory-based product discovery.
 #[derive(Debug)]
 pub struct SiblingFilter<'a> {
+    /// Names to take, as `FileIndex::query` matches them (`".rs"` suffix,
+    /// `"Cargo.lock"` exact name). Empty means every file: a query entry of
+    /// `""` matches no name at all, which once left `make` with the Makefile
+    /// as its only input.
     pub extensions: &'a [&'a str],
     pub excludes: &'a [&'a str],
 }
@@ -672,14 +676,18 @@ pub fn discover_directory_products(
             .unwrap_or_default();
 
         // Collect all matching sibling files under the anchor's directory as inputs
-        let sibling_files = file_index.query(
-            &anchor_dir,
-            siblings.extensions,
-            siblings.excludes,
-            &[],
-            &[],
-            &[],
-        );
+        let sibling_files = if siblings.extensions.is_empty() {
+            file_index.files_under(&anchor_dir, siblings.excludes)
+        } else {
+            file_index.query(
+                &anchor_dir,
+                siblings.extensions,
+                siblings.excludes,
+                &[],
+                &[],
+                &[],
+            )
+        };
 
         let inputs = build_anchor_inputs(&anchor, &sibling_files, &extra);
 

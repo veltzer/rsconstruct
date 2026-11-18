@@ -222,6 +222,24 @@ impl ObjectStore {
         // primitive (stale-output cleanup): validate every entry path before
         // admitting it to the local store. Production entries are always
         // project-root-relative.
+        // Every checksum is validated too. It becomes a path below
+        // `objects/` (`object_path`), so one holding a `/` would address a
+        // file outside the store, and one with a multi-byte first character
+        // would panic the two-character shard split.
+        let checksums: Vec<&str> = match &descriptor {
+            super::CacheDescriptor::Marker => Vec::new(),
+            super::CacheDescriptor::Blob { checksum, .. } => vec![checksum.as_str()],
+            super::CacheDescriptor::Tree { entries } => {
+                entries.iter().map(|e| e.checksum.as_str()).collect()
+            }
+        };
+        for checksum in checksums {
+            if !super::is_object_checksum(checksum) {
+                anyhow::bail!(
+                    "Remote cache descriptor {remote_key} contains '{checksum}', which is not a SHA-256 checksum"
+                );
+            }
+        }
         if let super::CacheDescriptor::Tree { entries } = &descriptor {
             for entry in entries {
                 let path = super::safe_entry_path(&entry.path)
@@ -439,5 +457,27 @@ mod tests {
             !consumer.has_object(&checksum),
             "the corrupt bytes must not land in the local store"
         );
+    }
+
+    /// A remote descriptor's checksum becomes a path below the objects
+    /// directory, so only the exact form of a SHA-256 digest is admitted.
+    #[test]
+    fn only_sha256_hex_counts_as_an_object_checksum() {
+        let real = ObjectStore::calculate_checksum_bytes(b"x");
+        assert!(super::super::is_object_checksum(&real));
+        for bad in [
+            "",
+            "ab",
+            "xx/etc/passwd",
+            "../../../../etc/passwd",
+            &real.to_uppercase(),
+            &format!("é{}", &real[2..]),
+            &format!("{real}0"),
+        ] {
+            assert!(
+                !super::super::is_object_checksum(bad),
+                "{bad:?} must be rejected"
+            );
+        }
     }
 }

@@ -10,6 +10,18 @@ use crate::config::StandardConfig;
 /// failed by checkers linting cache internals.
 const STATE_DIR: &str = ".rsconstruct";
 
+/// Whether `path` (project-relative, no leading slash) lies in the excluded
+/// directory `pattern`. Patterns are slash-delimited substrings (`"/out/"`).
+/// An indexed path has no leading slash, so a bare substring test finds
+/// `sub/out/x` but never the top-level `out/x`; a pattern that starts with a
+/// slash is therefore also matched against the start of the path.
+fn in_excluded_dir(path: &str, pattern: &str) -> bool {
+    path.contains(pattern)
+        || pattern
+            .strip_prefix('/')
+            .is_some_and(|top_level| !top_level.is_empty() && path.starts_with(top_level))
+}
+
 #[derive(Debug, Clone)]
 pub struct FileIndex {
     files: Vec<PathBuf>,
@@ -172,7 +184,10 @@ impl FileIndex {
                 // Check exclude dirs
                 if !src_exclude_dirs.is_empty() {
                     let path_str = path.to_string_lossy();
-                    if src_exclude_dirs.iter().any(|dir| path_str.contains(dir)) {
+                    if src_exclude_dirs
+                        .iter()
+                        .any(|dir| in_excluded_dir(&path_str, dir))
+                    {
                         return false;
                     }
                 }
@@ -205,6 +220,24 @@ impl FileIndex {
                 }
 
                 true
+            })
+            .cloned()
+            .collect()
+    }
+
+    /// Every indexed file under `dir` (the whole index for an empty `dir`)
+    /// that is outside `exclude_dirs`, whatever its name. `query` cannot
+    /// express this: it matches names by extension or exact name and has no
+    /// "any file" entry.
+    pub fn files_under(&self, dir: &Path, exclude_dirs: &[&str]) -> Vec<PathBuf> {
+        self.files
+            .iter()
+            .filter(|path| dir.as_os_str().is_empty() || path.starts_with(dir))
+            .filter(|path| {
+                let path_str = path.to_string_lossy();
+                !exclude_dirs
+                    .iter()
+                    .any(|excluded| in_excluded_dir(&path_str, excluded))
             })
             .cloned()
             .collect()
@@ -295,8 +328,15 @@ impl FileIndex {
             if !recursive {
                 // Filter to depth 1 from scan root: keep only files whose path has
                 // exactly one more component than the root.
+                // A file named in src_files is kept whatever its depth: it
+                // was asked for by path, not found by the directory scan.
                 let root_depth = root.components().count();
-                dir_results.retain(|path| path.components().count() == root_depth + 1);
+                dir_results.retain(|path| {
+                    path.components().count() == root_depth + 1
+                        || include_path_refs
+                            .iter()
+                            .any(|p| *p == path.to_string_lossy())
+                });
             }
 
             results.append(&mut dir_results);
@@ -356,6 +396,60 @@ impl FileIndex {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn exclude_dir_matches_a_top_level_directory() {
+        let index = FileIndex::from_paths(vec![
+            "target/gen.rs".into(),
+            "sub/target/gen.rs".into(),
+            "src/target.rs".into(),
+            "targets/a.rs".into(),
+        ]);
+        let found = index.query(Path::new(""), &[".rs"], &["/target/"], &[], &[], &[]);
+        assert_eq!(
+            found,
+            vec![PathBuf::from("src/target.rs"), "targets/a.rs".into()]
+        );
+    }
+
+    #[test]
+    fn files_under_takes_every_name_outside_the_excludes() {
+        let index = FileIndex::from_paths(vec![
+            "Makefile".into(),
+            "out/a.o".into(),
+            "sub/Makefile".into(),
+            "sub/main.c".into(),
+            "sub/out/b.o".into(),
+            "subway/x".into(),
+        ]);
+        assert_eq!(
+            index.files_under(Path::new("sub"), &["/out/"]),
+            vec![PathBuf::from("sub/Makefile"), "sub/main.c".into()]
+        );
+        assert_eq!(index.files_under(Path::new(""), &["/out/"]).len(), 4);
+    }
+
+    #[test]
+    fn non_recursive_scan_keeps_files_named_in_src_files() {
+        let index = FileIndex::from_paths(vec![
+            "Makefile".into(),
+            "src/a.py".into(),
+            "src/deep/b.py".into(),
+        ]);
+        let scan = StandardConfig {
+            src_dirs: Some(vec!["src".into()]),
+            src_extensions: Some(vec![".py".into()]),
+            src_files: Some(vec!["Makefile".into()]),
+            src_exclude_dirs: Some(Vec::new()),
+            src_exclude_files: Some(Vec::new()),
+            src_exclude_paths: Some(Vec::new()),
+            ..StandardConfig::default()
+        };
+        assert_eq!(
+            index.scan(&scan, false),
+            vec![PathBuf::from("Makefile"), "src/a.py".into()]
+        );
+    }
 
     fn sample_index() -> FileIndex {
         FileIndex::from_paths(vec![

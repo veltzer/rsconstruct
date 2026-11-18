@@ -20,8 +20,8 @@ pub use settings::*;
 pub use validation::FieldType;
 use validation::{
     expected_field_type, validate_analyzer_fields_raw, validate_build_config,
-    validate_dep_auto_exist, validate_no_dot_src_dirs, validate_processor_fields_raw,
-    validate_single_processor,
+    validate_cache_config, validate_dep_auto_exist, validate_no_dot_src_dirs,
+    validate_processor_fields_raw, validate_single_processor,
 };
 
 use anyhow::{Context, Result};
@@ -941,8 +941,21 @@ impl Config {
                 })?;
                 // The user-level file sits underneath: its [build] keys are
                 // defaults that the repo's own [build] overrides key by key.
-                let mut raw = read_user_build_config()?
-                    .unwrap_or_else(|| toml::Value::Table(toml::map::Map::new()));
+                // Every file merged into `raw`, for the error below: a type
+                // or unknown-field error is found in the merged value, so it
+                // may come from any of them.
+                let mut merged_files: Vec<String> = Vec::new();
+                let user_raw = read_user_build_config()?;
+                if user_raw.is_some()
+                    && let Some(path) = user_config_path()
+                {
+                    merged_files.push(path.display().to_string());
+                }
+                merged_files.push(config_path.display().to_string());
+                if local_path.exists() {
+                    merged_files.push(local_path.display().to_string());
+                }
+                let mut raw = user_raw.unwrap_or_else(|| toml::Value::Table(toml::map::Map::new()));
                 merge_toml_values(&mut raw, repo_raw);
                 // Overlay: rsconstruct.local.toml, when present, is deep-merged
                 // over the main config. Tables merge recursively; arrays and
@@ -976,12 +989,18 @@ impl Config {
                     )));
                 }
                 let config: Self = raw.try_into().map_err(|e| {
-                    crate::exit_code::config_error(format!(
-                        "Failed to parse config file {}: {e}",
-                        config_path.display()
-                    ))
+                    let files = if merged_files.len() == 1 {
+                        format!("config file {}", merged_files[0])
+                    } else {
+                        format!(
+                            "config (merged from {}; the error is in one of them)",
+                            merged_files.join(", ")
+                        )
+                    };
+                    crate::exit_code::config_error(format!("Failed to parse {files}: {e}"))
                 })?;
                 validate_build_config(&config.build)?;
+                validate_cache_config(&config.cache)?;
                 // Capture byte-level spans from the substituted sources so we can
                 // report user-set fields as `rsconstruct.toml:<line>` (or
                 // `rsconstruct.local.toml:<line>`) instead of the sentinel

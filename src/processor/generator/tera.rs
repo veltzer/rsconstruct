@@ -78,11 +78,12 @@ fn render_template(
     tera.register_function("glob", GlobFunction);
     tera.register_function("grep_count", GrepCountFunction);
 
-    // Add the template
-    tera.add_raw_template("template", &template_content)
-        .context("Failed to parse template")?;
-
-    // Register the project's .tera files so {% include %} can resolve them
+    // The template and the project's other .tera files are registered in
+    // one call. Tera resolves `{% extends %}` and `{% import %}` at
+    // registration, so adding the template on its own, before the parent or
+    // macro file it names, fails with "parent not found"; one batch lets
+    // every template see every other, whatever the order.
+    let mut templates: Vec<(String, String)> = vec![("template".to_string(), template_content)];
     for path in includable {
         // Skip the main template we already registered
         if *path == item.source_path {
@@ -98,10 +99,15 @@ fn render_template(
         let Ok(content) = fs::read_to_string(path) else {
             continue;
         };
-        let name = path.to_string_lossy().to_string();
-        tera.add_raw_template(&name, &content)
-            .with_context(|| format!("Failed to parse template: {}", path.display()))?;
+        templates.push((path.to_string_lossy().to_string(), content));
     }
+    // Tera's own error names the template that failed to parse.
+    tera.add_raw_templates(templates).with_context(|| {
+        format!(
+            "Failed to parse template {} or a template it can reach",
+            item.source_path.display()
+        )
+    })?;
 
     // Configure strict mode (fail on undefined variables)
     tera.set_escape_fn(std::string::ToString::to_string); // No HTML escaping by default

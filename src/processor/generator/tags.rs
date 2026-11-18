@@ -49,8 +49,11 @@ pub struct TagsConfig {
     #[serde(default)]
     pub unique_fields: Vec<String>,
     /// Expected types for fields: "scalar", "list", or "number".
+    /// A `BTreeMap`, not a `HashMap`: this field is part of the config hash,
+    /// and a `HashMap` serializes in a per-process random order, which gave
+    /// the product a new cache key on every run.
     #[serde(default)]
-    pub field_types: HashMap<String, String>,
+    pub field_types: BTreeMap<String, String>,
     /// Groups of fields where at least one group must be fully present.
     /// Each inner Vec is a group; a file passes if all fields in any one group are present.
     #[serde(default)]
@@ -82,7 +85,7 @@ impl Default for TagsConfig {
             required_fields: Vec::new(),
             required_values: Vec::new(),
             unique_fields: Vec::new(),
-            field_types: HashMap::new(),
+            field_types: BTreeMap::new(),
             required_field_groups: Vec::new(),
             sorted_tags: false,
             check_unused: false,

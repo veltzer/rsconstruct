@@ -60,6 +60,17 @@ fn safe_entry_path(raw: &str) -> Result<&Path> {
     Ok(path)
 }
 
+/// Whether `text` has the form of an object's name: the 64 lowercase hex
+/// digits `checksum::bytes_checksum` produces. Checked on every checksum
+/// that arrives from outside (a remote descriptor) before it is turned into
+/// a path below the objects directory.
+fn is_object_checksum(text: &str) -> bool {
+    text.len() == 64
+        && text
+            .bytes()
+            .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+}
+
 const RSBUILD_DIR: &str = ".rsconstruct";
 const OBJECTS_DIR: &str = "objects";
 const DESCRIPTORS_DIR: &str = "descriptors";
