@@ -135,6 +135,15 @@ pub fn rust_alternatives(name: &str) -> Vec<&'static str> {
 /// (`processor::checker::ruff`), and an instance appends one more segment.
 pub const NAME_PREFIX: &str = "processor.";
 
+/// The full processor name for a type segment and a short name:
+/// `("checker", "ruff")` is `processor.checker.ruff`. The one place a name
+/// is put together; [`parse_name`] is the one place it is taken apart.
+/// The type is a string because raw-TOML code (config loading, validation)
+/// has the table key in hand before any plugin is looked up.
+pub fn pname_from_parts(type_segment: &str, short: &str) -> String {
+    format!("{NAME_PREFIX}{type_segment}.{short}")
+}
+
 /// A processor name taken apart: `processor.<type>.<name>[.<instance>]`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct ParsedName<'a> {
@@ -150,11 +159,7 @@ pub struct ParsedName<'a> {
 impl ParsedName<'_> {
     /// The processor name without the instance segment.
     pub fn pname(&self) -> String {
-        format!(
-            "{NAME_PREFIX}{}.{}",
-            self.processor_type.as_str(),
-            self.short
-        )
+        pname_from_parts(self.processor_type.as_str(), self.short)
     }
 }
 
@@ -190,11 +195,7 @@ impl ProcessorPlugin {
     /// The processor's full name, `processor.<type>.<name>` — the name used
     /// in `rsconstruct.toml`, on the command line and in every product.
     pub fn pname(&self) -> String {
-        format!(
-            "{NAME_PREFIX}{}.{}",
-            self.processor_type.as_str(),
-            self.name
-        )
+        pname_from_parts(self.processor_type.as_str(), self.name)
     }
 }
 

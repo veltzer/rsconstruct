@@ -478,7 +478,7 @@ impl ProcessorConfig {
                 let Some(sub_table) = val.as_table() else {
                     continue;
                 };
-                let pname = format!("{}{type_key}.{short}", registry::NAME_PREFIX);
+                let pname = registry::pname_from_parts(type_key, short);
                 if !is_builtin_type(&pname) {
                     continue;
                 }

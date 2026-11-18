@@ -425,7 +425,7 @@ pub(super) fn validate_processor_fields_raw(raw: &toml::Value) -> Vec<String> {
                 ));
                 continue;
             };
-            let pname = format!("{}{type_key}.{short}", registry::NAME_PREFIX);
+            let pname = registry::pname_from_parts(type_key, short);
 
             if !is_builtin_type(&pname) {
                 let elsewhere: Vec<String> = registry::all_plugins()
