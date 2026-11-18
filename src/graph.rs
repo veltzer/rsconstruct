@@ -348,13 +348,9 @@ impl BuildGraph {
             return false;
         }
         let old_set: HashSet<&PathBuf> = existing.inputs.iter().collect();
-        // Collect index updates before mutating products, to satisfy the borrow checker.
-        let to_remove: Vec<PathBuf> = existing
-            .inputs
-            .iter()
-            .filter(|p| !new_set.contains(p))
-            .cloned()
-            .collect();
+        // Collect index updates before mutating products, to satisfy the
+        // borrow checker. Only additions: the check above already required
+        // every existing input to be in the new set.
         let to_add: Vec<PathBuf> = new_inputs
             .iter()
             .filter(|p| !old_set.contains(p))
@@ -362,13 +358,6 @@ impl BuildGraph {
             .collect();
         self.products[product_id].declared_inputs = new_inputs.len();
         self.products[product_id].inputs = new_inputs;
-        for path in &to_remove {
-            if let Some(path_id) = self.interner.get(path)
-                && let Some(ids) = self.input_to_products.get_mut(&path_id)
-            {
-                ids.retain(|&x| x != product_id);
-            }
-        }
         for path in &to_add {
             let path_id = self.interner.intern(path);
             self.input_to_products

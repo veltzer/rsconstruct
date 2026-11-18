@@ -8,7 +8,46 @@ use std::fmt::Write;
 use std::fs;
 use std::path::PathBuf;
 
+/// Every directory a clean may leave empty: the parent of each output file
+/// and of each output directory (which becomes a candidate once the
+/// directory itself is removed).
+fn output_parent_dirs(graph: &crate::graph::BuildGraph) -> HashSet<PathBuf> {
+    let mut dirs: HashSet<PathBuf> = HashSet::new();
+    for product in graph.products() {
+        let outputs = product.outputs.iter().map(PathBuf::as_path);
+        let output_dirs = product.output_dirs.iter().map(|dir| dir.as_path());
+        for path in outputs.chain(output_dirs) {
+            if let Some(parent) = path.parent()
+                && !parent.as_os_str().is_empty()
+            {
+                dirs.insert(parent.to_path_buf());
+            }
+        }
+    }
+    dirs
+}
+
 impl Builder {
+    /// The executor settings for a clean: nothing runs, so one thread and
+    /// no batching, retry or sandbox.
+    fn clean_executor_options(&self) -> ExecutorOptions {
+        ExecutorOptions {
+            parallel: 1,
+            verbose: false,
+            display_opts: DisplayOptions::minimal(),
+            batch_size: None,
+            explain: false,
+            retry: 0,
+            force: false,
+            keep_going: false,
+            timings: false,
+            worker_stack_bytes: self.config.build.worker_stack_mib * 1024 * 1024,
+            // Cleaning executes no product.
+            builtin_setup: crate::sandbox::BuiltinSetup::default(),
+            sandbox_builtin_children: 0,
+        }
+    }
+
     /// Clean build artifacts using the dependency graph.
     /// If `processor_filter` is `Some`, only clean outputs from the selected
     /// processors; the selectors are the ones `build -p` takes (names with or
@@ -41,49 +80,10 @@ impl Builder {
             graph.retain_products(|p| filter_set.contains(p.processor.as_str()));
         }
 
-        // Collect every directory whose contents may be affected by the clean:
-        // the parent of each output file, and the output_dirs themselves
-        // (whose parents become candidates once the dir is removed).
-        let mut candidate_dirs: HashSet<PathBuf> = HashSet::new();
-        for product in graph.products() {
-            for output in &product.outputs {
-                if let Some(parent) = output.parent()
-                    && !parent.as_os_str().is_empty()
-                {
-                    candidate_dirs.insert(parent.to_path_buf());
-                }
-            }
-            for dir in &product.output_dirs {
-                if let Some(parent) = dir.parent()
-                    && !parent.as_os_str().is_empty()
-                {
-                    candidate_dirs.insert(parent.to_path_buf());
-                }
-            }
-        }
+        let candidate_dirs = output_parent_dirs(&graph);
 
-        // Use executor to clean (batch_size doesn't matter for clean)
         let policy = crate::executor::IncrementalPolicy;
-        let executor = Executor::new(
-            &processors,
-            ctx,
-            &policy,
-            ExecutorOptions {
-                parallel: 1,
-                verbose: false,
-                display_opts: DisplayOptions::minimal(),
-                batch_size: None,
-                explain: false,
-                retry: 0,
-                force: false,
-                keep_going: false,
-                timings: false,
-                worker_stack_bytes: self.config.build.worker_stack_mib * 1024 * 1024,
-                // Cleaning executes no product.
-                builtin_setup: crate::sandbox::BuiltinSetup::default(),
-                sandbox_builtin_children: 0,
-            },
-        );
+        let executor = Executor::new(&processors, ctx, &policy, self.clean_executor_options());
         let stats = executor.clean(&graph, verbose)?;
 
         // Walk every candidate directory bottom-up: try fs::remove_dir (only
@@ -196,44 +196,9 @@ impl Builder {
             return Ok(());
         }
 
-        let mut candidate_dirs: HashSet<PathBuf> = HashSet::new();
-        for product in graph.products() {
-            for output in &product.outputs {
-                if let Some(parent) = output.parent()
-                    && !parent.as_os_str().is_empty()
-                {
-                    candidate_dirs.insert(parent.to_path_buf());
-                }
-            }
-            for dir in &product.output_dirs {
-                if let Some(parent) = dir.parent()
-                    && !parent.as_os_str().is_empty()
-                {
-                    candidate_dirs.insert(parent.to_path_buf());
-                }
-            }
-        }
+        let candidate_dirs = output_parent_dirs(&graph);
         let policy = crate::executor::IncrementalPolicy;
-        let executor = Executor::new(
-            &processors,
-            ctx,
-            &policy,
-            ExecutorOptions {
-                parallel: 1,
-                verbose: false,
-                display_opts: DisplayOptions::minimal(),
-                batch_size: None,
-                explain: false,
-                retry: 0,
-                force: false,
-                keep_going: false,
-                timings: false,
-                worker_stack_bytes: self.config.build.worker_stack_mib * 1024 * 1024,
-                // Cleaning executes no product.
-                builtin_setup: crate::sandbox::BuiltinSetup::default(),
-                sandbox_builtin_children: 0,
-            },
-        );
+        let executor = Executor::new(&processors, ctx, &policy, self.clean_executor_options());
         let stats = executor.clean(&graph, verbose)?;
 
         let mut entries: std::collections::BTreeMap<&str, usize> =

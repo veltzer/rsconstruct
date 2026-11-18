@@ -1294,12 +1294,12 @@ impl Executor<'_> {
                     .copied()
                     .expect(errors::PROCESSOR_NOT_IN_TOTALS);
 
+                let variant_tag = product
+                    .variant
+                    .as_ref()
+                    .map(|v| format!(":{v}"))
+                    .unwrap_or_default();
                 if self.verbose {
-                    let variant_tag = product
-                        .variant
-                        .as_ref()
-                        .map(|v| format!(":{v}"))
-                        .unwrap_or_default();
                     let gc = lctx.shared.global_current.load(Ordering::SeqCst) + 1;
                     crate::output::info(&format!(
                         "[{}{}] ({}/{}) ({}/{}) {} {}",
@@ -1313,11 +1313,6 @@ impl Executor<'_> {
                         self.product_display(product)
                     ));
                 } else {
-                    let variant_tag = product
-                        .variant
-                        .as_ref()
-                        .map(|v| format!(":{v}"))
-                        .unwrap_or_default();
                     lctx.pb.set_message(format!(
                         "[{}{}] {}",
                         product.processor,

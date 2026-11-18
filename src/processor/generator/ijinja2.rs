@@ -325,10 +325,6 @@ impl Processor for Ijinja2Processor {
         crate::processor::ProcessorBase::config_json(&self.config)
     }
 
-    fn clean(&self, product: &Product, verbose: bool) -> Result<usize> {
-        crate::processor::ProcessorBase::clean(product, &product.processor, verbose)
-    }
-
     fn auto_detect(&self, file_index: &FileIndex) -> bool {
         !super::find_templates(&self.config.standard, file_index).is_empty()
     }

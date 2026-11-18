@@ -90,7 +90,7 @@ fn execute_pandoc(
         .to_string_lossy();
     ensure_output_dir(output)?;
 
-    let mut cmd = Command::new(&config.standard.command);
+    let mut cmd = Command::new(config.standard.require_command("pandoc")?);
     cmd.env("SOURCE_DATE_EPOCH", "0");
     cmd.arg("--to").arg(format.as_ref());
     if format.as_ref() == "pdf" {

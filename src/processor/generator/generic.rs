@@ -96,10 +96,6 @@ impl Processor for GeneratorProcessor {
         crate::processor::ProcessorBase::config_json(&self.config)
     }
 
-    fn clean(&self, product: &crate::graph::Product, verbose: bool) -> anyhow::Result<usize> {
-        crate::processor::ProcessorBase::clean(product, &product.processor, verbose)
-    }
-
     fn auto_detect(&self, file_index: &FileIndex) -> bool {
         self.should_process() && !file_index.scan(&self.config.standard, true).is_empty()
     }

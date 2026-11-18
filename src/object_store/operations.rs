@@ -20,8 +20,7 @@ impl ObjectStore {
             return Ok(());
         }
 
-        let (prefix, rest) = checksum.split_at(super::CHECKSUM_PREFIX_LEN.min(checksum.len()));
-        let remote_key = format!("objects/{prefix}/{rest}");
+        let remote_key = super::remote_object_key(checksum);
 
         // Check if already exists remotely (avoid redundant uploads). A
         // failed check is reported like a failed upload: the push is
@@ -105,8 +104,7 @@ impl ObjectStore {
         let Some(remote) = &self.remote else {
             return false;
         };
-        let (prefix, rest) = checksum.split_at(super::CHECKSUM_PREFIX_LEN.min(checksum.len()));
-        let remote_key = format!("objects/{prefix}/{rest}");
+        let remote_key = super::remote_object_key(checksum);
         // Same policy as `ensure_object`: a broken remote degrades to "not
         // available" (the build rebuilds locally, which is always correct),
         // but it is reported, never swallowed.
@@ -135,8 +133,7 @@ impl ObjectStore {
             return Ok(true);
         }
 
-        let (prefix, rest) = checksum.split_at(super::CHECKSUM_PREFIX_LEN.min(checksum.len()));
-        let remote_key = format!("objects/{prefix}/{rest}");
+        let remote_key = super::remote_object_key(checksum);
         let Some(bytes) = remote.download_bytes(ctx, &remote_key)? else {
             return Ok(false);
         };

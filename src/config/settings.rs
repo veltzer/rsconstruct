@@ -57,7 +57,7 @@ pub struct BuildConfig {
     pub max_arg_len: usize,
     /// Maximum fixed-point discovery passes. Discovery repeats while
     /// processors keep adding products from each other's declared outputs;
-    /// a config whose final pass still declares new files fails the build instead of
+    /// a config still adding products after this many passes fails the build instead of
     /// silently truncating the graph.
     #[serde(default = "default_max_discovery_passes")]
     pub max_discovery_passes: usize,

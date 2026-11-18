@@ -76,6 +76,22 @@ fn safe_entry_path(raw: &str) -> Result<&Path> {
     Ok(path)
 }
 
+/// A key (an object checksum or a descriptor key) as its shard directory
+/// and the file name inside it: the first `CHECKSUM_PREFIX_LEN` characters,
+/// then the rest. A key shorter than the prefix is all directory. This is
+/// the one place the split is made; the local paths and the remote keys
+/// are both built from it.
+fn shard(key: &str) -> (&str, &str) {
+    key.split_at_checked(CHECKSUM_PREFIX_LEN.min(key.len()))
+        .unwrap_or((key, ""))
+}
+
+/// The remote cache key of an object: `objects/<shard>/<rest>`.
+fn remote_object_key(checksum: &str) -> String {
+    let (prefix, rest) = shard(checksum);
+    format!("objects/{prefix}/{rest}")
+}
+
 /// Whether `text` has the form of an object's name: the 64 lowercase hex
 /// digits `checksum::bytes_checksum` produces. Checked on every checksum
 /// that arrives from outside (a remote descriptor) before it is turned into
@@ -232,7 +248,7 @@ impl ObjectStore {
 
         fs::create_dir_all(&rsconstruct_dir).context("Failed to create .rsconstruct directory")?;
 
-        let db = crate::db::open_or_recreate(&db_path, "Cache database")?;
+        let db = crate::db::open(&db_path, "Cache database")?;
         let descriptors_dir = rsconstruct_dir.join(DESCRIPTORS_DIR);
 
         Ok(Self {
@@ -257,7 +273,7 @@ impl ObjectStore {
         Self {
             objects_dir: dir.join(OBJECTS_DIR),
             descriptors_dir: dir.join(DESCRIPTORS_DIR),
-            db: crate::db::open_or_recreate(&dir.join(db_name), "test cache database").unwrap(),
+            db: crate::db::open(&dir.join(db_name), "test cache database").unwrap(),
             restore_method: RestoreMethod::Hardlink,
             compression: false,
             remote: None,

@@ -89,10 +89,6 @@ impl Processor for NpmProcessor {
         crate::processor::ProcessorBase::config_json(&self.config)
     }
 
-    fn clean(&self, product: &crate::graph::Product, verbose: bool) -> anyhow::Result<usize> {
-        crate::processor::ProcessorBase::clean(product, &product.processor, verbose)
-    }
-
     fn required_tools(&self) -> Vec<String> {
         crate::processor::with_declared_tools(
             vec![self.config.standard.command.clone(), "node".to_string()],

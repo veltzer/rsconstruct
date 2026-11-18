@@ -232,3 +232,23 @@ fn dry_run_with_force() {
         stdout
     );
 }
+
+/// Under `--json` stdout is one JSON document. A dry run is always verbose,
+/// and its per-product lines used to be printed in front of the object.
+#[test]
+fn dry_run_json_prints_only_json() {
+    let temp_dir = setup_test_project();
+    let project_path = temp_dir.path();
+    fs::write(project_path.join("tera.templates/j.txt.tera"), "hello").unwrap();
+
+    let output = run_rsconstruct(project_path, &["build", "--dry-run", "--json"]);
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let parsed: serde_json::Value = serde_json::from_str(&stdout)
+        .unwrap_or_else(|e| panic!("stdout is not one JSON document ({e}): {stdout}"));
+    assert_eq!(parsed["totals"]["total"], 1, "{stdout}");
+}

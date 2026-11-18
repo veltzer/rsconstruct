@@ -196,13 +196,19 @@ fn read_user_config() -> Result<Option<toml::Value>> {
 /// config is deserialized: processor defaults (a `python_command`
 /// processor's `command`, sphinx's `python`) are filled in during that
 /// deserialization and must see the configured interpreter.
-fn set_python_interpreter(raw: &toml::Value) -> Result<()> {
+///
+/// `merged_from` says which files `raw` was merged from: this is the first
+/// place a mistyped `[build]` key is found, and the key may be in any of
+/// them.
+fn set_python_interpreter(raw: &toml::Value, merged_from: &str) -> Result<()> {
     let build: BuildConfig = raw
         .get("build")
         .cloned()
         .unwrap_or_else(|| toml::Value::Table(toml::map::Map::new()))
         .try_into()
-        .map_err(|e| crate::exit_code::config_error(format!("Failed to parse [build]: {e}")))?;
+        .map_err(|e| {
+            crate::exit_code::config_error(format!("Failed to parse [build] of {merged_from}: {e}"))
+        })?;
     crate::python_env::set_interpreter(&build.python);
     Ok(())
 }
@@ -955,6 +961,14 @@ impl Config {
                 if local_path.exists() {
                     merged_files.push(local_path.display().to_string());
                 }
+                let merged_from = if merged_files.len() == 1 {
+                    format!("config file {}", merged_files[0])
+                } else {
+                    format!(
+                        "config (merged from {}; the error is in one of them)",
+                        merged_files.join(", ")
+                    )
+                };
                 let mut raw = user_raw.unwrap_or_else(|| toml::Value::Table(toml::map::Map::new()));
                 merge_toml_values(&mut raw, repo_raw);
                 // Overlay: rsconstruct.local.toml, when present, is deep-merged
@@ -979,7 +993,7 @@ impl Config {
                 // get pretty per-section errors instead of serde's raw messages.
                 // Errors from both validators are surfaced together under a single
                 // "Invalid config:" header.
-                set_python_interpreter(&raw)?;
+                set_python_interpreter(&raw, &merged_from)?;
                 let mut all_errors = validate_processor_fields_raw(&raw);
                 all_errors.extend(validate_analyzer_fields_raw(&raw));
                 if !all_errors.is_empty() {
@@ -989,15 +1003,7 @@ impl Config {
                     )));
                 }
                 let config: Self = raw.try_into().map_err(|e| {
-                    let files = if merged_files.len() == 1 {
-                        format!("config file {}", merged_files[0])
-                    } else {
-                        format!(
-                            "config (merged from {}; the error is in one of them)",
-                            merged_files.join(", ")
-                        )
-                    };
-                    crate::exit_code::config_error(format!("Failed to parse {files}: {e}"))
+                    crate::exit_code::config_error(format!("Failed to parse {merged_from}: {e}"))
                 })?;
                 validate_build_config(&config.build)?;
                 validate_cache_config(&config.cache)?;

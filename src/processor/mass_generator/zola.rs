@@ -1464,10 +1464,6 @@ impl Processor for ZolaProcessor {
         true
     }
 
-    fn clean(&self, product: &Product, verbose: bool) -> Result<usize> {
-        ProcessorBase::clean(product, &product.processor, verbose)
-    }
-
     fn config_json(&self) -> Option<String> {
         ProcessorBase::config_json(&self.config)
     }

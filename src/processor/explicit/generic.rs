@@ -211,7 +211,7 @@ impl Processor for ExplicitProcessor {
     }
 
     fn clean(&self, product: &Product, verbose: bool) -> Result<usize> {
-        let file_count = ProcessorBase::clean(product, &product.processor, verbose)?;
+        let file_count = crate::processor::clean_outputs(product, &product.processor, verbose)?;
         let dir_count = crate::processor::clean_output_dir(product, &product.processor, verbose)?;
         Ok(file_count + dir_count)
     }

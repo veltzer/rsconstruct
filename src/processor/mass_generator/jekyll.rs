@@ -306,21 +306,13 @@ const SITE_EXCLUDES: &[&str] = &[
 
 /// Every indexed file under `anchor_dir` outside [`SITE_EXCLUDES`]: a
 /// Jekyll site reads all of them (pages, posts, layouts, includes, data,
-/// static files), so each is a source of every planned page. The index is
-/// filtered directly: `FileIndex::query` matches names by extension or by
-/// exact name and has no "any file" entry — the `extensions: [""]` this
-/// used to pass matched nothing, leaving `_config.yml` the sole input.
+/// static files), so each is a source of every planned page.
+/// `FileIndex::files_under` is the "any file" query: `FileIndex::query`
+/// matches names by extension or by exact name, and the `extensions: [""]`
+/// this used to pass it matched nothing, leaving `_config.yml` the sole
+/// input.
 fn site_files(file_index: &FileIndex, anchor_dir: &Path) -> Vec<PathBuf> {
-    file_index
-        .files()
-        .iter()
-        .filter(|path| anchor_dir.as_os_str().is_empty() || path.starts_with(anchor_dir))
-        .filter(|path| {
-            let text = format!("/{}", path.display());
-            !SITE_EXCLUDES.iter().any(|dir| text.contains(dir))
-        })
-        .cloned()
-        .collect()
+    file_index.files_under(anchor_dir, SITE_EXCLUDES)
 }
 
 fn parse_plan(raw: &str) -> Result<BTreeSet<String>> {
@@ -358,10 +350,6 @@ impl Processor for JekyllProcessor {
 
     fn config_json(&self) -> Option<String> {
         crate::processor::ProcessorBase::config_json(&self.config)
-    }
-
-    fn clean(&self, product: &crate::graph::Product, verbose: bool) -> anyhow::Result<usize> {
-        crate::processor::ProcessorBase::clean(product, &product.processor, verbose)
     }
 
     fn replaces_own_outputs(&self) -> bool {

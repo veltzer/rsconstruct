@@ -2,11 +2,11 @@ use anyhow::{Context, Result};
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use super::{CHECKSUM_PREFIX_LEN, CacheDescriptor, ObjectStore, TreeEntry, walk_files};
+use super::{CacheDescriptor, ObjectStore, TreeEntry, walk_files};
 
 impl ObjectStore {
     pub(super) fn descriptor_path(&self, descriptor_key: &str) -> PathBuf {
-        let (prefix, rest) = descriptor_key.split_at(CHECKSUM_PREFIX_LEN.min(descriptor_key.len()));
+        let (prefix, rest) = super::shard(descriptor_key);
         self.descriptors_dir.join(prefix).join(rest)
     }
 

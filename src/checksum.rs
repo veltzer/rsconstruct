@@ -55,7 +55,7 @@ fn get_mtime_db(ctx: &BuildContext) -> Result<std::sync::MutexGuard<'_, Option<r
             fs::create_dir_all(&dir),
             "Failed to create .rsconstruct directory",
         )?;
-        let db = crate::db::open_or_recreate(&dir.join("mtime.redb"), "Mtime cache")?;
+        let db = crate::db::open(&dir.join("mtime.redb"), "Mtime cache")?;
         *guard = Some(db);
     }
     Ok(guard)
@@ -302,12 +302,8 @@ pub fn flush_mtime_cache(ctx: &BuildContext) -> Result<()> {
 /// because `MISSING:{path}` entries embed arbitrary paths that may themselves
 /// contain `:`.
 fn hash_checksums(checksums: &[String]) -> String {
-    let mut hasher = Sha256::new();
-    for c in checksums {
-        hasher.update((c.len() as u64).to_le_bytes());
-        hasher.update(c.as_bytes());
-    }
-    hex::encode(hasher.finalize())
+    let parts: Vec<&str> = checksums.iter().map(String::as_str).collect();
+    hash_parts(&parts)
 }
 
 /// Hash a sequence of string parts with length prefixes, so no part can

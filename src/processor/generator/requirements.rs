@@ -108,10 +108,6 @@ impl Processor for RequirementsProcessor {
         crate::processor::ProcessorBase::config_json(&self.config)
     }
 
-    fn clean(&self, product: &Product, verbose: bool) -> Result<usize> {
-        crate::processor::ProcessorBase::clean(product, &product.processor, verbose)
-    }
-
     fn auto_detect(&self, file_index: &FileIndex) -> bool {
         !file_index.scan(&self.config.standard, false).is_empty()
     }

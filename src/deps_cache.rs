@@ -130,7 +130,7 @@ impl DepsCache {
         // Ensure .rsconstruct directory exists
         fs::create_dir_all(&rsconstruct_dir).context("Failed to create .rsconstruct directory")?;
 
-        let db = crate::db::open_or_recreate(&db_path, "Dependency cache")?;
+        let db = crate::db::open(&db_path, "Dependency cache")?;
 
         Ok(Self {
             db,

@@ -48,11 +48,12 @@ pub fn resolve_anchor_path(anchor_dir: &Path, rel: &str) -> PathBuf {
 
 /// The directory containing `path`, as a relative path.
 ///
-/// A path with no parent (a bare filename) yields `.`, so the result is
-/// always usable as a directory to join against or pass as a working
-/// directory. This idiom — `path.parent().unwrap_or(Path::new("."))` —
-/// appeared at 20+ sites; naming it says what the fallback means instead
-/// of leaving a bare `"."` at each one.
+/// A bare filename (`a.md`) yields the empty path, which is what
+/// `Path::parent` returns for it: joining onto it gives a project-relative
+/// path with no `./` prefix, so results still compare equal to paths in the
+/// file index. Only a path with no parent at all (the empty path, `/`)
+/// yields `.`. The empty path is not usable as a working directory; a
+/// caller that needs one must map it to `.` itself.
 pub fn parent_dir(path: &Path) -> &Path {
     path.parent().unwrap_or_else(|| Path::new("."))
 }
@@ -892,7 +893,9 @@ where
     match batch_fn(ctx, &input_paths) {
         Ok(()) => products.iter().map(|_| Ok(())).collect(),
         Err(e) => {
-            let err_msg = e.to_string();
+            // `{e:#}`: the whole context chain. `to_string()` keeps only the
+            // outermost context and drops the cause (the OS error).
+            let err_msg = format!("{e:#}");
             products
                 .iter()
                 .map(|_| Err(anyhow::anyhow!("{err_msg}")))
@@ -917,7 +920,9 @@ where
     match batch_fn(ctx, &pairs) {
         Ok(()) => products.iter().map(|_| Ok(())).collect(),
         Err(e) => {
-            let err_msg = e.to_string();
+            // `{e:#}`: the whole context chain. `to_string()` keeps only the
+            // outermost context and drops the cause (the OS error).
+            let err_msg = format!("{e:#}");
             products
                 .iter()
                 .map(|_| Err(anyhow::anyhow!("{err_msg}")))
@@ -1035,17 +1040,13 @@ impl ProcessorType {
     }
 }
 
-/// Helper namespace for processor boilerplate (`config_json`, clean).
+/// Helper namespace for processor boilerplate (`config_json`).
 /// No state — description and `processor_type` now live on the plugin metadata.
 pub struct ProcessorBase;
 
 impl ProcessorBase {
     pub fn config_json<C: Serialize>(config: &C) -> Option<String> {
         serde_json::to_string(config).ok()
-    }
-
-    pub fn clean(product: &Product, name: &str, verbose: bool) -> anyhow::Result<usize> {
-        clean_outputs(product, name, verbose)
     }
 }
 
@@ -1086,9 +1087,7 @@ impl ProcessorBase {
 ///         graph.add_product(inputs, outputs, instance_name, ...)?;  // non-empty outputs
 ///     }
 ///     fn execute(&self, ctx: &BuildContext, product: &Product) -> Result<()> { ... }
-///     fn clean(&self, product: &Product, verbose: bool) -> Result<usize> {
-///         clean_outputs(product, &product.processor, verbose)
-///     }
+///     // `clean` needs no override: the default removes the declared outputs.
 /// }
 /// ```
 ///
@@ -1213,9 +1212,13 @@ pub trait Processor: Sync + Send {
     /// Execute a single product
     fn execute(&self, ctx: &crate::build_context::BuildContext, product: &Product) -> Result<()>;
 
-    /// Clean outputs for a product. Checkers: default does nothing. Generators: override.
-    fn clean(&self, _product: &Product, _verbose: bool) -> Result<usize> {
-        Ok(0)
+    /// Clean outputs for a product: remove each declared output file and
+    /// return how many were removed. A checker declares no outputs, so this
+    /// removes nothing for it. Override only to remove more than the
+    /// declared files (see `processor.explicit.generic`, which also removes
+    /// its output directories).
+    fn clean(&self, product: &Product, verbose: bool) -> Result<usize> {
+        clean_outputs(product, &product.processor, verbose)
     }
 
     /// Auto-detect whether this processor is relevant for the current project.
@@ -1434,10 +1437,6 @@ where
 
     fn config_json(&self) -> Option<String> {
         ProcessorBase::config_json(&self.config)
-    }
-
-    fn clean(&self, product: &Product, verbose: bool) -> Result<usize> {
-        ProcessorBase::clean(product, &product.processor, verbose)
     }
 
     fn required_tools(&self) -> Vec<String> {

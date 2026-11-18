@@ -119,10 +119,6 @@ impl Processor for TagsProcessor {
         crate::processor::ProcessorBase::config_json(&self.config)
     }
 
-    fn clean(&self, product: &crate::graph::Product, verbose: bool) -> anyhow::Result<usize> {
-        crate::processor::ProcessorBase::clean(product, &product.processor, verbose)
-    }
-
     fn auto_detect(&self, file_index: &FileIndex) -> bool {
         if file_index.scan(&self.config.standard, true).is_empty() {
             return false;
@@ -610,7 +606,7 @@ fn write_tags_db(output_path: &Path, scan: &TagScan) -> Result<()> {
             )
         })?;
     }
-    let db = crate::db::open_or_recreate(output_path, "tags database")?;
+    let db = crate::db::open(output_path, "tags database")?;
 
     let write_txn = db
         .begin_write()

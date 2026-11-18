@@ -151,7 +151,7 @@ impl Executor<'_> {
                         &ctx.product.processor,
                         ProductStatus::Failed,
                         None,
-                        Some(&e.to_string()),
+                        Some(&format!("{e:#}")),
                     );
                 }
                 self.record_failure(ctx, e, false);
@@ -218,7 +218,7 @@ impl Executor<'_> {
                         ProductStatus::Failed,
                         duration,
                         Some(&format!(
-                            "Failed to compute post-execution input checksum: {e}"
+                            "Failed to compute post-execution input checksum: {e:#}"
                         )),
                     );
                     self.record_failure(ctx, e, false);
@@ -277,7 +277,7 @@ impl Executor<'_> {
                     &ctx.product.processor,
                     ProductStatus::Failed,
                     duration,
-                    Some(&e.to_string()),
+                    Some(&format!("{e:#}")),
                 );
                 self.record_failure(ctx, e, false);
                 return false;

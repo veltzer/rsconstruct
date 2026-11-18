@@ -662,7 +662,7 @@ impl Builder {
         // The files the previous round declared; None in round 0.
         let mut routed: Option<FileIndex> = None;
 
-        for pass in 0..max_passes {
+        for pass in 0..=max_passes {
             let before = graph.products().len();
             for name in active {
                 let name = name.as_ref();
@@ -684,20 +684,12 @@ impl Builder {
             if after == before {
                 break;
             }
-            let outputs: Vec<PathBuf> = graph.products()[before..after]
-                .iter()
-                .flat_map(|p| p.outputs.iter().cloned())
-                .collect();
-            let added = file_index.add_virtual_files(&outputs);
-            if added.is_empty() {
-                break;
-            }
-            if pass + 1 >= max_passes {
-                // The final pass declared files no later pass will route:
-                // the graph would be silently truncated. Fail loudly and
-                // name the culprits. (Products that declare no new file end
-                // discovery above and are not an error, whichever pass adds
-                // them.)
+            if pass == max_passes {
+                // `max_passes` passes may add products; this one more only
+                // confirms that the files the last of them declared feed
+                // nothing. It found products instead, so the chain is
+                // longer than the cap and the graph would be silently
+                // truncated. Fail loudly and name the culprits.
                 let mut culprits: Vec<&str> = graph.products()[before..after]
                     .iter()
                     .map(|p| p.processor.as_str())
@@ -707,10 +699,18 @@ impl Builder {
                 return Err(crate::exit_code::RsconstructError::new(
                     crate::exit_code::RsconstructExitCode::GraphError,
                     format!(
-                        "discovery did not converge after {max_passes} passes; still declaring new files on the final pass: {} (raise [build] max_discovery_passes if this chain is intentional)",
+                        "discovery did not converge after {max_passes} passes; still adding products: {} (raise [build] max_discovery_passes if this chain is intentional)",
                         culprits.join(", ")
                     ),
                 ).into());
+            }
+            let outputs: Vec<PathBuf> = graph.products()[before..after]
+                .iter()
+                .flat_map(|p| p.outputs.iter().cloned())
+                .collect();
+            let added = file_index.add_virtual_files(&outputs);
+            if added.is_empty() {
+                break;
             }
             if debug {
                 eprintln!(

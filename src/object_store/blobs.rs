@@ -3,7 +3,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
-use super::{CHECKSUM_PREFIX_LEN, ObjectStore};
+use super::ObjectStore;
 use crate::checksum;
 use crate::config::RestoreMethod;
 
@@ -19,7 +19,7 @@ impl ObjectStore {
 
     /// Get object path for a checksum (e.g., .rsconstruct/objects/ab/cdef123...)
     pub(super) fn object_path(&self, checksum: &str) -> PathBuf {
-        let (prefix, rest) = checksum.split_at(CHECKSUM_PREFIX_LEN.min(checksum.len()));
+        let (prefix, rest) = super::shard(checksum);
         self.objects_dir.join(prefix).join(rest)
     }
 

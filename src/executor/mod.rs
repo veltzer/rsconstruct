@@ -626,6 +626,30 @@ mod tests {
         assert_eq!(tracker.take_ready(), Vec::<usize>::new());
     }
 
+    /// `unfinished` is what the coordinator checks before it reports
+    /// success: every product that was not finished, dispatched or not.
+    #[test]
+    fn ready_tracker_reports_unfinished_products() {
+        let mut g = BuildGraph::new();
+        let first = g
+            .add_product(vec!["a.src".into()], vec!["a.mid".into()], "one", None)
+            .unwrap();
+        let second = g
+            .add_product(vec!["a.mid".into()], vec!["a.out".into()], "two", None)
+            .unwrap();
+        g.resolve_dependencies();
+
+        let mut tracker = ReadyTracker::new(&g, &HashSet::new(), &HashSet::new());
+        assert_eq!(tracker.unfinished(), vec![first, second]);
+        assert_eq!(tracker.take_ready(), vec![first]);
+        assert_eq!(tracker.unfinished(), vec![first, second], "dispatched only");
+        tracker.finish(&g, first);
+        assert_eq!(tracker.unfinished(), vec![second]);
+        assert_eq!(tracker.take_ready(), vec![second]);
+        tracker.finish(&g, second);
+        assert_eq!(tracker.unfinished(), Vec::<usize>::new());
+    }
+
     /// Edges added mid-build (re-analysis found a generated input) make a
     /// ready product wait again for a producer that has not run.
     #[test]

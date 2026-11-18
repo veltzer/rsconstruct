@@ -115,10 +115,6 @@ impl Processor for MarpProcessor {
         crate::processor::ProcessorBase::config_json(&self.config)
     }
 
-    fn clean(&self, product: &Product, verbose: bool) -> Result<usize> {
-        crate::processor::ProcessorBase::clean(product, &product.processor, verbose)
-    }
-
     fn required_tools(&self) -> Vec<String> {
         crate::processor::with_declared_tools(
             vec![self.config.standard.command.clone(), "node".into()],

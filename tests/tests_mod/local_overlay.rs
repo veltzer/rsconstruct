@@ -351,3 +351,53 @@ fn user_config_rejects_sections_other_than_build() {
         "error must say what is allowed and what was found: {stderr}"
     );
 }
+
+/// A type or unknown-field error is found in the merged config, so the
+/// message names every file that was merged. It used to name
+/// rsconstruct.toml alone, even when the typo was in the overlay.
+#[test]
+fn config_error_names_every_merged_file() {
+    let temp_dir = setup_project_with_config("[build]\nparallel = 2\n");
+    write_file(
+        temp_dir.path(),
+        "rsconstruct.local.toml",
+        "[build]\nparalel = 4\n",
+    );
+    let output = run_rsconstruct(temp_dir.path(), &["toml", "check"]);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert_eq!(output.status.code(), Some(2), "{stderr}");
+    assert!(
+        stderr.contains("rsconstruct.toml") && stderr.contains("rsconstruct.local.toml"),
+        "error must name both merged files: {stderr}"
+    );
+}
+
+/// `toml check` rejects what every building command rejects: compression
+/// with the hardlink restore method used to pass the check and fail later.
+#[test]
+fn toml_check_rejects_compression_with_hardlink_restore() {
+    let temp_dir =
+        setup_project_with_config("[cache]\ncompression = true\nrestore_method = \"hardlink\"\n");
+    let output = run_rsconstruct(temp_dir.path(), &["toml", "check"]);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert_eq!(output.status.code(), Some(2), "{stderr}");
+    assert!(stderr.contains("compression"), "{stderr}");
+}
+
+/// Discovery converges when a pass declares no new file. With a cap of one
+/// pass, a project whose products feed nothing used to fail as
+/// "did not converge", because the check looked at new products.
+#[test]
+fn one_discovery_pass_is_enough_when_nothing_is_routed() {
+    let temp_dir = setup_project_with_config(
+        "[build]\nmax_discovery_passes = 1\n\n[processor.generator.tera]\nsrc_dirs = [\"tera.templates\"]\n",
+    );
+    write_file(temp_dir.path(), "tera.templates/hello.txt.tera", "hello");
+    let output = run_rsconstruct(temp_dir.path(), &["build"]);
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(temp_dir.path().join("hello.txt").exists());
+}

@@ -445,6 +445,42 @@ mod tests {
         src.parse().unwrap()
     }
 
+    /// Sections are added in sorted order, whatever order the set yields,
+    /// so the same detection writes the same file every time.
+    #[test]
+    fn detected_processors_are_written_in_sorted_order() {
+        let detected: HashSet<String> = [
+            "processor.checker.ruff",
+            "processor.generator.tera",
+            "processor.checker.ascii",
+            "processor.checker.pylint",
+            "processor.checker.make",
+        ]
+        .iter()
+        .map(ToString::to_string)
+        .collect();
+        let mut d = doc("");
+        let table = processor_table(&mut d).unwrap();
+        for name in sorted(&detected) {
+            add_section(table, "processor", name).unwrap();
+        }
+        let text = d.to_string();
+        let positions: Vec<usize> = [
+            "[processor.checker.ascii]",
+            "[processor.checker.make]",
+            "[processor.checker.pylint]",
+            "[processor.checker.ruff]",
+            "[processor.generator.tera]",
+        ]
+        .iter()
+        .map(|h| {
+            text.find(h)
+                .unwrap_or_else(|| panic!("{h} missing in {text}"))
+        })
+        .collect();
+        assert!(positions.is_sorted(), "{text}");
+    }
+
     /// Sections nest by name segment, and removing the last processor of a
     /// type takes the empty type table with it.
     #[test]
