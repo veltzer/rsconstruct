@@ -138,7 +138,7 @@ output_files = [
 | `inputs` | array of strings | no | Literal input file paths; each must exist or be an upstream processor's declared output |
 | `input_globs` | array of strings | no | Glob patterns resolved to input files |
 | `output_files` | array of strings | no | Output file paths produced by the command |
-| `output_dirs` | array of strings | no | Output directories produced by the command (cached as a tree) |
+| `output_dirs` | array of strings | no | Output directories produced by the command (cached as a tree: every regular file with its content and mode, every symbolic link as a link with its target, dangling ones included; links are not followed) |
 
 At least one of `inputs` or `input_globs` must be specified, and at least one
 of `output_files` or `output_dirs`.

@@ -230,9 +230,12 @@ impl ObjectStore {
         let checksums: Vec<&str> = match &descriptor {
             super::CacheDescriptor::Marker => Vec::new(),
             super::CacheDescriptor::Blob { checksum, .. } => vec![checksum.as_str()],
-            super::CacheDescriptor::Tree { entries } => {
-                entries.iter().map(|e| e.checksum.as_str()).collect()
-            }
+            // A symlink entry names no object.
+            super::CacheDescriptor::Tree { entries } => entries
+                .iter()
+                .filter(|e| e.link.is_none())
+                .map(|e| e.checksum.as_str())
+                .collect(),
         };
         for checksum in checksums {
             if !super::is_object_checksum(checksum) {
@@ -242,6 +245,8 @@ impl ObjectStore {
             }
         }
         if let super::CacheDescriptor::Tree { entries } = &descriptor {
+            super::validate_tree_entries(entries)
+                .with_context(|| format!("Remote cache descriptor {remote_key} rejected"))?;
             for entry in entries {
                 let path = super::safe_entry_path(&entry.path)
                     .with_context(|| format!("Remote cache descriptor {remote_key} rejected"))?;
@@ -308,6 +313,70 @@ mod tests {
 
         let checksum = ObjectStore::calculate_checksum_bytes(b"never stored");
         assert!(!store.object_available(&ctx, &checksum));
+    }
+
+    /// A remote that takes descriptors but fails every object upload, and
+    /// records the keys it was asked to store.
+    struct ObjectsFailRemote {
+        uploads: std::sync::Arc<parking_lot::Mutex<Vec<String>>>,
+    }
+
+    impl crate::remote_cache::RemoteCache for ObjectsFailRemote {
+        fn exists(&self, _ctx: &BuildContext, _key: &str) -> anyhow::Result<bool> {
+            Ok(false)
+        }
+        fn upload(
+            &self,
+            _ctx: &BuildContext,
+            key: &str,
+            _src: &std::path::Path,
+        ) -> anyhow::Result<()> {
+            self.uploads.lock().push(key.to_string());
+            anyhow::ensure!(!key.starts_with("objects/"), "upload of {key} refused");
+            Ok(())
+        }
+        fn download_bytes(
+            &self,
+            _ctx: &BuildContext,
+            _key: &str,
+        ) -> anyhow::Result<Option<Vec<u8>>> {
+            Ok(None)
+        }
+    }
+
+    /// A descriptor is published only when the objects it names reached
+    /// the remote: alone, it is an entry no machine can restore. A marker
+    /// names no object and is always published.
+    #[test]
+    fn a_descriptor_is_not_pushed_without_its_objects() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let ctx = BuildContext::new();
+        ctx.set_mtime_check(false);
+        let uploads = std::sync::Arc::new(parking_lot::Mutex::new(Vec::new()));
+        let mut store =
+            ObjectStore::new_with_remote(&tmp.path().join("a"), "a.redb", &tmp.path().join("r"));
+        store.remote = Some(Box::new(ObjectsFailRemote {
+            uploads: std::sync::Arc::clone(&uploads),
+        }));
+
+        let out = tmp.path().join("out.txt");
+        fs::write(&out, b"produced bytes").unwrap();
+        store.store_blob_descriptor(&ctx, "0bcdbeef", &out).unwrap();
+        store.store_marker(&ctx, "0marker0").unwrap();
+
+        let uploads = uploads.lock();
+        assert!(
+            uploads.iter().any(|key| key.starts_with("objects/")),
+            "the object push was attempted: {uploads:?}"
+        );
+        assert!(
+            !uploads.contains(&"descriptors/0bcdbeef".to_string()),
+            "{uploads:?}"
+        );
+        assert!(
+            uploads.contains(&"descriptors/0marker0".to_string()),
+            "{uploads:?}"
+        );
     }
 
     /// The whole point of finding 12's remote-cache item: a machine with a

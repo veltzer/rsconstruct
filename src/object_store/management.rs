@@ -86,7 +86,9 @@ impl ObjectStore {
                     }
                     CacheDescriptor::Tree { entries } => {
                         for entry in entries {
-                            referenced.insert(entry.checksum);
+                            if entry.link.is_none() {
+                                referenced.insert(entry.checksum);
+                            }
                         }
                     }
                 }
@@ -254,7 +256,8 @@ impl ObjectStore {
                     .iter()
                     .map(|e| CacheListOutput {
                         path: e.path.clone(),
-                        exists: self.has_object(&e.checksum),
+                        // A symlink has no object to be missing.
+                        exists: e.link.is_some() || self.has_object(&e.checksum),
                     })
                     .collect(),
             };
@@ -296,7 +299,9 @@ impl ObjectStore {
                 CacheDescriptor::Tree { ref entries } => {
                     proc_stats.output_count += entries.len();
                     for entry in entries {
-                        proc_stats.output_bytes += self.object_size(&entry.checksum);
+                        if entry.link.is_none() {
+                            proc_stats.output_bytes += self.object_size(&entry.checksum);
+                        }
                     }
                 }
             }

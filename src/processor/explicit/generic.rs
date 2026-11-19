@@ -226,7 +226,10 @@ fn plugin_create(toml: &toml::Value) -> anyhow::Result<Box<dyn crate::processor:
 }
 inventory::submit! {
     crate::registries::ProcessorPlugin {
-        version: 1,
+        // 2: symbolic links under `output_dirs` are cached as links. An
+        // entry from before recorded them as regular files, and restoring
+        // from one would replace the links with copies.
+        version: 2,
         name: "generic",
         processor_type: crate::processor::ProcessorType::Explicit,
         create: plugin_create,

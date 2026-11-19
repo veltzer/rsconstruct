@@ -20,6 +20,7 @@ single eslint invocation for better performance.
 
 If an ESLint config file exists (`.eslintrc*` or `eslint.config.*`), it is
 automatically added as an extra input so that configuration changes trigger rebuilds.
+So are `.eslintignore` and `package.json` (which may carry an `eslintConfig` key).
 
 ## Source Files
 

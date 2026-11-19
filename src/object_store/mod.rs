@@ -59,6 +59,90 @@ pub fn walk_files(dir: &Path) -> Result<Vec<PathBuf>> {
     Ok(result)
 }
 
+/// Something a tool left under an output directory.
+pub enum TreeItem {
+    File(PathBuf),
+    /// A symbolic link and what it points at, exactly as the tool wrote it.
+    Link {
+        path: PathBuf,
+        target: PathBuf,
+    },
+}
+
+/// Collect what is under an output directory without following symbolic
+/// links: a link is an item of its own, whatever it points at.
+///
+/// `walk_files` follows them, which is right for the store's own
+/// directories (they hold none) and wrong for a tool's output: a link to a
+/// file was cached as a second regular file, a link to a directory as a
+/// copy of that whole directory, and a dangling link was dropped, so a
+/// restored tree was not the tree the tool had written.
+pub fn walk_tree(dir: &Path) -> Result<Vec<TreeItem>> {
+    let mut result = Vec::new();
+    let mut stack = vec![dir.to_path_buf()];
+    while let Some(current) = stack.pop() {
+        let entries = match fs::read_dir(&current) {
+            Ok(entries) => entries,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => continue,
+            Err(e) => {
+                return Err(e)
+                    .with_context(|| format!("Failed to read directory {}", current.display()));
+            }
+        };
+        for entry in entries {
+            let entry = entry.with_context(|| {
+                format!("Failed to read an entry of directory {}", current.display())
+            })?;
+            let path = entry.path();
+            // `DirEntry::file_type` does not follow a link.
+            let file_type = entry
+                .file_type()
+                .with_context(|| format!("Failed to stat {}", path.display()))?;
+            if file_type.is_symlink() {
+                let target = fs::read_link(&path)
+                    .with_context(|| format!("Failed to read symlink {}", path.display()))?;
+                result.push(TreeItem::Link { path, target });
+            } else if file_type.is_dir() {
+                stack.push(path);
+            } else if file_type.is_file() {
+                result.push(TreeItem::File(path));
+            }
+        }
+    }
+    Ok(result)
+}
+
+/// Whether `path` is a symbolic link pointing at exactly `target`.
+fn is_link_to(path: &Path, target: &str) -> bool {
+    fs::read_link(path).is_ok_and(|current| current == Path::new(target))
+}
+
+/// Reject a tree in which one entry lies below another entry that is a
+/// symbolic link. A tree recorded here never has one (`walk_tree` does not
+/// descend through links); a descriptor from elsewhere that did would have
+/// the restore write through the link, to wherever it points.
+fn validate_tree_entries(entries: &[TreeEntry]) -> Result<()> {
+    let links: std::collections::HashSet<&Path> = entries
+        .iter()
+        .filter(|e| e.link.is_some())
+        .map(|e| Path::new(&e.path))
+        .collect();
+    for entry in entries {
+        if let Some(link) = Path::new(&entry.path)
+            .ancestors()
+            .skip(1)
+            .find(|dir| links.contains(dir))
+        {
+            anyhow::bail!(
+                "cache descriptor entry '{}' lies below the symlink entry '{}'",
+                entry.path,
+                link.display()
+            );
+        }
+    }
+    Ok(())
+}
+
 /// Reject descriptor entry paths with `..` components — they could write
 /// (restore) or delete (stale-output cleanup via `previous_tree_paths`)
 /// outside the project root. Absolute paths are additionally rejected at the
@@ -204,9 +288,15 @@ pub enum CacheDescriptor {
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct TreeEntry {
     pub(super) path: String,
+    /// The object holding the file's content; empty for a symbolic link,
+    /// which has no object.
     pub(super) checksum: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub(super) mode: Option<u32>,
+    /// The target of a symbolic link, as the tool wrote it. `None` for a
+    /// regular file.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub(super) link: Option<String>,
 }
 
 /// Per-processor cache statistics
@@ -301,5 +391,77 @@ impl ObjectStore {
         store.remote_push = true;
         store.remote_pull = true;
         store
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn entry(path: &str, link: Option<&str>) -> TreeEntry {
+        TreeEntry {
+            path: path.to_string(),
+            checksum: String::new(),
+            mode: None,
+            link: link.map(str::to_string),
+        }
+    }
+
+    /// A tree with an entry below one of its own symlink entries would be
+    /// restored through the link, to wherever it points. No tree recorded
+    /// here has that shape, so one that does is rejected.
+    #[test]
+    fn an_entry_below_a_symlink_entry_is_rejected() {
+        let ok = [
+            entry("out/link", Some("/elsewhere")),
+            entry("out/linked", None),
+            entry("out/sub/file", None),
+        ];
+        validate_tree_entries(&ok).unwrap();
+
+        let through = [
+            entry("out/link", Some("/elsewhere")),
+            entry("out/link/sub/file", None),
+        ];
+        let err = validate_tree_entries(&through).unwrap_err().to_string();
+        assert!(err.contains("out/link/sub/file"), "{err}");
+    }
+
+    /// The walk reports a link as a link, to a file, to a directory or to
+    /// nothing, and does not descend through one.
+    #[test]
+    fn walk_tree_does_not_follow_links() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let root = tmp.path();
+        fs::create_dir_all(root.join("sub")).unwrap();
+        fs::write(root.join("sub/file"), "x").unwrap();
+        crate::platform::symlink_file(Path::new("sub"), &root.join("dir-link")).unwrap();
+        crate::platform::symlink_file(Path::new(".."), &root.join("sub/up")).unwrap();
+        crate::platform::symlink_file(Path::new("nowhere"), &root.join("dangling")).unwrap();
+
+        let mut seen: Vec<String> = walk_tree(root)
+            .unwrap()
+            .into_iter()
+            .map(|item| match item {
+                TreeItem::File(path) => {
+                    format!("file {}", path.strip_prefix(root).unwrap().display())
+                }
+                TreeItem::Link { path, target } => format!(
+                    "link {} -> {}",
+                    path.strip_prefix(root).unwrap().display(),
+                    target.display()
+                ),
+            })
+            .collect();
+        seen.sort();
+        assert_eq!(
+            seen,
+            [
+                "file sub/file",
+                "link dangling -> nowhere",
+                "link dir-link -> sub",
+                "link sub/up -> ..",
+            ]
+        );
     }
 }

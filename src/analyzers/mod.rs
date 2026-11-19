@@ -380,7 +380,15 @@ impl Analysis {
                 let parts = analyzer
                     .fingerprint_parts(ctx)
                     .with_context(|| format!("Failed to set up analyzer '{iname}'"))?;
-                let parts: Vec<&str> = parts.iter().map(String::as_str).collect();
+                // The analyzer's own version (see `AnalyzerPlugin::version`).
+                // An instance is named `<analyzer>` or `<analyzer>.<name>`.
+                let type_name = iname.split('.').next().unwrap_or(&iname);
+                let version = crate::registries::find_analyzer_plugin(type_name)
+                    .with_context(|| format!("Analyzer '{iname}' is not registered"))?
+                    .version;
+                let version = format!("analyzer version = {version}");
+                let mut parts: Vec<&str> = parts.iter().map(String::as_str).collect();
+                parts.push(&version);
                 Ok(ActiveAnalyzer {
                     fingerprint: crate::checksum::hash_parts(&parts),
                     iname,

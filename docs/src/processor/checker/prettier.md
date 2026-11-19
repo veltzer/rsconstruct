@@ -13,7 +13,7 @@ Runs `prettier --check <files>`. Prettier exits non-zero when a file is not form
 [warn] Code style issues found in the above file. Run Prettier with --write to fix.
 ```
 
-Prettier's own config file is read as usual, and any of `.prettierrc`, `.prettierrc.json`, `.prettierrc.js`, `.prettierrc.yml`, `.prettierrc.yaml`, `.prettierrc.toml`, `.prettierrc.cjs`, `.prettierrc.mjs`, `prettier.config.js`, `prettier.config.cjs` and `prettier.config.mjs` that exists is an input (`dep_auto`), so editing it re-checks every file.
+Prettier's own config file is read as usual, and any of `.prettierrc`, `.prettierrc.json`, `.prettierrc.js`, `.prettierrc.yml`, `.prettierrc.yaml`, `.prettierrc.toml`, `.prettierrc.cjs`, `.prettierrc.mjs`, `.prettierrc.json5`, `prettier.config.js`, `prettier.config.cjs`, `prettier.config.mjs` and `prettier.config.ts` that exists is an input (`dep_auto`), so editing it re-checks every file. So are the other files Prettier's verdict depends on: `.prettierignore`, `.editorconfig` (which Prettier reads by default) and `package.json` (which may carry a `prettier` key).
 
 This processor checks only. To reformat, run `prettier --write` yourself.
 

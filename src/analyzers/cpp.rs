@@ -328,6 +328,7 @@ inventory::submit! {
         name: "cpp",
         description: "Scan C/C++ source files for #include dependencies (using compiler -MM)",
         is_builtin: false,
+        version: 1,
         create: |toml_value, verbose| {
             let cfg: CppAnalyzerConfig = toml::from_str(&toml::to_string(toml_value)?)?;
             Ok(Box::new(CppDepAnalyzer::new(cfg, verbose)))

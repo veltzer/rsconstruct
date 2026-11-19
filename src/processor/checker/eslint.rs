@@ -22,7 +22,7 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     fields: &[],
     omit_standard_fields: &["formats", "output_dir"],
     scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &[".js", ".jsx", ".ts", ".tsx", ".mjs", ".cjs"], src_exclude_dirs: &[] }),
-    defaults: Some(crate::config::ProcessorDefaults { command: "eslint", dep_auto: &[".eslintrc", ".eslintrc.json", ".eslintrc.js", ".eslintrc.yml", ".eslintrc.yaml", ".eslintrc.cjs", "eslint.config.js", "eslint.config.mjs", "eslint.config.cjs"], ..crate::config::ProcessorDefaults::EMPTY }),
+    defaults: Some(crate::config::ProcessorDefaults { command: "eslint", dep_auto: &[".eslintrc", ".eslintrc.json", ".eslintrc.js", ".eslintrc.yml", ".eslintrc.yaml", ".eslintrc.cjs", "eslint.config.js", "eslint.config.mjs", "eslint.config.cjs", "eslint.config.ts", "eslint.config.mts", "eslint.config.cts", ".eslintignore", "package.json"], ..crate::config::ProcessorDefaults::EMPTY }),
     defconfig_json: crate::registries::default_config_json::<crate::config::StandardConfig>,
     keywords: &["javascript", "typescript", "linter", "js", "ts", "jsx", "tsx", "node", "npm", "web", "frontend"],
     description: "Lint JavaScript/TypeScript files using ESLint",

@@ -736,3 +736,22 @@ fn a_damaged_descriptor_fails_every_cache_listing() {
         );
     }
 }
+
+/// With no remote cache configured nothing is pushed and nothing is said
+/// about pushing. `remote_push` defaults to true either way, and a build
+/// without a remote once warned that every cache entry was "not pushed".
+#[test]
+fn a_build_without_a_remote_says_nothing_about_pushing() {
+    let temp_dir = setup_test_project();
+    let project_path = temp_dir.path();
+    fs::write(project_path.join("tera.templates/a.txt.tera"), "hello").unwrap();
+
+    let build = run_rsconstruct(project_path, &["build"]);
+    assert!(build.status.success());
+    let text = format!(
+        "{}{}",
+        String::from_utf8_lossy(&build.stdout),
+        String::from_utf8_lossy(&build.stderr)
+    );
+    assert!(!text.contains("remote cache"), "{text}");
+}

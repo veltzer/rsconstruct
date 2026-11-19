@@ -14,6 +14,10 @@ Each test file is checked individually — a failing test causes the build to fa
 - Input: `tests/**/*.py`
 - Output: none (checker — pass/fail only)
 
+A `conftest.py` is not run as a test. It is an input of every test file in
+its directory and in the directories below it, as pytest loads it for them,
+so changing a fixture reruns the tests that can see it.
+
 ## Configuration
 
 ```toml

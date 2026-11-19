@@ -356,6 +356,7 @@ inventory::submit! {
         name: "sass",
         description: "Scan Sass/SCSS files for @use, @forward and @import dependencies",
         is_builtin: true,
+        version: 1,
         create: |toml_value, _| {
             let cfg: SassAnalyzerConfig = toml::from_str(&toml::to_string(toml_value)?)?;
             Ok(Box::new(SassDepAnalyzer::new(cfg)))

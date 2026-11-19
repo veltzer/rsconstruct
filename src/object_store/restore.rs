@@ -2,7 +2,7 @@ use anyhow::{Context, Result};
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use super::{CacheDescriptor, ExplainAction, ObjectStore, RebuildReason};
+use super::{CacheDescriptor, ExplainAction, ObjectStore, RebuildReason, TreeEntry};
 
 impl ObjectStore {
     /// Restore outputs from a cache descriptor. Returns Ok(true) if restored.
@@ -57,24 +57,16 @@ impl ObjectStore {
                 Ok(true)
             }
             CacheDescriptor::Tree { entries } => {
+                super::validate_tree_entries(&entries)?;
                 for entry in &entries {
                     let file_path = super::safe_entry_path(&entry.path)?;
-                    if file_path.exists() {
-                        if let Some(existing) = Self::verify_checksum(ctx, file_path)
-                            && existing == entry.checksum
-                        {
-                            continue;
-                        }
-                        fs::remove_file(file_path).with_context(|| {
-                            format!(
-                                "Failed to remove stale cached file: {}",
-                                file_path.display()
-                            )
-                        })?;
+                    if Self::entry_is_current(ctx, entry) {
+                        continue;
                     }
-                    if !self.ensure_object(ctx, &entry.checksum) {
+                    if entry.link.is_none() && !self.ensure_object(ctx, &entry.checksum) {
                         return Ok(false);
                     }
+                    Self::remove_stale_entry(file_path)?;
                     if let Some(parent) = file_path.parent() {
                         fs::create_dir_all(parent).with_context(|| {
                             format!(
@@ -82,6 +74,12 @@ impl ObjectStore {
                                 parent.display()
                             )
                         })?;
+                    }
+                    if let Some(target) = &entry.link {
+                        crate::platform::symlink_file(Path::new(target), file_path).with_context(
+                            || format!("Failed to restore symlink: {}", file_path.display()),
+                        )?;
+                        continue;
                     }
                     self.restore_file(&entry.checksum, file_path, entry.mode)
                         .with_context(|| {
@@ -91,6 +89,40 @@ impl ObjectStore {
                 Ok(true)
             }
         }
+    }
+
+    /// Whether a tree entry is on disk as recorded: a symbolic link with
+    /// the recorded target, or a regular file with the recorded content. A
+    /// link standing where a file was recorded is not current, whatever it
+    /// points at, and neither is a file where a link was recorded.
+    fn entry_is_current(ctx: &crate::build_context::BuildContext, entry: &TreeEntry) -> bool {
+        let path = Path::new(&entry.path);
+        match &entry.link {
+            Some(target) => super::is_link_to(path, target),
+            None => {
+                fs::symlink_metadata(path).is_ok_and(|m| m.is_file())
+                    && Self::verify_checksum(ctx, path).as_ref() == Some(&entry.checksum)
+            }
+        }
+    }
+
+    /// Remove whatever stands where a tree entry is about to be restored:
+    /// nothing, a file, a link, or a directory left by an earlier shape of
+    /// the tree.
+    fn remove_stale_entry(path: &Path) -> Result<()> {
+        let metadata = match fs::symlink_metadata(path) {
+            Ok(metadata) => metadata,
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+            Err(e) => {
+                return Err(e).with_context(|| format!("Failed to stat {}", path.display()));
+            }
+        };
+        if metadata.is_dir() {
+            fs::remove_dir_all(path)
+        } else {
+            fs::remove_file(path)
+        }
+        .with_context(|| format!("Failed to remove stale cached entry: {}", path.display()))
     }
 
     /// Checksum an output for verification, consulting the persistent mtime
@@ -134,10 +166,7 @@ impl ObjectStore {
                 // product now declares but the descriptor never saw would
                 // otherwise go unnoticed.
                 output_paths.iter().any(|p| !p.exists())
-                    || entries.iter().any(|e| {
-                        let p = Path::new(&e.path);
-                        !p.exists() || Self::verify_checksum(ctx, p).as_ref() != Some(&e.checksum)
-                    })
+                    || entries.iter().any(|e| !Self::entry_is_current(ctx, e))
             }
         }
     }
@@ -169,9 +198,9 @@ impl ObjectStore {
                     clippy::unnecessary_fold,
                     reason = "must not short-circuit: every object has to be pulled"
                 )]
-                entries
-                    .iter()
-                    .fold(true, |ok, e| self.ensure_object(ctx, &e.checksum) && ok)
+                entries.iter().fold(true, |ok, e| {
+                    (e.link.is_some() || self.ensure_object(ctx, &e.checksum)) && ok
+                })
             }
         }
     }
@@ -234,18 +263,15 @@ impl ObjectStore {
                     let display = missing.display().to_string();
                     if entries
                         .iter()
-                        .all(|e| self.object_available(ctx, &e.checksum))
+                        .all(|e| e.link.is_some() || self.object_available(ctx, &e.checksum))
                     {
                         return ExplainAction::Restore(RebuildReason::OutputMissing(display));
                     }
                     return ExplainAction::Rebuild(RebuildReason::OutputMissing(display));
                 }
                 for entry in &entries {
-                    let p = Path::new(&entry.path);
-                    let needs_restore = !p.exists()
-                        || Self::verify_checksum(ctx, p).as_ref() != Some(&entry.checksum);
-                    if needs_restore {
-                        if self.object_available(ctx, &entry.checksum) {
+                    if !Self::entry_is_current(ctx, entry) {
+                        if entry.link.is_some() || self.object_available(ctx, &entry.checksum) {
                             return ExplainAction::Restore(RebuildReason::OutputMissing(
                                 entry.path.clone(),
                             ));

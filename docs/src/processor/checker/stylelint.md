@@ -17,7 +17,8 @@ This processor supports batch mode.
 
 If a stylelint config file exists (`.stylelintrc*` or `stylelint.config.*`), it
 is automatically added as an extra input so that configuration changes trigger
-rebuilds.
+rebuilds. So are `.stylelintignore` and `package.json` (which may carry a
+`stylelint` key).
 
 ## Source Files
 

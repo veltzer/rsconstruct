@@ -2,7 +2,7 @@ use anyhow::{Context, Result};
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use super::{CacheDescriptor, ObjectStore, TreeEntry, walk_files};
+use super::{CacheDescriptor, ObjectStore, TreeEntry, TreeItem, walk_tree};
 
 impl ObjectStore {
     pub(super) fn descriptor_path(&self, descriptor_key: &str) -> PathBuf {
@@ -210,6 +210,12 @@ impl ObjectStore {
         objects_pushed: bool,
     ) -> Result<()> {
         self.store_descriptor(cache_key, descriptor)?;
+        // `remote_push` defaults to true whether or not a remote is
+        // configured; with none there is nothing to push and nothing to
+        // warn about.
+        if self.remote.is_none() {
+            return Ok(());
+        }
         if self.remote_push && !objects_pushed {
             crate::output::warn(&format!(
                 "cache entry {cache_key} not pushed to the remote cache: an object it names could not be pushed"
@@ -284,7 +290,25 @@ impl ObjectStore {
                 "Expected output directory not produced: {}",
                 dir.display()
             );
-            for file_path in walk_files(dir)? {
+            for item in walk_tree(dir)? {
+                let file_path = match item {
+                    TreeItem::File(path) => path,
+                    TreeItem::Link { path, target } => {
+                        if is_foreign(&path) {
+                            continue;
+                        }
+                        let target = target.to_str().with_context(|| {
+                            format!("Symlink {} has a non-UTF-8 target", path.display())
+                        })?;
+                        entries.push(TreeEntry {
+                            path: path.display().to_string(),
+                            checksum: String::new(),
+                            mode: None,
+                            link: Some(target.to_string()),
+                        });
+                        continue;
+                    }
+                };
                 if is_foreign(&file_path) {
                     continue;
                 }
@@ -301,6 +325,7 @@ impl ObjectStore {
                     path: file_path.display().to_string(),
                     checksum,
                     mode,
+                    link: None,
                 });
             }
         }
@@ -324,6 +349,7 @@ impl ObjectStore {
                 path: Self::path_string(file_path),
                 checksum,
                 mode,
+                link: None,
             });
         }
 
@@ -336,10 +362,9 @@ impl ObjectStore {
                 entries: ref prev_entries,
             }) => {
                 entries.len() != prev_entries.len()
-                    || entries
-                        .iter()
-                        .zip(prev_entries.iter())
-                        .any(|(a, b)| a.checksum != b.checksum || a.path != b.path)
+                    || entries.iter().zip(prev_entries.iter()).any(|(a, b)| {
+                        a.checksum != b.checksum || a.path != b.path || a.link != b.link
+                    })
             }
             _ => true,
         };

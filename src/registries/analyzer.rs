@@ -14,6 +14,12 @@ pub struct AnalyzerPlugin {
     pub name: &'static str,
     pub description: &'static str,
     pub is_builtin: bool,
+    /// Bumped whenever a scan of an unchanged source would find something
+    /// else: a reference form newly recognised, a parsing fix. It is part
+    /// of the fingerprint every deps-cache entry is scanned under, so the
+    /// bump has every source scanned again; without it a fixed analyzer
+    /// kept serving what the broken one had found.
+    pub version: u32,
     /// Create an analyzer from its TOML config section.
     /// Receives the raw `[analyzer.IN]` table value and a verbose flag. The
     /// instance name is not passed: tagging deps-cache entries with it is

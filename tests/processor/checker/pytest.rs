@@ -88,3 +88,44 @@ fn pytest_failing_test() {
         "Build should fail with failing test"
     );
 }
+
+/// A `conftest.py` beside the tests is an input of each of them and not a
+/// test itself. It used to be scanned as a product (pytest collects nothing
+/// from it and exits 5), and a fixture changed in it left the cached test
+/// results in place: a test the change broke stayed green.
+#[test]
+fn pytest_conftest_is_an_input_of_the_tests_below_it() {
+    require_tool("pytest");
+
+    let temp_dir = setup_pytest_project();
+    let project_path = temp_dir.path();
+    let conftest = project_path.join("tests/conftest.py");
+    let fixture = |value: u32| {
+        format!("import pytest\n\n\n@pytest.fixture\ndef number():\n    return {value}\n")
+    };
+    fs::write(&conftest, fixture(1)).unwrap();
+    fs::write(
+        project_path.join("tests/test_number.py"),
+        "def test_number(number):\n    assert number == 1\n",
+    )
+    .unwrap();
+
+    let first = run_rsconstruct_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
+    let stdout = String::from_utf8_lossy(&first.stdout);
+    assert!(
+        first.status.success(),
+        "{stdout}{}",
+        String::from_utf8_lossy(&first.stderr)
+    );
+    assert!(
+        !stdout.contains("conftest.py"),
+        "conftest.py must not be run as a test: {stdout}"
+    );
+
+    fs::write(&conftest, fixture(2)).unwrap();
+    let second = run_rsconstruct_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    assert!(
+        !second.status.success(),
+        "the fixture change breaks the test, and the build must see it"
+    );
+}

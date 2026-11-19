@@ -185,12 +185,32 @@ impl MdbookProcessor {
             }
         }
 
+        let mut chapters: Vec<PathBuf> = Vec::new();
         for file in files_under(&src_dir)? {
-            if file.extension().and_then(|e| e.to_str()) != Some("md") {
+            if file.extension().and_then(|e| e.to_str()) == Some("md") {
+                chapters.push(file.clone());
+            } else {
                 relative.insert(relative_slash_path(&src_dir, &file));
             }
             if !sources.contains(&file) {
                 sources.push(file);
+            }
+        }
+        // What the chapters pull in with `{{#include}}` and its relatives
+        // from outside `src/` (example code kept beside the book, say) is
+        // part of the pages too: unlisted, an edit to such a file left the
+        // book cached with the old text. An included file may include
+        // further ones, so each new one is scanned in turn.
+        let mut to_scan = chapters;
+        while let Some(file) = to_scan.pop() {
+            let content = fs::read_to_string(&file)
+                .with_context(|| format!("Failed to read {}", file.display()))?;
+            for included in included_files(&file, &content) {
+                // A file that is not there is mdbook's error to report.
+                if included.is_file() && !sources.contains(&included) {
+                    sources.push(included.clone());
+                    to_scan.push(included);
+                }
             }
         }
 
@@ -262,6 +282,25 @@ impl MdbookProcessor {
             self.config.loose_manifest,
         )
     }
+}
+
+/// The files `content`, the text of `file`, pulls in with mdbook's
+/// `{{#include PATH}}`, `{{#rustdoc_include PATH}}` and `{{#playground
+/// PATH}}`, resolved against `file`'s directory as mdbook resolves them. A
+/// `:range` or `:anchor` after the path is not part of it; an escaped
+/// `\{{#include …}}` is text, not a directive.
+fn included_files(file: &Path, content: &str) -> Vec<PathBuf> {
+    static DIRECTIVE: std::sync::OnceLock<regex::Regex> = std::sync::OnceLock::new();
+    let directive = DIRECTIVE.get_or_init(|| {
+        regex::Regex::new(r"(\\?)\{\{\s*#(?:include|rustdoc_include|playground)\s+([^\s:}]+)")
+            .expect(crate::errors::INVALID_REGEX)
+    });
+    let dir = file.parent().unwrap_or_else(|| Path::new(""));
+    directive
+        .captures_iter(content)
+        .filter(|caps| caps[1].is_empty())
+        .map(|caps| crate::analyzers::lexical_normalize(&dir.join(&caps[2])))
+        .collect()
 }
 
 /// Extract the target paths from `[title](path)` links in `SUMMARY.md`.
@@ -437,6 +476,39 @@ mod tests {
             );
         }
         first.sources.clone()
+    }
+
+    /// A file a chapter includes from outside `src/` is a source, and so is
+    /// one that file includes in turn; an escaped directive and a missing
+    /// file add nothing. Editing such a file used to leave the book cached.
+    #[test]
+    fn included_files_outside_src_are_sources() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let book = tmp.path().join("book");
+        let book_toml = write_book(&book, "[book]\ntitle = \"Inc\"\n");
+        std::fs::create_dir_all(book.join("ex")).unwrap();
+        std::fs::write(book.join("ex/code.rs"), "fn main() {}\n").unwrap();
+        std::fs::write(book.join("ex/part.md"), "{{#include nested.txt}}\n").unwrap();
+        std::fs::write(book.join("ex/nested.txt"), "nested\n").unwrap();
+        std::fs::write(book.join("ex/escaped.txt"), "not included\n").unwrap();
+        std::fs::write(
+            book.join("src/ch1.md"),
+            "# Ch 1\n\n```rust\n{{#rustdoc_include ../ex/code.rs:2:5}}\n```\n\n\
+             {{#include ../ex/part.md}}\n\\{{#include ../ex/escaped.txt}}\n\
+             {{#include ../ex/missing.txt}}\n",
+        )
+        .unwrap();
+
+        let sources = plan_sources(&book_toml);
+        for included in ["ex/code.rs", "ex/part.md", "ex/nested.txt"] {
+            assert!(
+                sources.contains(&book.join(included)),
+                "{included}: {sources:?}"
+            );
+        }
+        for not_included in ["ex/escaped.txt", "ex/missing.txt"] {
+            assert!(!sources.contains(&book.join(not_included)), "{sources:?}");
+        }
     }
 
     /// Theme files (the default `theme/` or the `[output.html] theme`

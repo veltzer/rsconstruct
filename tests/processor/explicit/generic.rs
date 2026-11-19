@@ -312,3 +312,67 @@ sandbox_writable = ["runs.log"]
         "--inputs gen.sh a.txt --output-dirs outdir"
     );
 }
+
+/// Symbolic links under `output_dirs` are cached and restored as links: to
+/// a file, to a directory, and dangling. They used to be followed, so a
+/// restore turned a file link into a copy, a directory link into a copy of
+/// the directory, and dropped a dangling link.
+#[test]
+fn generic_output_dir_symlinks_are_restored_as_links() {
+    let temp_dir = setup(
+        r#"[processor.explicit.generic.links]
+command = "./links.sh"
+inputs = ["a.txt"]
+output_dirs = ["linked"]
+"#,
+    );
+    let root = temp_dir.path();
+    write_file(
+        root,
+        "links.sh",
+        "#!/bin/bash\nset -e\nmkdir -p linked/sub\necho a > linked/a.txt\necho s > linked/sub/s.txt\n\
+         ln -sfn a.txt linked/file-link\nln -sfn sub linked/dir-link\nln -sfn nowhere linked/dangling\n",
+    );
+    make_executable(&root.join("links.sh"));
+
+    let first = run_rsconstruct_json_with_env(root, &["build"], &[("NO_COLOR", "1")]);
+    assert!(first.exit_success, "build failed: {first:?}");
+
+    fs::remove_dir_all(root.join("linked")).unwrap();
+    let second = run_rsconstruct_json_with_env(root, &["build"], &[("NO_COLOR", "1")]);
+    assert!(second.exit_success, "restore failed: {second:?}");
+    assert_eq!(second.restored, 1, "{second:?}");
+
+    for (link, target) in [
+        ("file-link", "a.txt"),
+        ("dir-link", "sub"),
+        ("dangling", "nowhere"),
+    ] {
+        let path = root.join("linked").join(link);
+        assert_eq!(
+            fs::read_link(&path).unwrap_or_else(|e| panic!("{link} is not a link: {e}")),
+            Path::new(target)
+        );
+    }
+    assert_eq!(
+        fs::read_to_string(root.join("linked/dir-link/s.txt")).unwrap(),
+        "s\n"
+    );
+
+    // Restored, the tree is current: links are not judged by what they
+    // point at, so the dangling one does not force a restore every build.
+    let third = run_rsconstruct_json_with_env(root, &["build"], &[("NO_COLOR", "1")]);
+    assert!(third.exit_success, "{third:?}");
+    assert_eq!((third.success, third.restored), (0, 0), "{third:?}");
+
+    // A link replaced by a regular file with the same content is not the
+    // recorded tree: it is put back.
+    fs::remove_file(root.join("linked/file-link")).unwrap();
+    fs::write(root.join("linked/file-link"), "a\n").unwrap();
+    let fourth = run_rsconstruct_json_with_env(root, &["build"], &[("NO_COLOR", "1")]);
+    assert!(fourth.exit_success, "{fourth:?}");
+    assert_eq!(
+        fs::read_link(root.join("linked/file-link")).unwrap(),
+        Path::new("a.txt")
+    );
+}

@@ -42,36 +42,10 @@ impl MarkdownDepAnalyzer {
         let mut absent = Vec::new();
         let mut seen = HashSet::new();
 
-        // Match ![alt](path) and [text](path) — capture the path portion
-        // Excludes URLs (http://, https://, ftp://, data:, #anchors)
-        static REF_RE: OnceLock<Regex> = OnceLock::new();
-        let ref_re = REF_RE.get_or_init(|| {
-            Regex::new(r"!?\[(?:[^\]]*)\]\(([^)]+)\)").expect(errors::INVALID_REGEX)
-        });
-
         let source_dir = crate::processor::parent_dir(source);
 
-        for caps in ref_re.captures_iter(&content) {
-            let path_str = caps[1].trim();
-
-            // Skip URLs, anchors, and data URIs
-            if path_str.starts_with("http://")
-                || path_str.starts_with("https://")
-                || path_str.starts_with("ftp://")
-                || path_str.starts_with("data:")
-                || path_str.starts_with('#')
-            {
-                continue;
-            }
-
-            // Strip optional title: ![alt](path "title")
-            let path_str = path_str.split_whitespace().next().unwrap_or(path_str);
-            // Strip anchor fragments: path#section
-            let path_str = path_str.split('#').next().unwrap_or(path_str);
-
-            if path_str.is_empty() {
-                continue;
-            }
+        for path_str in reference_targets(&content) {
+            let path_str = path_str.as_str();
 
             // Try resolving relative to the source file's directory first,
             // then relative to the project root (cwd)
@@ -94,6 +68,85 @@ impl MarkdownDepAnalyzer {
 
         Ok(ScanResult::deps(refs, absent))
     }
+}
+
+/// The local paths a Markdown text refers to, each as written with its
+/// decoration removed. Recognised:
+///
+/// - inline links and images, `[text](path)` and `![alt](path "title")`,
+///   the path optionally in angle brackets (`(<my file.png>)`);
+/// - reference definitions, `[label]: path`, which is where the path of a
+///   `![alt][label]` lives;
+/// - the `src` and `href` attributes of inline HTML (`<img src="a.png">`).
+///
+/// URLs and bare `#anchors` are left out, a `#fragment` is cut off, and
+/// percent-escapes are decoded (`my%20file.png` is the file `my file.png`).
+fn reference_targets(content: &str) -> Vec<String> {
+    static INLINE_RE: OnceLock<Regex> = OnceLock::new();
+    static DEFINITION_RE: OnceLock<Regex> = OnceLock::new();
+    static ATTRIBUTE_RE: OnceLock<Regex> = OnceLock::new();
+    // The target of an inline link or a definition: `<anything>` or a run
+    // without whitespace; a title may follow and is not captured.
+    let inline_re = INLINE_RE.get_or_init(|| {
+        Regex::new(r"!?\[[^\]]*\]\(\s*(?:<([^>\n]*)>|([^)\s]+))[^)]*\)")
+            .expect(errors::INVALID_REGEX)
+    });
+    let definition_re = DEFINITION_RE.get_or_init(|| {
+        Regex::new(r"(?m)^ {0,3}\[[^\]\n]+\]:\s*(?:<([^>\n]*)>|(\S+))")
+            .expect(errors::INVALID_REGEX)
+    });
+    let attribute_re = ATTRIBUTE_RE.get_or_init(|| {
+        Regex::new(r#"(?i)<[a-z][^>]*?\s(?:src|href)\s*=\s*(?:"([^"]*)"|'([^']*)')"#)
+            .expect(errors::INVALID_REGEX)
+    });
+
+    let mut targets = Vec::new();
+    for re in [inline_re, definition_re, attribute_re] {
+        for caps in re.captures_iter(content) {
+            let Some(raw) = caps.get(1).or_else(|| caps.get(2)) else {
+                continue;
+            };
+            let raw = raw.as_str().trim();
+            // A scheme (`https:`, `mailto:`, `data:`) or a protocol-relative
+            // `//host` is not a file of the project.
+            let has_scheme = raw.split_once(':').is_some_and(|(scheme, _)| {
+                !scheme.is_empty()
+                    && scheme
+                        .chars()
+                        .all(|c| c.is_ascii_alphanumeric() || matches!(c, '+' | '-' | '.'))
+            });
+            if has_scheme || raw.starts_with("//") {
+                continue;
+            }
+            let path = raw.split('#').next().unwrap_or(raw);
+            if !path.is_empty() {
+                targets.push(percent_decode(path));
+            }
+        }
+    }
+    targets
+}
+
+/// `text` with its `%XX` escapes decoded. Text whose escapes do not decode
+/// to UTF-8 is returned as written.
+fn percent_decode(text: &str) -> String {
+    let bytes = text.as_bytes();
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        let hex = (bytes[i] == b'%')
+            .then(|| text.get(i + 1..i + 3))
+            .flatten()
+            .and_then(|pair| u8::from_str_radix(pair, 16).ok());
+        if let Some(byte) = hex {
+            out.push(byte);
+            i += 3;
+        } else {
+            out.push(bytes[i]);
+            i += 1;
+        }
+    }
+    String::from_utf8(out).unwrap_or_else(|_| text.to_string())
 }
 
 impl DepAnalyzer for MarkdownDepAnalyzer {
@@ -141,6 +194,9 @@ inventory::submit! {
         name: "markdown",
         description: "Scan Markdown files for local file dependencies",
         is_builtin: true,
+        // 2: reference-style links, HTML `src`/`href`, `<...>` and
+        // percent-encoded targets.
+        version: 2,
         create: |toml_value, _| {
             let cfg: MarkdownAnalyzerConfig = toml::from_str(&toml::to_string(toml_value)?)?;
             Ok(Box::new(MarkdownDepAnalyzer::new(cfg)))
@@ -149,5 +205,56 @@ inventory::submit! {
             toml::to_string_pretty(&MarkdownAnalyzerConfig::default()).ok()
         },
         known_fields: crate::registries::typed_known_fields::<MarkdownAnalyzerConfig>,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Every form a Markdown file names a local file in. Only the plain
+    /// inline form used to be seen, so an image named any other way was
+    /// not a dependency and editing it left the rendered output cached.
+    #[test]
+    fn reference_targets_cover_the_forms_markdown_names_a_file_in() {
+        let content = "\
+![plain](c.png)
+![titled](d.png \"a title\")
+[text](doc/page.md#section)
+![encoded](my%20img.png)
+![angle](<an image.png>)
+![by reference][r]
+<img src=\"b.png\" alt=\"x\">
+<a href='notes.txt'>notes</a>
+
+[r]: a.png \"title\"
+[site]: https://example.com/x.png
+[web](https://example.com) [mail](mailto:a@b.c) [top](#top) [cdn](//cdn/x.js)
+<img src=\"https://example.com/y.png\">
+";
+        let mut targets = reference_targets(content);
+        targets.sort();
+        assert_eq!(
+            targets,
+            [
+                "a.png",
+                "an image.png",
+                "b.png",
+                "c.png",
+                "d.png",
+                "doc/page.md",
+                "my img.png",
+                "notes.txt",
+            ]
+        );
+    }
+
+    #[test]
+    fn percent_decode_leaves_what_is_not_an_escape() {
+        assert_eq!(percent_decode("a%20b%2Fc"), "a b/c");
+        assert_eq!(percent_decode("100%.png"), "100%.png");
+        assert_eq!(percent_decode("bad%zz"), "bad%zz");
+        assert_eq!(percent_decode("caf%C3%A9"), "café");
+        assert_eq!(percent_decode("lone%FF"), "lone%FF");
     }
 }

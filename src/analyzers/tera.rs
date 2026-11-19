@@ -414,6 +414,18 @@ fn scan_template_recursive(
     // must too). The pattern mirrors WorkflowNamesFunction in
     // processor/generator/tera.rs; this used to be untracked — a renamed
     // workflow left stale rendered output cached indefinitely.
+    // 3d) copyright_years() — renders the years up to the current one, so
+    // the year is part of what the product is made from. Untracked, a file
+    // rendered in one year stayed cached with that year as its last until
+    // the template was next edited.
+    if !calls(&content, &["copyright_years"]).is_empty() {
+        use chrono::Datelike;
+        hash_pieces.push(format!(
+            "copyright_years_until:{}",
+            chrono::Local::now().year()
+        ));
+    }
+
     if !calls(&content, &["workflow_names"]).is_empty() {
         let matched = expand_glob(".github/workflows/*.yml")?;
         hash_pieces.push(format!("workflow_names_resolved:{}", matched.join("\n")));
@@ -581,6 +593,7 @@ inventory::submit! {
         name: "tera",
         description: "Scan Tera templates for include/import/extends dependencies",
         is_builtin: true,
+        version: 1,
         create: |toml_value, _| {
             let cfg: TeraAnalyzerConfig = toml::from_str(&toml::to_string(toml_value)?)?;
             Ok(Box::new(TeraDepAnalyzer::new(cfg)))
@@ -690,6 +703,22 @@ mod tests {
         TeraDepAnalyzer::new(TeraAnalyzerConfig::default())
             .scan_template(&ctx, &source, &file_index)
             .unwrap()
+    }
+
+    /// A template calling `copyright_years()` is made from the current
+    /// year too; one that does not call it is not.
+    #[test]
+    fn copyright_years_makes_the_year_a_hash_piece() {
+        use chrono::Datelike;
+        let temp = tempfile::TempDir::new().unwrap();
+        let year = chrono::Local::now().year();
+        let with = scan(temp.path(), "© {{ copyright_years() }}\n", &[]);
+        assert_eq!(
+            with.hash_pieces,
+            vec![format!("copyright_years_until:{year}")]
+        );
+        let without = scan(temp.path(), "no years here\n", &[]);
+        assert_eq!(without.hash_pieces, Vec::<String>::new());
     }
 
     /// Paths resolve against the project root only, as the tera processor

@@ -369,6 +369,8 @@ inventory::submit! {
         name: "python",
         description: "Scan Python files for local import dependencies",
         is_builtin: true,
+        // 2: statements joined by `;`, only dotted names, no docstring text.
+        version: 2,
         create: |toml_value, _| {
             let cfg: PythonAnalyzerConfig = toml::from_str(&toml::to_string(toml_value)?)?;
             Ok(Box::new(PythonDepAnalyzer::new(cfg)))
