@@ -354,10 +354,7 @@ use crate::processor::{Processor, resolve_dep_inputs, run_command};
 /// `src_extensions` gets those files compiled as C++ — selecting on `cc`
 /// alone compiled them with the C compiler and `cflags`.
 fn is_cpp_source(path: &Path) -> bool {
-    matches!(
-        path.extension().and_then(|s| s.to_str()),
-        Some("cc" | "cpp" | "cxx" | "c++" | "C")
-    )
+    crate::analyzers::is_cxx_source(path)
 }
 
 /// Configuration for a single compiler profile

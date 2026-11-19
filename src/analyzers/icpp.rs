@@ -39,11 +39,7 @@ impl IcppDepAnalyzer {
     }
 
     fn is_excluded(&self, path: &Path) -> bool {
-        let path_str = path.to_string_lossy();
-        self.config
-            .src_exclude_dirs
-            .iter()
-            .any(|seg| path_str.contains(seg))
+        super::in_excluded_dir(path, &self.config.src_exclude_dirs)
     }
 
     /// Query pkg-config for include paths (lazy, cached).

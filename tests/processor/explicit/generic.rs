@@ -191,6 +191,31 @@ sandbox_writable = ["runs.log"]
     );
 }
 
+/// A stanza whose `input_globs` match nothing, on disk or among declared
+/// outputs, is a config error naming it. It used to vanish from the build:
+/// exit 0, and its output never produced.
+#[test]
+fn generic_stanza_without_any_input_is_a_config_error() {
+    let temp_dir = setup(
+        r#"[processor.explicit.generic.collect]
+command = "./gen.sh"
+input_globs = ["nomatch/*.txt"]
+output_dirs = ["outdir"]
+sandbox_writable = ["runs.log"]
+"#,
+    );
+    let root = temp_dir.path();
+
+    let output = run_rsconstruct_with_env(root, &["build"], &[("NO_COLOR", "1")]);
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert_eq!(output.status.code(), Some(2), "{stderr}");
+    assert!(
+        stderr.contains("[processor.explicit.generic.collect] no input"),
+        "the error names the stanza: {stderr}"
+    );
+    assert_eq!(runs(root), 0, "nothing ran");
+}
+
 /// The `inputs` and `input_globs` lists are part of the cache key: they
 /// are passed to the command as `--inputs`, so listing the same files
 /// under another spelling is a different run.

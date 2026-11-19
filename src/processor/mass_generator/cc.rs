@@ -235,10 +235,7 @@ impl CcProcessor {
 
     /// Determine whether a source file is C++ based on extension.
     fn is_cxx(path: &Path) -> bool {
-        matches!(
-            path.extension().and_then(|e| e.to_str()),
-            Some("cc" | "cpp" | "cxx" | "C")
-        )
+        crate::analyzers::is_cxx_source(path)
     }
 
     /// Choose the compiler for a source file.

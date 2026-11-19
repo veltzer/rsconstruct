@@ -81,11 +81,7 @@ impl CppDepAnalyzer {
 
     /// Check if a source path matches any of the configured exclude-dir segments.
     fn is_excluded(&self, path: &Path) -> bool {
-        let path_str = path.to_string_lossy();
-        self.config
-            .src_exclude_dirs
-            .iter()
-            .any(|seg| path_str.contains(seg))
+        super::in_excluded_dir(path, &self.config.src_exclude_dirs)
     }
 
     /// Run gcc/g++ -MM to scan dependencies for a source file.
@@ -270,8 +266,7 @@ impl DepAnalyzer for CppDepAnalyzer {
         source: &Path,
         _file_index: &FileIndex,
     ) -> Result<ScanResult> {
-        let ext = source.extension().and_then(|s| s.to_str()).unwrap_or("");
-        let is_cpp = ext == "cc" || ext == "cpp" || ext == "cxx";
+        let is_cpp = super::is_cxx_source(source);
         let deps = self.scan_dependencies(ctx, source, is_cpp)?;
         let absent = shadow_probes(&self.search_dirs(ctx, source)?, &deps);
         Ok(ScanResult::deps(deps, absent))

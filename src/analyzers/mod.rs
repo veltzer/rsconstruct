@@ -645,12 +645,34 @@ impl ActiveAnalyzer {
 
 /// Extensions of the translation units the C/C++ analyzers scan. Headers
 /// are reached through the includes of these, never scanned on their own.
-const CPP_SOURCE_EXTENSIONS: &[&str] = &["c", "cc", "cpp", "cxx"];
+/// The extensions the compilers themselves take as C++; `.C`, upper case,
+/// is C++ to gcc and clang. The one list: the analyzers and the `cc` and
+/// `cc_single_file` processors each had their own, and disagreed, so a
+/// `.C` or `.c++` file was compiled as C++ by one, as C by another, and
+/// never scanned for includes.
+const CXX_SOURCE_EXTENSIONS: &[&str] = &["cc", "cpp", "cxx", "c++", "C"];
 
-/// Whether `path` is a C/C++ translation unit (see `CPP_SOURCE_EXTENSIONS`).
-pub fn is_cpp_source(path: &Path) -> bool {
+/// Whether `path` is a C++ translation unit (see `CXX_SOURCE_EXTENSIONS`).
+pub fn is_cxx_source(path: &Path) -> bool {
     let ext = path.extension().and_then(|s| s.to_str()).unwrap_or("");
-    CPP_SOURCE_EXTENSIONS.contains(&ext)
+    CXX_SOURCE_EXTENSIONS.contains(&ext)
+}
+
+/// Whether `path` is a C or C++ translation unit.
+pub fn is_cpp_source(path: &Path) -> bool {
+    path.extension().and_then(|s| s.to_str()) == Some("c") || is_cxx_source(path)
+}
+
+/// Whether a project-relative `path` matches one of an analyzer's
+/// `src_exclude_dirs` segments. A segment is matched as a substring of the
+/// path with a `/` in front, so `"/vendor/"` excludes the top-level
+/// `vendor/` as well as `lib/vendor/`: against the bare relative path, which
+/// has no leading slash, it matched only the nested one.
+pub fn in_excluded_dir(path: &Path, src_exclude_dirs: &[String]) -> bool {
+    let rooted = format!("/{}", path.to_string_lossy());
+    src_exclude_dirs
+        .iter()
+        .any(|seg| rooted.contains(seg.as_str()))
 }
 
 /// The paths a search probed before `found`: every candidate up to (not

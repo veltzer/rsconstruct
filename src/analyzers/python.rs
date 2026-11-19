@@ -27,11 +27,55 @@ struct Import {
 
 /// The first word of each comma-separated item (`a as b` → `a`), skipping
 /// `*` and blanks.
+///
+/// Only a dotted name counts. Whatever else leads an item is not a module:
+/// taking the first word as it came put `"lib")` and `sys;` into a
+/// generated `requirements.txt`.
 fn import_items(list: &str) -> impl Iterator<Item = String> + '_ {
     list.split(',')
         .filter_map(|item| item.split_whitespace().next())
-        .filter(|name| *name != "*" && *name != "\\")
+        .filter(|name| is_dotted_name(name))
         .map(str::to_string)
+}
+
+/// Whether `name` is a Python dotted name: identifiers joined by dots.
+fn is_dotted_name(name: &str) -> bool {
+    !name.is_empty()
+        && name.split('.').all(|part| {
+            let mut chars = part.chars();
+            chars.next().is_some_and(|c| c.is_alphabetic() || c == '_')
+                && chars.all(|c| c.is_alphanumeric() || c == '_')
+        })
+}
+
+/// `line` without what lies inside triple-quoted strings. `open` is the
+/// quote of the string the line starts in, if any, and is left as the one
+/// it ends in: a docstring showing an `import` line is text, not code.
+fn outside_triple_quotes(line: &str, open: &mut Option<&'static str>) -> String {
+    const QUOTES: [&str; 2] = ["\"\"\"", "'''"];
+    let mut out = String::new();
+    let mut rest = line;
+    loop {
+        if let Some(quote) = *open {
+            let Some(end) = rest.find(quote) else {
+                return out;
+            };
+            rest = &rest[end + quote.len()..];
+            *open = None;
+        } else {
+            let next = QUOTES
+                .iter()
+                .filter_map(|quote| rest.find(quote).map(|at| (at, *quote)))
+                .min_by_key(|&(at, _)| at);
+            let Some((at, quote)) = next else {
+                out.push_str(rest);
+                return out;
+            };
+            out.push_str(&rest[..at]);
+            rest = &rest[at + quote.len()..];
+            *open = Some(quote);
+        }
+    }
 }
 
 /// Parse the `import` / `from X import …` statements of Python source,
@@ -48,8 +92,17 @@ fn parse_imports(content: &str) -> Vec<Import> {
     let mut imports: Vec<Import> = Vec::new();
     // Inside `from X import (` … `)`: the names continue on later lines.
     let mut in_parens = false;
-    for line in content.lines() {
-        let code = line.split('#').next().unwrap_or("");
+    let mut in_string: Option<&'static str> = None;
+    let lines: Vec<String> = content
+        .lines()
+        .map(|line| outside_triple_quotes(line, &mut in_string))
+        .collect();
+    // A line holds one statement or several joined by `;`
+    // (`import sys; import helper`): each is parsed on its own.
+    let statements = lines
+        .iter()
+        .flat_map(|line| line.split('#').next().unwrap_or("").split(';'));
+    for code in statements {
         if in_parens {
             let (names, closed) = code
                 .split_once(')')
@@ -359,6 +412,13 @@ from inline import (p, q)
 from . import sibling
 from .bar import baz
 from ..pkg import qux
+import first; import second
+from third import t; x = 1
+import fourth; fourth.path.insert(0, \"lib\")
+doc = \"\"\"
+import in_a_docstring
+\"\"\"
+one_line = '''import quoted'''; import fifth
 ";
         assert_eq!(
             parsed(src),
@@ -374,6 +434,11 @@ from ..pkg import qux
                 (".".to_string(), owned(&["sibling"])),
                 (".bar".to_string(), owned(&["baz"])),
                 ("..pkg".to_string(), owned(&["qux"])),
+                ("first".to_string(), vec![]),
+                ("second".to_string(), vec![]),
+                ("third".to_string(), owned(&["t"])),
+                ("fourth".to_string(), vec![]),
+                ("fifth".to_string(), vec![]),
             ]
         );
     }

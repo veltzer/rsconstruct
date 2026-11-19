@@ -828,6 +828,28 @@ impl Builder {
                     ));
                 }
             }
+            // A stanza whose inputs resolved to nothing waits round by
+            // round for an upstream output to appear (see its `discover`).
+            // Still without a product now, nothing will ever feed it: a
+            // mistyped input_globs made the stanza vanish from the build
+            // with exit 0 and its output never produced.
+            for name in active {
+                let name = name.as_ref();
+                if name != crate::processor::names::EXPLICIT && !name.starts_with(&explicit_prefix)
+                {
+                    continue;
+                }
+                let processor = &processors[name];
+                if !processor.scan_config().enabled || !processor.auto_detect(&file_index) {
+                    continue;
+                }
+                if !graph.products().iter().any(|p| p.processor == name) {
+                    missing_inputs.push(format!(
+                        "  [{name}] no input: its inputs and input_globs resolve to no file, so \
+                         the stanza would never run"
+                    ));
+                }
+            }
         }
         if missing_dirs.is_empty() && missing_files.is_empty() && missing_inputs.is_empty() {
             return Ok(file_index);
@@ -838,7 +860,8 @@ impl Builder {
         Err(crate::exit_code::config_error(format!(
             "Invalid config:\n{}\nEvery src_dirs entry must name a directory that exists, and every \
              src_files entry and every explicit inputs entry a file that exists (or a path an \
-             upstream processor declares as its output) — fix the path or remove the entry; \
+             upstream processor declares as its output), and every explicit stanza must have at \
+             least one input — fix the path or remove the entry; \
              [build] allow_missing_src_dirs = true skips absent directories as before, never \
              absent files",
             missing.join("\n")

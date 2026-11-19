@@ -881,6 +881,18 @@ fn print_install_groups(groups: &[(&str, Vec<String>)], ctx: &crate::tools::Inst
 /// machine: its `[dependencies]` system packages and the tools of its enabled
 /// processors whose preferred target is the machine. Nothing here goes
 /// into the project.
+/// Fail on a tool name the registry does not know, before an install does
+/// anything: checked only where the name was used, `tool install machine
+/// nosuch` first created `rsconstruct.lock` and then rejected the name.
+fn require_known_tool(name: Option<&str>) -> Result<()> {
+    match name {
+        Some(name) if crate::tools::tool_info(name).is_none() => {
+            Err(tool_error(format!("Unknown tool '{name}'")))
+        }
+        _ => Ok(()),
+    }
+}
+
 fn install_machine(
     ctx: &crate::build_context::BuildContext,
     processors: &crate::processor::ProcessorMap,
@@ -891,6 +903,7 @@ fn install_machine(
     flags: &InstallFlags,
 ) -> Result<()> {
     let root = std::path::Path::new(".");
+    require_known_tool(name)?;
     // In a project, each tool is requested at its rsconstruct.lock version
     // (a `.deb` at its locked asset). `--all` is the config-independent
     // registry sweep and has no lock to follow.
@@ -1086,6 +1099,7 @@ fn install_project(
     flags: &InstallFlags,
 ) -> Result<()> {
     let root = std::path::Path::new(".");
+    require_known_tool(name)?;
     let deps = &builder.config.dependencies;
     let wanted = project_wanted(builder, processors, is_enabled)?;
     let (lock, _) = lock_for_install(ctx, &wanted, flags.verbose)?;
