@@ -8,8 +8,71 @@ use std::path::Path;
 use super::{
     BuildConfig, CacheConfig, FieldProvenance, ProcessorConfig, ProcessorInstance, RestoreMethod,
     SCAN_CONFIG_FIELDS, STANDARD_EXTRA_FIELDS, SectionShape, find_registry_entry, is_builtin_type,
+    provenance::SourceFiles,
 };
 use crate::registries::{self as registry, ProcessorPlugin};
+
+/// A mistake in the config, and the key it is about. The checks here run on
+/// the merged value, which has no positions; the path is what
+/// [`SourceFiles::locate`] turns back into the file and line to edit.
+#[derive(Debug)]
+pub struct ConfigIssue {
+    /// The key's path from the document root (`["build", "parallel"]`).
+    pub path: Vec<String>,
+    pub message: String,
+}
+
+impl ConfigIssue {
+    /// An issue about the section (or key) at `path`.
+    pub(super) fn at(path: &[&str], message: String) -> Self {
+        Self {
+            path: path.iter().map(ToString::to_string).collect(),
+            message,
+        }
+    }
+
+    /// An issue about `field` of the section at `section`.
+    pub(super) fn field(section: &[&str], field: &str, message: String) -> Self {
+        let mut issue = Self::at(section, message);
+        issue.path.push(field.to_string());
+        issue
+    }
+
+    /// The message, led by `file:line:` when the key is in a file.
+    pub(super) fn located(&self, sources: &SourceFiles) -> String {
+        match sources.locate(&self.path) {
+            Some(location) => format!("{location}: {}", self.message),
+            None => self.message.clone(),
+        }
+    }
+
+    /// This issue alone as a config error.
+    pub(super) fn into_error(self, sources: &SourceFiles) -> anyhow::Error {
+        crate::exit_code::config_error(self.located(sources))
+    }
+}
+
+impl std::fmt::Display for ConfigIssue {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.message)
+    }
+}
+
+impl std::error::Error for ConfigIssue {}
+
+/// Record an issue about the section (or key) at `path`.
+fn add(errors: &mut Vec<ConfigIssue>, path: &[&str], message: String) {
+    errors.push(ConfigIssue::at(path, message));
+}
+
+/// Every issue on its own line, each led by where it is.
+pub(super) fn describe_issues(issues: &[ConfigIssue], sources: &SourceFiles) -> String {
+    issues
+        .iter()
+        .map(|issue| issue.located(sources))
+        .collect::<Vec<_>>()
+        .join("\n")
+}
 
 /// Expected TOML type for a config field.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -119,20 +182,27 @@ pub(super) fn expected_field_type(processor: &str, field: &str) -> Option<FieldT
 pub(super) fn validate_single_processor(
     type_name: &str,
     section_label: &str,
+    section: &[&str],
     table: &toml::map::Map<String, toml::Value>,
-    errors: &mut Vec<String>,
+    errors: &mut Vec<ConfigIssue>,
 ) {
     let own_fields: Vec<&'static str> = match ProcessorConfig::known_fields_for(type_name) {
         Some(fields) => fields,
         None => return, // not a registered processor; reported by the raw check
     };
+    // Every mistake found here is about one field of the section.
+    let mut report =
+        |field: &str, message: String| errors.push(ConfigIssue::field(section, field, message));
 
     // A zero-permit semaphore can never grant a permit: max_jobs = 0 would
     // deadlock the build waiting forever, so reject it at load time.
     if table.get("max_jobs").and_then(toml::Value::as_integer) == Some(0) {
-        errors.push(format!(
-            "[{section_label}]: 'max_jobs' must be greater than 0 (use 'enabled = false' to turn the processor off)",
-        ));
+        report(
+            "max_jobs",
+            format!(
+                "[{section_label}]: 'max_jobs' must be greater than 0 (use 'enabled = false' to turn the processor off)",
+            ),
+        );
     }
 
     for (key, field_value) in table {
@@ -146,41 +216,50 @@ pub(super) fn validate_single_processor(
                 .chain(STANDARD_EXTRA_FIELDS.iter())
                 .copied()
                 .collect();
-            errors.push(format!(
-                "[{}]: unknown field '{}' (valid fields: {})",
-                section_label,
+            report(
                 key,
-                all_fields.join(", ")
-            ));
+                format!(
+                    "[{}]: unknown field '{}' (valid fields: {})",
+                    section_label,
+                    key,
+                    all_fields.join(", ")
+                ),
+            );
             continue;
         }
 
         if let Some(expected) = expected_field_type(type_name, key)
             && !expected.matches(field_value)
         {
-            errors.push(format!(
-                "[{}]: field '{}' must be {}, got {} ({})",
-                section_label,
+            report(
                 key,
-                expected.label(),
-                FieldType::describe_value(field_value),
-                field_value,
-            ));
+                format!(
+                    "[{}]: field '{}' must be {}, got {} ({})",
+                    section_label,
+                    key,
+                    expected.label(),
+                    FieldType::describe_value(field_value),
+                    field_value,
+                ),
+            );
         } else if key == super::EXECUTION_MODEL
             && field_value
                 .clone()
                 .try_into::<super::ExecutionModel>()
                 .is_err()
         {
-            errors.push(format!(
-                "[{section_label}]: field '{key}' must be \"native\" or \"sandbox\", got {field_value}",
-            ));
+            report(
+                key,
+                format!(
+                    "[{section_label}]: field '{key}' must be \"native\" or \"sandbox\", got {field_value}",
+                ),
+            );
         } else if key == super::SANDBOX_WRITABLE
             && let Some(entries) = field_value.as_array()
         {
             for entry in entries.iter().filter_map(toml::Value::as_str) {
                 if let Err(e) = crate::sandbox::Writable::parse(entry) {
-                    errors.push(format!("[{section_label}]: {e}"));
+                    report(key, format!("[{section_label}]: {e}"));
                 }
             }
         }
@@ -191,19 +270,22 @@ pub(super) fn validate_single_processor(
         for field in &must {
             match table.get(*field) {
                 None => {
-                    errors.push(format!(
-                        "[{section_label}]: required field '{field}' must be specified",
-                    ));
+                    report(
+                        field,
+                        format!("[{section_label}]: required field '{field}' must be specified"),
+                    );
                 }
                 Some(toml::Value::Array(arr)) if arr.is_empty() => {
-                    errors.push(format!(
-                        "[{section_label}]: required field '{field}' must not be empty",
-                    ));
+                    report(
+                        field,
+                        format!("[{section_label}]: required field '{field}' must not be empty"),
+                    );
                 }
                 Some(toml::Value::String(s)) if s.is_empty() => {
-                    errors.push(format!(
-                        "[{section_label}]: required field '{field}' must not be empty",
-                    ));
+                    report(
+                        field,
+                        format!("[{section_label}]: required field '{field}' must not be empty"),
+                    );
                 }
                 _ => {} // present and non-empty: OK
             }
@@ -217,23 +299,30 @@ pub(super) fn validate_single_processor(
 /// per process spawn. (`parallel = 0` and `batch_size = 0` are documented
 /// sentinels and stay valid.) Same message shape as the per-processor
 /// `max_jobs != 0` guard.
-pub(super) fn validate_build_config(build: &BuildConfig) -> Result<()> {
+pub(super) fn validate_build_config(build: &BuildConfig) -> Result<(), ConfigIssue> {
+    let issue = |field: &str, message: &str| ConfigIssue::field(&["build"], field, message.into());
     if build.max_discovery_passes == 0 {
-        return Err(crate::exit_code::config_error(
-            "[build] max_discovery_passes must be at least 1 — 0 would skip discovery entirely and report an empty build as success".to_string()));
+        return Err(issue(
+            "max_discovery_passes",
+            "[build] max_discovery_passes must be at least 1 — 0 would skip discovery entirely and report an empty build as success",
+        ));
     }
     if build.max_arg_len == 0 {
-        return Err(crate::exit_code::config_error(
-            "[build] max_arg_len must be at least 1 — 0 would split every batch into one file per tool invocation".to_string()));
+        return Err(issue(
+            "max_arg_len",
+            "[build] max_arg_len must be at least 1 — 0 would split every batch into one file per tool invocation",
+        ));
     }
     if build.worker_stack_mib == 0 {
-        return Err(crate::exit_code::config_error(
-            "[build] worker_stack_mib must be at least 1".to_string(),
+        return Err(issue(
+            "worker_stack_mib",
+            "[build] worker_stack_mib must be at least 1",
         ));
     }
     if build.python.trim().is_empty() {
-        return Err(crate::exit_code::config_error(
-            "[build] python must name an interpreter (e.g. \"python\" or \"python3\")".to_string(),
+        return Err(issue(
+            "python",
+            "[build] python must name an interpreter (e.g. \"python\" or \"python3\")",
         ));
     }
     Ok(())
@@ -241,11 +330,13 @@ pub(super) fn validate_build_config(build: &BuildConfig) -> Result<()> {
 
 /// Cross-field checks on `[cache]`. Here rather than where the object store
 /// is built, so `toml check` rejects what every building command rejects.
-pub(super) fn validate_cache_config(cache: &CacheConfig) -> Result<()> {
+pub(super) fn validate_cache_config(cache: &CacheConfig) -> Result<(), ConfigIssue> {
     // A hardlinked output shares the cached object's bytes, and a compressed
     // object's bytes are not the output's.
     if cache.compression && cache.restore_method.resolve() == RestoreMethod::Hardlink {
-        return Err(crate::exit_code::config_error(
+        return Err(ConfigIssue::field(
+            &["cache"],
+            "compression",
             "[cache] compression cannot be used with the hardlink restore method. \
              Set restore_method = \"copy\" or disable compression."
                 .to_string(),
@@ -378,7 +469,7 @@ pub(super) fn validate_no_dot_src_dirs(
 /// and have the correct TOML types. Supports both single-instance and multi-instance formats.
 /// Returns a list of error strings (empty if valid). `Config::load` combines this with the
 /// analyzer validator output under a single "Invalid config:" header.
-pub(super) fn validate_processor_fields_raw(raw: &toml::Value) -> Vec<String> {
+pub(super) fn validate_processor_fields_raw(raw: &toml::Value) -> Vec<ConfigIssue> {
     let Some(processor_table) = raw.get("processor").and_then(|v| v.as_table()) else {
         return Vec::new();
     };
@@ -396,10 +487,14 @@ pub(super) fn validate_processor_fields_raw(raw: &toml::Value) -> Vec<String> {
         // A scalar under [processor] (e.g. `checker = true`) is a config
         // mistake that would otherwise be silently dropped.
         let Some(type_table) = type_value.as_table() else {
-            errors.push(format!(
-                "[processor]: '{type_key}' must be a table of processors (e.g. [processor.{type_key}.NAME]), got {}",
-                FieldType::describe_value(type_value),
-            ));
+            add(
+                &mut errors,
+                &["processor", type_key],
+                format!(
+                    "[processor]: '{type_key}' must be a table of processors (e.g. [processor.{type_key}.NAME]), got {}",
+                    FieldType::describe_value(type_value),
+                ),
+            );
             continue;
         };
         if crate::processor::ProcessorType::parse(type_key).is_none() {
@@ -410,19 +505,27 @@ pub(super) fn validate_processor_fields_raw(raw: &toml::Value) -> Vec<String> {
                 .find(|p| p.name == type_key)
                 .map(|p| format!(" — did you mean [{}]?", p.pname()))
                 .unwrap_or_default();
-            errors.push(format!(
-                "[processor.{type_key}]: unknown processor type '{type_key}' (processors are named \
+            add(
+                &mut errors,
+                &["processor", type_key],
+                format!(
+                    "[processor.{type_key}]: unknown processor type '{type_key}' (processors are named \
                  processor.<type>.<name>; types: {type_names}){hint}",
-            ));
+                ),
+            );
             continue;
         }
 
         for (short, value) in type_table {
             let Some(table) = value.as_table() else {
-                errors.push(format!(
-                    "[processor.{type_key}]: '{short}' must be a section (e.g. [processor.{type_key}.{short}]), got {}",
-                    FieldType::describe_value(value),
-                ));
+                add(
+                    &mut errors,
+                    &["processor", type_key, short],
+                    format!(
+                        "[processor.{type_key}]: '{short}' must be a section (e.g. [processor.{type_key}.{short}]), got {}",
+                        FieldType::describe_value(value),
+                    ),
+                );
                 continue;
             };
             let pname = registry::pname_from_parts(type_key, short);
@@ -437,9 +540,11 @@ pub(super) fn validate_processor_fields_raw(raw: &toml::Value) -> Vec<String> {
                 } else {
                     format!(" — did you mean [{}]?", elsewhere.join("] or ["))
                 };
-                errors.push(format!(
-                    "[{pname}]: there is no {type_key} processor named '{short}'{hint}",
-                ));
+                add(
+                    &mut errors,
+                    &["processor", type_key, short],
+                    format!("[{pname}]: there is no {type_key} processor named '{short}'{hint}"),
+                );
                 continue;
             }
 
@@ -452,20 +557,36 @@ pub(super) fn validate_processor_fields_raw(raw: &toml::Value) -> Vec<String> {
                         // directory): an empty segment or one with a dot
                         // in it is a name `parse_name` cannot take apart.
                         if inst_name.is_empty() || inst_name.contains('.') {
-                            errors.push(format!(
-                                "[{pname}]: invalid instance name '{inst_name}': an instance \
+                            add(
+                                &mut errors,
+                                &["processor", type_key, short, inst_name],
+                                format!(
+                                    "[{pname}]: invalid instance name '{inst_name}': an instance \
                                  name must be non-empty and contain no '.'"
-                            ));
+                                ),
+                            );
                             continue;
                         }
                         if let Some(inst_table) = inst_value.as_table() {
                             let section = format!("{pname}.{inst_name}");
-                            validate_single_processor(&pname, &section, inst_table, &mut errors);
+                            validate_single_processor(
+                                &pname,
+                                &section,
+                                &["processor", type_key, short, inst_name],
+                                inst_table,
+                                &mut errors,
+                            );
                         }
                     }
                 }
                 SectionShape::SingleInstance => {
-                    validate_single_processor(&pname, &pname, table, &mut errors);
+                    validate_single_processor(
+                        &pname,
+                        &pname,
+                        &["processor", type_key, short],
+                        table,
+                        &mut errors,
+                    );
                 }
                 // The section reads as both a config-field table and a set of
                 // named instances. Guessing here is what let a config silently
@@ -473,24 +594,28 @@ pub(super) fn validate_processor_fields_raw(raw: &toml::Value) -> Vec<String> {
                 // matched an existing user's instance — so it is rejected
                 // instead, naming the exact keys to rename.
                 SectionShape::Ambiguous { colliding } => {
-                    errors.push(format!(
-                        "[{pname}]: ambiguous section — {} also {} a config field of \
+                    add(
+                        &mut errors,
+                        &["processor", type_key, short],
+                        format!(
+                            "[{pname}]: ambiguous section — {} also {} a config field of \
                      '{pname}', so this could be read either as config or as named \
                      instance{}. Rename the instance{}, or move the config fields to \
                      [{pname}] and keep only instances as sub-tables.",
-                        colliding
-                            .iter()
-                            .map(|c| format!("'{c}'"))
-                            .collect::<Vec<_>>()
-                            .join(", "),
-                        if colliding.len() == 1 {
-                            "names"
-                        } else {
-                            "name"
-                        },
-                        if colliding.len() == 1 { "" } else { "s" },
-                        if colliding.len() == 1 { "" } else { "s" },
-                    ));
+                            colliding
+                                .iter()
+                                .map(|c| format!("'{c}'"))
+                                .collect::<Vec<_>>()
+                                .join(", "),
+                            if colliding.len() == 1 {
+                                "names"
+                            } else {
+                                "name"
+                            },
+                            if colliding.len() == 1 { "" } else { "s" },
+                            if colliding.len() == 1 { "" } else { "s" },
+                        ),
+                    );
                 }
             }
         }
@@ -505,7 +630,7 @@ pub(super) fn validate_processor_fields_raw(raw: &toml::Value) -> Vec<String> {
 /// time. Returns a list of error strings (empty if valid). `Config::load`
 /// combines this with the processor validator output under a single
 /// "Invalid config:" header.
-pub(super) fn validate_analyzer_fields_raw(raw: &toml::Value) -> Vec<String> {
+pub(super) fn validate_analyzer_fields_raw(raw: &toml::Value) -> Vec<ConfigIssue> {
     let Some(analyzer_table) = raw.get("analyzer").and_then(|v| v.as_table()) else {
         return Vec::new();
     };
@@ -514,14 +639,22 @@ pub(super) fn validate_analyzer_fields_raw(raw: &toml::Value) -> Vec<String> {
 
     for (type_name, value) in analyzer_table {
         let Some(table) = value.as_table() else {
-            errors.push(format!("[analyzer.{type_name}]: expected a table"));
+            add(
+                &mut errors,
+                &["analyzer", type_name],
+                format!("[analyzer.{type_name}]: expected a table"),
+            );
             continue;
         };
 
         let Some(plugin) = registry::find_analyzer_plugin(type_name) else {
-            errors.push(format!(
-                "[analyzer.{type_name}]: unknown analyzer type '{type_name}' (run 'rsconstruct analyzer list' to see available)",
-            ));
+            add(
+                &mut errors,
+                &["analyzer", type_name],
+                format!(
+                    "[analyzer.{type_name}]: unknown analyzer type '{type_name}' (run 'rsconstruct analyzer list' to see available)",
+                ),
+            );
             continue;
         };
 
@@ -533,12 +666,24 @@ pub(super) fn validate_analyzer_fields_raw(raw: &toml::Value) -> Vec<String> {
             for (inst_name, inst_value) in table {
                 if let Some(inst_table) = inst_value.as_table() {
                     let section = format!("analyzer.{type_name}.{inst_name}");
-                    validate_analyzer_section(plugin, &section, inst_table, &mut errors);
+                    validate_analyzer_section(
+                        plugin,
+                        &section,
+                        &["analyzer", type_name, inst_name],
+                        inst_table,
+                        &mut errors,
+                    );
                 }
             }
         } else {
             let section = format!("analyzer.{type_name}");
-            validate_analyzer_section(plugin, &section, table, &mut errors);
+            validate_analyzer_section(
+                plugin,
+                &section,
+                &["analyzer", type_name],
+                table,
+                &mut errors,
+            );
         }
     }
 
@@ -549,17 +694,22 @@ pub(super) fn validate_analyzer_fields_raw(raw: &toml::Value) -> Vec<String> {
 fn validate_analyzer_section(
     plugin: &registry::AnalyzerPlugin,
     section_label: &str,
+    section: &[&str],
     table: &toml::map::Map<String, toml::Value>,
-    errors: &mut Vec<String>,
+    errors: &mut Vec<ConfigIssue>,
 ) {
     let known = (plugin.known_fields)();
     for key in table.keys() {
         if !known.contains(&key.as_str()) {
-            errors.push(format!(
-                "[{}]: unknown field '{}' (valid fields: {})",
-                section_label,
+            errors.push(ConfigIssue::field(
+                section,
                 key,
-                known.join(", ")
+                format!(
+                    "[{}]: unknown field '{}' (valid fields: {})",
+                    section_label,
+                    key,
+                    known.join(", ")
+                ),
             ));
         }
     }

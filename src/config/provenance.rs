@@ -191,6 +191,99 @@ fn global_span_map_of(doc: &Document<&str>, source: &str) -> GlobalSpanMap {
     map
 }
 
+/// One config file as it was loaded.
+#[derive(Debug, Clone)]
+pub struct SourceFile {
+    /// The path as it is shown to the user.
+    pub name: String,
+    /// The file's text after `[vars]` substitution, which keeps every line
+    /// where it was: a line number here is a line number in the file.
+    pub content: String,
+    /// The user config: only its `[build]` table is merged, and it may hold
+    /// a `[tables]` section the project files may not.
+    pub build_only: bool,
+}
+
+/// The files a config was merged from, highest precedence first, so the
+/// first file that has a key is the one whose value won the merge.
+///
+/// An error found in the merged value is found without a position, and the
+/// key may come from any of the files; this is what turns the key's path
+/// back into the `file:line` the user has to edit.
+#[derive(Debug, Clone, Default)]
+pub struct SourceFiles(Vec<SourceFile>);
+
+impl SourceFiles {
+    pub const fn new(files: Vec<SourceFile>) -> Self {
+        Self(files)
+    }
+
+    pub fn files(&self) -> &[SourceFile] {
+        &self.0
+    }
+
+    /// `file:line` of the key at `path` (`["build", "parallel"]`,
+    /// `["processor", "checker", "ruff", "args"]`). When no file has the
+    /// key — a required field that is missing — the nearest enclosing
+    /// section some file has is given instead. `None` only when not even
+    /// the first segment is in any file.
+    pub fn locate(&self, path: &[String]) -> Option<String> {
+        let docs: Vec<(&SourceFile, Document<&str>)> = self
+            .0
+            .iter()
+            .filter_map(|file| {
+                Document::parse(file.content.as_str())
+                    .ok()
+                    .map(|doc| (file, doc))
+            })
+            .collect();
+        for len in (1..=path.len()).rev() {
+            for (file, doc) in &docs {
+                if let Some(offset) = offset_of(doc.as_table(), &path[..len]) {
+                    let line = byte_offset_to_line(&file.content, offset);
+                    return Some(format!("{}:{line}", file.name));
+                }
+            }
+        }
+        None
+    }
+}
+
+/// Byte offset of the key at `path` under `root`, when it is there.
+fn offset_of(root: &Table, path: &[String]) -> Option<usize> {
+    let (last, parents) = path.split_last()?;
+    let mut table: &dyn toml_edit::TableLike = root;
+    for segment in parents {
+        table = table.get(segment)?.as_table_like()?;
+    }
+    let item = table.get(last)?;
+    // A `[section]` is found by its header and a `key = value` line by its
+    // key. A section that exists only as the prefix of deeper headers
+    // (`[processor.checker]` when the file has `[processor.checker.ruff]`)
+    // has neither, and is where its first descendant is.
+    item.as_table()
+        .and_then(Table::span)
+        .or_else(|| table.key(last).and_then(toml_edit::Key::span))
+        .map(|span| span.start)
+        .or_else(|| first_offset(item))
+}
+
+/// The smallest byte offset of anything in `item` that has a position.
+fn first_offset(item: &Item) -> Option<usize> {
+    if let Some(span) = item.span() {
+        return Some(span.start);
+    }
+    let table = item.as_table()?;
+    table
+        .iter()
+        .filter_map(|(key, child)| {
+            key_span(table, key)
+                .map(|span| span.start)
+                .or_else(|| first_offset(child))
+        })
+        .min()
+}
+
 /// Convert a byte offset into a 1-based line number, counting `\n` bytes.
 fn byte_offset_to_line(source: &str, offset: usize) -> usize {
     let clamped = offset.min(source.len());
@@ -238,6 +331,72 @@ strict = true
         assert_eq!(spans.get(&key), Some(&10), "span map: {spans:?}");
         let key = (Section::Analyzer, "tera".to_string(), "strict".to_string());
         assert_eq!(spans.get(&key), Some(&13), "span map: {spans:?}");
+    }
+
+    fn path(segments: &[&str]) -> Vec<String> {
+        segments.iter().map(ToString::to_string).collect()
+    }
+
+    fn source(name: &str, content: &str) -> SourceFile {
+        SourceFile {
+            name: name.to_string(),
+            content: content.to_string(),
+            build_only: false,
+        }
+    }
+
+    /// A key is where the highest-precedence file that has it puts it; a
+    /// key no file has is at its nearest enclosing section.
+    #[test]
+    fn locate_finds_keys_sections_and_the_winning_file() {
+        let main = "[build]\nparallel = 4\n\n[processor.checker.ruff]\nargs = [\"--fix\"]\n\n[processor.checker.pylint.core]\nsrc_dirs = [\"src\"]\n";
+        let local = "# overlay\n[build]\nparallel = 2\n";
+        let sources = SourceFiles::new(vec![
+            source("rsconstruct.local.toml", local),
+            source("rsconstruct.toml", main),
+        ]);
+        let at = |segments: &[&str]| sources.locate(&path(segments));
+        // Set in both files: the overlay's line.
+        assert_eq!(
+            at(&["build", "parallel"]).as_deref(),
+            Some("rsconstruct.local.toml:3")
+        );
+        assert_eq!(
+            at(&["processor", "checker", "ruff", "args"]).as_deref(),
+            Some("rsconstruct.toml:5")
+        );
+        // A missing field is at its section's header.
+        assert_eq!(
+            at(&["processor", "checker", "ruff", "command"]).as_deref(),
+            Some("rsconstruct.toml:4")
+        );
+        assert_eq!(
+            at(&["processor", "checker", "pylint", "core"]).as_deref(),
+            Some("rsconstruct.toml:7")
+        );
+        // A section that is only a prefix of deeper headers is where its
+        // first descendant is.
+        assert_eq!(
+            at(&["processor", "checker"]).as_deref(),
+            Some("rsconstruct.toml:4")
+        );
+        assert_eq!(at(&["cache", "compression"]), None);
+    }
+
+    #[test]
+    fn locate_finds_inline_and_dotted_keys() {
+        let main = "build = { parallel = 4 }\nprocessor.checker.ruff.args = [\"x\"]\n";
+        let sources = SourceFiles::new(vec![source("rsconstruct.toml", main)]);
+        assert_eq!(
+            sources.locate(&path(&["build", "parallel"])).as_deref(),
+            Some("rsconstruct.toml:1")
+        );
+        assert_eq!(
+            sources
+                .locate(&path(&["processor", "checker", "ruff", "args"]))
+                .as_deref(),
+            Some("rsconstruct.toml:2")
+        );
     }
 
     #[test]

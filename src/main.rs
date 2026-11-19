@@ -645,8 +645,8 @@ fn run() -> (Result<()>, bool) {
                         // every one is built too: a config that `check`
                         // calls valid must be one `build` can start on.
                         let config = config::Config::load()?;
-                        builder::create_processors_of(&config.processor)?;
-                        builder::create_analyzers_of(&config.analyzer, false)?;
+                        builder::create_processors_of(&config)?;
+                        builder::create_analyzers_of(&config, false)?;
                         if json_output::is_json_mode() {
                             println!("{}", serde_json::json!({ "valid": true }));
                         } else {

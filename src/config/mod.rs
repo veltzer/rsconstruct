@@ -15,11 +15,11 @@ pub use dependencies::*;
 use overrides::{apply_override_to_instances, parse_override_entry};
 pub use processor_configs::*;
 pub use processors::*;
-pub use provenance::{FieldProvenance, ProvenanceMap, Section, SpanMap};
+pub use provenance::{FieldProvenance, ProvenanceMap, Section, SourceFile, SourceFiles, SpanMap};
 pub use settings::*;
 pub use validation::FieldType;
 use validation::{
-    expected_field_type, validate_analyzer_fields_raw, validate_build_config,
+    describe_issues, expected_field_type, validate_analyzer_fields_raw, validate_build_config,
     validate_cache_config, validate_dep_auto_exist, validate_no_dot_src_dirs,
     validate_processor_fields_raw, validate_single_processor,
 };
@@ -153,7 +153,10 @@ pub fn config_files() -> Vec<ConfigFile> {
 /// never sees this file. Build-policy switches are the one thing that is
 /// safe to default per user, and they stay overridable per repo; `[tables]`
 /// only changes which columns the CLI's tables print.
-fn read_user_config() -> Result<Option<toml::Value>> {
+///
+/// Returns the parsed file and its text, which is what an error found
+/// after the merge is located in.
+fn read_user_config() -> Result<Option<(toml::Value, String)>> {
     let Some(path) = user_config_path() else {
         return Ok(None);
     };
@@ -189,7 +192,48 @@ fn read_user_config() -> Result<Option<toml::Value>> {
             )));
         }
     }
-    Ok(Some(raw))
+    Ok(Some((raw, content)))
+}
+
+/// The `[build]` table of one config file, whatever else the file holds.
+#[derive(Deserialize)]
+struct BuildSection {
+    #[serde(default)]
+    #[allow(dead_code)] // deserialized for its errors only
+    build: BuildConfig,
+}
+
+/// The parse error of the first of `files` that does not deserialize as
+/// `T` on its own. A type error found in the merged value has no position;
+/// the file that holds the mistake fails the same way by itself, and that
+/// error has the file's line and column and shows the line.
+fn parse_error_in<'a, T: serde::de::DeserializeOwned>(
+    files: impl Iterator<Item = &'a SourceFile>,
+) -> Option<String> {
+    files.into_iter().find_map(|file| {
+        toml::from_str::<T>(&file.content)
+            .err()
+            .map(|e| format!("Failed to parse config file {}: {e}", file.name))
+    })
+}
+
+/// Which files a merged config came from, for an error that cannot be
+/// pinned on one of them.
+fn merged_from(sources: &SourceFiles) -> String {
+    // Lowest precedence first, the order the files are merged in.
+    let names: Vec<&str> = sources
+        .files()
+        .iter()
+        .rev()
+        .map(|f| f.name.as_str())
+        .collect();
+    match names.as_slice() {
+        [one] => format!("config file {one}"),
+        _ => format!(
+            "config (merged from {}; the error is in one of them)",
+            names.join(", ")
+        ),
+    }
 }
 
 /// Record the merged config's `[build] python` before the rest of the
@@ -197,31 +241,45 @@ fn read_user_config() -> Result<Option<toml::Value>> {
 /// processor's `command`, sphinx's `python`) are filled in during that
 /// deserialization and must see the configured interpreter.
 ///
-/// `merged_from` says which files `raw` was merged from: this is the first
-/// place a mistyped `[build]` key is found, and the key may be in any of
-/// them.
-fn set_python_interpreter(raw: &toml::Value, merged_from: &str) -> Result<()> {
+/// This is the first place a mistyped `[build]` key is found, and the key
+/// may be in any of the merged files.
+fn set_python_interpreter(raw: &toml::Value, sources: &SourceFiles) -> Result<()> {
     let build: BuildConfig = raw
         .get("build")
         .cloned()
         .unwrap_or_else(|| toml::Value::Table(toml::map::Map::new()))
         .try_into()
         .map_err(|e| {
-            crate::exit_code::config_error(format!("Failed to parse [build] of {merged_from}: {e}"))
+            crate::exit_code::config_error(
+                parse_error_in::<BuildSection>(sources.files().iter()).unwrap_or_else(|| {
+                    format!("Failed to parse [build] of {}: {e}", merged_from(sources))
+                }),
+            )
         })?;
     crate::python_env::set_interpreter(&build.python);
     Ok(())
 }
 
-/// The user config's `[build]` part, for merging under the repo's files.
-/// `[tables]` is presentation only and is not part of `Config`, so it is
-/// dropped here; `user_tables_config` reads it.
-fn read_user_build_config() -> Result<Option<toml::Value>> {
-    let mut raw = read_user_config()?;
-    if let Some(table) = raw.as_mut().and_then(toml::Value::as_table_mut) {
+/// The user config's `[build]` part, for merging under the repo's files,
+/// and the file as a source to locate errors in. `[tables]` is presentation
+/// only and is not part of `Config`, so it is dropped from the value here;
+/// `user_tables_config` reads it.
+fn read_user_build_config() -> Result<Option<(toml::Value, SourceFile)>> {
+    let Some((mut raw, content)) = read_user_config()? else {
+        return Ok(None);
+    };
+    if let Some(table) = raw.as_table_mut() {
         table.remove("tables");
     }
-    Ok(raw)
+    let name = user_config_path().map_or_else(String::new, |p| p.display().to_string());
+    Ok(Some((
+        raw,
+        SourceFile {
+            name,
+            content,
+            build_only: true,
+        },
+    )))
 }
 
 /// The `[tables]` section of the user config: table name to the columns it
@@ -232,7 +290,7 @@ fn read_user_build_config() -> Result<Option<toml::Value>> {
 /// leaving the default columns in place.
 pub fn user_tables_config() -> Result<std::collections::BTreeMap<String, Vec<String>>> {
     let mut config = std::collections::BTreeMap::new();
-    let Some(raw) = read_user_config()? else {
+    let Some((raw, _)) = read_user_config()? else {
         return Ok(config);
     };
     let Some(tables) = raw.get("tables") else {
@@ -623,6 +681,11 @@ pub struct Config {
     /// user TOML, so skipped during (de)serialization.
     #[serde(skip)]
     pub global_provenance: HashMap<String, ProvenanceMap>,
+    /// The files this config was merged from, kept so that a mistake found
+    /// after loading (a stanza whose processor cannot be built) can still
+    /// be reported at its file and line.
+    #[serde(skip)]
+    pub sources: SourceFiles,
 }
 
 pub fn default_cc_compiler() -> String {
@@ -947,30 +1010,23 @@ impl Config {
                 })?;
                 // The user-level file sits underneath: its [build] keys are
                 // defaults that the repo's own [build] overrides key by key.
-                // Every file merged into `raw`, for the error below: a type
-                // or unknown-field error is found in the merged value, so it
-                // may come from any of them.
-                let mut merged_files: Vec<String> = Vec::new();
-                let user_raw = read_user_build_config()?;
-                if user_raw.is_some()
-                    && let Some(path) = user_config_path()
-                {
-                    merged_files.push(path.display().to_string());
-                }
-                merged_files.push(config_path.display().to_string());
-                if local_path.exists() {
-                    merged_files.push(local_path.display().to_string());
-                }
-                let merged_from = if merged_files.len() == 1 {
-                    format!("config file {}", merged_files[0])
-                } else {
-                    format!(
-                        "config (merged from {}; the error is in one of them)",
-                        merged_files.join(", ")
-                    )
+                // Every file merged into `raw` is kept as a source: a
+                // mistake is found in the merged value, which has no
+                // positions, and is located in these afterwards.
+                let mut files: Vec<SourceFile> = Vec::new();
+                let mut raw = match read_user_build_config()? {
+                    Some((user_raw, user_file)) => {
+                        files.push(user_file);
+                        user_raw
+                    }
+                    None => toml::Value::Table(toml::map::Map::new()),
                 };
-                let mut raw = user_raw.unwrap_or_else(|| toml::Value::Table(toml::map::Map::new()));
                 merge_toml_values(&mut raw, repo_raw);
+                files.push(SourceFile {
+                    name: config_path.display().to_string(),
+                    content: substituted.clone(),
+                    build_only: false,
+                });
                 // Overlay: rsconstruct.local.toml, when present, is deep-merged
                 // over the main config. Tables merge recursively; arrays and
                 // scalars from the local file replace the main file's values.
@@ -985,28 +1041,45 @@ impl Config {
                         ))
                     })?;
                     merge_toml_values(&mut raw, local_raw);
+                    files.push(SourceFile {
+                        name: local_path.display().to_string(),
+                        content: local_content.clone(),
+                        build_only: false,
+                    });
                     Some(local_content)
                 } else {
                     None
                 };
+                // Highest precedence first: the first file that has a key is
+                // the one whose value won the merge.
+                files.reverse();
+                let sources = SourceFiles::new(files);
                 // Run both schema validators before serde sees the config, so users
                 // get pretty per-section errors instead of serde's raw messages.
                 // Errors from both validators are surfaced together under a single
                 // "Invalid config:" header.
-                set_python_interpreter(&raw, &merged_from)?;
+                set_python_interpreter(&raw, &sources)?;
                 let mut all_errors = validate_processor_fields_raw(&raw);
                 all_errors.extend(validate_analyzer_fields_raw(&raw));
                 if !all_errors.is_empty() {
                     return Err(crate::exit_code::config_error(format!(
                         "Invalid config:\n{}",
-                        all_errors.join("\n")
+                        describe_issues(&all_errors, &sources)
                     )));
                 }
-                let config: Self = raw.try_into().map_err(|e| {
-                    crate::exit_code::config_error(format!("Failed to parse {merged_from}: {e}"))
+                let mut config: Self = raw.try_into().map_err(|e| {
+                    // The user config holds only `[build]`, which parsed
+                    // above; with its `[tables]` it is not a `Config`.
+                    let project_files = sources.files().iter().filter(|f| !f.build_only);
+                    crate::exit_code::config_error(
+                        parse_error_in::<Self>(project_files).unwrap_or_else(|| {
+                            format!("Failed to parse {}: {e}", merged_from(&sources))
+                        }),
+                    )
                 })?;
-                validate_build_config(&config.build)?;
-                validate_cache_config(&config.cache)?;
+                validate_build_config(&config.build).map_err(|i| i.into_error(&sources))?;
+                validate_cache_config(&config.cache).map_err(|i| i.into_error(&sources))?;
+                config.sources = sources;
                 // Capture byte-level spans from the substituted sources so we can
                 // report user-set fields as `rsconstruct.toml:<line>` (or
                 // `rsconstruct.local.toml:<line>`) instead of the sentinel
@@ -1024,17 +1097,25 @@ impl Config {
                     )));
                 }
                 let config: Self = match read_user_build_config()? {
-                    Some(raw) => raw.try_into().map_err(|e| {
-                        crate::exit_code::config_error(format!(
-                            "Failed to parse user config file: {e}"
-                        ))
-                    })?,
+                    Some((raw, user_file)) => {
+                        let sources = SourceFiles::new(vec![user_file]);
+                        let mut config: Self = raw.try_into().map_err(|e| {
+                            crate::exit_code::config_error(
+                                parse_error_in::<BuildSection>(sources.files().iter())
+                                    .unwrap_or_else(|| {
+                                        format!("Failed to parse {}: {e}", merged_from(&sources))
+                                    }),
+                            )
+                        })?;
+                        config.sources = sources;
+                        config
+                    }
                     None => Self::default(),
                 };
                 // No processor sections here, so nothing was deserialized
                 // against the interpreter yet; recording it now suffices.
                 crate::python_env::set_interpreter(&config.build.python);
-                validate_build_config(&config.build)?;
+                validate_build_config(&config.build).map_err(|i| i.into_error(&config.sources))?;
                 (
                     config,
                     SpanMap::new(),
@@ -1104,13 +1185,24 @@ impl Config {
             if let Some(table) = inst.config_toml.as_table() {
                 // instance_name is already the full section name
                 // (`processor.checker.ruff`, `processor.checker.ascii.one`).
-                validate_single_processor(&inst.pname, &inst.instance_name, table, &mut errors);
+                // The section path is left empty: a value that is wrong
+                // after an override is wrong on the command line, and
+                // pointing at the file would send the user to a line that
+                // is fine.
+                validate_single_processor(
+                    &inst.pname,
+                    &inst.instance_name,
+                    &[],
+                    table,
+                    &mut errors,
+                );
             }
         }
         if !errors.is_empty() {
+            let messages: Vec<&str> = errors.iter().map(|e| e.message.as_str()).collect();
             return Err(crate::exit_code::config_error(format!(
                 "Invalid config after CLI overrides:\n{}",
-                errors.join("\n")
+                messages.join("\n")
             )));
         }
         // An override may have set `enabled = true` or a new

@@ -274,7 +274,7 @@ pub(super) fn substitute_variables(content: &str) -> Result<String> {
     let defined_vars = parsed.as_ref().map(var_names_of).unwrap_or_default();
 
     // Check for undefined variable references, ignoring `${...}` in comments
-    for line in content.lines() {
+    for (index, line) in content.lines().enumerate() {
         for captures in var_pattern.captures_iter(strip_toml_comment(line)) {
             let var_name = captures
                 .get(1)
@@ -283,7 +283,7 @@ pub(super) fn substitute_variables(content: &str) -> Result<String> {
             if !defined_vars.iter().any(|v| v == var_name) {
                 return Err(crate::exit_code::RsconstructError::new(
                     crate::exit_code::RsconstructExitCode::ConfigError,
-                    format!("Undefined variable: ${{{var_name}}}"),
+                    format!("line {}: Undefined variable: ${{{var_name}}}", index + 1),
                 )
                 .into());
             }
@@ -331,7 +331,9 @@ fn check_no_residual_references(content: &str) -> Result<()> {
     static RESIDUAL_PATTERN: OnceLock<Regex> = OnceLock::new();
     let residual =
         RESIDUAL_PATTERN.get_or_init(|| Regex::new(r"\$\{([^}]+)\}").expect(errors::INVALID_REGEX));
-    for line in content.lines() {
+    // Substitution keeps every line where it was (see the module-level
+    // invariant), so a line number here is one in the file.
+    for (index, line) in content.lines().enumerate() {
         if let Some(captures) = residual.captures(strip_toml_comment(line)) {
             let var_name = captures
                 .get(1)
@@ -340,7 +342,8 @@ fn check_no_residual_references(content: &str) -> Result<()> {
             return Err(crate::exit_code::RsconstructError::new(
                 crate::exit_code::RsconstructExitCode::ConfigError,
                 format!(
-                    "Unresolved variable reference ${{{var_name}}}: a reference must be the entire quoted value (\"${{{var_name}}}\"), not embedded in a larger string"
+                    "line {}: Unresolved variable reference ${{{var_name}}}: a reference must be the entire quoted value (\"${{{var_name}}}\"), not embedded in a larger string",
+                    index + 1
                 ),
             ).into());
         }

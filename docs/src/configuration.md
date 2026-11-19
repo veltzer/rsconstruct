@@ -290,6 +290,32 @@ is hidden by default:
 | `tool_stats` | `rsconstruct tool stats` | `Tool`, `Status`, `Processors`, `Install` |
 | `webcache_list` | `rsconstruct webcache list` | `URL`, `Size`, `Age`, `State` |
 
+## Where a config error points
+
+Up to three files are merged into one config (user config, `rsconstruct.toml`,
+`rsconstruct.local.toml`), and most mistakes are found in the merged result.
+Every config error is reported at the file and line to edit, whichever file
+that is:
+
+```text
+Invalid config:
+rsconstruct.toml:12: [processor.checker.ruff]: unknown field 'arg' (valid fields: ...)
+rsconstruct.local.toml:4: [processor.checker.pylint.core]: 'max_jobs' must be greater than 0 (...)
+```
+
+- An unknown or mistyped field is at its own line. When a key is set in more
+  than one file, the line is in the file whose value won the merge.
+- A required field that is missing has no line: the error is at the header
+  of the stanza it has to be added to. The same holds for a value only the
+  processor's own config rejects (`max_jobs = -1`).
+- A value of the wrong type in a top-level section (`[build] parallel = "x"`)
+  is reported as that file's own parse error, with line, column and the line
+  itself.
+- An undefined `${variable}` names its line in the file it is in.
+
+A mistake that exists only on the command line (`--iset`, `--pset`) is
+reported without a location: the files are fine.
+
 ## Section details
 
 ### `[build]`

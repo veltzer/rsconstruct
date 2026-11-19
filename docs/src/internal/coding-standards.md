@@ -239,8 +239,13 @@ the user doesn't need just to see "you typoed a field name."
 
 The validators are `validate_processor_fields_raw` and
 `validate_analyzer_fields_raw` in `src/config/validation.rs`. They return
-`Vec<String>` so `Config::load()` can surface errors from both validators
-together under a single `Invalid config:` header. If you add a new config
+`Vec<ConfigIssue>` so `Config::load()` can surface errors from both validators
+together under a single `Invalid config:` header. A `ConfigIssue` is a message
+plus the path of the key it is about (`["processor", "checker", "ruff",
+"args"]`); the validators see the merged value, which has no positions, and
+`SourceFiles::locate` turns that path back into the `file:line` the message
+leads with. Every new check must give the path of the key it complains about
+— the field for a field mistake, the stanza for a missing field. If you add a new config
 surface (a new top-level section with its own registered plugins), add a
 matching validator and call it from `Config::load()` alongside the
 existing two.

@@ -181,14 +181,56 @@ pub fn create_processor_for_instance(
 /// error naming the stanza. The value of a field is only checked when its
 /// config type is built (`max_jobs = -1`), so this is where such a mistake
 /// surfaces, and it is the user's file that is wrong, not the build.
-fn stanza_error(section: &str, error: &anyhow::Error) -> anyhow::Error {
-    crate::exit_code::config_error(format!("Invalid config:\n  [{section}]: {error:#}"))
+///
+/// `path` is the stanza's key path in the config files, which is what gives
+/// the message the file and line of the stanza's header.
+fn stanza_error(
+    config: &crate::config::Config,
+    path: &[String],
+    section: &str,
+    error: &anyhow::Error,
+) -> anyhow::Error {
+    let location = config
+        .sources
+        .locate(path)
+        .map_or_else(String::new, |location| format!("{location}: "));
+    crate::exit_code::config_error(format!(
+        "Invalid config:\n  {location}[{section}]: {error:#}"
+    ))
 }
 
-/// Create a processor for every declared instance of `cfg`.
-pub fn create_processors_of(cfg: &crate::config::ProcessorConfig) -> Result<ProcessorMap> {
+/// The key path of a processor instance's stanza: `processor`, its type,
+/// its name, and its instance segment when it has one.
+fn processor_stanza_path(instance_name: &str) -> Vec<String> {
+    let Some(parsed) = crate::registries::parse_name(instance_name) else {
+        return Vec::new();
+    };
+    let mut path = vec![
+        "processor".to_string(),
+        parsed.processor_type.as_str().to_string(),
+        parsed.short.to_string(),
+    ];
+    path.extend(parsed.instance.map(str::to_string));
+    path
+}
+
+/// The key path of an analyzer instance's stanza: `analyzer`, its type, and
+/// its instance segment when it has one.
+fn analyzer_stanza_path(inst: &crate::config::AnalyzerInstance) -> Vec<String> {
+    let mut path = vec!["analyzer".to_string(), inst.type_name.clone()];
+    path.extend(
+        inst.instance_name
+            .strip_prefix(inst.type_name.as_str())
+            .and_then(|rest| rest.strip_prefix('.'))
+            .map(str::to_string),
+    );
+    path
+}
+
+/// Create a processor for every declared instance of `config`.
+pub fn create_processors_of(config: &crate::config::Config) -> Result<ProcessorMap> {
     let mut processors: ProcessorMap = HashMap::new();
-    for inst in &cfg.instances {
+    for inst in &config.processor.instances {
         match create_processor_for_instance(&inst.pname, &inst.config_toml) {
             Ok(Some(proc)) => {
                 processors.insert(inst.instance_name.clone(), proc);
@@ -196,24 +238,37 @@ pub fn create_processors_of(cfg: &crate::config::ProcessorConfig) -> Result<Proc
             Ok(None) => {
                 anyhow::bail!("Unknown processor type: '{}'", inst.pname);
             }
-            Err(e) => return Err(stanza_error(&inst.instance_name, &e)),
+            Err(e) => {
+                return Err(stanza_error(
+                    config,
+                    &processor_stanza_path(&inst.instance_name),
+                    &inst.instance_name,
+                    &e,
+                ));
+            }
         }
     }
     Ok(processors)
 }
 
-/// Create an analyzer for every declared instance of `cfg`, disabled ones
-/// included: whether one runs is the caller's business.
+/// Create an analyzer for every declared instance of `config`, disabled
+/// ones included: whether one runs is the caller's business.
 pub fn create_analyzers_of(
-    cfg: &crate::config::AnalyzerConfig,
+    config: &crate::config::Config,
     verbose: bool,
 ) -> Result<Vec<(String, Box<dyn DepAnalyzer>)>> {
     let mut analyzers = Vec::new();
-    for inst in &cfg.instances {
+    for inst in &config.analyzer.instances {
         let plugin = crate::registries::find_analyzer_plugin(&inst.type_name)
             .ok_or_else(|| anyhow::anyhow!("Unknown analyzer type '{}'", inst.type_name))?;
-        let analyzer = (plugin.create)(&inst.config_toml, verbose)
-            .map_err(|e| stanza_error(&format!("analyzer.{}", inst.instance_name), &e))?;
+        let analyzer = (plugin.create)(&inst.config_toml, verbose).map_err(|e| {
+            stanza_error(
+                config,
+                &analyzer_stanza_path(inst),
+                &format!("analyzer.{}", inst.instance_name),
+                &e,
+            )
+        })?;
         analyzers.push((inst.instance_name.clone(), analyzer));
     }
     Ok(analyzers)
@@ -327,7 +382,7 @@ impl Builder {
     /// Create processors from declared instances in the config.
     /// Only processors declared in `[processor.TYPE]` or `[processor.TYPE.NAME]` are created.
     pub fn create_processors(&self) -> Result<ProcessorMap> {
-        create_processors_of(&self.config.processor)
+        create_processors_of(&self.config)
     }
 
     /// Detect and display config changes for each processor.
@@ -416,7 +471,7 @@ impl Builder {
         &self,
         verbose: bool,
     ) -> Result<HashMap<String, Box<dyn DepAnalyzer>>> {
-        Ok(create_analyzers_of(&self.config.analyzer, verbose)?
+        Ok(create_analyzers_of(&self.config, verbose)?
             .into_iter()
             .filter(|(_, analyzer)| analyzer.enabled())
             .collect())

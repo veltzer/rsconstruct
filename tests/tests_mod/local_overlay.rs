@@ -352,11 +352,12 @@ fn user_config_rejects_sections_other_than_build() {
     );
 }
 
-/// A type or unknown-field error is found in the merged config, so the
-/// message names every file that was merged. It used to name
-/// rsconstruct.toml alone, even when the typo was in the overlay.
+/// A type or unknown-field error is found in the merged config. The message
+/// names the one file that holds it: it used to name rsconstruct.toml alone
+/// even when the typo was in the overlay, and then every merged file with
+/// "the error is in one of them".
 #[test]
-fn config_error_names_every_merged_file() {
+fn config_error_names_the_file_that_holds_it() {
     let temp_dir = setup_project_with_config("[build]\nparallel = 2\n");
     write_file(
         temp_dir.path(),
@@ -367,8 +368,9 @@ fn config_error_names_every_merged_file() {
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert_eq!(output.status.code(), Some(2), "{stderr}");
     assert!(
-        stderr.contains("rsconstruct.toml") && stderr.contains("rsconstruct.local.toml"),
-        "error must name both merged files: {stderr}"
+        stderr.contains("Failed to parse config file rsconstruct.local.toml")
+            && stderr.contains("line 2, column 1"),
+        "error must name the overlay and the line: {stderr}"
     );
 }
 
@@ -400,4 +402,144 @@ fn one_discovery_pass_is_enough_when_nothing_is_routed() {
         String::from_utf8_lossy(&output.stderr)
     );
     assert!(temp_dir.path().join("hello.txt").exists());
+}
+
+/// What `toml check` prints on stderr for a project with these two files
+/// (the overlay is left out when `local` is empty). Every case here is a
+/// config error.
+fn check_stderr(main: &str, local: &str) -> String {
+    let temp_dir = setup_project_with_config(main);
+    if !local.is_empty() {
+        write_file(temp_dir.path(), "rsconstruct.local.toml", local);
+    }
+    let output = run_rsconstruct(temp_dir.path(), &["toml", "check"]);
+    let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
+    assert_eq!(output.status.code(), Some(2), "{stderr}");
+    stderr
+}
+
+/// A schema mistake is found in the merged config, which has no positions:
+/// the message used to name the section and leave the file and the line to
+/// the reader. Each one now leads with the file and line of its key, and a
+/// key set in the overlay is reported in the overlay.
+#[test]
+fn schema_errors_name_the_file_and_line() {
+    let main = "# main\n[processor.checker.ruff]\nbogus = 1\n\n[processor.ruff]\n\n[analyzer.python]\nenabeld = true\n";
+    let stderr = check_stderr(main, "");
+    for expected in [
+        "rsconstruct.toml:3: [processor.checker.ruff]: unknown field 'bogus'",
+        "rsconstruct.toml:5: [processor.ruff]: unknown processor type",
+        "rsconstruct.toml:8: [analyzer.python]: unknown field 'enabeld'",
+    ] {
+        assert!(
+            stderr.contains(expected),
+            "missing `{expected}` in: {stderr}"
+        );
+    }
+
+    let stderr = check_stderr(
+        "[processor.checker.ruff]\nargs = [\"-q\"]\n",
+        "\n\n[processor.checker.ruff]\nmax_jobs = 0\n",
+    );
+    assert!(
+        stderr.contains("rsconstruct.local.toml:4: [processor.checker.ruff]: 'max_jobs'"),
+        "{stderr}"
+    );
+}
+
+/// A required field that is missing has no line of its own: the stanza's
+/// header is where it has to be added.
+#[test]
+fn a_missing_required_field_is_located_at_its_stanza() {
+    let stderr = check_stderr(
+        "[build]\nparallel = 1\n\n[processor.explicit.generic.a]\ninputs = [\"x\"]\n",
+        "",
+    );
+    assert!(
+        stderr.contains("rsconstruct.toml:4: [processor.explicit.generic.a]: required field"),
+        "{stderr}"
+    );
+}
+
+/// A value of the wrong type in a top-level section was reported against
+/// "config (merged from ...; the error is in one of them)". The file that
+/// holds it fails the same way on its own, with line, column and the line
+/// itself.
+#[test]
+fn a_type_error_is_reported_in_the_file_that_holds_it() {
+    let stderr = check_stderr(
+        "[build]\nparallel = 2\n",
+        "# overlay\n[build]\nparallel = \"x\"\n",
+    );
+    assert!(
+        stderr.contains("Failed to parse config file rsconstruct.local.toml")
+            && stderr.contains("line 3, column 12"),
+        "{stderr}"
+    );
+    assert!(!stderr.contains("merged from"), "{stderr}");
+
+    let stderr = check_stderr(
+        "[build]\nparallel = 2\n\n[cache]\nbogus = 1\n",
+        "[build]\nparallel = 3\n",
+    );
+    assert!(
+        stderr.contains("Failed to parse config file rsconstruct.toml")
+            && stderr.contains("line 5, column 1"),
+        "{stderr}"
+    );
+}
+
+/// The range checks on `[build]` and the cross-field check on `[cache]`
+/// run on the loaded config and name the line of the offending key.
+#[test]
+fn value_checks_name_the_file_and_line() {
+    let stderr = check_stderr("[build]\nparallel = 2\n", "[build]\n\nmax_arg_len = 0\n");
+    assert!(
+        stderr.contains("rsconstruct.local.toml:3: [build] max_arg_len"),
+        "{stderr}"
+    );
+    let stderr = check_stderr(
+        "[cache]\nrestore_method = \"hardlink\"\ncompression = true\n",
+        "",
+    );
+    assert!(
+        stderr.contains("rsconstruct.toml:3: [cache] compression"),
+        "{stderr}"
+    );
+}
+
+/// A value only the processor's or analyzer's own config type rejects is
+/// found when the stanza is built, long after the files were merged, and
+/// is still reported at the stanza's header.
+#[test]
+fn a_stanza_that_cannot_be_built_is_located() {
+    let stderr = check_stderr(
+        "[build]\nparallel = 1\n\n[processor.checker.ruff.core]\nmax_jobs = -1\n",
+        "",
+    );
+    assert!(
+        stderr.contains("rsconstruct.toml:4: [processor.checker.ruff.core]:"),
+        "{stderr}"
+    );
+}
+
+/// An undefined or embedded `${...}` reference names its line.
+#[test]
+fn variable_errors_name_the_line() {
+    let stderr = check_stderr(
+        "[vars]\na = \"x\"\n\n[processor.checker.ruff]\nargs = [\"${nope}\"]\n",
+        "",
+    );
+    assert!(
+        stderr.contains("rsconstruct.toml: line 5: Undefined variable: ${nope}"),
+        "{stderr}"
+    );
+    let stderr = check_stderr(
+        "[vars]\na = \"x\"\n\n[processor.checker.ruff]\n\nargs = [\"${a}/src\"]\n",
+        "",
+    );
+    assert!(
+        stderr.contains("rsconstruct.toml: line 6: Unresolved variable reference ${a}"),
+        "{stderr}"
+    );
 }

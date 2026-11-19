@@ -405,7 +405,47 @@ fn substitute_variables_boolean() {
 // push schema errors past config-load and into the Builder where they produce
 // worse messages.
 
-use crate::config::{validate_analyzer_fields_raw, validate_processor_fields_raw};
+/// The messages of the analyzer validator's issues: what these tests read.
+fn validate_analyzer_fields_raw(raw: &toml::Value) -> Vec<String> {
+    crate::config::validate_analyzer_fields_raw(raw)
+        .into_iter()
+        .map(|issue| issue.message)
+        .collect()
+}
+
+/// The messages of the processor validator's issues.
+fn validate_processor_fields_raw(raw: &toml::Value) -> Vec<String> {
+    crate::config::validate_processor_fields_raw(raw)
+        .into_iter()
+        .map(|issue| issue.message)
+        .collect()
+}
+
+/// Each issue names the key it is about, which is what gets it a file and
+/// a line: the field for a field mistake, the section for a missing field's
+/// neighbours or a section-level mistake.
+#[test]
+fn validator_issues_carry_the_key_path() {
+    let raw = toml_of(
+        "[processor.checker.ruff]\nbogus = 1\n\n[processor.checker.pylint.core]\nmax_jobs = 0\n\n[processor.checker.nosuch]\n\n[analyzer.python]\nenabeld = false\n\n[analyzer.cpp.kernel]\ntypo = 1\n",
+    );
+    let mut paths: Vec<String> = crate::config::validate_processor_fields_raw(&raw)
+        .into_iter()
+        .chain(crate::config::validate_analyzer_fields_raw(&raw))
+        .map(|issue| issue.path.join("/"))
+        .collect();
+    paths.sort();
+    assert_eq!(
+        paths,
+        [
+            "analyzer/cpp/kernel/typo",
+            "analyzer/python/enabeld",
+            "processor/checker/nosuch",
+            "processor/checker/pylint/core/max_jobs",
+            "processor/checker/ruff/bogus",
+        ]
+    );
+}
 
 fn toml_of(s: &str) -> toml::Value {
     toml::from_str(s).expect("test fixture must be valid TOML")
