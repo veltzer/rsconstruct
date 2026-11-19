@@ -33,6 +33,12 @@ fn cache_operations() {
     let size_stdout = String::from_utf8_lossy(&size_output.stdout);
     assert!(size_stdout.contains("Cache size:"));
     assert!(size_stdout.contains("objects"));
+    // One product was built: one stored output and one cache entry,
+    // counted apart (they used to be lumped together as "2 objects").
+    assert!(
+        size_stdout.contains("(1 objects, 1 entries)"),
+        "{size_stdout}"
+    );
     // Should have at least 1 object
     assert!(
         !size_stdout.contains("0 objects"),

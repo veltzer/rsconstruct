@@ -30,25 +30,42 @@ fn read_descriptor_file(path: &Path) -> Result<CacheDescriptor> {
     })
 }
 
-impl ObjectStore {
-    /// Get cache size in bytes and number of objects (blobs + descriptors)
-    pub fn size(&self) -> Result<(u64, usize)> {
-        let mut total_bytes = 0u64;
-        let mut object_count = 0usize;
+/// What the cache holds on disk: its total size, and how many objects
+/// (the stored content of outputs) and entries (one descriptor per cached
+/// product) make it up.
+pub struct CacheSize {
+    pub bytes: u64,
+    pub objects: usize,
+    pub entries: usize,
+}
 
-        for dir in [&self.objects_dir, &self.descriptors_dir] {
+impl ObjectStore {
+    /// Get the cache's size on disk. Objects and entries are counted
+    /// apart: lumped together as "objects" the figure matched neither
+    /// `cache trim`, which calls only the stored content objects, nor
+    /// `cache stats`, which counts entries.
+    pub fn size(&self) -> Result<CacheSize> {
+        let mut size = CacheSize {
+            bytes: 0,
+            objects: 0,
+            entries: 0,
+        };
+        for (dir, is_objects) in [(&self.objects_dir, true), (&self.descriptors_dir, false)] {
             if !dir.exists() {
                 continue;
             }
             for path in walk_files(dir)? {
                 let metadata = fs::metadata(&path)
                     .with_context(|| format!("Failed to stat cache file {}", path.display()))?;
-                total_bytes += metadata.len();
-                object_count += 1;
+                size.bytes += metadata.len();
+                if is_objects {
+                    size.objects += 1;
+                } else {
+                    size.entries += 1;
+                }
             }
         }
-
-        Ok((total_bytes, object_count))
+        Ok(size)
     }
 
     /// Trim cache by removing blob objects not referenced by any descriptor.

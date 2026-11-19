@@ -26,15 +26,20 @@ pub fn handle(ctx: &crate::build_context::BuildContext, action: CacheAction) -> 
         }
         CacheAction::Size => {
             let builder = Builder::new(ctx)?;
-            let (bytes, count) = builder.object_store().size()?;
+            let size = builder.object_store().size()?;
             if json_output::is_json_mode() {
-                let out = serde_json::json!({ "bytes": bytes, "objects": count });
+                let out = serde_json::json!({
+                    "bytes": size.bytes,
+                    "objects": size.objects,
+                    "entries": size.entries,
+                });
                 println!("{}", serde_json::to_string_pretty(&out)?);
             } else {
                 println!(
-                    "Cache size: {} ({} objects)",
-                    humansize::format_size(bytes, humansize::BINARY),
-                    count
+                    "Cache size: {} ({} objects, {} entries)",
+                    humansize::format_size(size.bytes, humansize::BINARY),
+                    size.objects,
+                    size.entries
                 );
             }
         }

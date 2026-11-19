@@ -606,7 +606,30 @@ impl Executor<'_> {
         if self.is_interrupted() {
             crate::output::info(&color::yellow("Interrupted, saving progress..."));
         }
-        result?;
+        // The coordinator itself failed (re-analysis of regenerated sources,
+        // a scheduler stall). Products may have failed before that, and
+        // their failures are only reported from the statistics collected
+        // below, which this return skips: carry them on the error, or the
+        // user sees the coordinator's error alone and never learns that a
+        // product failed.
+        if let Err(e) = result {
+            let mut recorded: Vec<String> = shared
+                .errors
+                .lock()
+                .iter()
+                .map(|error| format!("{error:#}"))
+                .collect();
+            recorded.extend(shared.failed_messages.lock().iter().cloned());
+            if recorded.is_empty() {
+                return Err(e);
+            }
+            return Err(e.context(format!(
+                "the build stopped on an error after {} product failure(s):\n  {}\nthe error that \
+                 stopped it",
+                recorded.len(),
+                recorded.join("\n  ")
+            )));
+        }
         Self::remove_outputs_never_rebuilt(graph, object_store, classification, &shared)?;
         Self::collect_build_stats(shared, keep_going, self.is_interrupted())
     }

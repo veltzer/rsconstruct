@@ -365,6 +365,7 @@ impl Builder {
                 if let Some(analyzer_name) = analyzer {
                     // Clear only entries from specific analyzer
                     let deps_cache = DepsCache::open()?;
+                    self.require_known_analyzer(&deps_cache, &analyzer_name)?;
                     let removed =
                         deps_cache
                             .remove_by_analyzer(&analyzer_name)
@@ -497,6 +498,9 @@ impl Builder {
                         }
                     }
                     AnalyzerShowFilter::Analyzers { analyzers } => {
+                        for name in &analyzers {
+                            self.require_known_analyzer(&deps_cache, name)?;
+                        }
                         let mut entries: Vec<_> = deps_cache.list_by_analyzers(&analyzers);
                         entries.sort_by(|a, b| a.0.cmp(&b.0));
                         if json_mode {
@@ -517,6 +521,34 @@ impl Builder {
         }
 
         Ok(())
+    }
+
+    /// Fail on an analyzer name that is neither declared in the config nor
+    /// the owner of any cached entry (an analyzer since removed from the
+    /// config still owns its entries, and those can be shown and cleaned).
+    /// A mistyped name used to be "no entries found" and exit 0.
+    fn require_known_analyzer(&self, deps_cache: &DepsCache, name: &str) -> Result<()> {
+        let mut known: Vec<String> = self
+            .config
+            .analyzer
+            .instances
+            .iter()
+            .map(|i| i.instance_name.clone())
+            .chain(deps_cache.stats_by_analyzer().into_keys())
+            .collect();
+        known.sort();
+        known.dedup();
+        if known.iter().any(|k| k == name) {
+            return Ok(());
+        }
+        Err(crate::exit_code::config_error(format!(
+            "Unknown analyzer '{name}'. Known here: {}",
+            if known.is_empty() {
+                "none".to_string()
+            } else {
+                known.join(", ")
+            }
+        )))
     }
 
     /// Print dependencies for a source file

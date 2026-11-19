@@ -746,3 +746,43 @@ fn analyzer_show_files_ignores_a_leading_dot_slash() {
         "expected the cached dependency of src/main.c: {stdout}"
     );
 }
+
+/// An analyzer name that is neither declared nor the owner of a cached
+/// entry is a mistake, and an error: `analyzer clean --analyzer` and
+/// `analyzer show analyzers` used to answer "no entries" and exit 0.
+#[test]
+fn an_unknown_analyzer_name_is_an_error() {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let project_path = temp_dir.path();
+    fs::write(
+        project_path.join("rsconstruct.toml"),
+        "[processor.generator.markdown2html]\nsrc_dirs = [\".\"]\n\n[analyzer.markdown]\n",
+    )
+    .unwrap();
+    fs::write(project_path.join("doc.md"), "# hi\n").unwrap();
+
+    for args in [
+        &["analyzer", "clean", "--analyzer", "markdwon"][..],
+        &["analyzer", "show", "analyzers", "markdwon"],
+    ] {
+        let output = run_rsconstruct_with_env(project_path, args, &[("NO_COLOR", "1")]);
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert_eq!(output.status.code(), Some(2), "{args:?}: {stderr}");
+        assert!(stderr.contains("Unknown analyzer 'markdwon'"), "{stderr}");
+        assert!(
+            stderr.contains("markdown"),
+            "the known names are listed: {stderr}"
+        );
+    }
+    // The declared name is accepted, with or without cached entries.
+    let output = run_rsconstruct_with_env(
+        project_path,
+        &["analyzer", "clean", "--analyzer", "markdown"],
+        &[("NO_COLOR", "1")],
+    );
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
