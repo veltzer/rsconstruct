@@ -67,7 +67,6 @@ struct HandlerContext<'b> {
     id: usize,
     input_checksum: &'b str,
     proc_name: &'b str,
-    keep_going: bool,
     shared: &'b SharedState,
     pb: &'b ProgressBar,
 }

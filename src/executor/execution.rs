@@ -359,7 +359,6 @@ struct LevelContext<'b> {
     /// this lock.
     graph: &'b RwLock<BuildGraph>,
     object_store: &'b ObjectStore,
-    keep_going: bool,
     timings: bool,
     shared: &'b SharedState,
     pb: &'b ProgressBar,
@@ -551,7 +550,6 @@ impl Executor<'_> {
         let lctx = LevelContext {
             graph: &graph_lock,
             object_store,
-            keep_going,
             timings: self.timings,
             shared: &shared,
             pb: &pb,
@@ -998,7 +996,6 @@ impl Executor<'_> {
         item: &WorkItem,
         proc_name: &str,
         lctx: &LevelContext,
-        emit_fail_event: bool,
     ) -> PreCheckResult {
         let product = &item.product;
         lctx.shared.attempted.lock().insert(item.product_id);
@@ -1019,7 +1016,6 @@ impl Executor<'_> {
             id: item.product_id,
             input_checksum: &item.input_checksum,
             proc_name,
-            keep_going: lctx.keep_going,
             shared: lctx.shared,
             pb: lctx.pb,
         };
@@ -1061,17 +1057,15 @@ impl Executor<'_> {
             && !sandbox_removes
             && let Err(e) = remove_stale_outputs(product, lctx.object_store, &item.input_checksum)
         {
-            self.handle_error(&ctx, e, None);
+            self.handle_error(&ctx, &e, None);
             Self::inc_progress(lctx.pb, lctx.shared);
             return PreCheckResult::Handled;
         }
         match item.action {
-            ProductAction::Restore => {
-                match self.handle_restore(&ctx, lctx.object_store, emit_fail_event) {
-                    RestoreOutcome::Restored | RestoreOutcome::Failed => PreCheckResult::Handled,
-                    RestoreOutcome::NotRestorable => PreCheckResult::NeedsExecution,
-                }
-            }
+            ProductAction::Restore => match self.handle_restore(&ctx, lctx.object_store) {
+                RestoreOutcome::Restored | RestoreOutcome::Failed => PreCheckResult::Handled,
+                RestoreOutcome::NotRestorable => PreCheckResult::NeedsExecution,
+            },
             ProductAction::Skip | ProductAction::Build => PreCheckResult::NeedsExecution,
         }
     }
@@ -1094,7 +1088,7 @@ impl Executor<'_> {
         // Handle skip/restore for items that don't need rebuild
         let mut to_execute: Vec<&WorkItem> = Vec::new();
         for item in items {
-            match self.try_skip_or_restore(item, proc_name, lctx, true) {
+            match self.try_skip_or_restore(item, proc_name, lctx) {
                 // Already skipped or restored — nothing left to execute.
                 PreCheckResult::Handled => {}
                 PreCheckResult::NeedsExecution => to_execute.push(item),
@@ -1247,7 +1241,6 @@ impl Executor<'_> {
                     id: item.product_id,
                     input_checksum: &item.input_checksum,
                     proc_name,
-                    keep_going: lctx.keep_going,
                     shared: lctx.shared,
                     pb: lctx.pb,
                 };
@@ -1257,7 +1250,7 @@ impl Executor<'_> {
                         self.handle_success(&ctx, lctx.object_store, lctx.graph, None);
                     }
                     Err(e) => {
-                        self.handle_error(&ctx, e, None);
+                        self.handle_error(&ctx, &e, None);
                     }
                 }
                 Self::inc_progress(lctx.pb, lctx.shared);
@@ -1295,7 +1288,7 @@ impl Executor<'_> {
             let product = &item.product;
 
             if matches!(
-                self.try_skip_or_restore(item, &product.processor, lctx, true),
+                self.try_skip_or_restore(item, &product.processor, lctx),
                 PreCheckResult::Handled
             ) {
                 continue;
@@ -1307,7 +1300,6 @@ impl Executor<'_> {
                     id: item.product_id,
                     input_checksum: &item.input_checksum,
                     proc_name: &product.processor,
-                    keep_going: lctx.keep_going,
                     shared: lctx.shared,
                     pb: lctx.pb,
                 };
@@ -1437,7 +1429,7 @@ impl Executor<'_> {
                                 last_error = Some(e);
                             } else {
                                 let duration = product_start.elapsed();
-                                self.handle_error(&ctx, e, Some(duration));
+                                self.handle_error(&ctx, &e, Some(duration));
                                 last_error = None; // error already handled
                             }
                         }
@@ -1446,7 +1438,7 @@ impl Executor<'_> {
                 // Safety: if we broke out of retry loop with unhandled error, handle it
                 if let Some(e) = last_error {
                     let duration = product_start.elapsed();
-                    self.handle_error(&ctx, e, Some(duration));
+                    self.handle_error(&ctx, &e, Some(duration));
                 }
                 crate::processor::set_declared_tools(None);
                 crate::sandbox::set_spec(None);
@@ -1589,28 +1581,9 @@ impl Executor<'_> {
                     {
                         Ok(cs) => cs,
                         Err(e) => {
-                            // Reported like a failed run (see
-                            // `record_failure`): the same `[processor]
-                            // product:` wording in both modes, a JSON
-                            // product event, and printed now only when
-                            // keeping going.
-                            let msg = self.failure_message(product, &e);
-                            json_output::emit_product_complete(
-                                &self.product_display(product),
-                                &product.processor,
-                                json_output::ProductStatus::Failed,
-                                None,
-                                Some(&format!("{e:#}")),
-                            );
-                            shared.failed_products.lock().insert(id);
-                            if keep_going {
-                                // stderr: errors must survive --json, and must not
-                                // corrupt the JSON event stream on stdout.
-                                crate::output::error(&msg);
-                                shared.failed_messages.lock().push(msg);
-                            } else {
-                                shared.errors.lock().push(anyhow::anyhow!(msg));
-                            }
+                            // Its inputs cannot be read: failed like any
+                            // other product, before it was ever started.
+                            self.fail_product(shared, id, product, &e, None, false);
                             continue;
                         }
                     };

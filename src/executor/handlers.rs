@@ -11,44 +11,59 @@ impl Executor<'_> {
         f(stats.entry(proc_name.to_string()).or_default());
     }
 
-    /// Record a product failure into shared state.
+    /// Everything a product's failure does, and the only place that does
+    /// it: whatever went wrong (its inputs could not be read, a restore
+    /// failed, its tool failed, its outputs could not be cached) the product
+    /// is failed the same way.
     ///
-    /// The message is `[processor] product: error` in both modes (see
-    /// [`failure_message`](super::Executor::failure_message)). In keep-going
-    /// mode it is printed at once and kept for the summary. In fail-fast mode
-    /// it is kept for the build's error, which reports every failure of the
-    /// run (see `collect_build_stats`); nothing prints it earlier, so each
-    /// failure is reported exactly once in either mode. If
-    /// `mark_processor_failed` is true, the processor name is also recorded so
-    /// its remaining products are skipped in fail-fast mode.
-    fn record_failure(
+    /// - A `product_complete` "failed" JSON event is emitted.
+    /// - The processor's `failed` count goes up, so the per-processor table
+    ///   adds up to the summary's total.
+    /// - The product is marked failed, which is what blocks its dependents.
+    /// - Its outputs are forgotten: the tool may have partly written them,
+    ///   and no later read may serve a pre-write checksum.
+    /// - The message, `[processor] product: error` in both modes (see
+    ///   [`failure_message`](Self::failure_message)), is reported exactly
+    ///   once: keeping going, it is printed now and kept for the summary;
+    ///   failing fast, it is kept for the build's error, which reports every
+    ///   failure of the run (see `collect_build_stats`).
+    ///
+    /// `stops_processor` is true when the processor's own run failed: failing
+    /// fast, its remaining products are then not started.
+    pub(super) fn fail_product(
         &self,
-        ctx: &HandlerContext,
-        error: anyhow::Error,
-        mark_processor_failed: bool,
+        shared: &SharedState,
+        id: usize,
+        product: &crate::graph::Product,
+        error: &anyhow::Error,
+        duration: Option<std::time::Duration>,
+        stops_processor: bool,
     ) {
-        // Always mark the product as failed
-        ctx.shared.failed_products.lock().insert(ctx.id);
+        emit_product_complete(
+            &self.product_display(product),
+            &product.processor,
+            ProductStatus::Failed,
+            duration,
+            Some(&format!("{error:#}")),
+        );
+        Self::update_stats(shared, &product.processor, |s| s.failed += 1);
+        shared.failed_products.lock().insert(id);
+        crate::checksum::forget_in_session(self.build_ctx, &product.outputs);
 
-        // The tool may have partially written outputs before failing; evict
-        // them so no later read serves a pre-write checksum.
-        crate::checksum::forget_in_session(self.build_ctx, &ctx.product.outputs);
-
-        let msg = self.failure_message(ctx.product, &error);
-
-        if ctx.keep_going {
+        let msg = self.failure_message(product, error);
+        if self.keep_going {
             // stderr: errors must survive --json, and must not corrupt the
             // JSON event stream on stdout.
             crate::output::error(&msg);
-            ctx.shared.failed_messages.lock().push(msg);
+            shared.failed_messages.lock().push(msg);
         } else {
-            if mark_processor_failed {
-                ctx.shared
+            if stops_processor {
+                shared
                     .failed_processors
                     .lock()
-                    .insert(ctx.proc_name.to_string());
+                    .insert(product.processor.clone());
             }
-            ctx.shared.errors.lock().push(anyhow::anyhow!(msg));
+            shared.errors.lock().push(anyhow::anyhow!(msg));
         }
     }
 
@@ -95,12 +110,10 @@ impl Executor<'_> {
 
     /// Handle cache restore for a product.
     /// Try to restore a product from cache.
-    /// When `emit_fail_event` is true, emits a `product_complete` "failed" JSON event on error.
     pub(super) fn handle_restore(
         &self,
         ctx: &HandlerContext,
         object_store: &crate::object_store::ObjectStore,
-        emit_fail_event: bool,
     ) -> RestoreOutcome {
         let desc_key = ctx.product.descriptor_key(ctx.input_checksum);
         let restore_result = object_store
@@ -145,16 +158,7 @@ impl Executor<'_> {
                 RestoreOutcome::Restored
             }
             Err(e) => {
-                if emit_fail_event {
-                    emit_product_complete(
-                        &self.product_display(ctx.product),
-                        &ctx.product.processor,
-                        ProductStatus::Failed,
-                        None,
-                        Some(&format!("{e:#}")),
-                    );
-                }
-                self.record_failure(ctx, e, false);
+                self.fail_product(ctx.shared, ctx.id, ctx.product, &e, None, false);
                 Self::inc_progress(ctx.pb, ctx.shared);
                 RestoreOutcome::Failed
             }
@@ -162,23 +166,14 @@ impl Executor<'_> {
         }
     }
 
-    /// Handle a product execution error.
-    /// Emits a JSON event, records failure stats, and records keep-going / non-keep-going state.
+    /// Handle a product execution error: the processor's own run failed.
     pub(super) fn handle_error(
         &self,
         ctx: &HandlerContext,
-        error: anyhow::Error,
+        error: &anyhow::Error,
         duration: Option<std::time::Duration>,
     ) {
-        emit_product_complete(
-            &self.product_display(ctx.product),
-            &ctx.product.processor,
-            ProductStatus::Failed,
-            duration,
-            Some(&format!("{error:#}")),
-        );
-        Self::update_stats(ctx.shared, ctx.proc_name, |s| s.failed += 1);
-        self.record_failure(ctx, error, true);
+        self.fail_product(ctx.shared, ctx.id, ctx.product, error, duration, true);
     }
 
     /// Handle caching outputs and recording stats after successful execution.
@@ -212,16 +207,8 @@ impl Executor<'_> {
             match crate::checksum::combined_input_checksum(self.build_ctx, &ctx.product.inputs) {
                 Ok(cs) => cs,
                 Err(e) => {
-                    emit_product_complete(
-                        &self.product_display(ctx.product),
-                        &ctx.product.processor,
-                        ProductStatus::Failed,
-                        duration,
-                        Some(&format!(
-                            "Failed to compute post-execution input checksum: {e:#}"
-                        )),
-                    );
-                    self.record_failure(ctx, e, false);
+                    let e = e.context("Failed to compute post-execution input checksum");
+                    self.fail_product(ctx.shared, ctx.id, ctx.product, &e, duration, false);
                     return false;
                 }
             };
@@ -272,14 +259,7 @@ impl Executor<'_> {
         match cache_result {
             Ok(_changed) => {}
             Err(e) => {
-                emit_product_complete(
-                    &self.product_display(ctx.product),
-                    &ctx.product.processor,
-                    ProductStatus::Failed,
-                    duration,
-                    Some(&format!("{e:#}")),
-                );
-                self.record_failure(ctx, e, false);
+                self.fail_product(ctx.shared, ctx.id, ctx.product, &e, duration, false);
                 return false;
             }
         }
