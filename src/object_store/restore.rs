@@ -50,11 +50,10 @@ impl ObjectStore {
                         format!("Failed to create output directory: {}", parent.display())
                     })?;
                 }
-                self.restore_file(&checksum, output_path, mode)
+                self.restore_verified(&checksum, output_path, mode)
                     .with_context(|| {
                         format!("Failed to restore blob to: {}", output_path.display())
-                    })?;
-                Ok(true)
+                    })
             }
             CacheDescriptor::Tree { entries } => {
                 super::validate_tree_entries(&entries)?;
@@ -81,14 +80,46 @@ impl ObjectStore {
                         )?;
                         continue;
                     }
-                    self.restore_file(&entry.checksum, file_path, entry.mode)
+                    let intact = self
+                        .restore_verified(&entry.checksum, file_path, entry.mode)
                         .with_context(|| {
                             format!("Failed to restore tree entry: {}", file_path.display())
                         })?;
+                    if !intact {
+                        return Ok(false);
+                    }
                 }
                 Ok(true)
             }
         }
+    }
+
+    /// Restore one file from its object and check that what came out is
+    /// what the checksum names. `Ok(false)` when it is not: the object is
+    /// damaged, so it and the file just restored from it are removed, and
+    /// the product is built instead.
+    ///
+    /// An object is written to a temp file and renamed into place without
+    /// being synced, so a power loss can leave an empty or short file
+    /// under a valid name. Nothing looked at an object's content again:
+    /// the damaged bytes were restored, the next build found the output
+    /// did not match and restored the same bytes once more, and every
+    /// build reported "restored" over an output that stayed wrong.
+    fn restore_verified(&self, checksum: &str, path: &Path, mode: Option<u32>) -> Result<bool> {
+        self.restore_file(checksum, path, mode)?;
+        let content = fs::read(path)
+            .with_context(|| format!("Failed to read back restored file: {}", path.display()))?;
+        if Self::calculate_checksum_bytes(&content) == checksum {
+            return Ok(true);
+        }
+        crate::output::warn(&format!(
+            "cache object {checksum} is damaged (its content does not match its name); \
+             removing it and rebuilding {}",
+            path.display()
+        ));
+        fs::remove_file(path).with_context(|| format!("Failed to remove {}", path.display()))?;
+        self.remove_object(checksum)?;
+        Ok(false)
     }
 
     /// Whether a tree entry is on disk as recorded: a symbolic link with
@@ -309,6 +340,53 @@ mod tests {
         store.store_marker(&ctx, "cafe1234").unwrap();
         assert!(!store.needs_rebuild_descriptor(&ctx, "cafe1234", &[]));
         assert!(store.can_restore_descriptor(&ctx, "cafe1234"));
+    }
+
+    /// An object whose content no longer matches its name (emptied by a
+    /// power loss, say) is not restored: the restore reports that it could
+    /// not be done, the damaged object and the file made from it are gone,
+    /// and once the product is built again the entry restores normally.
+    #[test]
+    fn a_damaged_object_is_dropped_instead_of_restored() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let store = ObjectStore::new_in(tmp.path());
+        let ctx = BuildContext::new();
+        ctx.set_mtime_check(false);
+
+        let out = tmp.path().join("out.txt");
+        fs::write(&out, b"the real content").unwrap();
+        store.store_blob_descriptor(&ctx, "feed0001", &out).unwrap();
+        let checksum = ObjectStore::calculate_checksum_bytes(b"the real content");
+
+        // Damage the object the way a lost write does, and lose the output.
+        let object = store.object_path(&checksum);
+        crate::platform::set_permissions_mode(&object, 0o644).unwrap();
+        fs::write(&object, b"").unwrap();
+        fs::remove_file(&out).unwrap();
+
+        let outputs = std::slice::from_ref(&out);
+        assert!(
+            !store
+                .restore_from_descriptor(&ctx, "feed0001", outputs)
+                .unwrap()
+        );
+        assert!(
+            !out.exists(),
+            "the damaged bytes must not be left as output"
+        );
+        assert!(!store.has_object(&checksum), "the damaged object must go");
+        assert!(!store.can_restore_descriptor(&ctx, "feed0001"));
+
+        // Built again, the entry is whole and restores.
+        fs::write(&out, b"the real content").unwrap();
+        store.store_blob_descriptor(&ctx, "feed0001", &out).unwrap();
+        fs::remove_file(&out).unwrap();
+        assert!(
+            store
+                .restore_from_descriptor(&ctx, "feed0001", outputs)
+                .unwrap()
+        );
+        assert_eq!(fs::read(&out).unwrap(), b"the real content");
     }
 
     /// Blob verification is tiered: the first output is content-verified

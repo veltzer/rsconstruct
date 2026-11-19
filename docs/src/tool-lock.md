@@ -117,6 +117,11 @@ project's Python packages into its `.venv`:
 .rsconstruct/tools/bin/<exe>                         the executables, first on PATH
 ```
 
+`bin` is a symbolic link to a `bin.gen-…` directory beside it. A sync builds
+a complete new one and replaces the link in one step, so a build that starts
+while tools are being installed sees either the old set or the new one, never
+a missing `bin`.
+
 At startup, in a project directory, rsconstruct puts `.rsconstruct/tools/bin`
 first on `PATH` for itself and every tool it runs, so the project's copy wins
 over anything installed elsewhere. `cargo <subcommand>` processors (`cargo

@@ -132,6 +132,27 @@ impl ObjectStore {
         self.object_path(checksum).exists() || self.compressed_object_path(checksum).exists()
     }
 
+    /// Remove an object from the store, in whichever format it is held.
+    /// Objects are read-only; removing one needs only its directory to be
+    /// writable, so no mode is changed.
+    pub(super) fn remove_object(&self, checksum: &str) -> Result<()> {
+        for path in [
+            self.object_path(checksum),
+            self.compressed_object_path(checksum),
+        ] {
+            match fs::remove_file(&path) {
+                Ok(()) => {}
+                Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+                Err(e) => {
+                    return Err(e).with_context(|| {
+                        format!("Failed to remove cache object: {}", path.display())
+                    });
+                }
+            }
+        }
+        Ok(())
+    }
+
     /// Restore a file from the object store, applying the stored file mode.
     ///
     /// The restore path is chosen by the object's actual on-disk format, not

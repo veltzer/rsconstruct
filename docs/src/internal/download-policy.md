@@ -48,7 +48,7 @@ refused, or dropped during handshake. The motivating incident was a
 
 ```text
 curl: (35) Recv failure: Connection reset by peer
-FAILED [binary] rumdl, taplo: curl -fsSL -o /tmp/taplo.dl https://... exited with code 35
+FAILED [binary] rumdl, taplo: curl -fsSL -o /tmp/rsconstruct-install-4242/taplo.dl https://... exited with code 35
 ```
 
 The connection died about half a second in. Re-running the identical job

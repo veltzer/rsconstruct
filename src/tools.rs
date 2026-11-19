@@ -750,8 +750,21 @@ fn join_argv(argv: &[String]) -> String {
     argv.join(" ")
 }
 
-/// The directory `run_binary` downloads and unpacks into.
-const INSTALL_WORK_DIR: &str = "/tmp";
+/// The directory `run_binary` downloads and unpacks into: this process's
+/// own, under the system temp directory, created private (see
+/// `platform::create_private_dir`) for one install and removed after it.
+///
+/// It used to be `/tmp` itself, with file names made from the tool's name
+/// alone. Two installs of one tool on the same host then shared every
+/// path, one removing or renaming the file the other was about to hash or
+/// `sudo mv`; and a name anyone can predict in a directory anyone can
+/// write to is a name another user can occupy first.
+fn install_work_dir() -> String {
+    std::env::temp_dir()
+        .join(format!("rsconstruct-install-{}", std::process::id()))
+        .to_string_lossy()
+        .into_owned()
+}
 
 /// Description of the steps that `run_binary` would execute, for the
 /// install plan `tool install` prints and the `-i` prompt shows. Built
@@ -794,7 +807,8 @@ fn describe_binary(
         ) => (*url).to_string(),
         (None, _) => recipe.url.to_string(),
     };
-    let plan = fetch_plan(&recipe, &url, INSTALL_WORK_DIR);
+    let work_dir = install_work_dir();
+    let plan = fetch_plan(&recipe, &url, &work_dir);
     steps.push(plan.curl);
     if let Some(pin) = pin {
         steps.push(vec![format!(
@@ -804,8 +818,7 @@ fn describe_binary(
     }
     steps.extend(plan.unpack.iter().map(Step::argv));
     if let ArchiveKind::Tree { exe, .. } = recipe.archive {
-        let prefix =
-            std::path::Path::new(&tree_dir(INSTALL_WORK_DIR, recipe.dest)).join(tree_prefix(exe));
+        let prefix = std::path::Path::new(&tree_dir(&work_dir, recipe.dest)).join(tree_prefix(exe));
         steps.push(vec![format!(
             "# {} becomes the package's prefix in {}",
             prefix.display(),
@@ -1130,7 +1143,7 @@ struct FetchedBinary {
 /// differs is an error: the lock said which bytes to install, and these
 /// are not they.
 ///
-/// Shared by `run_binary` (base [`INSTALL_WORK_DIR`], the paths
+/// Shared by `run_binary` (base [`install_work_dir`], the paths
 /// `describe_binary` shows) and `tool lock` (a private directory), so a
 /// locked hash is always the hash of exactly what an install downloads.
 fn fetch_binary(
@@ -1198,23 +1211,38 @@ fn run_binary(pkg: &str, ctx: &InstallCtx) -> anyhow::Result<()> {
         Some(pin) => pin.url.clone(),
         None => unpinned_binary_url(&recipe)?,
     };
-    let fetched = fetch_binary(
+    use anyhow::Context as _;
+    let work_dir = install_work_dir();
+    crate::platform::create_private_dir(std::path::Path::new(&work_dir)).with_context(|| {
+        format!("Failed to create the install work directory {work_dir} (remove it if a crashed install left it)")
+    })?;
+    let result = fetch_binary(
         &recipe,
         &url,
         pin.map(|p| p.sha256.as_str()),
-        INSTALL_WORK_DIR,
+        &work_dir,
         ctx.verbose,
-    )?;
-    let argv = install_argv(&recipe, &fetched.payload);
-    let result = exec_inherited(
-        &argv.iter().map(String::as_str).collect::<Vec<_>>(),
-        ctx.verbose,
-    );
-    // apt copies the .deb into its cache; `mv` consumes the executable.
-    if matches!(recipe.archive, ArchiveKind::Deb { .. }) {
-        std::fs::remove_file(&fetched.payload).ok();
-    }
-    result
+    )
+    .and_then(|fetched| {
+        // Nothing vouches for these bytes but the server they came from;
+        // say which they were, so the install can be told from another.
+        if pin.is_none() {
+            crate::output::info(&format!(
+                "{pkg}: not pinned in rsconstruct.lock; installing {url} (sha256 {})",
+                fetched.download_sha256
+            ));
+        }
+        let argv = install_argv(&recipe, &fetched.payload);
+        exec_inherited(
+            &argv.iter().map(String::as_str).collect::<Vec<_>>(),
+            ctx.verbose,
+        )
+    });
+    // The download, and whatever unpacking left beside the executable
+    // that `mv` consumed or the `.deb` apt copied into its cache.
+    let removed = std::fs::remove_dir_all(&work_dir)
+        .with_context(|| format!("Failed to remove the install work directory {work_dir}"));
+    result.and(removed)
 }
 
 /// Whether `pkg`'s binary recipe can be recorded in rsconstruct.lock. A
@@ -2460,20 +2488,26 @@ mod tests {
     /// member that is not named after the tool.
     #[test]
     fn binary_describe_shows_the_steps_fetch_takes() {
+        // Every path is in this process's own work directory, not `/tmp`
+        // itself under a name another install or another user shares.
+        let dir = install_work_dir();
+        assert!(dir.ends_with(&format!("rsconstruct-install-{}", std::process::id())));
+        let at = |name: &str| format!("{dir}/{name}");
+
         let steps = describe("binary", &["taplo"], &no_pins());
         assert_eq!(steps.len(), 6, "{steps:?}");
         assert_eq!(steps[0][0], "curl");
         assert_eq!(
             &steps[1..5],
             &[
-                argv(&["mv", "/tmp/taplo.dl", "/tmp/taplo.dl.gz"]),
-                argv(&["gunzip", "-f", "/tmp/taplo.dl.gz"]),
-                argv(&["mv", "/tmp/taplo.dl", "/tmp/taplo"]),
-                argv(&["chmod", "+x", "/tmp/taplo"]),
+                argv(&["mv", &at("taplo.dl"), &at("taplo.dl.gz")]),
+                argv(&["gunzip", "-f", &at("taplo.dl.gz")]),
+                argv(&["mv", &at("taplo.dl"), &at("taplo")]),
+                argv(&["chmod", "+x", &at("taplo")]),
             ]
         );
         assert!(
-            steps[5].ends_with(&argv(&["mv", "/tmp/taplo", "/usr/local/bin/taplo"])),
+            steps[5].ends_with(&argv(&["mv", &at("taplo"), "/usr/local/bin/taplo"])),
             "{steps:?}"
         );
 
@@ -2481,22 +2515,34 @@ mod tests {
         assert!(
             steps.contains(&argv(&[
                 "mv",
-                "/tmp/oxlint-x86_64-unknown-linux-gnu",
-                "/tmp/oxlint"
+                &at("oxlint-x86_64-unknown-linux-gnu"),
+                &at("oxlint")
             ])),
             "{steps:?}"
         );
         assert!(
-            steps.contains(&argv(&["rm", "/tmp/oxlint.dl"])),
+            steps.contains(&argv(&["rm", &at("oxlint.dl")])),
             "{steps:?}"
         );
 
         // A member already named after the tool is not renamed onto itself.
         let steps = describe("binary", &["rumdl"], &no_pins());
         assert!(
-            !steps.contains(&argv(&["mv", "/tmp/rumdl", "/tmp/rumdl"])),
+            !steps.contains(&argv(&["mv", &at("rumdl"), &at("rumdl")])),
             "{steps:?}"
         );
+    }
+
+    /// The work directory is made new and private; one already there is
+    /// refused rather than adopted.
+    #[test]
+    fn the_install_work_directory_is_private_and_never_adopted() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let dir = tmp.path().join("work");
+        crate::platform::create_private_dir(&dir).unwrap();
+        let mode = crate::platform::get_mode(&std::fs::metadata(&dir).unwrap());
+        assert_eq!(mode & 0o777, 0o700);
+        assert!(crate::platform::create_private_dir(&dir).is_err());
     }
 
     /// Run the plan for real against local files: a gzip asset comes out as

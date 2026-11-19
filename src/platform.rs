@@ -79,6 +79,14 @@ pub fn symlink_file(original: &std::path::Path, link: &std::path::Path) -> std::
     std::os::unix::fs::symlink(original, link)
 }
 
+/// Create `path` as a new directory only its owner can enter. Fails when
+/// anything already stands there: a directory someone else made first is
+/// not private, whatever its mode says now.
+pub fn create_private_dir(path: &std::path::Path) -> std::io::Result<()> {
+    use std::os::unix::fs::DirBuilderExt;
+    std::fs::DirBuilder::new().mode(0o700).create(path)
+}
+
 /// Set file permissions from a Unix mode.
 pub fn set_permissions_mode(path: &std::path::Path, mode: u32) -> std::io::Result<()> {
     use std::os::unix::fs::PermissionsExt;

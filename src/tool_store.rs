@@ -47,6 +47,10 @@ const BIN_DIR: &str = "bin";
 /// Overrides where the store lives. Set in images that bake tools in, so a
 /// job running there with another `$HOME` still finds them.
 pub const STORE_ENV: &str = "RSCONSTRUCT_TOOL_STORE";
+/// The prefix of a generation of `bin/`: the directory the `bin` link
+/// points at (see `rebuild_bin`).
+const GENERATION_PREFIX: &str = "bin.gen-";
+
 /// The prefix of a directory something is still being installed into.
 const TMP_PREFIX: &str = ".tmp-";
 
@@ -415,11 +419,27 @@ fn remove_if_present(path: &Path) -> Result<()> {
 /// a relative symlink into the package's own `bin/`, or for a gem a
 /// [`gem_launcher`]. Two packages providing the same executable is an
 /// error, since only one could win.
+///
+/// `bin` is a symbolic link to a generation directory beside it
+/// (`bin.gen-…`). The new generation is built complete and the link is
+/// replaced with one `rename`, so a build starting at any moment finds
+/// either the old tools or the new ones. `bin` used to be a directory that
+/// was removed and then renamed into place: in between there was no `bin`,
+/// and a build starting then ran the machine's tools or found none.
 fn rebuild_bin(root: &Path, packages: &BTreeSet<Package>) -> Result<()> {
     let tools = tools_dir(root);
-    let tmp = tools.join(format!("{TMP_PREFIX}bin-{}", std::process::id()));
-    remove_if_present(&tmp)?;
-    fs::create_dir_all(&tmp).with_context(|| format!("Failed to create {}", tmp.display()))?;
+    fs::create_dir_all(&tools).with_context(|| format!("Failed to create {}", tools.display()))?;
+    // A name no generation has: the live one may be this process's own
+    // from an earlier sync, so the process id alone is not enough.
+    let (generation_name, tmp) = (0..u32::MAX)
+        .map(|n| format!("{GENERATION_PREFIX}{}-{n}", std::process::id()))
+        .map(|name| {
+            let path = tools.join(&name);
+            (name, path)
+        })
+        .find(|(_, path)| fs::symlink_metadata(path).is_err())
+        .context("no free generation name")?;
+    fs::create_dir(&tmp).with_context(|| format!("Failed to create {}", tmp.display()))?;
     let mut owner: BTreeMap<String, &Package> = BTreeMap::new();
     for pkg in packages {
         let pkg_bin = package_dir(root, pkg).join(BIN_DIR);
@@ -465,14 +485,41 @@ fn rebuild_bin(root: &Path, packages: &BTreeSet<Package>) -> Result<()> {
         }
     }
     let bin = tools.join(BIN_DIR);
-    remove_if_present(&bin)?;
-    fs::rename(&tmp, &bin).with_context(|| {
+    // A `bin` that is a real directory is from before generations: it goes
+    // once, non-atomically, and never again.
+    if fs::symlink_metadata(&bin).is_ok_and(|m| m.is_dir()) {
+        remove_if_present(&bin)?;
+    }
+    let link = tools.join(format!("{TMP_PREFIX}bin-link-{}", std::process::id()));
+    match fs::remove_file(&link) {
+        Ok(()) => {}
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+        Err(e) => {
+            return Err(e).with_context(|| format!("Failed to remove {}", link.display()));
+        }
+    }
+    crate::platform::symlink_file(Path::new(&generation_name), &link)
+        .with_context(|| format!("Failed to create {}", link.display()))?;
+    fs::rename(&link, &bin).with_context(|| {
         format!(
             "Failed to move {} into place as {}",
-            tmp.display(),
+            link.display(),
             bin.display()
         )
-    })
+    })?;
+    // Every other generation is now unreferenced: the one just replaced,
+    // and any a crashed sync left behind.
+    let entries =
+        fs::read_dir(&tools).with_context(|| format!("Failed to read {}", tools.display()))?;
+    for entry in entries {
+        let entry = entry.with_context(|| format!("Failed to read {}", tools.display()))?;
+        let name = entry.file_name();
+        let name = name.to_string_lossy();
+        if name.starts_with(GENERATION_PREFIX) && *name != generation_name {
+            remove_if_present(&entry.path())?;
+        }
+    }
+    Ok(())
 }
 
 /// The `bin/` entry for executable `exe` of the gem package at `package`
@@ -592,6 +639,50 @@ mod tests {
             );
         }
         assert_eq!(parse_key("cargo", "noversion"), None);
+    }
+
+    /// `bin` is a link to one generation directory, replaced whole: after
+    /// any number of syncs there is exactly one generation, and a `bin`
+    /// directory from before generations is taken over.
+    #[test]
+    fn bin_is_a_link_to_the_one_live_generation() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let store = tmp.path().join("store");
+        let root = tmp.path().join("project");
+        let tools = root.join(REPO_TOOLS_DIR);
+        // What an older rsconstruct left: a real directory.
+        fs::create_dir_all(tools.join("bin")).unwrap();
+        fs::write(tools.join("bin/stale"), "old").unwrap();
+        let calls = std::cell::Cell::new(0);
+        let install = fake_installer(&calls);
+
+        let generations = || -> Vec<String> {
+            let mut names: Vec<String> = fs::read_dir(&tools)
+                .unwrap()
+                .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+                .filter(|name| name.starts_with(GENERATION_PREFIX))
+                .collect();
+            names.sort();
+            names
+        };
+        let mut seen = Vec::new();
+        for version in ["0.1.0", "0.2.0", "0.2.0"] {
+            let pkgs = set(&[Package::new("cargo", "rssite", version)]);
+            sync(&root, &store, &pkgs, &install, &mut |_, _| {}).unwrap();
+            let target = fs::read_link(tools.join("bin")).expect("bin must be a link");
+            let live = generations();
+            assert_eq!(live, [target.to_string_lossy().into_owned()]);
+            assert_eq!(
+                fs::read_to_string(tools.join("bin/rssite")).unwrap(),
+                format!("#!/bin/sh\necho {version}\n")
+            );
+            assert!(!tools.join("bin/stale").exists());
+            seen.push(live);
+        }
+        assert_ne!(
+            seen[1], seen[2],
+            "a sync never rebuilds the live generation"
+        );
     }
 
     /// Installing one tool by name leaves the others as they are: a tool
