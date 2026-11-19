@@ -919,13 +919,29 @@ impl Run {
     /// undeclared ones), on failure discard everything; then remove the
     /// run's directory.
     pub fn finish(self, tool_succeeded: bool) -> Result<()> {
-        let applied = if tool_succeeded { self.apply() } else { Ok(()) };
-        if tool_succeeded && applied.is_ok() {
-            clear_stale();
+        if !tool_succeeded {
+            return remove_run_dir(&self.dir);
         }
-        let cleaned = remove_run_dir(&self.dir);
-        applied?;
-        cleaned
+        let mut journal = Journal::new(self.dir.join("replaced"));
+        let Err(error) = self.apply(&mut journal) else {
+            clear_stale();
+            return remove_run_dir(&self.dir);
+        };
+        // Applying failed part-way: put back what was already changed, so
+        // the tree is as the tool found it. When even that fails the run's
+        // directory is kept, since it holds the files that were set aside.
+        if let Err(undo) = journal.undo() {
+            anyhow::bail!(
+                "{error:#}\n[{}] the tree could not be put back as it was: {undo:#}\n\
+                 What this run replaced is kept in {}",
+                self.spec.label,
+                journal.aside.display()
+            );
+        }
+        match remove_run_dir(&self.dir) {
+            Ok(()) => Err(error),
+            Err(cleanup) => Err(anyhow::anyhow!("{error:#}\n{cleanup:#}")),
+        }
     }
 
     /// Whether the product may change `path`. The stale outputs are
@@ -965,7 +981,11 @@ impl Run {
             .collect())
     }
 
-    fn apply(&self) -> Result<()> {
+    /// Apply the run's changes to the real tree, recording each step in
+    /// `journal`. Nothing is deleted here: what a change removes or
+    /// overwrites is moved aside into the run's directory, so a failure
+    /// part-way can be undone, and goes with that directory otherwise.
+    fn apply(&self, journal: &mut Journal) -> Result<()> {
         let mut changes = Vec::new();
         collect_changes(&self.upper, Path::new(""), &self.root, &mut changes)?;
         let mut undeclared: Vec<String> = Vec::new();
@@ -985,7 +1005,7 @@ impl Run {
         // contents are moved in.
         for change in &changes {
             match change {
-                Change::Removed(p) => remove_real(&self.root.join(p))?,
+                Change::Removed(p) => journal.set_aside(&self.root.join(p))?,
                 // A writable place (cargo's `target`) is shared state that
                 // runs alongside this one may be writing into: a run that
                 // started before it existed created its own, which overlayfs
@@ -995,30 +1015,128 @@ impl Run {
                 // writes while it is removed), so this run's files are
                 // merged into it instead, as a native run's would be.
                 Change::Replaced(p) if !self.writable.iter().any(|w| w.covers(p)) => {
-                    remove_real(&self.root.join(p))?;
+                    journal.set_aside(&self.root.join(p))?;
                 }
                 Change::Replaced(_) | Change::Written(_) => {}
             }
         }
         for change in &changes {
             if let Change::Written(p) = change {
-                let from = self.upper.join(p);
                 let to = self.root.join(p);
-                if let Some(parent) = to.parent() {
-                    fs::create_dir_all(parent).with_context(|| {
-                        format!("Failed to create directory {}", parent.display())
-                    })?;
+                journal.create_parents(&to)?;
+                // A file the tool rewrote is set aside first. A directory
+                // is not: a file may not take the place of one, and the
+                // move below fails on it.
+                if fs::symlink_metadata(&to).is_ok_and(|m| !m.is_dir()) {
+                    journal.set_aside(&to)?;
                 }
-                fs::rename(&from, &to).with_context(|| {
-                    format!(
-                        "Failed to move sandbox output {} to {}",
-                        from.display(),
-                        to.display()
-                    )
-                })?;
+                journal.move_path(&self.upper.join(p), &to)?;
             }
         }
         Ok(())
+    }
+}
+
+/// What applying a run has done to the real tree so far, so that a failure
+/// part-way can put the tree back as it was.
+struct Journal {
+    /// Where the real files a run removes or overwrites are kept, inside
+    /// the run's directory: on the project's filesystem, so setting one
+    /// aside is a rename, and gone with the directory once the run settles.
+    aside: PathBuf,
+    steps: Vec<Step>,
+}
+
+/// One thing [`Run::apply`] did to the real tree.
+enum Step {
+    /// `from` was renamed to `to`.
+    Moved { from: PathBuf, to: PathBuf },
+    /// A directory was created.
+    Created(PathBuf),
+}
+
+impl Journal {
+    const fn new(aside: PathBuf) -> Self {
+        Self {
+            aside,
+            steps: Vec::new(),
+        }
+    }
+
+    fn move_path(&mut self, from: &Path, to: &Path) -> Result<()> {
+        fs::rename(from, to)
+            .with_context(|| format!("Failed to move {} to {}", from.display(), to.display()))?;
+        self.steps.push(Step::Moved {
+            from: from.to_path_buf(),
+            to: to.to_path_buf(),
+        });
+        Ok(())
+    }
+
+    /// Take `real` out of the tree, whatever it is; absent is fine.
+    fn set_aside(&mut self, real: &Path) -> Result<()> {
+        if fs::symlink_metadata(real).is_err() {
+            return Ok(());
+        }
+        fs::create_dir_all(&self.aside)
+            .with_context(|| format!("Failed to create directory {}", self.aside.display()))?;
+        let kept = self.aside.join(self.steps.len().to_string());
+        self.move_path(real, &kept)
+    }
+
+    /// Create the directories above `path` that do not exist yet.
+    fn create_parents(&mut self, path: &Path) -> Result<()> {
+        let Some(parent) = path.parent() else {
+            return Ok(());
+        };
+        // Recorded before they are made, so that a failure half-way down
+        // still removes the ones that were; the deepest goes last, so
+        // undoing removes it first.
+        let recorded = self.steps.len();
+        for missing in parent
+            .ancestors()
+            .take_while(|a| fs::symlink_metadata(a).is_err())
+        {
+            self.steps.push(Step::Created(missing.to_path_buf()));
+        }
+        self.steps[recorded..].reverse();
+        fs::create_dir_all(parent)
+            .with_context(|| format!("Failed to create directory {}", parent.display()))
+    }
+
+    /// Reverse every step, newest first. Every step is tried even after one
+    /// fails; the failures are reported together.
+    fn undo(&mut self) -> Result<()> {
+        let mut failures = Vec::new();
+        while let Some(step) = self.steps.pop() {
+            match step {
+                Step::Moved { from, to } => {
+                    if let Err(e) = fs::rename(&to, &from) {
+                        failures.push(format!(
+                            "Failed to move {} back to {}: {e}",
+                            to.display(),
+                            from.display()
+                        ));
+                    }
+                }
+                // A directory that was never made, or that a run alongside
+                // this one has written into since, stays as it is.
+                Step::Created(dir) => match fs::remove_dir(&dir) {
+                    Ok(()) => {}
+                    Err(e)
+                        if matches!(
+                            e.kind(),
+                            std::io::ErrorKind::NotFound | std::io::ErrorKind::DirectoryNotEmpty
+                        ) => {}
+                    Err(e) => failures.push(format!("Failed to remove {}: {e}", dir.display())),
+                },
+            }
+        }
+        if failures.is_empty() {
+            Ok(())
+        } else {
+            anyhow::bail!("{}", failures.join("\n"))
+        }
     }
 }
 
@@ -1134,19 +1252,6 @@ fn real_files_under(root: &Path, rel: &Path, out: &mut Vec<PathBuf>) -> Result<(
         }
     }
     Ok(())
-}
-
-/// Remove `path` from the real tree, whatever it is; absent is fine.
-fn remove_real(path: &Path) -> Result<()> {
-    let Ok(meta) = fs::symlink_metadata(path) else {
-        return Ok(());
-    };
-    if meta.is_dir() {
-        fs::remove_dir_all(path)
-    } else {
-        fs::remove_file(path)
-    }
-    .with_context(|| format!("Failed to remove {}", path.display()))
 }
 
 /// Remove a run's directory. overlayfs leaves `work/work` with mode 000,
@@ -1727,10 +1832,74 @@ mod tests {
         run.root = root.clone();
         run.upper = upper;
         run.writable = vec![Writable::parse("target").unwrap()];
-        run.apply().unwrap();
+        let mut journal = Journal::new(tmp.path().join("replaced"));
+        run.apply(&mut journal).unwrap();
         assert!(root.join("target/theirs").exists());
         assert!(root.join("target/mine").exists());
         assert!(!root.join("docs/theirs").exists());
         assert!(root.join("docs/mine").exists());
+    }
+
+    /// A run whose changes cannot all be applied leaves the tree as the
+    /// tool found it. Here the last change puts a file where the real tree
+    /// has a directory, which fails after an output was overwritten, one
+    /// removed and a new directory filled.
+    #[test]
+    fn a_failed_apply_puts_the_tree_back() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path().join("root");
+        let dir = root.join(SANDBOX_DIR).join("run");
+        let upper = dir.join("upper");
+        fs::create_dir_all(upper.join("out/new")).unwrap();
+        fs::create_dir_all(root.join("out/z")).unwrap();
+        fs::write(root.join("out/a"), "old").unwrap();
+        fs::write(root.join("out/gone"), "kept").unwrap();
+        fs::write(root.join("out/z/inner"), "i").unwrap();
+        fs::write(upper.join("out/a"), "new").unwrap();
+        fs::write(upper.join("out/new/b"), "b").unwrap();
+        fs::write(upper.join("out/z"), "a file").unwrap();
+        let mut run = run_with(&[], &["out"]);
+        run.root = root.clone();
+        run.dir = dir.clone();
+        run.upper = upper;
+        run.spec.stale = vec![PathBuf::from("out/gone")];
+
+        // What the tool's `rm out/gone` leaves in the overlay is a
+        // character device, which a test cannot create: set it aside the
+        // way `apply` does for one.
+        let mut journal = Journal::new(dir.join("replaced"));
+        journal.set_aside(&root.join("out/gone")).unwrap();
+        let error = run.apply(&mut journal).unwrap_err();
+        assert!(format!("{error:#}").contains("out/z"), "{error:#}");
+        assert!(!root.join("out/gone").exists());
+        journal.undo().unwrap();
+
+        assert_eq!(fs::read_to_string(root.join("out/a")).unwrap(), "old");
+        assert_eq!(fs::read_to_string(root.join("out/gone")).unwrap(), "kept");
+        assert_eq!(fs::read_to_string(root.join("out/z/inner")).unwrap(), "i");
+        assert!(!root.join("out/new").exists());
+    }
+
+    /// `finish` undoes a failed apply and removes the run's directory.
+    #[test]
+    fn finish_undoes_a_failed_apply() {
+        let tmp = tempfile::tempdir().unwrap();
+        let root = tmp.path().join("root");
+        let dir = root.join(SANDBOX_DIR).join("run");
+        let upper = dir.join("upper");
+        fs::create_dir_all(&upper).unwrap();
+        fs::create_dir_all(root.join("out/z")).unwrap();
+        fs::write(root.join("out/a"), "old").unwrap();
+        fs::create_dir_all(upper.join("out")).unwrap();
+        fs::write(upper.join("out/a"), "new").unwrap();
+        fs::write(upper.join("out/z"), "a file").unwrap();
+        let mut run = run_with(&[], &["out"]);
+        run.root = root.clone();
+        run.dir = dir.clone();
+        run.upper = upper;
+        assert!(run.finish(true).is_err());
+        assert_eq!(fs::read_to_string(root.join("out/a")).unwrap(), "old");
+        assert!(root.join("out/z").is_dir());
+        assert!(!dir.exists());
     }
 }

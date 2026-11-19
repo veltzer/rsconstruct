@@ -218,7 +218,14 @@ Then:
    In both cases the real tree is exactly as it was before the run,
    previous outputs included.
 3. Otherwise removals are applied first (so a replaced directory is
-   emptied), then written files are renamed into the real tree.
+   emptied), then written files are renamed into the real tree. Nothing
+   is deleted while this happens: a file or directory that is removed or
+   overwritten is renamed into the run directory (`replaced/`), and every
+   step is recorded. If a step fails (a file where the tree has a
+   directory, a read-only directory), the recorded steps are reversed,
+   newest first, and the product fails with the tree as the tool found
+   it. If reversing fails too, the error says so and the run directory
+   is kept, since it holds what was set aside.
 4. The run directory is removed. overlayfs leaves `work/work` with mode
    000, so its mode is opened up first.
 
