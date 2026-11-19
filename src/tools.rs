@@ -432,7 +432,8 @@ pub fn install_into_prefix(
                 ],
                 &[("GEM_HOME", &root), ("GEM_PATH", &root)],
                 ctx.verbose,
-            )
+            )?;
+            keep_own_gem_executables(name, version, &root, &bin)
         }
         "binary" => install_binary_into_prefix(name, version, prefix, ctx),
         other => anyhow::bail!("install method '{other}' does not install into a project"),
@@ -1122,6 +1123,69 @@ fn exec_inherited_env(argv: &[&str], env: &[(&str, &str)], verbose: bool) -> any
         );
     }
     Ok(())
+}
+
+/// Remove from `bin` every executable that is not gem `name`'s own.
+///
+/// `gem install --bindir` writes a binstub for every gem it installs, the
+/// dependencies included, so the package of `jekyll` came with `kramdown`,
+/// `rougify`, `rake` and more. A package's executables are what a project's
+/// `bin/` exposes, and two packages may not expose the same one: `jekyll`
+/// and `mdl` both depend on kramdown, so a project that locked both could
+/// not install its tools. The dependencies stay installed as libraries;
+/// only their binstubs go, and the gem's own never needed them.
+fn keep_own_gem_executables(
+    name: &str,
+    version: &str,
+    gem_home: &str,
+    bin: &std::path::Path,
+) -> anyhow::Result<()> {
+    use anyhow::Context as _;
+    let argv = [
+        "gem",
+        "specification",
+        name,
+        "--version",
+        version,
+        "executables",
+    ];
+    let out = std::process::Command::new(argv[0])
+        .args(&argv[1..])
+        .envs([("GEM_HOME", gem_home), ("GEM_PATH", gem_home)])
+        .output()
+        .with_context(|| format!("failed to spawn: {}", argv.join(" ")))?;
+    if !out.status.success() {
+        anyhow::bail!(
+            "{} failed: {}",
+            argv.join(" "),
+            String::from_utf8_lossy(&out.stderr).trim()
+        );
+    }
+    let own = gem_executables(&String::from_utf8_lossy(&out.stdout));
+    let entries = match std::fs::read_dir(bin) {
+        Ok(entries) => entries,
+        // A gem with no executable of its own or of any dependency.
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(e) => return Err(e).with_context(|| format!("Failed to read {}", bin.display())),
+    };
+    for entry in entries {
+        let entry = entry.with_context(|| format!("Failed to read {}", bin.display()))?;
+        if !own.contains(&entry.file_name().to_string_lossy().into_owned()) {
+            std::fs::remove_file(entry.path())
+                .with_context(|| format!("Failed to remove {}", entry.path().display()))?;
+        }
+    }
+    Ok(())
+}
+
+/// The executable names in the output of `gem specification <gem>
+/// executables`: a YAML document that is a list of plain names, one `- name`
+/// line each (`--- []` for a gem with none).
+fn gem_executables(yaml: &str) -> Vec<String> {
+    yaml.lines()
+        .filter_map(|line| line.strip_prefix("- "))
+        .map(|name| name.trim().trim_matches(['"', '\'']).to_string())
+        .collect()
 }
 
 /// SHA-256 of a file's bytes, hex-encoded, streamed rather than read whole
@@ -2374,6 +2438,49 @@ mod tests {
             github_repo_of("https://github.com/hadolint/hadolint/releases/latest/download/h"),
             Some("hadolint/hadolint")
         );
+    }
+
+    #[test]
+    fn gem_executables_reads_the_yaml_list() {
+        assert_eq!(gem_executables("---\n- jekyll\n"), ["jekyll"]);
+        assert_eq!(
+            gem_executables("---\n- mdl\n- \"odd name\"\n"),
+            ["mdl", "odd name"]
+        );
+        assert_eq!(gem_executables("--- []\n"), Vec::<String>::new());
+    }
+
+    /// A gem package keeps its own executables and loses its dependencies'
+    /// binstubs: `jekyll` and `mdl` both came with `kramdown`, and a
+    /// project's `bin/` cannot hold two of one name. Runs the real `gem`
+    /// against a hand-written installed spec, so nothing is downloaded.
+    #[test]
+    fn a_gem_package_keeps_only_its_own_executables() {
+        let dir = tempfile::tempdir().unwrap();
+        let home = dir.path();
+        let specs = home.join("specifications");
+        std::fs::create_dir_all(&specs).unwrap();
+        std::fs::write(
+            specs.join("mytool-1.2.3.gemspec"),
+            "Gem::Specification.new do |s|\n  s.name = \"mytool\"\n  s.version = \"1.2.3\"\n  \
+             s.summary = \"x\"\n  s.authors = [\"x\"]\n  s.files = []\n  \
+             s.executables = [\"mytool\", \"mytool-admin\"]\nend\n",
+        )
+        .unwrap();
+        let bin = home.join("bin");
+        std::fs::create_dir_all(&bin).unwrap();
+        for exe in ["mytool", "mytool-admin", "kramdown", "rake"] {
+            std::fs::write(bin.join(exe), "#!/bin/sh\n").unwrap();
+        }
+
+        keep_own_gem_executables("mytool", "1.2.3", &home.to_string_lossy(), &bin).unwrap();
+
+        let mut left: Vec<String> = std::fs::read_dir(&bin)
+            .unwrap()
+            .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+            .collect();
+        left.sort();
+        assert_eq!(left, ["mytool", "mytool-admin"]);
     }
 
     /// Chrome's vendor URL always serves the current build, so it is the

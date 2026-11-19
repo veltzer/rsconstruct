@@ -129,7 +129,12 @@ deny`, `cargo nextest`) run the project's `cargo-<subcommand>` directly,
 because cargo itself looks in `$CARGO_HOME/bin` before `PATH`. A gem's entry in
 `bin/` is a small launcher that runs it with `GEM_HOME` and `GEM_PATH` naming
 only its own package, because rubygems activates the newest version of a gem
-found anywhere on its path.
+found anywhere on its path. A gem package puts only the gem's own executables
+in `bin/`: `gem install` also writes one for every dependency (`jekyll` comes
+with `kramdown`, `rougify`, `rake`), and two packages may not provide the same
+executable, so a project that locked both `jekyll` and `mdl`, which share
+kramdown, could not install its tools. The dependencies are still installed;
+they are just not on `PATH`.
 
 `tool install project` keeps the directory in step with the lock: they add what is missing, replace what moved, remove what the lock no
 longer names, and print each package with `✓` (in place), `+` (added) or `-`
