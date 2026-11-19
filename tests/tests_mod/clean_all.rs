@@ -202,3 +202,34 @@ fn clean_unknown_keeps_tracked_files_git_would_quote_and_nested_repositories() {
         "a nested repository's .git must stay"
     );
 }
+
+/// A repository dropped into the tree that the outer one neither tracks nor
+/// ignores (a clone, a worktree) is not a pile of unknown files: `clean
+/// unknown` used to delete all of it, its `.git` included.
+#[test]
+fn clean_unknown_keeps_an_untracked_nested_repository() {
+    let dir = project();
+    let root = dir.path();
+    git_init(root);
+    git(root, &["add", "rsconstruct.toml", "tera.templates"]);
+    git(root, &["commit", "-q", "-m", "init"]);
+
+    write_file(root, "vendored/inner.txt", "owned by the nested repository");
+    git_init(&root.join("vendored"));
+    git(&root.join("vendored"), &["add", "-A"]);
+    git(&root.join("vendored"), &["commit", "-q", "-m", "inner"]);
+    write_file(root, "junk.txt", "untracked");
+
+    let out = run_rsconstruct(root, &["clean", "unknown"]);
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(!root.join("junk.txt").exists(), "untracked file must go");
+    assert!(root.join("vendored/inner.txt").exists());
+    assert!(
+        root.join("vendored/.git/HEAD").exists(),
+        "the nested repository's .git must stay"
+    );
+}

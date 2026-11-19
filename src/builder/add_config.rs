@@ -138,7 +138,17 @@ fn render_section(
         if !desc.is_empty() {
             let _ = writeln!(out, "# {desc}{tag}");
         }
-        let _ = writeln!(out, "# {field} = {value_str}");
+        match value_str {
+            Some(value_str) => {
+                let _ = writeln!(out, "# {field} = {value_str}");
+            }
+            // No default to show. A made-up `""` here was a type error
+            // once uncommented for any field that is not a string
+            // (`max_jobs = ""`).
+            None => {
+                let _ = writeln!(out, "# {field} is unset by default");
+            }
+        }
     }
 
     out
@@ -151,10 +161,11 @@ fn default_value_for_must(field: &str, val: Option<&serde_json::Value>) -> Strin
     }
 }
 
-fn default_value_for_optional(val: Option<&serde_json::Value>) -> String {
+/// The default of an optional field as TOML, or `None` when it has none.
+fn default_value_for_optional(val: Option<&serde_json::Value>) -> Option<String> {
     match val {
-        Some(v) => toml_value_string(v),
-        None => "\"\"".to_string(),
+        Some(serde_json::Value::Null) | None => None,
+        Some(v) => Some(toml_value_string(v)),
     }
 }
 

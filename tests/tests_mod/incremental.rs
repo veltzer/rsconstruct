@@ -128,6 +128,11 @@ fn a_failed_dependency_keeps_the_downstream_output() {
         let args: &[&str] = if keep_going { &["--keep-going"] } else { &[] };
         let second = build_with(project, args);
         assert!(!second.exit_success, "the first step must fail");
+        // One product failed; the one it blocked did not fail and has no
+        // error of its own. Keeping going used to count it as a second
+        // failure, against a list of one error.
+        assert_eq!(second.failed, 1, "keep_going = {keep_going}: {second:?}");
+        assert_eq!(second.errors.len(), 1, "keep_going = {keep_going}");
         assert!(
             downstream.exists(),
             "keep_going = {keep_going}: the blocked downstream output must be kept"

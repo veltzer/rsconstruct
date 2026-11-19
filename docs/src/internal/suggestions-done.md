@@ -30,6 +30,11 @@ Items from `suggestions.md` that have been implemented.
 - **Moved `should_process` guard into macro** — Added `guard: scan_root` built-in to `impl_checker!`, removed boilerplate `should_process()` from 7 processors.
 - **Simplified `KnownFields`** — Scan config fields auto-appended by validation layer via `SCAN_CONFIG_FIELDS` constant; `KnownFields` impls only list their own fields.
 - **Extracted `WordManager` for spellcheck/aspell** — Shared word-file management (loading, collecting, flushing, execute/batch patterns) in `word_manager.rs`.
+- **One checker discovery helper** — `discover_checker_products` takes `dep_inputs` and `dep_auto` explicitly; the `checker_discover` variant that differed only in merging `dep_auto` is gone, and with it the hazard of picking the wrong one.
+- **Remote pull wired in** — `remote_pull` and the `try_fetch_*` helpers are called from the descriptor and restore paths on a local miss; no unused scaffold remains.
+- **`processor_type` is live** — it is half of every processor's name (`ProcessorPlugin::pname`), not a dead field.
+- **Processors own their tools** — each processor file submits the `ToolInfo` of the tools only it runs; the central `TOOLS` table in `src/tools.rs` holds only what no single processor owns, enforced by `central_registry_holds_only_unowned_tools`.
+- **Batch timings carry `start_offset`** — both batch paths in `src/executor/execution.rs` record it, so `--trace` places batched products correctly.
 
 ## Completed New Processors
 

@@ -419,14 +419,18 @@ impl Executor<'_> {
 
                 // Emit JSON build summary
                 json_output::emit_build_summary(
-                    stats.total_processed()
-                        + stats.total_skipped()
-                        + stats.total_restored()
-                        + stats.failed_count,
-                    stats.total_processed(),
-                    stats.failed_count,
-                    stats.total_skipped(),
-                    stats.total_restored(),
+                    json_output::BuildCounts {
+                        total: stats.total_processed()
+                            + stats.total_skipped()
+                            + stats.total_restored()
+                            + stats.failed_count
+                            + stats.blocked_count,
+                        success: stats.total_processed(),
+                        failed: stats.failed_count,
+                        blocked: stats.blocked_count,
+                        skipped: stats.total_skipped(),
+                        restored: stats.total_restored(),
+                    },
                     stats.total_duration,
                     &stats.failed_messages,
                 );
@@ -446,11 +450,14 @@ impl Executor<'_> {
                 let (processed, skipped, restored) =
                     failures.map_or((0, 0, 0), |f| (f.processed, f.skipped, f.restored));
                 json_output::emit_build_summary(
-                    order.len(),
-                    processed,
-                    messages.len(),
-                    skipped,
-                    restored,
+                    json_output::BuildCounts {
+                        total: order.len(),
+                        success: processed,
+                        failed: messages.len(),
+                        blocked: 0,
+                        skipped,
+                        restored,
+                    },
                     duration,
                     &messages,
                 );
@@ -518,6 +525,7 @@ impl Executor<'_> {
             stats: Arc::new(Mutex::new(HashMap::new())),
             errors: Arc::new(Mutex::new(Vec::new())),
             failed_products: Arc::new(Mutex::new(HashSet::new())),
+            blocked: Arc::new(AtomicUsize::new(0)),
             failed_messages: Arc::new(Mutex::new(Vec::new())),
             failed_processors: Arc::new(Mutex::new(HashSet::new())),
             changed: Arc::new(Mutex::new(Vec::new())),
@@ -679,8 +687,7 @@ impl Executor<'_> {
             .collect();
         let mut tracker = ReadyTracker::new(&graph.read(), &held, &whole_run);
         loop {
-            let stopping =
-                self.is_interrupted() || (!self.keep_going && !shared.errors.lock().is_empty());
+            let stopping = self.should_stop(shared);
             if !stopping {
                 let wave = tracker.take_ready();
                 if !wave.is_empty() {
@@ -720,11 +727,10 @@ impl Executor<'_> {
                     .filter(|product| stuck.contains(&product.id))
                     .take(5)
                     .map(|product| {
-                        format!(
-                            "[{}] {}",
-                            product.processor,
-                            product.primary_input().display()
-                        )
+                        // `display`, not `primary_input`: that panics on
+                        // a product without inputs, and would replace this
+                        // report with a panic.
+                        format!("[{}] {}", product.processor, self.product_display(product))
                     })
                     .collect();
                 anyhow::bail!(
@@ -1050,7 +1056,11 @@ impl Executor<'_> {
     /// Process one batch unit: a chunk of a batching processor's products,
     /// run in one invocation of its tool.
     fn process_batch_group(&self, proc_name: &str, items: &[WorkItem], lctx: &LevelContext) {
-        if self.is_interrupted() {
+        // Before the skip/restore pass below, which removes each item's
+        // stale outputs: checked only after it, a fail-fast build that had
+        // already failed deleted the outputs of a whole chunk and then did
+        // not run it.
+        if self.should_stop(lctx.shared) {
             return;
         }
 
@@ -1081,8 +1091,7 @@ impl Executor<'_> {
 
         // Process in chunks
         for chunk in to_execute.chunks(chunk_size) {
-            if self.is_interrupted() || (!lctx.keep_going && !lctx.shared.errors.lock().is_empty())
-            {
+            if self.should_stop(lctx.shared) {
                 break;
             }
 
@@ -1256,9 +1265,7 @@ impl Executor<'_> {
         current_per_processor: &Mutex<HashMap<String, usize>>,
     ) {
         for item in chunk {
-            // Stop if interrupted or if there's an error (non-keep-going mode)
-            if self.is_interrupted() || (!lctx.keep_going && !lctx.shared.errors.lock().is_empty())
-            {
+            if self.should_stop(lctx.shared) {
                 break;
             }
 
@@ -1450,7 +1457,8 @@ impl Executor<'_> {
                 anyhow::anyhow!("internal error: outstanding Arc reference to failed messages")
             })?
             .into_inner();
-        stats.failed_count = final_failed.len();
+        stats.blocked_count = shared.blocked.load(Ordering::Relaxed);
+        stats.failed_count = final_failed.len() - stats.blocked_count;
         stats.failed_messages = final_msgs;
 
         // In non-keep-going mode, the failures are the build's error (see
@@ -1515,7 +1523,9 @@ impl Executor<'_> {
         if !skipped_ids.is_empty() {
             let mut failed_guard = shared.failed_products.lock();
             for id in &skipped_ids {
-                failed_guard.insert(*id);
+                if failed_guard.insert(*id) {
+                    shared.blocked.fetch_add(1, Ordering::Relaxed);
+                }
             }
         }
 
@@ -1532,7 +1542,9 @@ impl Executor<'_> {
                 // In non-keep-going mode, silently skip products from a
                 // processor that failed in a previous level
                 if !keep_going && fp_guard.contains(&product.processor) {
-                    shared.failed_products.lock().insert(id);
+                    if shared.failed_products.lock().insert(id) {
+                        shared.blocked.fetch_add(1, Ordering::Relaxed);
+                    }
                     continue;
                 }
                 // Take the input checksum here (per-level, in topological

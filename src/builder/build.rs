@@ -729,7 +729,9 @@ impl Builder {
         let BuildPlan { graph, .. } = self.plan_build(ctx, opts)?;
 
         let order = graph.topological_sort()?;
-        if order.is_empty() {
+        // Under --json the empty case is the same object with empty lists,
+        // printed below: a sentence on stdout is not JSON.
+        if order.is_empty() && !crate::json_output::is_json_mode() {
             println!("No products discovered.");
             return Ok(());
         }
@@ -780,8 +782,6 @@ impl Builder {
                 display_opts: DisplayOptions::default(),
                 verbose: true,
                 all_processor_names: &[],
-                builtin_processors: &std::collections::HashSet::new(),
-                rust_processors: &std::collections::HashSet::new(),
             },
         );
         Ok(())
@@ -798,7 +798,7 @@ impl Builder {
         let graph = self.build_graph_with_processors(ctx, &processors)?;
 
         let products: Vec<&_> = graph.products().iter().collect();
-        if products.is_empty() && processors.is_empty() {
+        if products.is_empty() && processors.is_empty() && !crate::json_output::is_json_mode() {
             println!("No products discovered.");
             return Ok(());
         }
@@ -815,16 +815,6 @@ impl Builder {
             .into_iter()
             .map(std::string::String::as_str)
             .collect();
-        let builtin_set: std::collections::HashSet<&str> = processors
-            .iter()
-            .filter(|(name, _)| crate::registries::processor::is_builtin(name.as_str()))
-            .map(|(name, _)| name.as_str())
-            .collect();
-        let rust_set: std::collections::HashSet<&str> = processors
-            .iter()
-            .filter(|(name, _)| crate::registries::processor::is_rust(name.as_str()))
-            .map(|(name, _)| name.as_str())
-            .collect();
         let entries: Vec<_> = products
             .iter()
             .map(|product| (*product, self.current_action(ctx, product)))
@@ -837,8 +827,6 @@ impl Builder {
                 display_opts: DisplayOptions::default(),
                 verbose,
                 all_processor_names: &all_proc_names,
-                builtin_processors: &builtin_set,
-                rust_processors: &rust_set,
             },
         );
 
@@ -1028,8 +1016,8 @@ impl Builder {
                         "stale": pc[2],
                         "new": pc[3],
                         "total": pc[0] + pc[1] + pc[2] + pc[3],
-                        "builtin": opts.builtin_processors.contains(name),
-                        "rust": opts.rust_processors.contains(name),
+                        "builtin": crate::registries::processor::is_builtin(name),
+                        "rust": crate::registries::processor::is_rust(name),
                     })
                 })
                 .collect();
@@ -1061,8 +1049,11 @@ impl Builder {
         let rows: Vec<Vec<String>> = per_processor
             .iter()
             .map(|(name, pc)| {
-                let builtin = crate::tables::yes_no(opts.builtin_processors.contains(name));
-                let rust = crate::tables::yes_no(opts.rust_processors.contains(name));
+                // Asked of the registry by name, not handed in as sets: the
+                // dry run passed empty sets and reported every processor as
+                // neither builtin nor Rust.
+                let builtin = crate::tables::yes_no(crate::registries::processor::is_builtin(name));
+                let rust = crate::tables::yes_no(crate::registries::processor::is_rust(name));
                 vec![
                     crate::tables::short_processor_name(name).to_string(),
                     pc[0].to_string(),

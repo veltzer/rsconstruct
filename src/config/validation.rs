@@ -447,6 +447,17 @@ pub(super) fn validate_processor_fields_raw(raw: &toml::Value) -> Vec<String> {
             match ProcessorConfig::classify_section(&pname, table) {
                 SectionShape::MultiInstance => {
                     for (inst_name, inst_value) in table {
+                        // An instance is addressed as `<pname>.<instance>`
+                        // everywhere (`-p`, the cache key, the output
+                        // directory): an empty segment or one with a dot
+                        // in it is a name `parse_name` cannot take apart.
+                        if inst_name.is_empty() || inst_name.contains('.') {
+                            errors.push(format!(
+                                "[{pname}]: invalid instance name '{inst_name}': an instance \
+                                 name must be non-empty and contain no '.'"
+                            ));
+                            continue;
+                        }
                         if let Some(inst_table) = inst_value.as_table() {
                             let section = format!("{pname}.{inst_name}");
                             validate_single_processor(&pname, &section, inst_table, &mut errors);

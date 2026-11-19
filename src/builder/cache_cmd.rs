@@ -88,10 +88,10 @@ pub fn handle(ctx: &crate::build_context::BuildContext, action: CacheAction) -> 
             let builder = Builder::new(ctx)?;
             let stats = builder.object_store().stats_by_processor()?;
 
-            if stats.is_empty() {
-                println!("Cache is empty.");
-            } else if json_output::is_json_mode() {
+            if json_output::is_json_mode() {
                 println!("{}", serde_json::to_string_pretty(&stats)?);
+            } else if stats.is_empty() {
+                println!("Cache is empty.");
             } else {
                 let mut total_entries = 0usize;
                 let mut total_outputs = 0usize;

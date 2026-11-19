@@ -44,6 +44,10 @@ pub struct BuildStats {
     pub categories: Vec<ProcessStats>,
     pub total_duration: Duration,
     pub failed_count: usize,
+    /// Products not run because of a failure elsewhere (a failed
+    /// dependency); each failure in `failed_count` has a message, these
+    /// have none.
+    pub blocked_count: usize,
     pub failed_messages: Vec<String>,
     pub phase_timings: Vec<(String, Duration)>,
 }
@@ -138,6 +142,15 @@ impl BuildStats {
             );
             for msg in &self.failed_messages {
                 println!("{} {}", color::red("*"), msg);
+            }
+            if self.blocked_count > 0 {
+                println!(
+                    "{}",
+                    color::red(&format!(
+                        "{} product(s) not built because of a failed dependency.",
+                        self.blocked_count
+                    ))
+                );
             }
         }
 

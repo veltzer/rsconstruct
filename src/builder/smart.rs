@@ -68,16 +68,61 @@ fn ensure_table<'a>(
     Ok(current)
 }
 
-/// The table at `path` below `table`, if every segment exists and is a table.
+/// The table at `path` below `table`, if every segment exists and is a
+/// table, written either as a `[header]` or inline (`ruff = {}`).
 fn get_table<'a>(
     table: &'a mut toml_edit::Table,
     path: &[String],
-) -> Option<&'a mut toml_edit::Table> {
-    let mut current = table;
+) -> Option<&'a mut dyn toml_edit::TableLike> {
+    let mut current: &mut dyn toml_edit::TableLike = table;
     for key in path {
-        current = current.get_mut(key)?.as_table_mut()?;
+        current = current.get_mut(key)?.as_table_like_mut()?;
     }
     Some(current)
+}
+
+/// The instance names `doc` declares in `section` (`processor` or
+/// `analyzer`), read the way the build reads them, so a name is "declared"
+/// here exactly when the build would create an instance for it.
+fn declared_inames(doc: &toml_edit::DocumentMut, section: &str) -> Result<Vec<String>> {
+    let value: toml::Value = toml::from_str(&doc.to_string())
+        .with_context(|| format!("Failed to parse {CONFIG_FILE}"))?;
+    let Some(section_value) = value.get(section) else {
+        return Ok(Vec::new());
+    };
+    let mut names: Vec<String> = if section == "processor" {
+        crate::config::ProcessorConfig::from_toml(section_value)
+            .instances
+            .into_iter()
+            .map(|inst| inst.instance_name)
+            .collect()
+    } else {
+        crate::config::AnalyzerConfig::from_toml(section_value)?
+            .instances
+            .into_iter()
+            .map(|inst| inst.instance_name)
+            .collect()
+    };
+    names.sort();
+    Ok(names)
+}
+
+/// Fail unless `iname` is a declared instance of `section`. The commands
+/// that edit one stanza go through this: resolving the name as a key path
+/// alone also finds a type table (`processor.checker`) or the parent of
+/// named instances (`processor.checker.ruff` above `.core`), and writing
+/// `enabled` there, or deleting it, wrecked the file.
+fn require_declared(doc: &toml_edit::DocumentMut, section: &str, iname: &str) -> Result<()> {
+    let declared = declared_inames(doc, section)?;
+    if declared.iter().any(|name| name == iname) {
+        return Ok(());
+    }
+    let listing = if declared.is_empty() {
+        "none are declared".to_string()
+    } else {
+        format!("declared: {}", declared.join(", "))
+    };
+    bail!("{section} '{iname}' is not declared in {CONFIG_FILE} ({listing}).")
 }
 
 /// Whether a section for `name` exists below `table`.
@@ -102,14 +147,14 @@ fn add_section(table: &mut toml_edit::Table, section: &str, name: &str) -> Resul
 /// `[processor.checker]` behind. Returns whether anything was removed.
 fn remove_section(table: &mut toml_edit::Table, section: &str, name: &str) -> bool {
     let path = key_path(section, name);
-    fn remove_at(table: &mut toml_edit::Table, path: &[String]) -> bool {
+    fn remove_at(table: &mut dyn toml_edit::TableLike, path: &[String]) -> bool {
         let Some((first, rest)) = path.split_first() else {
             return false;
         };
         if rest.is_empty() {
             return table.remove(first).is_some();
         }
-        let Some(child) = table.get_mut(first).and_then(|t| t.as_table_mut()) else {
+        let Some(child) = table.get_mut(first).and_then(|t| t.as_table_like_mut()) else {
             return false;
         };
         let removed = remove_at(child, rest);
@@ -324,87 +369,89 @@ fn analyzer_table(doc: &mut toml_edit::DocumentMut) -> Result<&mut toml_edit::Ta
         .context("[analyzer] must be a table")
 }
 
-/// Set `enabled = VALUE` on the entry for `iname` below `section_table`.
-/// Returns an error if the iname is not found.
-fn set_enabled_iname(
-    section_table: &mut toml_edit::Table,
+/// The section table (`processor` or `analyzer`) of `doc`.
+fn section_table<'a>(
+    doc: &'a mut toml_edit::DocumentMut,
+    section: &str,
+) -> Result<&'a mut toml_edit::Table> {
+    if section == "processor" {
+        processor_table(doc)
+    } else {
+        analyzer_table(doc)
+    }
+}
+
+/// Set `enabled = value` on the declared instance `iname` of `section`.
+fn set_enabled_in(
+    doc: &mut toml_edit::DocumentMut,
+    section: &str,
     iname: &str,
     value: bool,
-    section: &str,
 ) -> Result<()> {
-    match get_table(section_table, &key_path(section, iname)) {
-        Some(t) => {
-            t.insert("enabled", toml_edit::value(value));
-            Ok(())
-        }
-        None => bail!("{section} '{iname}' is not declared in rsconstruct.toml."),
-    }
+    require_declared(doc, section, iname)?;
+    let table = section_table(doc, section)?;
+    get_table(table, &key_path(section, iname))
+        .with_context(|| format!("{section} '{iname}' has no table in {CONFIG_FILE}"))?
+        .insert("enabled", toml_edit::value(value));
+    Ok(())
+}
+
+/// Remove the declared instance `iname` of `section` from `doc`.
+fn delete_in(doc: &mut toml_edit::DocumentMut, section: &str, iname: &str) -> Result<()> {
+    require_declared(doc, section, iname)?;
+    let table = section_table(doc, section)?;
+    remove_section(table, section, iname);
+    Ok(())
+}
+
+/// Set `enabled = value` on the declared instance `iname` of `section` in
+/// rsconstruct.toml.
+fn set_enabled(section: &str, iname: &str, value: bool) -> Result<()> {
+    let mut doc = load_doc()?;
+    set_enabled_in(&mut doc, section, iname, value)?;
+    save_doc(&doc)?;
+    let verb = if value { "Enabled" } else { "Disabled" };
+    println!("{verb} {section} '{iname}'.");
+    Ok(())
+}
+
+/// Delete the declared instance `iname` of `section` from rsconstruct.toml.
+fn delete(section: &str, iname: &str) -> Result<()> {
+    let mut doc = load_doc()?;
+    delete_in(&mut doc, section, iname)?;
+    save_doc(&doc)?;
+    println!("Deleted {section} '{iname}'.");
+    Ok(())
 }
 
 /// Delete a processor by iname from rsconstruct.toml.
 pub fn delete_processor(iname: &str) -> Result<()> {
-    let mut doc = load_doc()?;
-    let table = processor_table(&mut doc)?;
-    if remove_section(table, "processor", iname) {
-        save_doc(&doc)?;
-        println!("Deleted processor '{iname}'.");
-    } else {
-        println!("Processor '{iname}' is not declared.");
-    }
-    Ok(())
+    delete("processor", iname)
 }
 
 /// Set enabled = false on a processor by iname.
 pub fn disable_processor(iname: &str) -> Result<()> {
-    let mut doc = load_doc()?;
-    let table = processor_table(&mut doc)?;
-    set_enabled_iname(table, iname, false, "processor")?;
-    save_doc(&doc)?;
-    println!("Disabled processor '{iname}'.");
-    Ok(())
+    set_enabled("processor", iname, false)
 }
 
 /// Set enabled = true on a processor by iname.
 pub fn enable_processor(iname: &str) -> Result<()> {
-    let mut doc = load_doc()?;
-    let table = processor_table(&mut doc)?;
-    set_enabled_iname(table, iname, true, "processor")?;
-    save_doc(&doc)?;
-    println!("Enabled processor '{iname}'.");
-    Ok(())
+    set_enabled("processor", iname, true)
 }
 
 /// Delete an analyzer by iname from rsconstruct.toml.
 pub fn delete_analyzer(iname: &str) -> Result<()> {
-    let mut doc = load_doc()?;
-    let table = analyzer_table(&mut doc)?;
-    if remove_section(table, "analyzer", iname) {
-        save_doc(&doc)?;
-        println!("Deleted analyzer '{iname}'.");
-    } else {
-        println!("Analyzer '{iname}' is not declared.");
-    }
-    Ok(())
+    delete("analyzer", iname)
 }
 
 /// Set enabled = false on an analyzer by iname.
 pub fn disable_analyzer(iname: &str) -> Result<()> {
-    let mut doc = load_doc()?;
-    let table = analyzer_table(&mut doc)?;
-    set_enabled_iname(table, iname, false, "analyzer")?;
-    save_doc(&doc)?;
-    println!("Disabled analyzer '{iname}'.");
-    Ok(())
+    set_enabled("analyzer", iname, false)
 }
 
 /// Set enabled = true on an analyzer by iname.
 pub fn enable_analyzer(iname: &str) -> Result<()> {
-    let mut doc = load_doc()?;
-    let table = analyzer_table(&mut doc)?;
-    set_enabled_iname(table, iname, true, "analyzer")?;
-    save_doc(&doc)?;
-    println!("Enabled analyzer '{iname}'.");
-    Ok(())
+    set_enabled("analyzer", iname, true)
 }
 
 /// Remove processors from rsconstruct.toml that don't match any files.
@@ -515,17 +562,45 @@ mod tests {
     #[test]
     fn enabled_flag_lands_on_the_named_section() {
         let mut d = doc("[processor.checker.pylint.core]\nargs = []\n[analyzer.tera]\n");
-        let table = processor_table(&mut d).unwrap();
-        set_enabled_iname(table, "processor.checker.pylint.core", false, "processor").unwrap();
-        assert!(set_enabled_iname(table, "processor.checker.ruff", false, "processor").is_err());
-        let table = analyzer_table(&mut d).unwrap();
-        set_enabled_iname(table, "tera", false, "analyzer").unwrap();
+        set_enabled_in(&mut d, "processor", "processor.checker.pylint.core", false).unwrap();
+        assert!(set_enabled_in(&mut d, "processor", "processor.checker.ruff", false).is_err());
+        set_enabled_in(&mut d, "analyzer", "tera", false).unwrap();
         let text = d.to_string();
         assert!(
             text.contains("[processor.checker.pylint.core]\nargs = []\nenabled = false"),
             "{text}"
         );
         assert!(text.contains("[analyzer.tera]\nenabled = false"), "{text}");
+    }
+
+    /// A name that is a table in the file but not a declared instance (the
+    /// parent of named instances, a type table) is refused and the file is
+    /// left alone: `enabled = false` on the parent made `core` an unknown
+    /// field, and deleting `processor.checker` removed every checker.
+    #[test]
+    fn a_table_that_is_not_an_instance_is_refused() {
+        let src = "[processor.checker.pylint.core]\nargs = []\n[processor.checker.ruff]\n";
+        for name in ["processor.checker.pylint", "processor.checker", "processor"] {
+            let mut d = doc(src);
+            let err = set_enabled_in(&mut d, "processor", name, false).unwrap_err();
+            assert!(err.to_string().contains("is not declared"), "{err}");
+            assert!(
+                err.to_string().contains("processor.checker.pylint.core"),
+                "the declared names are listed: {err}"
+            );
+            assert!(delete_in(&mut d, "processor", name).is_err());
+            assert_eq!(d.to_string(), src);
+        }
+    }
+
+    /// A stanza written as an inline table is declared like any other.
+    #[test]
+    fn an_inline_table_stanza_is_edited() {
+        let mut d = doc("[processor.checker]\nruff = {}\nascii = {}\n");
+        set_enabled_in(&mut d, "processor", "processor.checker.ruff", false).unwrap();
+        assert!(d.to_string().contains("ruff = { enabled = false }"), "{d}");
+        delete_in(&mut d, "processor", "processor.checker.ascii").unwrap();
+        assert!(!d.to_string().contains("ascii"), "{d}");
     }
 
     #[test]

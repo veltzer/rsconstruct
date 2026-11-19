@@ -231,19 +231,12 @@ impl ProjectTools {
     }
 
     /// The tool directory with `only`, `(method, package)` pairs, added to
-    /// what it already holds and nothing else installed: `tool install
-    /// project NAME`.
+    /// what it already holds and nothing else installed or removed: `tool
+    /// install project NAME` (see `tool_store::only_selected`).
     fn with_only(self, only: &[(&str, &str)]) -> Self {
-        let packages: std::collections::BTreeSet<crate::tool_store::Package> = self
-            .packages
-            .into_iter()
-            .filter(|p| {
-                only.iter()
-                    .any(|(method, package)| p.method == *method && p.name == *package)
-                    || self.plan.present.contains(p)
-            })
-            .collect();
-        let plan = crate::tool_store::plan(std::path::Path::new("."), &packages);
+        let root = std::path::Path::new(".");
+        let packages = crate::tool_store::only_selected(root, &self.packages, only);
+        let plan = crate::tool_store::plan(root, &packages);
         Self { packages, plan }
     }
 }

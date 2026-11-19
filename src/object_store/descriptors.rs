@@ -197,15 +197,24 @@ impl ObjectStore {
 
     /// Store a descriptor locally and, when remote push is on, publish it so
     /// another machine's pull can find it. Objects are pushed by their own
-    /// call sites (they must exist before the descriptor that names them).
+    /// call sites (they must exist before the descriptor that names them),
+    /// which pass `objects_pushed`: whether every object the descriptor
+    /// names reached the remote. When one did not, the descriptor stays
+    /// local: published, it would be a remote entry no machine can restore,
+    /// found on every pull until the same key is rebuilt.
     fn store_and_push_descriptor(
         &self,
         ctx: &crate::build_context::BuildContext,
         cache_key: &str,
         descriptor: &CacheDescriptor,
+        objects_pushed: bool,
     ) -> Result<()> {
         self.store_descriptor(cache_key, descriptor)?;
-        if self.remote_push {
+        if self.remote_push && !objects_pushed {
+            crate::output::warn(&format!(
+                "cache entry {cache_key} not pushed to the remote cache: an object it names could not be pushed"
+            ));
+        } else if self.remote_push {
             let data = serde_json::to_vec(descriptor)
                 .context("Failed to serialize cache descriptor for remote push")?;
             self.try_push_descriptor_to_remote(ctx, cache_key, &data)?;
@@ -221,7 +230,7 @@ impl ObjectStore {
         ctx: &crate::build_context::BuildContext,
         cache_key: &str,
     ) -> Result<()> {
-        self.store_and_push_descriptor(ctx, cache_key, &CacheDescriptor::Marker)
+        self.store_and_push_descriptor(ctx, cache_key, &CacheDescriptor::Marker, true)
     }
 
     /// Store a blob descriptor (generator produced a single output).
@@ -243,11 +252,14 @@ impl ObjectStore {
             _ => true,
         };
 
-        if self.remote_push {
-            self.try_push_object_to_remote(ctx, &checksum)?;
-        }
+        let pushed = self.remote_push && self.try_push_object_to_remote(ctx, &checksum);
 
-        self.store_and_push_descriptor(ctx, cache_key, &CacheDescriptor::Blob { checksum, mode })?;
+        self.store_and_push_descriptor(
+            ctx,
+            cache_key,
+            &CacheDescriptor::Blob { checksum, mode },
+            pushed,
+        )?;
 
         Ok(changed)
     }
@@ -263,6 +275,7 @@ impl ObjectStore {
     ) -> Result<bool> {
         let prev = self.get_descriptor(cache_key);
         let mut entries = Vec::new();
+        let mut pushed = true;
 
         for dir in output_dirs {
             let dir: &Path = dir;
@@ -282,7 +295,7 @@ impl ObjectStore {
                     .ok()
                     .map(|m| crate::platform::get_mode(&m));
                 if self.remote_push {
-                    self.try_push_object_to_remote(ctx, &checksum)?;
+                    pushed &= self.try_push_object_to_remote(ctx, &checksum);
                 }
                 entries.push(TreeEntry {
                     path: file_path.display().to_string(),
@@ -305,7 +318,7 @@ impl ObjectStore {
                 .ok()
                 .map(|m| crate::platform::get_mode(&m));
             if self.remote_push {
-                self.try_push_object_to_remote(ctx, &checksum)?;
+                pushed &= self.try_push_object_to_remote(ctx, &checksum);
             }
             entries.push(TreeEntry {
                 path: Self::path_string(file_path),
@@ -331,7 +344,7 @@ impl ObjectStore {
             _ => true,
         };
 
-        self.store_and_push_descriptor(ctx, cache_key, &CacheDescriptor::Tree { entries })?;
+        self.store_and_push_descriptor(ctx, cache_key, &CacheDescriptor::Tree { entries }, pushed)?;
         Ok(changed)
     }
 }

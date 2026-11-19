@@ -765,6 +765,46 @@ impl BuildGraph {
         }
     }
 
+    /// One concrete cycle among the products a topological sort could not
+    /// place, one product per line, each reading an output of the next and
+    /// the last reading an output of the first.
+    ///
+    /// `in_degree` is what the sort left: a product still above zero has a
+    /// dependency that was never placed, so following unplaced dependencies
+    /// from any of them must come back to a product already visited.
+    fn describe_cycle(&self, in_degree: &[usize]) -> String {
+        let Some(start) = in_degree.iter().position(|&deg| deg > 0) else {
+            return "  (no product is left unplaced)".to_string();
+        };
+        let mut walk: Vec<usize> = Vec::new();
+        let mut current = start;
+        let cycle_start = loop {
+            if let Some(position) = walk.iter().position(|&id| id == current) {
+                break position;
+            }
+            walk.push(current);
+            let Some(&next) = self.dependencies[current]
+                .iter()
+                .find(|&&dep| in_degree[dep] > 0)
+            else {
+                break walk.len() - 1;
+            };
+            current = next;
+        };
+        walk[cycle_start..]
+            .iter()
+            .map(|&id| {
+                let product = &self.products[id];
+                format!(
+                    "  [{}] {}",
+                    product.processor,
+                    product.display(DisplayOptions::default())
+                )
+            })
+            .collect::<Vec<_>>()
+            .join("\n")
+    }
+
     /// Topological sort - returns product ids in execution order
     /// Returns error if there's a cycle
     pub fn topological_sort(&self) -> Result<Vec<usize>> {
@@ -799,7 +839,10 @@ impl BuildGraph {
         if result.len() != self.products.len() {
             return Err(crate::exit_code::RsconstructError::new(
                 crate::exit_code::RsconstructExitCode::GraphError,
-                "Cycle detected in build graph",
+                format!(
+                    "Cycle detected in build graph:\n{}",
+                    self.describe_cycle(&in_degree)
+                ),
             )
             .into());
         }
@@ -951,18 +994,39 @@ impl BuildGraph {
             return Ok(());
         }
 
-        // Collect IDs to keep
-        let selected: HashSet<usize> = self
-            .products
+        // Collect IDs to keep, and which patterns selected anything.
+        let mut matched = vec![false; compiled.len()];
+        let mut selected: HashSet<usize> = HashSet::new();
+        for product in &self.products {
+            for input in &product.inputs {
+                let input_str = input.display().to_string();
+                for (index, pattern) in compiled.iter().enumerate() {
+                    if pattern.matches(&input_str) {
+                        matched[index] = true;
+                        selected.insert(product.id);
+                    }
+                }
+            }
+        }
+        // A target that selects nothing is a mistyped target: building
+        // nothing and reporting success would pass for a green build.
+        let unmatched: Vec<&str> = patterns
             .iter()
-            .filter(|product| {
-                product.inputs.iter().any(|input| {
-                    let input_str = input.display().to_string();
-                    compiled.iter().any(|pat| pat.matches(&input_str))
-                })
-            })
-            .map(|p| p.id)
+            .zip(&matched)
+            .filter(|&(_, &hit)| !hit)
+            .map(|(pattern, _)| pattern.as_str())
             .collect();
+        if !unmatched.is_empty() {
+            return Err(crate::exit_code::config_error(format!(
+                "No product has an input matching target {}. Targets are glob patterns over \
+                 product input paths, relative to the project root.",
+                unmatched
+                    .iter()
+                    .map(|p| format!("'{p}'"))
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            )));
+        }
         self.select_with_producers(&selected, &HashSet::new());
         Ok(())
     }
@@ -1190,6 +1254,45 @@ mod tests {
         let result = g.topological_sort();
         assert!(result.is_err());
         assert!(result.unwrap_err().to_string().contains("Cycle"));
+    }
+
+    /// The cycle error names the products of one cycle and nothing else: a
+    /// product downstream of the cycle is unplaced too, but is not part of
+    /// it, and a bare "Cycle detected" left the user to find the loop.
+    #[test]
+    fn cycle_error_names_the_products_of_the_cycle() {
+        let mut g = BuildGraph::new();
+        g.add_product(vec!["seed".into()], vec!["ok.o".into()], "fine", None)
+            .unwrap();
+        g.add_product(vec!["b.o".into()], vec!["a.o".into()], "first", None)
+            .unwrap();
+        g.add_product(vec!["a.o".into()], vec!["b.o".into()], "second", None)
+            .unwrap();
+        g.add_product(vec!["b.o".into()], vec!["app".into()], "downstream", None)
+            .unwrap();
+        g.resolve_dependencies();
+        let message = g.topological_sort().unwrap_err().to_string();
+        assert!(message.contains("[first]"), "{message}");
+        assert!(message.contains("[second]"), "{message}");
+        assert!(!message.contains("[fine]"), "{message}");
+        assert!(!message.contains("[downstream]"), "{message}");
+    }
+
+    /// A target pattern that matches no product input is an error naming
+    /// it, also when another pattern of the same run does match.
+    #[test]
+    fn filter_by_targets_rejects_a_pattern_matching_nothing() {
+        let mut g = BuildGraph::new();
+        g.add_product(vec!["a.md".into()], vec!["a.html".into()], "pandoc", None)
+            .unwrap();
+        g.resolve_dependencies();
+        let err = g
+            .filter_by_targets(&["a.md".to_string(), "nosuch*".to_string()])
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains("'nosuch*'"), "{err}");
+        assert!(!err.contains("'a.md'"), "{err}");
+        assert_eq!(g.products().len(), 1, "the graph is left as it was");
     }
 
     #[test]

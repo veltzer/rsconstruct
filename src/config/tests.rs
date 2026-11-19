@@ -1572,3 +1572,21 @@ fn processor_sandbox_fields_validate() {
         "{errors:?}"
     );
 }
+
+/// An instance is addressed as `<pname>.<instance>`, so an instance name
+/// that is empty or has a dot in it is a name nothing can take apart
+/// again. Both used to pass validation.
+#[test]
+fn instance_names_must_be_one_non_empty_segment() {
+    let ok = toml_of("[processor.checker.ruff.core]\n[processor.checker.ruff.tests]\n");
+    let errors = validate_processor_fields_raw(&ok);
+    assert!(errors.is_empty(), "unexpected errors: {errors:?}");
+    for bad in [
+        "[processor.checker.ruff.\"\"]\n",
+        "[processor.checker.ruff.\"a.b\"]\n",
+    ] {
+        let errors = validate_processor_fields_raw(&toml_of(bad));
+        assert_eq!(errors.len(), 1, "{bad}: {errors:?}");
+        assert!(errors[0].contains("invalid instance name"), "{errors:?}");
+    }
+}

@@ -220,6 +220,45 @@ pub fn plan(root: &Path, packages: &BTreeSet<Package>) -> Plan {
     out
 }
 
+/// The package set that installs `only` (`(method, name)` pairs) at their
+/// version in `wanted` and leaves every other tool exactly as the project's
+/// tool directory holds it now.
+///
+/// "As it holds it now" is the installed version, not the wanted one: when
+/// the lock has moved another tool on, its old version on disk is neither
+/// wanted nor selected, and a set built from `wanted` alone made `sync`
+/// prune it and drop its `bin/` link without installing the new one. A
+/// partial install left the project with fewer working tools than before.
+pub fn only_selected(
+    root: &Path,
+    wanted: &BTreeSet<Package>,
+    only: &[(&str, &str)],
+) -> BTreeSet<Package> {
+    let selected = |method: &str, name: &str| only.iter().any(|&(m, n)| m == method && n == name);
+    let mut packages: BTreeSet<Package> = wanted
+        .iter()
+        .filter(|p| selected(&p.method, &p.name))
+        .cloned()
+        .collect();
+    for ((method, name), versions) in installed_versions(root) {
+        if selected(&method, &name) {
+            continue;
+        }
+        // The wanted version when it is among the installed ones; else the
+        // highest installed. A second leftover version is not kept: two
+        // versions of one tool cannot both be linked into `bin/`.
+        let version = wanted
+            .iter()
+            .find(|p| p.method == method && p.name == name && versions.contains(&p.version))
+            .map(|p| &p.version)
+            .or_else(|| versions.last());
+        if let Some(version) = version {
+            packages.insert(Package::new(&method, &name, version));
+        }
+    }
+    packages
+}
+
 /// Installs one package into an empty directory, leaving its executables in
 /// that directory's `bin/`.
 pub type Installer<'a> = dyn Fn(&Package, &Path) -> Result<()> + 'a;
@@ -288,7 +327,12 @@ fn ensure_in_store(
         remove_if_present(&tmp).ok();
         return Err(e.context(format!("Failed to install {pkg} into the tool store")));
     }
-    make_files_read_only(&tmp)?;
+    // The temp directory carries this process's id, so no later run would
+    // ever collect one left behind here.
+    if let Err(e) = make_files_read_only(&tmp) {
+        remove_if_present(&tmp).ok();
+        return Err(e);
+    }
     match fs::rename(&tmp, &dir) {
         Ok(()) => Ok((dir, true)),
         Err(_) if dir.is_dir() => {
@@ -398,7 +442,19 @@ fn rebuild_bin(root: &Path, packages: &BTreeSet<Package>) -> Result<()> {
                 .join(pkg.key());
             let entry = tmp.join(&exe);
             if pkg.method == "gem" {
-                fs::write(&entry, gem_launcher(&package, &exe))
+                // An unchanged launcher is carried over as the same file,
+                // mtime included: a tool's identity in cache keys is its
+                // path, size and mtime, and a launcher written afresh on
+                // every sync invalidated every product of every gem tool
+                // each time anything was installed.
+                let launcher = gem_launcher(&package, &exe);
+                let current = tools.join(BIN_DIR).join(&exe);
+                if fs::read(&current).is_ok_and(|old| old == launcher.as_bytes()) {
+                    fs::hard_link(&current, &entry)
+                        .with_context(|| format!("Failed to carry {} over", current.display()))?;
+                    continue;
+                }
+                fs::write(&entry, launcher)
                     .with_context(|| format!("Failed to write {}", entry.display()))?;
                 crate::platform::set_permissions_mode(&entry, 0o755)
                     .with_context(|| format!("Failed to make {} executable", entry.display()))?;
@@ -536,6 +592,50 @@ mod tests {
             );
         }
         assert_eq!(parse_key("cargo", "noversion"), None);
+    }
+
+    /// Installing one tool by name leaves the others as they are: a tool
+    /// whose locked version has moved keeps its installed version and its
+    /// `bin/` link. It used to be pruned as stale, with nothing installed
+    /// in its place.
+    #[test]
+    fn installing_one_tool_keeps_the_installed_version_of_the_others() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let store = tmp.path().join("store");
+        let root = tmp.path().join("project");
+        fs::create_dir_all(&root).unwrap();
+        let calls = std::cell::Cell::new(0);
+        let install = fake_installer(&calls);
+        let old = set(&[Package::new("cargo", "cargo-deny", "0.18.0")]);
+        sync(&root, &store, &old, &install, &mut |_, _| {}).unwrap();
+
+        // The lock moved cargo-deny on and added mdbook; only mdbook is
+        // being installed.
+        let wanted = set(&[
+            Package::new("cargo", "cargo-deny", "0.19.0"),
+            Package::new("cargo", "mdbook", "0.5.0"),
+        ]);
+        let packages = only_selected(&root, &wanted, &[("cargo", "mdbook")]);
+        assert_eq!(
+            packages,
+            set(&[
+                Package::new("cargo", "cargo-deny", "0.18.0"),
+                Package::new("cargo", "mdbook", "0.5.0"),
+            ])
+        );
+        assert_eq!(plan(&root, &packages).stale, Vec::<String>::new());
+        sync(&root, &store, &packages, &install, &mut |_, _| {}).unwrap();
+        let bin = root.join(REPO_TOOLS_DIR).join("bin");
+        assert_eq!(
+            fs::read_to_string(bin.join("cargo-deny")).unwrap(),
+            "#!/bin/sh\necho 0.18.0\n"
+        );
+        assert!(bin.join("mdbook").exists());
+
+        // Selecting the moved tool itself does replace it.
+        let packages = only_selected(&root, &wanted, &[("cargo", "cargo-deny")]);
+        assert!(packages.contains(&Package::new("cargo", "cargo-deny", "0.19.0")));
+        assert!(!packages.contains(&Package::new("cargo", "cargo-deny", "0.18.0")));
     }
 
     /// The first sync installs into the store and links into the project;
@@ -732,5 +832,14 @@ mod tests {
             String::from_utf8_lossy(&out.stdout),
             format!("{0}|{0}|x.md\n", pkg.display())
         );
+
+        // A second sync that changes nothing keeps the launcher as the same
+        // file, so the tool's identity in cache keys (path, size, mtime)
+        // does not move.
+        let ino = std::os::unix::fs::MetadataExt::ino(&meta);
+        sync(&root, &store, &pkgs, &install, &mut |_, _| {}).unwrap();
+        let again = fs::symlink_metadata(&launcher).unwrap();
+        assert_eq!(std::os::unix::fs::MetadataExt::ino(&again), ino);
+        assert_eq!(again.modified().unwrap(), meta.modified().unwrap());
     }
 }

@@ -110,6 +110,12 @@ struct SharedState {
     stats: Arc<Mutex<HashMap<String, ProcessStats>>>,
     errors: Arc<Mutex<Vec<anyhow::Error>>>,
     failed_products: Arc<Mutex<HashSet<usize>>>,
+    /// How many of `failed_products` did not fail themselves but were not
+    /// run because of a failure: a failed dependency, or, failing fast, a
+    /// processor that already failed. They are in `failed_products` so
+    /// their own dependents are held back too, but each has no error of its
+    /// own and must not be counted as one.
+    blocked: Arc<AtomicUsize>,
     failed_messages: Arc<Mutex<Vec<String>>>,
     failed_processors: Arc<Mutex<HashSet<String>>>,
     /// Products that built or restored in the current level — what the
@@ -282,6 +288,14 @@ impl<'a> Executor<'a> {
     /// Check if the build was interrupted (Ctrl+C).
     fn is_interrupted(&self) -> bool {
         self.build_ctx.is_interrupted()
+    }
+
+    /// Whether no further product may start: the build was interrupted, or
+    /// it fails fast and a product has failed. Asked before anything is
+    /// done to a product, the removal of its stale outputs included: a
+    /// product that is not going to run keeps its outputs.
+    fn should_stop(&self, shared: &SharedState) -> bool {
+        self.is_interrupted() || (!self.keep_going && !shared.errors.lock().is_empty())
     }
 
     /// Display a product with the current display options.

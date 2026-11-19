@@ -26,22 +26,20 @@ Per-analyzer reference pages:
 Analyzers are configured in `rsconstruct.toml`:
 
 ```toml
-[analyzer]
-auto_detect = true                                  # default: true
-enabled     = ["cpp", "markdown", "python", "tera"] # instances to run
-
 [analyzer.cpp]
 include_paths = ["include", "src"]
+
+[analyzer.markdown]
 ```
 
-Only analyzers listed under `[analyzer.X]` (or `enabled`) are instantiated — there is no global "all analyzers always run" mode.
+Only analyzers declared with an `[analyzer.X]` table are instantiated — there is no global "all analyzers always run" mode, and `[analyzer]` has no keys of its own. Several instances of one analyzer are declared as `[analyzer.X.NAME]`.
 
 ### Auto-detection
 
 An analyzer runs if:
 
-1. It is declared (listed in `enabled` or configured via `[analyzer.X]`).
-2. AND either `auto_detect = false`, OR the analyzer detects relevant files in the project.
+1. It is declared with an `[analyzer.X]` table, and that table does not say `enabled = false`.
+2. AND the analyzer detects relevant files in the project.
 
 This mirrors how processors work.
 

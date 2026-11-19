@@ -78,8 +78,10 @@ pub enum BuildEvent {
         total: usize,
         /// Successfully processed
         success: usize,
-        /// Failed
+        /// Failed: one entry of `errors` each
         failed: usize,
+        /// Not run because a product they depend on failed
+        blocked: usize,
         /// Skipped (unchanged)
         skipped: usize,
         /// Restored from cache
@@ -313,22 +315,29 @@ pub fn emit_product_complete(
     });
 }
 
+/// How a build's products ended, for the summary event. `total` is the sum
+/// of the others except where the build stopped before reaching them all.
+#[derive(Debug, Clone, Copy)]
+pub struct BuildCounts {
+    pub total: usize,
+    pub success: usize,
+    /// Products that failed: one entry of the summary's `errors` each.
+    pub failed: usize,
+    /// Products not run because a product they depend on failed.
+    pub blocked: usize,
+    pub skipped: usize,
+    pub restored: usize,
+}
+
 /// Emit a build summary event.
-pub fn emit_build_summary(
-    total: usize,
-    success: usize,
-    failed: usize,
-    skipped: usize,
-    restored: usize,
-    duration: Duration,
-    errors: &[String],
-) {
+pub fn emit_build_summary(counts: BuildCounts, duration: Duration, errors: &[String]) {
     emit(&BuildEvent::BuildSummary {
-        total,
-        success,
-        failed,
-        skipped,
-        restored,
+        total: counts.total,
+        success: counts.success,
+        failed: counts.failed,
+        blocked: counts.blocked,
+        skipped: counts.skipped,
+        restored: counts.restored,
         duration_ms: duration.as_millis() as u64,
         errors: errors.to_vec(),
     });

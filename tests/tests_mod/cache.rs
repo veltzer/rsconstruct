@@ -690,3 +690,49 @@ fn distinct_processors_do_not_share_cache_entries() {
         "gen_b restored the wrong processor's cached blob"
     );
 }
+
+/// `--json cache stats` on an empty cache is an empty JSON object, not the
+/// sentence the text mode prints.
+#[test]
+fn cache_stats_json_empty_is_json() {
+    let temp_dir = setup_test_project();
+    let project_path = temp_dir.path();
+    fs::write(project_path.join("rsconstruct.toml"), "\n").unwrap();
+
+    let output = run_rsconstruct_with_env(
+        project_path,
+        &["--json", "cache", "stats"],
+        &[("NO_COLOR", "1")],
+    );
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let parsed: serde_json::Value =
+        serde_json::from_str(&stdout).unwrap_or_else(|e| panic!("not JSON ({e}): {stdout}"));
+    assert_eq!(parsed, serde_json::json!({}));
+}
+
+/// A descriptor that does not parse is the same named error in `cache
+/// list`, `cache stats` and `cache trim`. The first two used to leave it
+/// out, so nothing but the failing `trim` ever named the file.
+#[test]
+fn a_damaged_descriptor_fails_every_cache_listing() {
+    let temp_dir = setup_test_project();
+    let project_path = temp_dir.path();
+    fs::write(project_path.join("tera.templates/a.txt.tera"), "hello").unwrap();
+    let build = run_rsconstruct(project_path, &["build"]);
+    assert!(build.status.success());
+
+    let damaged = project_path.join(".rsconstruct/descriptors/zz");
+    fs::create_dir_all(&damaged).unwrap();
+    fs::write(damaged.join("junk"), "garbage").unwrap();
+
+    for action in ["list", "stats", "trim"] {
+        let output = run_rsconstruct(project_path, &["cache", action]);
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(!output.status.success(), "cache {action} must fail");
+        assert!(
+            stderr.contains("descriptors/zz/junk"),
+            "cache {action} must name the file: {stderr}"
+        );
+    }
+}

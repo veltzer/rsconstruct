@@ -355,10 +355,21 @@ impl Builder {
             .git_ignore(respect_gitignore)
             .git_global(respect_gitignore)
             .git_exclude(respect_gitignore)
+            // A directory holding its own `.git` (a clone or a worktree
+            // dropped into the tree, neither tracked nor ignored) is another
+            // repository: its files, its `.git` included, are not ours to
+            // judge unknown.
+            .filter_entry(|entry| {
+                entry.depth() == 0
+                    || !(entry.file_type().is_some_and(|ft| ft.is_dir())
+                        && entry.path().join(".git").exists())
+            })
             .build();
 
         for entry in walker {
-            let Ok(entry) = entry else { continue };
+            // An unreadable directory hides whatever is below it; listing
+            // the rest as "all the unknown files" would be a wrong answer.
+            let entry = entry.context("Failed to walk the project tree for unknown files")?;
             // Skip directories — we only care about files
             if !entry.file_type().is_some_and(|ft| ft.is_file()) {
                 continue;
@@ -417,9 +428,10 @@ impl Builder {
         if force {
             println!("{}", color::bold("Removing unknown files..."));
             let mut removed = 0usize;
+            let mut failed: Vec<String> = Vec::new();
             for path in &unknown_files {
                 if let Err(e) = fs::remove_file(path) {
-                    eprintln!("  Failed to remove {}: {}", path.display(), e);
+                    failed.push(format!("{}: {e}", path.display()));
                 } else {
                     if verbose {
                         println!("  {}", path.display());
@@ -456,6 +468,14 @@ impl Builder {
             let mut summary = format!("Removed {removed} unknown file(s)");
             if dirs_removed > 0 {
                 let _ = write!(summary, ", {dirs_removed} empty dir(s)");
+            }
+            if !failed.is_empty() {
+                println!("{summary}");
+                bail!(
+                    "Failed to remove {} unknown file(s):\n  {}",
+                    failed.len(),
+                    failed.join("\n  ")
+                );
             }
             println!("{}", color::green(&summary));
         } else {

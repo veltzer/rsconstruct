@@ -11,7 +11,7 @@ choose the columns the CLI's tables show — see
 
 ```toml
 [build]
-parallel = 1          # Number of parallel jobs (1 = sequential, 0 = auto-detect CPU cores)
+parallel = 0          # Number of parallel jobs (0 = one per CPU core, 1 = sequential)
                       # Also settable via RSCONSTRUCT_THREADS env var (CLI -j takes precedence)
 batch_size = 0        # Max files per batch for batch-capable processors (0 = no limit)
 output_dir = "out"    # Global output directory prefix for generator processors
@@ -42,9 +42,12 @@ remote_pull = true       # Pull from remote cache on cache miss (default: true)
 mtime_check = true       # Use mtime pre-check to skip unchanged file checksums (default: true)
 webcache_ttl_secs = 604800  # How long a fetched HTTP response stays fresh (default: 7 days)
 
-[analyzer]
-auto_detect = true
-enabled = ["cpp", "python"]
+# Declare dependency analyzers by adding [analyzer.NAME] sections.
+# Only declared analyzers run.
+[analyzer.cpp]
+include_paths = ["include"]
+
+[analyzer.python]
 
 [graph]
 viewer = "google-chrome"  # Command to open graph files (default: platform-specific)
@@ -293,9 +296,10 @@ is hidden by default:
 
 | Key | Type | Default | Description |
 |---|---|---|---|
-| `parallel` | integer | `1` | Number of parallel jobs. `1` = sequential, `0` = auto-detect CPU cores. Can also be set via the `RSCONSTRUCT_THREADS` environment variable (CLI `-j` takes precedence). |
+| `parallel` | integer | `0` | Number of parallel jobs. `0` = one per CPU core, `1` = sequential. Can also be set via the `RSCONSTRUCT_THREADS` environment variable (CLI `-j` takes precedence). |
 | `batch_size` | integer | `0` | Maximum files per batch for batch-capable processors. `0` = no limit (all files in one batch). To disable batching, pass `--batch-size -1` on the CLI or set `batch = false` on individual processors. |
-| `output_dir` | string | `"out"` | Global output directory prefix. Processor `output_dir` defaults that start with `out/` are remapped to use this prefix (e.g., setting `"build"` changes `out/processor.generator.marp` to `build/marp`). Individual processors can still override their `output_dir` explicitly. |
+| `output_dir` | string | `"out"` | Global output directory prefix. Processor `output_dir` defaults that start with `out/` are remapped to use this prefix (e.g., setting `"build"` changes `out/processor.generator.marp` to `build/processor.generator.marp`). Individual processors can still override their `output_dir` explicitly. |
+| `max_arg_len` | integer | `1000000` | Maximum total length, in bytes, of the file arguments of one checker invocation; a longer list is split over several invocations. Linux's `ARG_MAX` is about 2 MB, and the default leaves room for the environment and the tool's own arguments. |
 | `max_discovery_passes` | integer | `10` | Maximum fixed-point discovery passes. Discovery repeats while processors keep adding products from each other's declared outputs; a config still adding products after this many passes fails the build (naming the processors involved) instead of silently truncating the graph. |
 | `hash_tool_versions` | boolean | `true` | Mix the identity of each processor's external tools into its products' cache keys, so upgrading a tool invalidates what that tool produced. Tools are identified by the resolved binary's path, size and mtime (no `--version` subprocess and no read of its bytes). Which release is installed is [`rsconstruct.lock`](tool-lock.md)'s business, not the cache key's. Set to `false` to leave tool identity out of cache keys entirely. |
 | `hash_python_env` | boolean | `true` | Mix a fingerprint of the project's Python environment (the distributions installed in `./.venv` and the interpreter version from `pyvenv.cfg`) into the cache keys of the processors that depend on it: the Python checkers, and any processor whose tool runs the venv's Python (see the per-processor [`hash_python_env`](#processortypename) field). Upgrading the packages (`uv lock --upgrade && uv sync`) then rebuilds what was checked or built against the old ones. No effect in a project without `./.venv`. Set to `false` to leave the Python environment out of every cache key. Design notes: [Python Environment Fingerprint](internal/python-env-fingerprint.md). |
@@ -359,10 +363,12 @@ Processor-specific fields are documented on each processor's page under [Process
 
 ### `[analyzer]`
 
-| Key | Type | Default | Description |
-|---|---|---|---|
-| `auto_detect` | boolean | `true` | When `true`, only run enabled analyzers that auto-detect relevant files. |
-| `enabled` | array of strings | `["cpp", "python"]` | List of dependency analyzers to enable. |
+`[analyzer]` has no keys of its own. Each analyzer is declared by its own
+table, `[analyzer.NAME]` (or `[analyzer.NAME.INSTANCE]` for several instances
+of one analyzer), holding that analyzer's fields; a declared analyzer runs
+when it detects files it applies to, and `enabled = false` in its table
+switches it off without removing the table. See
+[Dependency Analyzers](analyzers.md) and `rsconstruct analyzer defconfig NAME`.
 
 ### `[graph]`
 

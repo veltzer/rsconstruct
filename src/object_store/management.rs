@@ -1,10 +1,34 @@
 use anyhow::{Context, Result};
 use std::collections::BTreeMap;
 use std::fs;
+use std::path::Path;
 
 use super::{
     CacheDescriptor, CacheListEntry, CacheListOutput, ObjectStore, ProcessorCacheStats, walk_files,
 };
+
+/// Whether `path` is a temp file a crashed descriptor write left behind
+/// (`store_descriptor` writes `.tmp-<pid>-<n>`, then renames). It is not a
+/// descriptor and may be truncated.
+fn is_descriptor_temp(path: &Path) -> bool {
+    path.file_name()
+        .and_then(|n| n.to_str())
+        .is_some_and(|n| n.starts_with(".tmp-"))
+}
+
+/// Read and parse the descriptor file at `path`. Every management command
+/// goes through this, so a damaged descriptor is the same named error in
+/// `list`, `stats` and `trim` instead of an entry two of them leave out.
+fn read_descriptor_file(path: &Path) -> Result<CacheDescriptor> {
+    let data = fs::read(path)
+        .with_context(|| format!("Failed to read cache descriptor: {}", path.display()))?;
+    serde_json::from_slice(&data).with_context(|| {
+        format!(
+            "Failed to parse cache descriptor: {} (remove it to proceed)",
+            path.display()
+        )
+    })
+}
 
 impl ObjectStore {
     /// Get cache size in bytes and number of objects (blobs + descriptors)
@@ -42,17 +66,11 @@ impl ObjectStore {
         let mut referenced: std::collections::HashSet<String> = std::collections::HashSet::new();
         if self.descriptors_dir.exists() {
             for path in walk_files(&self.descriptors_dir)? {
-                // A temp file a crashed write left behind (`store_descriptor`
-                // writes `.tmp-<pid>-<n>`, then renames) is not a
-                // descriptor and may be truncated: parsing it would abort
-                // every trim until someone removed it by hand. It is
-                // garbage, so it is collected here. redb's exclusive lock
-                // means no other process is mid-write.
-                if path
-                    .file_name()
-                    .and_then(|n| n.to_str())
-                    .is_some_and(|n| n.starts_with(".tmp-"))
-                {
+                // Parsing a leftover temp file would abort every trim until
+                // someone removed it by hand. It is garbage, so it is
+                // collected here. redb's exclusive lock means no other
+                // process is mid-write.
+                if is_descriptor_temp(&path) {
                     fs::remove_file(&path).with_context(|| {
                         format!(
                             "Failed to remove leftover descriptor temp file: {}",
@@ -61,16 +79,7 @@ impl ObjectStore {
                     })?;
                     continue;
                 }
-                let data = fs::read(&path).with_context(|| {
-                    format!("Failed to read descriptor during trim: {}", path.display())
-                })?;
-                let desc = serde_json::from_slice::<CacheDescriptor>(&data).with_context(|| {
-                    format!(
-                        "Failed to parse descriptor during trim: {} (remove it to proceed)",
-                        path.display()
-                    )
-                })?;
-                match desc {
+                match read_descriptor_file(&path)? {
                     CacheDescriptor::Marker => {}
                     CacheDescriptor::Blob { checksum, .. } => {
                         referenced.insert(checksum);
@@ -212,37 +221,46 @@ impl ObjectStore {
             return Ok(Vec::new());
         }
 
-        let mut entries: Vec<CacheListEntry> = walk_files(&self.descriptors_dir)?
-            .into_iter()
-            .filter_map(|path| {
-                let data = fs::read(&path).ok()?;
-                let desc: CacheDescriptor = serde_json::from_slice(&data).ok()?;
+        let mut entries: Vec<CacheListEntry> = Vec::new();
+        for path in walk_files(&self.descriptors_dir)? {
+            if is_descriptor_temp(&path) {
+                continue;
+            }
+            let desc = read_descriptor_file(&path)?;
 
-                // Reconstruct descriptor key from path
-                let prefix = path.parent()?.file_name()?.to_str()?;
-                let rest = path.file_name()?.to_str()?;
-                let cache_key = format!("{prefix}{rest}");
+            // Reconstruct descriptor key from path
+            let (Some(prefix), Some(rest)) = (
+                path.parent()
+                    .and_then(|p| p.file_name())
+                    .and_then(|n| n.to_str()),
+                path.file_name().and_then(|n| n.to_str()),
+            ) else {
+                anyhow::bail!(
+                    "Cache descriptor path is not valid UTF-8: {}",
+                    path.display()
+                );
+            };
+            let cache_key = format!("{prefix}{rest}");
 
-                let outputs = match desc {
-                    CacheDescriptor::Marker => Vec::new(),
-                    CacheDescriptor::Blob { ref checksum, .. } => {
-                        vec![CacheListOutput {
-                            path: "(blob)".to_string(),
-                            exists: self.has_object(checksum),
-                        }]
-                    }
-                    CacheDescriptor::Tree { entries } => entries
-                        .iter()
-                        .map(|e| CacheListOutput {
-                            path: e.path.clone(),
-                            exists: self.has_object(&e.checksum),
-                        })
-                        .collect(),
-                };
+            let outputs = match desc {
+                CacheDescriptor::Marker => Vec::new(),
+                CacheDescriptor::Blob { ref checksum, .. } => {
+                    vec![CacheListOutput {
+                        path: "(blob)".to_string(),
+                        exists: self.has_object(checksum),
+                    }]
+                }
+                CacheDescriptor::Tree { entries } => entries
+                    .iter()
+                    .map(|e| CacheListOutput {
+                        path: e.path.clone(),
+                        exists: self.has_object(&e.checksum),
+                    })
+                    .collect(),
+            };
 
-                Some(CacheListEntry { cache_key, outputs })
-            })
-            .collect();
+            entries.push(CacheListEntry { cache_key, outputs });
+        }
 
         entries.sort_by(|a, b| a.cache_key.cmp(&b.cache_key));
         Ok(entries)
@@ -258,10 +276,10 @@ impl ObjectStore {
         }
 
         for path in walk_files(&self.descriptors_dir)? {
-            let Ok(data) = fs::read(&path) else { continue };
-            let Ok(desc) = serde_json::from_slice::<CacheDescriptor>(&data) else {
+            if is_descriptor_temp(&path) {
                 continue;
-            };
+            }
+            let desc = read_descriptor_file(&path)?;
 
             // We can't extract processor name from a hashed descriptor key.
             // Use "all" as a single bucket for now.

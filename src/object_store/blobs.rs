@@ -171,9 +171,14 @@ impl ObjectStore {
             return Ok(());
         }
 
-        let needs_exec = mode.is_some_and(|m| m & 0o111 != 0);
+        // A hardlink shares the object's inode and so its mode, 0444. That is
+        // only right when 0444 grants nothing the recorded mode withheld:
+        // an executable needs its exec bits, and a file the tool wrote
+        // private (0600, 0640) must not come back readable by group or
+        // others. Both are restored by copy, with the recorded mode.
+        let needs_own_mode = mode.is_some_and(|m| m & 0o111 != 0 || 0o044 & !m != 0);
         match self.restore_method {
-            RestoreMethod::Hardlink if !needs_exec => {
+            RestoreMethod::Hardlink if !needs_own_mode => {
                 fs::hard_link(&object_path, output_path)
                     .with_context(|| format!("Failed to hard link from cache: {checksum}. If on a cross-filesystem setup, set restore_method = \"copy\" in rsconstruct.toml."))?;
             }
@@ -251,6 +256,32 @@ mod tests {
             0,
             "hardlink-restored output shares the object inode and must stay read-only"
         );
+    }
+
+    /// A file the tool wrote private comes back private. A hardlink shares
+    /// the object's 0444, which made a restored 0600 output readable by
+    /// everyone; such a file is restored by copy with its recorded mode.
+    /// The common modes (0644, 0664) still restore as hardlinks.
+    #[test]
+    fn restore_does_not_widen_a_private_mode() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let store = store_in(tmp.path());
+        let checksum = store.store_object(b"secret").unwrap();
+        let ino = |p: &Path| std::os::unix::fs::MetadataExt::ino(&fs::metadata(p).unwrap());
+        let object = store.object_path(&checksum);
+
+        for mode in [0o600, 0o640] {
+            let out = tmp.path().join(format!("private-{mode:o}"));
+            store.restore_file(&checksum, &out, Some(mode)).unwrap();
+            let restored = crate::platform::get_mode(&fs::metadata(&out).unwrap()) & 0o777;
+            assert_eq!(restored, mode, "restored {restored:o}, recorded {mode:o}");
+            assert_ne!(ino(&out), ino(&object), "must be a copy, not a link");
+        }
+        for mode in [0o644, 0o664] {
+            let out = tmp.path().join(format!("public-{mode:o}"));
+            store.restore_file(&checksum, &out, Some(mode)).unwrap();
+            assert_eq!(ino(&out), ino(&object), "{mode:o} still hardlinks");
+        }
     }
 
     /// Objects written under one `compression` setting must stay readable and

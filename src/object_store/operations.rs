@@ -3,21 +3,23 @@ use anyhow::{Context, Result};
 use super::ObjectStore;
 
 impl ObjectStore {
-    /// Try to push an object to remote cache (ignores errors).
+    /// Try to push an object to remote cache. A failure is a warning, not an
+    /// error (the push is best-effort); the result says whether the remote
+    /// now holds the object, so the caller does not publish a descriptor
+    /// naming an object that is not there.
     /// The remote always stores the original (uncompressed) content so
     /// machines with different local `compression` settings interoperate.
-    #[allow(clippy::unnecessary_wraps)] // Result kept for API symmetry with try_fetch_*; future writers may legitimately fail.
     pub(super) fn try_push_object_to_remote(
         &self,
         ctx: &crate::build_context::BuildContext,
         checksum: &str,
-    ) -> Result<()> {
+    ) -> bool {
         let Some(remote) = &self.remote else {
-            return Ok(());
+            return false;
         };
 
         if !self.has_object(checksum) {
-            return Ok(());
+            return false;
         }
 
         let remote_key = super::remote_object_key(checksum);
@@ -27,27 +29,29 @@ impl ObjectStore {
         // best-effort, but a broken remote (expired credentials, denied
         // bucket) must never pass for "not there yet" without a word.
         match remote.exists(ctx, &remote_key) {
-            Ok(true) => return Ok(()),
+            Ok(true) => return true,
             Ok(false) => {}
             Err(e) => {
                 crate::output::warn(&format!(
                     "failed to check remote cache for {remote_key}: {e}"
                 ));
-                return Ok(());
+                return false;
             }
         }
 
-        // Upload (ignore errors - remote cache is best-effort)
         match self.read_object(checksum) {
-            Ok(content) => {
-                if let Err(e) = remote.upload_bytes(ctx, &remote_key, &content) {
+            Ok(content) => match remote.upload_bytes(ctx, &remote_key, &content) {
+                Ok(()) => true,
+                Err(e) => {
                     crate::output::warn(&format!("failed to push to remote cache: {e}"));
+                    false
                 }
+            },
+            Err(e) => {
+                crate::output::warn(&format!("failed to read object for remote push: {e}"));
+                false
             }
-            Err(e) => crate::output::warn(&format!("failed to read object for remote push: {e}")),
         }
-
-        Ok(())
     }
 
     /// Whether the object is available locally, fetching it from the remote

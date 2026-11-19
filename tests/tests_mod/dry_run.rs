@@ -251,4 +251,25 @@ fn dry_run_json_prints_only_json() {
     let parsed: serde_json::Value = serde_json::from_str(&stdout)
         .unwrap_or_else(|e| panic!("stdout is not one JSON document ({e}): {stdout}"));
     assert_eq!(parsed["totals"]["total"], 1, "{stdout}");
+    // tera is a builtin written in Rust; the dry run used to report every
+    // processor as neither, while `status` reported them correctly.
+    let tera = &parsed["processor"][0];
+    assert_eq!(tera["name"], "processor.generator.tera", "{stdout}");
+    assert_eq!(tera["builtin"], true, "{stdout}");
+    assert_eq!(tera["rust"], true, "{stdout}");
+}
+
+/// A `--target` that selects nothing is a typo, not an empty build: it
+/// used to print "Nothing to build" and exit 0.
+#[test]
+fn a_target_matching_nothing_is_a_config_error() {
+    let temp_dir = setup_test_project();
+    let project_path = temp_dir.path();
+    fs::write(project_path.join("tera.templates/j.txt.tera"), "hello").unwrap();
+
+    let output = run_rsconstruct(project_path, &["build", "-t", "no/such/file"]);
+    assert_eq!(output.status.code(), Some(2));
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("'no/such/file'"), "{stderr}");
+    assert!(!project_path.join("j.txt").exists());
 }

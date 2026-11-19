@@ -160,10 +160,6 @@ struct StatusPrintOptions<'a> {
     display_opts: DisplayOptions,
     verbose: bool,
     all_processor_names: &'a [&'a str],
-    builtin_processors: &'a std::collections::HashSet<&'a str>,
-    /// Processors whose implementation is written in Rust (see
-    /// `ProcessorPlugin::is_rust`); shown as the `rust` column.
-    rust_processors: &'a std::collections::HashSet<&'a str>,
 }
 
 /// Create a processor from a type name and TOML config value.
