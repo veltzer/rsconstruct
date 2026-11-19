@@ -637,6 +637,7 @@ rsconstruct tool install machine   # Install what this project needs on the mach
 rsconstruct tool install machine shellcheck   # Install one tool through its machine install
 rsconstruct tool install machine --all        # Install every tool in the registry onto the machine, ignoring the config (no config needed)
 rsconstruct tool install machine --no-eatmydata   # Don't wrap apt/dnf/pacman with eatmydata
+rsconstruct tool install machine --allow-unpinned # Install release binaries rsconstruct.lock does not pin (refused otherwise)
 rsconstruct tool install project   # Install everything into the project from its lockfiles: uv sync (.venv), npm ci (node_modules), .rsconstruct/tools
 rsconstruct tool install project rumdl        # Install one tool through its project install
 rsconstruct tool install project -i           # Ask for confirmation first (default: install without asking)
@@ -690,7 +691,9 @@ config, so it needs no `rsconstruct.toml`. It never skips: a tool with no
 machine install is a hard error, not a warning. This makes it the intended
 way to provision a machine for every processor at once (rsconstruct's own
 CI does, for its tests), and a registry entry that loses its machine install
-fails the provisioning step instead of quietly shrinking the matrix. `--all`
+fails the provisioning step instead of quietly shrinking the matrix. Outside a
+project nothing is pinned, so its release binaries need `--allow-unpinned`
+(see [Unpinned release binaries are refused](tool-lock.md#unpinned-release-binaries-are-refused)). `--all`
 cannot be combined with a tool name, and `install project` has none: a
 project installs only what it uses.
 

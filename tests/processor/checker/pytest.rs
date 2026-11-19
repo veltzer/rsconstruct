@@ -122,7 +122,10 @@ fn pytest_conftest_is_an_input_of_the_tests_below_it() {
         "conftest.py must not be run as a test: {stdout}"
     );
 
-    fs::write(&conftest, fixture(2)).unwrap();
+    // A value of another length: Python holds a `.pyc` to its source by
+    // size and whole-second mtime, so a same-size rewrite within the second
+    // ran the stale bytecode and the test passed on the old fixture.
+    fs::write(&conftest, fixture(20)).unwrap();
     let second = run_rsconstruct_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
     assert!(
         !second.status.success(),

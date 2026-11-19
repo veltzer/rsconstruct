@@ -631,6 +631,11 @@ pub enum InstallAction {
         /// tool with no machine install is a hard error.
         #[arg(short, long, conflicts_with = "name")]
         all: bool,
+        /// Install a release binary that rsconstruct.lock does not pin:
+        /// whatever its URL serves today, with no checksum to hold it to.
+        /// Refused without this flag
+        #[arg(long)]
+        allow_unpinned: bool,
         /// Prompt for confirmation before installing (default: install
         /// without asking, so CI and scripts work with no extra flags)
         #[arg(short, long)]

@@ -337,6 +337,7 @@ fn apply_project_tools(
         verbose,
         use_eatmydata: false,
         binary_pins: lock.binary.clone(),
+        allow_unpinned: false,
     };
     let install = |pkg: &crate::tool_store::Package, prefix: &std::path::Path| {
         crate::tools::install_into_prefix(pkg, prefix, &ctx)
@@ -726,6 +727,7 @@ fn run_tools_command(
             InstallAction::Machine {
                 name,
                 all,
+                allow_unpinned,
                 interactive,
                 no_eatmydata,
             } => {
@@ -749,6 +751,7 @@ fn run_tools_command(
                         && config_enables_eatmydata
                         && which::which("eatmydata").is_ok(),
                     verbose,
+                    allow_unpinned,
                 };
                 install_machine(
                     ctx,
@@ -770,6 +773,8 @@ fn run_tools_command(
                     interactive,
                     use_eatmydata: false,
                     verbose,
+                    // A project install is from the lock and nothing else.
+                    allow_unpinned: false,
                 };
                 install_project(
                     ctx,
@@ -794,6 +799,36 @@ struct InstallFlags {
     /// Wrap the system package manager in `eatmydata`.
     use_eatmydata: bool,
     verbose: bool,
+    /// Install release binaries the lock does not pin (`--allow-unpinned`).
+    allow_unpinned: bool,
+}
+
+/// Refuse a machine install that would download a release binary no lock
+/// entry pins. Such an install takes whatever the recipe's URL serves today
+/// and puts it on the machine with nothing to check it against; a pinned
+/// one downloads a recorded URL and must match its recorded SHA-256.
+/// Checked before anything is installed, so a refused run changes nothing.
+fn refuse_unpinned_binaries(
+    groups: &[(&str, Vec<String>)],
+    ctx: &crate::tools::InstallCtx,
+) -> Result<()> {
+    if ctx.allow_unpinned {
+        return Ok(());
+    }
+    let unpinned: Vec<&str> = groups
+        .iter()
+        .filter(|(method, _)| *method == "binary")
+        .flat_map(|(_, packages)| packages.iter().map(String::as_str))
+        .filter(|package| !ctx.binary_pins.contains_key(*package))
+        .collect();
+    if unpinned.is_empty() {
+        return Ok(());
+    }
+    Err(tool_error(format!(
+        "Refusing to install release binaries that rsconstruct.lock does not pin: {}\n{}",
+        unpinned.join(", "),
+        crate::tools::UNPINNED_HELP
+    )))
 }
 
 /// The order machine installs run in, by method. Fixed and load-bearing:
@@ -1072,7 +1107,9 @@ fn install_machine(
         verbose: flags.verbose,
         use_eatmydata: flags.use_eatmydata,
         binary_pins: lock.map(|l| l.binary).unwrap_or_default(),
+        allow_unpinned: flags.allow_unpinned,
     };
+    refuse_unpinned_binaries(&groups, &install_ctx)?;
     println!("{}:", color::bold("To install onto the machine"));
     print_install_groups(&groups, &install_ctx);
     if !go_ahead(flags)? {
@@ -1234,6 +1271,7 @@ fn install_project(
         verbose: flags.verbose,
         use_eatmydata: false,
         binary_pins: lock.binary.clone(),
+        allow_unpinned: flags.allow_unpinned,
     };
     if !groups.is_empty() {
         println!("{}:", color::bold("Project environments"));
@@ -1459,7 +1497,7 @@ fn tools_graph_svg(
 
 #[cfg(test)]
 mod dpkg_status_tests {
-    use super::dpkg_status_means_installed;
+    use super::{dpkg_status_means_installed, refuse_unpinned_binaries};
 
     #[test]
     fn installed_package_is_installed() {
@@ -1476,5 +1514,48 @@ mod dpkg_status_tests {
         assert!(!dpkg_status_means_installed("deinstall ok config-files"));
         assert!(!dpkg_status_means_installed("install ok half-configured"));
         assert!(!dpkg_status_means_installed(""));
+    }
+
+    /// A machine install plan with a release binary the lock does not pin
+    /// is refused whole, naming every such binary; pinned binaries and the
+    /// other install methods pass, and `--allow-unpinned` lets all through.
+    #[test]
+    fn a_plan_with_unpinned_binaries_is_refused() {
+        let pin = crate::tool_lock::BinaryPin {
+            url: "https://example.invalid/taplo.gz".to_string(),
+            sha256: "0".repeat(64),
+            executable_sha256: None,
+            deb_package: None,
+            deb_version: None,
+        };
+        let ctx = |allow_unpinned| crate::tools::InstallCtx {
+            verbose: false,
+            use_eatmydata: false,
+            binary_pins: [("taplo".to_string(), pin.clone())].into(),
+            allow_unpinned,
+        };
+        let pinned_only = [
+            ("apt", vec!["curl".to_string()]),
+            ("binary", vec!["taplo".to_string()]),
+        ];
+        refuse_unpinned_binaries(&pinned_only, &ctx(false)).unwrap();
+
+        let mixed = [(
+            "binary",
+            vec![
+                "taplo".to_string(),
+                "drawio".to_string(),
+                "google-chrome-stable".to_string(),
+            ],
+        )];
+        let err = refuse_unpinned_binaries(&mixed, &ctx(false))
+            .unwrap_err()
+            .to_string();
+        assert!(
+            err.contains("does not pin: drawio, google-chrome-stable")
+                && err.contains("--allow-unpinned"),
+            "{err}"
+        );
+        refuse_unpinned_binaries(&mixed, &ctx(true)).unwrap();
     }
 }

@@ -173,6 +173,31 @@ machine`, which never touches any project's tool directory; `tool install
 machine <name>` and `tool install machine --all` install a named tool, or the
 whole registry, for the machine.
 
+### Unpinned release binaries are refused
+
+A release binary the lock pins is downloaded from its recorded URL and must
+match its recorded SHA-256. One the lock does not pin would be whatever its
+URL serves that day, installed onto the machine with nothing to check it
+against, so `tool install machine` refuses it before installing anything:
+
+```text
+Refusing to install release binaries that rsconstruct.lock does not pin: drawio
+```
+
+A binary is unpinned when the project's lock has no entry for it (run
+`rsconstruct tool lock`), when there is no project and so no lock (`tool
+install machine <name>` or `--all` outside one), or when its recipe cannot be
+pinned at all (`google-chrome-stable` is a vendor URL with no versioned
+release). `--allow-unpinned` installs it anyway and prints the URL and the
+SHA-256 of what was downloaded, so the install can be told from another:
+
+```console
+rsconstruct tool install machine --all --allow-unpinned
+```
+
+System packages and `pip`/`npm`/`cargo`/`gem` installs are not affected: the
+flag is about release binaries only.
+
 ## rsconstruct itself is not locked
 
 The fleet's `scripts/ci-install-tools.sh` (run by `ci.yml`) downloads the

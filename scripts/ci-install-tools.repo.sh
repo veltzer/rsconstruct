@@ -43,7 +43,11 @@ cp target/debug/rsconstruct "${CARGO_HOME:-${HOME}/.cargo}/bin/rsconstruct"
 # so this inherits GITHUB_TOKEN from the workflow step to stay under the
 # authenticated rate limit (see the comment on that step in ci.yml). Unset
 # locally, where one machine never approaches the anonymous 60/hour.
-rsconstruct tool install machine --all
+#
+# --allow-unpinned: the matrix is the registry's every release binary at
+# today's latest, which is what these tests are for, and this repo's
+# rsconstruct.lock pins only what its own build runs.
+rsconstruct tool install machine --all --allow-unpinned
 
 # drawio is an Electron app with no headless mode: `drawio --export` exits
 # with "Missing X server or $DISPLAY" on a runner, which has no display

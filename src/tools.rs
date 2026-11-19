@@ -49,7 +49,16 @@ pub struct InstallCtx {
     /// recipe name: a pinned recipe downloads the locked URL and must match
     /// the locked SHA-256. Empty outside a project.
     pub binary_pins: std::collections::BTreeMap<String, crate::tool_lock::BinaryPin>,
+    /// Install a `binary` recipe that has no entry in `binary_pins`. Off
+    /// unless the user asked for it (`tool install machine
+    /// --allow-unpinned`): an unpinned install is whatever the URL serves.
+    pub allow_unpinned: bool,
 }
+
+/// What to do about a release binary the lock does not pin.
+pub const UNPINNED_HELP: &str = "An unpinned binary is whatever its URL serves today, installed with no checksum to hold it to. \
+     In a project, run `rsconstruct tool lock` to pin it; \
+     to install it unpinned anyway, pass --allow-unpinned to `tool install machine`.";
 
 impl InstallMethod {
     pub const fn new(method: &'static str, package: &'static str) -> Self {
@@ -1204,9 +1213,15 @@ fn run_binary(pkg: &str, ctx: &InstallCtx) -> anyhow::Result<()> {
              (`rsconstruct tool install project {pkg}`)"
         );
     }
-    // A lock entry decides the exact asset and its bytes; without one (no
-    // project, or a recipe that cannot be pinned) the recipe decides.
+    // A lock entry decides the exact asset and its bytes. Without one (no
+    // project, or a recipe that cannot be pinned) the recipe would decide,
+    // and nothing would vouch for the bytes: that takes an explicit yes.
     let pin = ctx.binary_pins.get(pkg);
+    if pin.is_none() && !ctx.allow_unpinned {
+        anyhow::bail!(
+            "Refusing to install the release binary '{pkg}': rsconstruct.lock does not pin it\n{UNPINNED_HELP}"
+        );
+    }
     let url = match pin {
         Some(pin) => pin.url.clone(),
         None => unpinned_binary_url(&recipe)?,
@@ -2731,9 +2746,29 @@ mod tests {
                 verbose: false,
                 use_eatmydata: false,
                 binary_pins: no_pins(),
+                allow_unpinned: false,
             };
             let err = run_binary(pkg, &ctx).unwrap_err();
             assert!(err.to_string().contains("only into a project"), "{err}");
+        }
+    }
+
+    /// A release binary with no lock entry is not installed unless the
+    /// caller said so: the refusal comes before anything is downloaded.
+    #[test]
+    fn an_unpinned_binary_is_refused() {
+        let ctx = InstallCtx {
+            verbose: false,
+            use_eatmydata: false,
+            binary_pins: no_pins(),
+            allow_unpinned: false,
+        };
+        for pkg in ["taplo", "google-chrome-stable"] {
+            let err = run_binary(pkg, &ctx).unwrap_err().to_string();
+            assert!(
+                err.contains("does not pin it") && err.contains("--allow-unpinned"),
+                "{pkg}: {err}"
+            );
         }
     }
 }
