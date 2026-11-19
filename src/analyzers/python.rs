@@ -372,7 +372,7 @@ inventory::submit! {
         // 2: statements joined by `;`, only dotted names, no docstring text.
         version: 2,
         create: |toml_value, _| {
-            let cfg: PythonAnalyzerConfig = toml::from_str(&toml::to_string(toml_value)?)?;
+            let cfg: PythonAnalyzerConfig = crate::registries::deserialize_config(toml_value)?;
             Ok(Box::new(PythonDepAnalyzer::new(cfg)))
         },
         defconfig_toml: || {

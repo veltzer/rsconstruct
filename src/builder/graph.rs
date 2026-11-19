@@ -210,8 +210,16 @@ impl Builder {
 
         unreferenced.sort();
 
-        for path in &unreferenced {
-            println!("{}", path.display());
+        if crate::json_output::is_json_mode() {
+            let paths: Vec<String> = unreferenced
+                .iter()
+                .map(|path| path.display().to_string())
+                .collect();
+            println!("{}", serde_json::to_string_pretty(&paths)?);
+        } else {
+            for path in &unreferenced {
+                println!("{}", path.display());
+            }
         }
 
         if rm {

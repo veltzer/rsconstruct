@@ -546,7 +546,9 @@ fn run_tools_command(
         }
         ToolAction::Check => {
             let builder = builder.ok_or_else(|| {
-                anyhow::anyhow!("tool check requires a project with rsconstruct.toml")
+                crate::exit_code::config_error(
+                    "tool check requires a project with rsconstruct.toml",
+                )
             })?;
             let wanted = project_wanted(builder, processors, is_enabled)?;
             tool_lock::verify(ctx, &wanted, tool_lock::Coverage::Exact)?;
@@ -565,7 +567,7 @@ fn run_tools_command(
         }
         ToolAction::Lock { upgrade } => {
             let builder = builder.ok_or_else(|| {
-                anyhow::anyhow!("tool lock requires a project with rsconstruct.toml")
+                crate::exit_code::config_error("tool lock requires a project with rsconstruct.toml")
             })?;
             let wanted = project_wanted(builder, processors, is_enabled)?;
             let synced = match upgrade {
@@ -760,7 +762,9 @@ fn run_tools_command(
             }
             InstallAction::Project { name, interactive } => {
                 let builder = builder.ok_or_else(|| {
-                    anyhow::anyhow!("tool install project requires a project with rsconstruct.toml")
+                    crate::exit_code::config_error(
+                        "tool install project requires a project with rsconstruct.toml",
+                    )
                 })?;
                 let flags = InstallFlags {
                     interactive,

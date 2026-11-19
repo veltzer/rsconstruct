@@ -198,7 +198,7 @@ inventory::submit! {
         // percent-encoded targets.
         version: 2,
         create: |toml_value, _| {
-            let cfg: MarkdownAnalyzerConfig = toml::from_str(&toml::to_string(toml_value)?)?;
+            let cfg: MarkdownAnalyzerConfig = crate::registries::deserialize_config(toml_value)?;
             Ok(Box::new(MarkdownDepAnalyzer::new(cfg)))
         },
         defconfig_toml: || {

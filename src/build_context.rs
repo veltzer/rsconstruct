@@ -80,7 +80,9 @@ impl BuildContext {
             mtime_config_enabled: AtomicBool::new(true),
             mtime_forced_off: AtomicBool::new(false),
             max_arg_len: std::sync::atomic::AtomicUsize::new(1_000_000),
-            webcache_ttl_secs: std::sync::atomic::AtomicU64::new(7 * 24 * 60 * 60),
+            webcache_ttl_secs: std::sync::atomic::AtomicU64::new(
+                crate::config::DEFAULT_WEBCACHE_TTL_SECS,
+            ),
             command_timeout_secs: std::sync::atomic::AtomicU64::new(0),
             sandbox_by_default: AtomicBool::new(false),
             report_undeclared_reads: AtomicBool::new(false),

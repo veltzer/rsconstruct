@@ -177,6 +177,48 @@ pub fn create_processor_for_instance(
     Ok(None)
 }
 
+/// A stanza that cannot be turned into a processor or an analyzer: a config
+/// error naming the stanza. The value of a field is only checked when its
+/// config type is built (`max_jobs = -1`), so this is where such a mistake
+/// surfaces, and it is the user's file that is wrong, not the build.
+fn stanza_error(section: &str, error: &anyhow::Error) -> anyhow::Error {
+    crate::exit_code::config_error(format!("Invalid config:\n  [{section}]: {error:#}"))
+}
+
+/// Create a processor for every declared instance of `cfg`.
+pub fn create_processors_of(cfg: &crate::config::ProcessorConfig) -> Result<ProcessorMap> {
+    let mut processors: ProcessorMap = HashMap::new();
+    for inst in &cfg.instances {
+        match create_processor_for_instance(&inst.pname, &inst.config_toml) {
+            Ok(Some(proc)) => {
+                processors.insert(inst.instance_name.clone(), proc);
+            }
+            Ok(None) => {
+                anyhow::bail!("Unknown processor type: '{}'", inst.pname);
+            }
+            Err(e) => return Err(stanza_error(&inst.instance_name, &e)),
+        }
+    }
+    Ok(processors)
+}
+
+/// Create an analyzer for every declared instance of `cfg`, disabled ones
+/// included: whether one runs is the caller's business.
+pub fn create_analyzers_of(
+    cfg: &crate::config::AnalyzerConfig,
+    verbose: bool,
+) -> Result<Vec<(String, Box<dyn DepAnalyzer>)>> {
+    let mut analyzers = Vec::new();
+    for inst in &cfg.instances {
+        let plugin = crate::registries::find_analyzer_plugin(&inst.type_name)
+            .ok_or_else(|| anyhow::anyhow!("Unknown analyzer type '{}'", inst.type_name))?;
+        let analyzer = (plugin.create)(&inst.config_toml, verbose)
+            .map_err(|e| stanza_error(&format!("analyzer.{}", inst.instance_name), &e))?;
+        analyzers.push((inst.instance_name.clone(), analyzer));
+    }
+    Ok(analyzers)
+}
+
 /// Create all builtin processors with default configs.
 pub fn create_all_default_processors() -> Result<ProcessorMap> {
     let mut processors: ProcessorMap = HashMap::new();
@@ -285,27 +327,7 @@ impl Builder {
     /// Create processors from declared instances in the config.
     /// Only processors declared in `[processor.TYPE]` or `[processor.TYPE.NAME]` are created.
     pub fn create_processors(&self) -> Result<ProcessorMap> {
-        let cfg = &self.config.processor;
-        let mut processors: ProcessorMap = HashMap::new();
-
-        for inst in &cfg.instances {
-            match create_processor_for_instance(&inst.pname, &inst.config_toml) {
-                Ok(Some(proc)) => {
-                    processors.insert(inst.instance_name.clone(), proc);
-                }
-                Ok(None) => {
-                    anyhow::bail!("Unknown processor type: '{}'", inst.pname);
-                }
-                Err(e) => {
-                    return Err(e.context(format!(
-                        "Failed to create processor instance '{}'",
-                        inst.instance_name
-                    )));
-                }
-            }
-        }
-
-        Ok(processors)
+        create_processors_of(&self.config.processor)
     }
 
     /// Detect and display config changes for each processor.
@@ -394,17 +416,10 @@ impl Builder {
         &self,
         verbose: bool,
     ) -> Result<HashMap<String, Box<dyn DepAnalyzer>>> {
-        let mut analyzers: HashMap<String, Box<dyn DepAnalyzer>> = HashMap::new();
-        for inst in &self.config.analyzer.instances {
-            let plugin = crate::registries::find_analyzer_plugin(&inst.type_name)
-                .ok_or_else(|| anyhow::anyhow!("Unknown analyzer type '{}'", inst.type_name))?;
-            let analyzer = (plugin.create)(&inst.config_toml, verbose)?;
-            if !analyzer.enabled() {
-                continue;
-            }
-            analyzers.insert(inst.instance_name.clone(), analyzer);
-        }
-        Ok(analyzers)
+        Ok(create_analyzers_of(&self.config.analyzer, verbose)?
+            .into_iter()
+            .filter(|(_, analyzer)| analyzer.enabled())
+            .collect())
     }
 
     /// Run all declared dependency analyzers on the graph.

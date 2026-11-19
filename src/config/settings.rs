@@ -366,8 +366,10 @@ pub struct CacheConfig {
 /// Seven days. Long enough that a normal working week of builds hits the
 /// cache, short enough that an upstream schema change lands without anyone
 /// having to know `rsconstruct cache webcache clear` exists.
+pub const DEFAULT_WEBCACHE_TTL_SECS: u64 = 7 * 24 * 60 * 60;
+
 const fn default_webcache_ttl_secs() -> u64 {
-    7 * 24 * 60 * 60
+    DEFAULT_WEBCACHE_TTL_SECS
 }
 
 impl Default for CacheConfig {

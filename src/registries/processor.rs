@@ -281,14 +281,23 @@ pub fn apply_all_defaults(
 
 // --- Helpers that processor files call from their create/defconfig functions ---
 
+/// A processor's or an analyzer's config table as its config type.
+///
+/// Deserialized from the value itself. It used to be printed to a string
+/// and parsed back, and a wrong value was then reported at "line 1, column
+/// 1" of that string, which the user's `rsconstruct.toml` has nothing to
+/// do with.
+pub fn deserialize_config<C: DeserializeOwned>(config_toml: &toml::Value) -> Result<C> {
+    Ok(config_toml.clone().try_into()?)
+}
+
 /// Deserialize TOML into config type C and call the constructor.
 /// The TOML should already have defaults applied by the framework.
 pub fn deserialize_and_create<C: Default + DeserializeOwned>(
     config_toml: &toml::Value,
     ctor: fn(C) -> Box<dyn Processor>,
 ) -> Result<Box<dyn Processor>> {
-    let cfg: C = toml::from_str(&toml::to_string(config_toml)?)?;
-    Ok(ctor(cfg))
+    Ok(ctor(deserialize_config(config_toml)?))
 }
 
 /// Like [`deserialize_and_create`], for processors whose constructor can fail
@@ -297,8 +306,7 @@ pub fn deserialize_and_try_create<C: Default + DeserializeOwned>(
     config_toml: &toml::Value,
     ctor: fn(C) -> Result<Box<dyn Processor>>,
 ) -> Result<Box<dyn Processor>> {
-    let cfg: C = toml::from_str(&toml::to_string(config_toml)?)?;
-    ctor(cfg)
+    ctor(deserialize_config(config_toml)?)
 }
 
 /// Build default config JSON for a config type, applying defaults for the given processor name.

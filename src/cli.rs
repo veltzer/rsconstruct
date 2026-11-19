@@ -338,7 +338,7 @@ pub enum SmartAction {
     },
     /// Remove processors from rsconstruct.toml that don't match any files (requires config)
     RemoveNoFileProcessors,
-    /// Remove all [processor.*] sections, returning to pure defaults (no config needed)
+    /// Remove all [processor.*] sections, returning to pure defaults (requires config)
     Reset,
 }
 

@@ -330,7 +330,7 @@ inventory::submit! {
         is_builtin: false,
         version: 1,
         create: |toml_value, verbose| {
-            let cfg: CppAnalyzerConfig = toml::from_str(&toml::to_string(toml_value)?)?;
+            let cfg: CppAnalyzerConfig = crate::registries::deserialize_config(toml_value)?;
             Ok(Box::new(CppDepAnalyzer::new(cfg, verbose)))
         },
         defconfig_toml: || {

@@ -319,7 +319,7 @@ inventory::submit! {
         is_builtin: true,
         version: 1,
         create: |toml_value, verbose| {
-            let cfg: IcppAnalyzerConfig = toml::from_str(&toml::to_string(toml_value)?)?;
+            let cfg: IcppAnalyzerConfig = crate::registries::deserialize_config(toml_value)?;
             Ok(Box::new(IcppDepAnalyzer::new(cfg, verbose)))
         },
         defconfig_toml: || {

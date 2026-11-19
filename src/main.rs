@@ -108,7 +108,7 @@ mod watcher;
 mod webcache;
 pub(crate) mod word_manager;
 
-use anyhow::{Context, Result, bail};
+use anyhow::{Context, Result};
 use builder::Builder;
 use cli::{BuildPhase, CleanAction, Commands, WebCacheAction, parse_shell, print_completions};
 use config::Config;
@@ -467,9 +467,9 @@ fn run() -> (Result<()>, bool) {
                         builder::smart::enable_processor(iname)?;
                     }
                     cli::ProcessorAction::Config { .. } if !has_config => {
-                        bail!(
-                            "No rsconstruct.toml found. Use 'processor defconfig <name>' to see default config without a project."
-                        );
+                        return Err(exit_code::config_error(
+                            "No rsconstruct.toml found. Use 'processor defconfig <name>' to see default config without a project.",
+                        ));
                     }
                     action => {
                         let builder = Builder::new(&ctx)?;
@@ -552,10 +552,12 @@ fn run() -> (Result<()>, bool) {
                 builder.status(&ctx, cli.verbose, breakdown)?;
             }
             Commands::SymlinkInstall => {
+                Config::require_config()?;
                 let config = Config::load()?;
                 builder::symlink_install::run(&config.command.symlink_install)?;
             }
             Commands::Term { action } => {
+                Config::require_config()?;
                 let config = Config::load()?;
                 let terms_config: processor::terms::TermsConfig = config
                     .processor
@@ -577,6 +579,7 @@ fn run() -> (Result<()>, bool) {
                 }
             }
             Commands::Tag { action } => {
+                Config::require_config()?;
                 let config = Config::load()?;
                 let db_path = config
                     .processor
@@ -636,9 +639,14 @@ fn run() -> (Result<()>, bool) {
                 match action {
                     cli::TomlAction::Check => {
                         config::Config::require_config()?;
-                        // Config::load() validates all fields — unknown fields, types, required fields.
-                        // If it succeeds, the config is valid.
-                        let _config = config::Config::load()?;
+                        // Config::load() validates field names and the
+                        // shape of the file. A field's value is checked by
+                        // the config type of its processor or analyzer, so
+                        // every one is built too: a config that `check`
+                        // calls valid must be one `build` can start on.
+                        let config = config::Config::load()?;
+                        builder::create_processors_of(&config.processor)?;
+                        builder::create_analyzers_of(&config.analyzer, false)?;
                         if json_output::is_json_mode() {
                             println!("{}", serde_json::json!({ "valid": true }));
                         } else {
@@ -753,7 +761,15 @@ fn run() -> (Result<()>, bool) {
                     }
                 }
                 WebCacheAction::List => {
-                    let entries = webcache::list()?;
+                    // Freshness is judged by the project's TTL, as a build
+                    // and `cache trim` judge it; outside a project, by the
+                    // default.
+                    let ttl_secs = if std::path::Path::new(config::CONFIG_FILE).exists() {
+                        config::Config::load()?.cache.webcache_ttl_secs
+                    } else {
+                        config::DEFAULT_WEBCACHE_TTL_SECS
+                    };
+                    let entries = webcache::list_with_ttl(ttl_secs)?;
                     if json_output::is_json_mode() {
                         let rows: Vec<serde_json::Value> = entries
                             .iter()

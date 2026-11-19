@@ -91,7 +91,7 @@ fn value_to_toml_inline_table() {
 #[test]
 fn remove_vars_section_basic() {
     let content = "[vars]\nfoo = \"bar\"\n\n[other]\nkey = \"value\"\n";
-    let result = remove_vars_section(content);
+    let result = remove_vars_section(content).unwrap();
     assert!(!result.contains("[vars]"));
     assert!(!result.contains("foo = \"bar\""));
     assert!(result.contains("[other]"));
@@ -101,7 +101,7 @@ fn remove_vars_section_basic() {
 #[test]
 fn remove_vars_section_at_end() {
     let content = "[other]\nkey = \"value\"\n\n[vars]\nfoo = \"bar\"\n";
-    let result = remove_vars_section(content);
+    let result = remove_vars_section(content).unwrap();
     assert!(!result.contains("[vars]"));
     assert!(!result.contains("foo = \"bar\""));
     assert!(result.contains("[other]"));
@@ -111,14 +111,14 @@ fn remove_vars_section_at_end() {
 #[test]
 fn remove_vars_section_no_vars() {
     let content = "[other]\nkey = \"value\"\n";
-    let result = remove_vars_section(content);
+    let result = remove_vars_section(content).unwrap();
     assert_eq!(result, "[other]\nkey = \"value\"\n");
 }
 
 #[test]
 fn remove_vars_section_multiple_vars() {
     let content = "[vars]\nfoo = \"bar\"\nbaz = [1, 2, 3]\n\n[other]\nkey = \"value\"\n";
-    let result = remove_vars_section(content);
+    let result = remove_vars_section(content).unwrap();
     assert!(!result.contains("[vars]"));
     assert!(!result.contains("foo = \"bar\""));
     assert!(!result.contains("baz = [1, 2, 3]"));
@@ -130,7 +130,7 @@ fn remove_vars_section_multiple_vars() {
 #[test]
 fn remove_vars_section_preserves_line_numbers() {
     let content = "[vars]\nfoo = \"bar\"\n\n[other]\nkey = \"value\"\n";
-    let result = remove_vars_section(content);
+    let result = remove_vars_section(content).unwrap();
     let lines: Vec<&str> = result.lines().collect();
     assert_eq!(lines.len(), 5, "line count must be unchanged");
     assert_eq!(lines[3], "[other]", "[other] must stay on line 4");
@@ -224,7 +224,7 @@ fn remove_vars_section_preserves_line_count() {
     let content =
         "[vars]\na = \"1\"\nb = \"2\"\n\n[processor.checker.ruff]\nsrc_dirs = [\"src\"]\n";
     let before = content.lines().count();
-    let result = remove_vars_section(content);
+    let result = remove_vars_section(content).unwrap();
     assert_eq!(
         result.lines().count(),
         before,
@@ -1588,5 +1588,32 @@ fn instance_names_must_be_one_non_empty_segment() {
         let errors = validate_processor_fields_raw(&toml_of(bad));
         assert_eq!(errors.len(), 1, "{bad}: {errors:?}");
         assert!(errors[0].contains("invalid instance name"), "{errors:?}");
+    }
+}
+
+/// The section ends at the next table header of the document, not at the
+/// first line that looks like one: a multi-line array of arrays inside
+/// `[vars]` has such lines, and stopping there left half an array behind
+/// as a syntax error on valid TOML. Line numbers after the section hold.
+#[test]
+fn remove_vars_section_is_not_fooled_by_lines_that_look_like_headers() {
+    let content = "[vars]\nmatrix = [\n  [\"a\"],\n  [\"b\"],\n]\nname = \"x\" # [not.a.header]\n\n[build]\nparallel = 2\n";
+    let result = remove_vars_section(content).unwrap();
+    assert_eq!(result, "\n\n\n\n\n\n\n[build]\nparallel = 2\n");
+
+    // An indented header, a `[[array]]` header and a nested table end it
+    // too, and what precedes the section stays.
+    let content = "[build]\nparallel = 2\n  [vars] # comment\na = 1\n[[extra]]\nb = 2\n";
+    let result = remove_vars_section(content).unwrap();
+    assert_eq!(result, "[build]\nparallel = 2\n\n\n[[extra]]\nb = 2\n");
+}
+
+/// Variables written without a `[vars]` header have no lines that are the
+/// section; that is an error saying so, not "unknown field 'vars'".
+#[test]
+fn vars_must_be_a_table_with_a_header() {
+    for content in ["vars.a = 1\n", "vars = { a = 1 }\n"] {
+        let err = remove_vars_section(content).unwrap_err().to_string();
+        assert!(err.contains("[vars] table"), "{content}: {err}");
     }
 }

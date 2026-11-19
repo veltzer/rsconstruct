@@ -58,48 +58,88 @@ pub(super) fn value_to_toml_inline(value: &toml::Value) -> String {
     }
 }
 
-/// Check if a trimmed line is a TOML section header (e.g., `[section]` or `[section] # comment`).
-fn is_section_header(trimmed: &str) -> bool {
-    if !trimmed.starts_with('[') {
-        return false;
+/// The byte offset of every table header (`[a]`, `[a.b]`, `[[c]]`) below
+/// `table`, in any order.
+fn header_starts(table: &toml_edit::Table, starts: &mut Vec<usize>) {
+    for (_, item) in table {
+        match item {
+            toml_edit::Item::Table(sub) => {
+                starts.extend(sub.span().map(|span| span.start));
+                header_starts(sub, starts);
+            }
+            toml_edit::Item::ArrayOfTables(array) => {
+                for sub in array {
+                    starts.extend(sub.span().map(|span| span.start));
+                    header_starts(sub, starts);
+                }
+            }
+            _ => {}
+        }
     }
-    // Strip trailing comment: "[section] # comment" -> "[section]"
-    let header_part = trimmed.split('#').next().unwrap_or(trimmed).trim_end();
-    header_part.ends_with(']')
-}
-
-/// Check if a trimmed line is specifically the `[vars]` section header.
-fn is_vars_header(trimmed: &str) -> bool {
-    if !trimmed.starts_with("[vars]") {
-        return false;
-    }
-    // Allow trailing whitespace/comments: "[vars]", "[vars] # comment"
-    let rest = trimmed["[vars]".len()..].trim_start();
-    rest.is_empty() || rest.starts_with('#')
 }
 
 /// Remove the [vars] section from TOML content by blanking its lines.
 /// Blanking (instead of deleting) keeps every remaining line at its original
 /// line number, so provenance spans built from the result stay correct.
-pub(super) fn remove_vars_section(content: &str) -> String {
-    let mut in_vars_section = false;
-    let lines: Vec<&str> = content
-        .lines()
-        .map(|line| {
-            let trimmed = line.trim();
-            if is_vars_header(trimmed) {
-                in_vars_section = true;
-                return "";
-            }
-            if in_vars_section && is_section_header(trimmed) {
-                in_vars_section = false;
-            }
-            if in_vars_section { "" } else { line }
-        })
-        .collect();
-    let mut result = lines.join("\n");
-    result.push('\n');
-    result
+///
+/// The section is found by parsing: it runs from its header to the next
+/// table header of the document. Judging each line by its looks took the
+/// `["a"]` line of a multi-line array inside `[vars]` for a header, ended
+/// the section there, and left half an array behind as a syntax error on
+/// valid TOML.
+///
+/// Variables are a `[vars]` table. Written any other way (`vars.a = 1`,
+/// `vars = { a = 1 }`) there is no run of lines that is the section, and
+/// that is an error rather than a config the rest of the load then rejects
+/// with "unknown field 'vars'".
+pub(super) fn remove_vars_section(content: &str) -> Result<String> {
+    // A document that does not parse is reported by `Config::load`, which
+    // parses it next and has the whole message to give.
+    let Ok(doc) = toml_edit::Document::parse(content) else {
+        return Ok(content.to_string());
+    };
+    let Some(vars) = doc.as_table().get("vars") else {
+        return Ok(content.to_string());
+    };
+    let Some(start) = vars
+        .as_table()
+        .filter(|table| !table.is_dotted())
+        .and_then(toml_edit::Table::span)
+        .map(|span| span.start)
+    else {
+        return Err(crate::exit_code::config_error(
+            "Variables must be written as a [vars] table with one `name = value` line each; \
+             `vars.name = value` and `vars = { ... }` are not supported",
+        ));
+    };
+    let mut starts = Vec::new();
+    header_starts(doc.as_table(), &mut starts);
+    let end = starts
+        .into_iter()
+        .filter(|&other| other > start)
+        .min()
+        .unwrap_or(content.len());
+
+    let mut result = String::with_capacity(content.len());
+    let mut offset = 0;
+    for line in content.lines() {
+        // The header line holds `start`; every later line that begins
+        // before the next header belongs to the section too.
+        let line_end = offset + line.len();
+        let in_section = (offset <= start && start < line_end) || (offset > start && offset < end);
+        if !in_section {
+            result.push_str(line);
+        }
+        result.push('\n');
+        // `lines` drops the terminator: one byte for `\n`, two for `\r\n`.
+        offset = line_end
+            + if content[line_end..].starts_with("\r\n") {
+                2
+            } else {
+                1
+            };
+    }
+    Ok(result)
 }
 
 /// Strip a TOML line comment (a `#` outside of any string literal).
@@ -276,7 +316,7 @@ pub(super) fn substitute_variables(content: &str) -> Result<String> {
     }
 
     // Remove the [vars] section from the result
-    let result = remove_vars_section(&result);
+    let result = remove_vars_section(&result)?;
 
     check_no_residual_references(&result)?;
     Ok(result)

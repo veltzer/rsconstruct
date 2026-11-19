@@ -263,7 +263,7 @@ pub fn clear() -> Result<usize> {
     if !db_exists() {
         return Ok(0);
     }
-    let count = list()?.len();
+    let count = list_with_ttl(u64::MAX)?.len();
     with_db(|db| {
         let write_txn = db
             .begin_write()
@@ -317,18 +317,9 @@ pub fn prune(ttl_secs: u64) -> Result<usize> {
     Ok(expired.len())
 }
 
-/// List all cache entries with URL, size and age.
-pub fn list() -> Result<Vec<CacheEntry>> {
-    list_with_ttl(default_ttl_for_display())
-}
-
-/// The TTL used when listing without a loaded config (e.g. `cache webcache
-/// list` outside a project). Only affects the reported `expired` flag.
-const fn default_ttl_for_display() -> u64 {
-    7 * 24 * 60 * 60
-}
-
-/// List entries, marking each expired against `ttl_secs`.
+/// List entries, marking each expired against `ttl_secs`: the project's
+/// `[cache] webcache_ttl_secs`, so that what the listing calls fresh is
+/// what a build will use and `cache trim` will keep.
 pub fn list_with_ttl(ttl_secs: u64) -> Result<Vec<CacheEntry>> {
     if !db_exists() {
         return Ok(Vec::new());
@@ -361,7 +352,8 @@ pub fn list_with_ttl(ttl_secs: u64) -> Result<Vec<CacheEntry>> {
 
 /// Return (`total_bytes`, `entry_count`) for the webcache.
 pub fn stats() -> Result<(u64, usize)> {
-    let entries = list()?;
+    // Sizes and a count: the freshness of an entry plays no part.
+    let entries = list_with_ttl(u64::MAX)?;
     let total: u64 = entries.iter().map(|e| e.size as u64).sum();
     Ok((total, entries.len()))
 }

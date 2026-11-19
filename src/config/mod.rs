@@ -1019,9 +1019,9 @@ impl Config {
                 (config, spans, global_spans, local_spans, local_global_spans)
             } else {
                 if local_path.exists() {
-                    anyhow::bail!(
+                    return Err(crate::exit_code::config_error(format!(
                         "{LOCAL_CONFIG_FILE} found without {CONFIG_FILE} — the local overlay only extends a main config file",
-                    );
+                    )));
                 }
                 let config: Self = match read_user_build_config()? {
                     Some(raw) => raw.try_into().map_err(|e| {

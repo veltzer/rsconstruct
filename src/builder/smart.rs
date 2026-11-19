@@ -8,6 +8,9 @@ const CONFIG_FILE: &str = "rsconstruct.toml";
 
 /// Load rsconstruct.toml as a `toml_edit` document.
 fn load_doc() -> Result<toml_edit::DocumentMut> {
+    // The same "no rsconstruct.toml" config error every other command
+    // gives, not an IO error about a file the user never made.
+    crate::config::Config::require_config()?;
     let content =
         fs::read_to_string(CONFIG_FILE).with_context(|| format!("Failed to read {CONFIG_FILE}"))?;
     content

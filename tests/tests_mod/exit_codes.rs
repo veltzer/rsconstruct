@@ -128,3 +128,57 @@ fn bare_clean_lists_its_subcommands() {
     );
     assert_eq!(output.status.code(), Some(2), "{text}");
 }
+
+/// Every command that needs `rsconstruct.toml` says so the same way when
+/// there is none: a config error, exit 2. Some used to carry on with an
+/// empty config (`tag check` exited 0), some failed with an IO error about
+/// the file (exit 5), some with a plain error (exit 1).
+#[test]
+fn commands_that_need_a_config_agree_on_a_missing_one() {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let project_path = temp_dir.path();
+
+    for args in [
+        &["status"][..],
+        &["tag", "check"],
+        &["term", "stats"],
+        &["symlink-install"],
+        &["smart", "reset"],
+        &["processor", "enable", "processor.checker.ruff"],
+        &["processor", "config", "processor.checker.ruff"],
+        &["tool", "check"],
+        &["tool", "lock"],
+        &["toml", "check"],
+    ] {
+        let output = run_rsconstruct_with_env(project_path, args, &[("NO_COLOR", "1")]);
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert_eq!(output.status.code(), Some(2), "{args:?}: {stderr}");
+        assert!(stderr.contains("rsconstruct.toml"), "{args:?}: {stderr}");
+    }
+}
+
+/// A value of the wrong kind in a processor or analyzer stanza is a config
+/// error naming the stanza, from `toml check` as from a build. `toml check`
+/// used to call such a file valid, and the build then failed with exit 1
+/// and "TOML parse error at line 1, column 1".
+#[test]
+fn a_wrong_value_in_a_stanza_is_a_config_error_everywhere() {
+    for (config, section) in [
+        (
+            "[processor.checker.ascii]\nmax_jobs = -1\n",
+            "[processor.checker.ascii]",
+        ),
+        ("[analyzer.cpp]\ninclude_paths = 3\n", "[analyzer.cpp]"),
+    ] {
+        let temp_dir = TempDir::new().expect("Failed to create temp dir");
+        let project_path = temp_dir.path();
+        fs::write(project_path.join("rsconstruct.toml"), config).unwrap();
+        for args in [&["toml", "check"][..], &["build"], &["status"]] {
+            let output = run_rsconstruct_with_env(project_path, args, &[("NO_COLOR", "1")]);
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            assert_eq!(output.status.code(), Some(2), "{args:?}: {stderr}");
+            assert!(stderr.contains(section), "{args:?}: {stderr}");
+            assert!(!stderr.contains("line 1"), "{args:?}: {stderr}");
+        }
+    }
+}

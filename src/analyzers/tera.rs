@@ -595,7 +595,7 @@ inventory::submit! {
         is_builtin: true,
         version: 1,
         create: |toml_value, _| {
-            let cfg: TeraAnalyzerConfig = toml::from_str(&toml::to_string(toml_value)?)?;
+            let cfg: TeraAnalyzerConfig = crate::registries::deserialize_config(toml_value)?;
             Ok(Box::new(TeraDepAnalyzer::new(cfg)))
         },
         defconfig_toml: || {
