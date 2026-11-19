@@ -543,3 +543,36 @@ fn variable_errors_name_the_line() {
         "{stderr}"
     );
 }
+
+/// Each file is type-checked on its own. A mistyped value that a later
+/// file overrides is gone from the merged config, so it used to pass until
+/// the day the override was removed — in the project file under an
+/// overlay, and in the user config under the project file.
+#[test]
+fn an_overridden_mistake_is_still_reported() {
+    let stderr = check_stderr("[build]\nparallel = \"x\"\n", "[build]\nparallel = 3\n");
+    assert!(
+        stderr.contains("Failed to parse config file rsconstruct.toml")
+            && stderr.contains("line 2, column 12"),
+        "{stderr}"
+    );
+
+    let temp_dir = setup_project_with_config("[build]\nparallel = 2\n");
+    let xdg = TempDir::new().unwrap();
+    write_file(
+        xdg.path(),
+        "rsconstruct/config.toml",
+        "[tables]\n\n[build]\nparallel = \"x\"\n",
+    );
+    let output = run_rsconstruct_with_env(
+        temp_dir.path(),
+        &["toml", "check"],
+        &[("XDG_CONFIG_HOME", xdg.path().to_str().unwrap())],
+    );
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert_eq!(output.status.code(), Some(2), "{stderr}");
+    assert!(
+        stderr.contains("rsconstruct/config.toml") && stderr.contains("line 4, column 12"),
+        "{stderr}"
+    );
+}

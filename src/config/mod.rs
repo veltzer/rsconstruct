@@ -204,9 +204,12 @@ struct BuildSection {
 }
 
 /// The parse error of the first of `files` that does not deserialize as
-/// `T` on its own. A type error found in the merged value has no position;
-/// the file that holds the mistake fails the same way by itself, and that
-/// error has the file's line and column and shows the line.
+/// `T` on its own. Every file is checked by itself, not only the merged
+/// value, for two reasons: a mistake in one file that a later file
+/// overrides is gone from the merged value and would go unreported until
+/// the override is removed; and an error found in the merged value has no
+/// position, while the file's own error has line and column and shows the
+/// line.
 fn parse_error_in<'a, T: serde::de::DeserializeOwned>(
     files: impl Iterator<Item = &'a SourceFile>,
 ) -> Option<String> {
@@ -250,11 +253,10 @@ fn set_python_interpreter(raw: &toml::Value, sources: &SourceFiles) -> Result<()
         .unwrap_or_else(|| toml::Value::Table(toml::map::Map::new()))
         .try_into()
         .map_err(|e| {
-            crate::exit_code::config_error(
-                parse_error_in::<BuildSection>(sources.files().iter()).unwrap_or_else(|| {
-                    format!("Failed to parse [build] of {}: {e}", merged_from(sources))
-                }),
-            )
+            crate::exit_code::config_error(format!(
+                "Failed to parse [build] of {}: {e}",
+                merged_from(sources)
+            ))
         })?;
     crate::python_env::set_interpreter(&build.python);
     Ok(())
@@ -1058,6 +1060,11 @@ impl Config {
                 // get pretty per-section errors instead of serde's raw messages.
                 // Errors from both validators are surfaced together under a single
                 // "Invalid config:" header.
+                // `[build]` of every file first: the interpreter below is
+                // read from it, and the user config holds nothing else.
+                if let Some(message) = parse_error_in::<BuildSection>(sources.files().iter()) {
+                    return Err(crate::exit_code::config_error(message));
+                }
                 set_python_interpreter(&raw, &sources)?;
                 let mut all_errors = validate_processor_fields_raw(&raw);
                 all_errors.extend(validate_analyzer_fields_raw(&raw));
@@ -1067,15 +1074,18 @@ impl Config {
                         describe_issues(&all_errors, &sources)
                     )));
                 }
+                // Then the rest of each project file. The user config holds
+                // only `[build]`, checked above; with its `[tables]` it is
+                // not a `Config`.
+                let project_files = sources.files().iter().filter(|f| !f.build_only);
+                if let Some(message) = parse_error_in::<Self>(project_files) {
+                    return Err(crate::exit_code::config_error(message));
+                }
                 let mut config: Self = raw.try_into().map_err(|e| {
-                    // The user config holds only `[build]`, which parsed
-                    // above; with its `[tables]` it is not a `Config`.
-                    let project_files = sources.files().iter().filter(|f| !f.build_only);
-                    crate::exit_code::config_error(
-                        parse_error_in::<Self>(project_files).unwrap_or_else(|| {
-                            format!("Failed to parse {}: {e}", merged_from(&sources))
-                        }),
-                    )
+                    crate::exit_code::config_error(format!(
+                        "Failed to parse {}: {e}",
+                        merged_from(&sources)
+                    ))
                 })?;
                 validate_build_config(&config.build).map_err(|i| i.into_error(&sources))?;
                 validate_cache_config(&config.cache).map_err(|i| i.into_error(&sources))?;

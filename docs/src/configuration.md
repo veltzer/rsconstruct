@@ -313,6 +313,11 @@ rsconstruct.local.toml:4: [processor.checker.pylint.core]: 'max_jobs' must be gr
   itself.
 - An undefined `${variable}` names its line in the file it is in.
 
+The top-level sections of each file are checked on their own, not only after
+the merge. A mistyped `[build] parallel` in the user config or in
+`rsconstruct.toml` is an error even when a later file overrides it: the
+override would otherwise hide the mistake until the day it is removed.
+
 A mistake that exists only on the command line (`--iset`, `--pset`) is
 reported without a location: the files are fine.
 
