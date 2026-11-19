@@ -625,11 +625,7 @@ impl ProcessorConfig {
                 // guarded while the value itself was still rewritten).
                 if matches!(
                     inst.provenance.get(*field),
-                    Some(
-                        FieldProvenance::UserToml { .. }
-                            | FieldProvenance::LocalToml { .. }
-                            | FieldProvenance::CliOverride
-                    ),
+                    Some(FieldProvenance::UserToml { .. } | FieldProvenance::CliOverride),
                 ) {
                     continue;
                 }

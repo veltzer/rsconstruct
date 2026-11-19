@@ -8,9 +8,6 @@ pub enum FieldProvenance {
     UserToml {
         line: usize,
     },
-    LocalToml {
-        line: usize,
-    },
     ProcessorDefault,
     ScanDefault,
     OutputDirDefault,
@@ -27,7 +24,6 @@ impl fmt::Display for FieldProvenance {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::UserToml { line } => write!(f, "from rsconstruct.toml:{line}"),
-            Self::LocalToml { line } => write!(f, "from rsconstruct.local.toml:{line}"),
             Self::ProcessorDefault => write!(f, "processor default"),
             Self::ScanDefault => write!(f, "scan default"),
             Self::OutputDirDefault => write!(f, "output dir default"),
@@ -71,9 +67,7 @@ pub type GlobalSpanMap = HashMap<String, HashMap<String, usize>>;
 /// parsing fails (the caller already ran the `toml` crate's parser and
 /// validated the config, so we treat span capture as best-effort enrichment).
 /// Both span maps from a single parse. They are always wanted together — the
-/// two used to be separate entry points that each re-parsed the same source,
-/// so loading a config with a local overlay parsed it four times for spans
-/// alone.
+/// two used to be separate entry points that each re-parsed the same source.
 ///
 /// `Document` preserves byte spans on every `Key` and `Item`. `DocumentMut`
 /// strips them on construction (`despan`), so we can't use it here.
@@ -350,16 +344,21 @@ strict = true
     #[test]
     fn locate_finds_keys_sections_and_the_winning_file() {
         let main = "[build]\nparallel = 4\n\n[processor.checker.ruff]\nargs = [\"--fix\"]\n\n[processor.checker.pylint.core]\nsrc_dirs = [\"src\"]\n";
-        let local = "# overlay\n[build]\nparallel = 2\n";
+        let user = "# user\n[build]\nparallel = 2\nbatch_size = 5\n";
         let sources = SourceFiles::new(vec![
-            source("rsconstruct.local.toml", local),
             source("rsconstruct.toml", main),
+            source("config.toml", user),
         ]);
         let at = |segments: &[&str]| sources.locate(&path(segments));
-        // Set in both files: the overlay's line.
+        // Set in both files: the project file's line, which won the merge.
         assert_eq!(
             at(&["build", "parallel"]).as_deref(),
-            Some("rsconstruct.local.toml:3")
+            Some("rsconstruct.toml:2")
+        );
+        // Set in the user config only.
+        assert_eq!(
+            at(&["build", "batch_size"]).as_deref(),
+            Some("config.toml:4")
         );
         assert_eq!(
             at(&["processor", "checker", "ruff", "args"]).as_deref(),

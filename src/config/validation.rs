@@ -347,8 +347,7 @@ pub(super) fn validate_cache_config(cache: &CacheConfig) -> Result<(), ConfigIss
 
 /// Every `dep_auto` entry the user listed must exist on disk.
 ///
-/// Only user-set lists are checked (main config, local overlay, or a CLI
-/// override): a processor's default `dep_auto` (`.pylintrc`, `ruff.toml`,
+/// Only user-set lists are checked (the config file or a CLI override): a processor's default `dep_auto` (`.pylintrc`, `ruff.toml`,
 /// ...) is optional by nature and stays skip-if-absent, and entries a
 /// processor computes at discovery time never pass through here. Disabled
 /// instances are skipped, as they are everywhere else. `[build]
@@ -368,9 +367,7 @@ pub(super) fn validate_dep_auto_exist(
         };
         let user_set = matches!(
             source,
-            FieldProvenance::UserToml { .. }
-                | FieldProvenance::LocalToml { .. }
-                | FieldProvenance::CliOverride
+            FieldProvenance::UserToml { .. } | FieldProvenance::CliOverride
         );
         if !user_set {
             continue;

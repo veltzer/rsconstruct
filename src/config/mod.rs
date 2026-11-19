@@ -36,17 +36,11 @@ use crate::registries as registry;
 use variables::substitute_variables;
 
 pub const CONFIG_FILE: &str = "rsconstruct.toml";
-/// Optional per-repo overlay merged over `rsconstruct.toml` at load time.
-/// Lets many repos share one canonical main config while keeping
-/// repo-specific sections (dependencies, explicit generators, excludes)
-/// in a separate local file.
-pub const LOCAL_CONFIG_FILE: &str = "rsconstruct.local.toml";
 
 /// The user-level config file, relative to `$XDG_CONFIG_HOME` (or
 /// `~/.config`). It may set `[build]` keys, which sit *under* the repo's
-/// files (rsconstruct.toml overrides it, rsconstruct.local.toml overrides
-/// both), and `[tables]`, which chooses the columns the CLI's tables show
-/// and is read by nothing else.
+/// rsconstruct.toml (which overrides it key by key), and `[tables]`, which
+/// chooses the columns the CLI's tables show and is read by nothing else.
 pub const USER_CONFIG_FILE: &str = "rsconstruct/config.toml";
 
 /// The top-level tables the user config may contain.
@@ -72,7 +66,7 @@ pub struct ConfigFile {
     /// Position in the merge order, 1 = lowest; a later file overrides an
     /// earlier one key by key. `None` for files outside the merge chain.
     pub precedence: Option<usize>,
-    /// Short role name: "user", "project", "local overlay", ...
+    /// Short role name: "user", "project", "tool lock", ...
     pub role: &'static str,
     /// Where the file is looked for. `None` when the location cannot be
     /// determined (the user config with neither `$XDG_CONFIG_HOME` nor
@@ -87,9 +81,8 @@ pub struct ConfigFile {
 /// Every file rsconstruct may read settings from, resolved against the
 /// current directory, lowest precedence first.
 ///
-/// The first three form the merge chain (`user` < `project` < `local
-/// overlay`); the rest are project files read for other purposes and never
-/// merged. The list is the single place that knows these names, so a new
+/// The first two form the merge chain (`user` < `project`); the rest are
+/// project files read for other purposes and never merged. The list is the single place that knows these names, so a new
 /// config file must be added here to be reported.
 #[must_use]
 pub fn config_files() -> Vec<ConfigFile> {
@@ -123,12 +116,6 @@ pub fn config_files() -> Vec<ConfigFile> {
             "project",
             Some(in_project(CONFIG_FILE)),
             "the main config; required by most commands",
-        ),
-        entry(
-            Some(3),
-            "local overlay",
-            Some(in_project(LOCAL_CONFIG_FILE)),
-            "merged over rsconstruct.toml when present",
         ),
         entry(
             None,
@@ -912,18 +899,9 @@ impl Config {
     pub(crate) fn require_config() -> Result<()> {
         let config_path = Path::new(CONFIG_FILE);
         if !config_path.exists() {
-            let message = if Path::new(LOCAL_CONFIG_FILE).exists() {
-                format!(
-                    "{LOCAL_CONFIG_FILE} found without {CONFIG_FILE} — the local overlay only extends a main config file. Run 'rsconstruct init' to create one."
-                )
-            } else {
-                "No rsconstruct.toml found. Run 'rsconstruct init' to create one.".to_string()
-            };
-            return Err(crate::exit_code::RsconstructError::new(
-                crate::exit_code::RsconstructExitCode::ConfigError,
-                message,
-            )
-            .into());
+            return Err(crate::exit_code::config_error(
+                "No rsconstruct.toml found. Run 'rsconstruct init' to create one.",
+            ));
         }
         Ok(())
     }
@@ -999,150 +977,108 @@ impl Config {
 
     pub(crate) fn load() -> Result<Self> {
         let config_path = Path::new(CONFIG_FILE);
-        let local_path = Path::new(LOCAL_CONFIG_FILE);
 
-        let (mut config, span_map, global_span_map, local_span_map, local_global_span_map) =
-            if config_path.exists() {
-                let substituted = read_and_substitute(config_path)?;
-                let repo_raw: toml::Value = toml::from_str(&substituted).map_err(|e| {
-                    crate::exit_code::config_error(format!(
-                        "Failed to parse config file {}: {e}",
-                        config_path.display()
-                    ))
-                })?;
-                // The user-level file sits underneath: its [build] keys are
-                // defaults that the repo's own [build] overrides key by key.
-                // Every file merged into `raw` is kept as a source: a
-                // mistake is found in the merged value, which has no
-                // positions, and is located in these afterwards.
-                let mut files: Vec<SourceFile> = Vec::new();
-                let mut raw = match read_user_build_config()? {
-                    Some((user_raw, user_file)) => {
-                        files.push(user_file);
-                        user_raw
-                    }
-                    None => toml::Value::Table(toml::map::Map::new()),
-                };
-                merge_toml_values(&mut raw, repo_raw);
-                files.push(SourceFile {
-                    name: config_path.display().to_string(),
-                    content: substituted.clone(),
-                    build_only: false,
-                });
-                // Overlay: rsconstruct.local.toml, when present, is deep-merged
-                // over the main config. Tables merge recursively; arrays and
-                // scalars from the local file replace the main file's values.
-                // `[vars]` substitution is per-file: each file's `${...}`
-                // references resolve against its own `[vars]` section only.
-                let local_substituted = if local_path.exists() {
-                    let local_content = read_and_substitute(local_path)?;
-                    let local_raw: toml::Value = toml::from_str(&local_content).map_err(|e| {
-                        crate::exit_code::config_error(format!(
-                            "Failed to parse config file {}: {e}",
-                            local_path.display()
-                        ))
-                    })?;
-                    merge_toml_values(&mut raw, local_raw);
-                    files.push(SourceFile {
-                        name: local_path.display().to_string(),
-                        content: local_content.clone(),
-                        build_only: false,
-                    });
-                    Some(local_content)
-                } else {
-                    None
-                };
-                // Highest precedence first: the first file that has a key is
-                // the one whose value won the merge.
-                files.reverse();
-                let sources = SourceFiles::new(files);
-                // Run both schema validators before serde sees the config, so users
-                // get pretty per-section errors instead of serde's raw messages.
-                // Errors from both validators are surfaced together under a single
-                // "Invalid config:" header.
-                // `[build]` of every file first: the interpreter below is
-                // read from it, and the user config holds nothing else.
-                if let Some(message) = parse_error_in::<BuildSection>(sources.files().iter()) {
-                    return Err(crate::exit_code::config_error(message));
+        let (mut config, span_map, global_span_map) = if config_path.exists() {
+            let substituted = read_and_substitute(config_path)?;
+            let repo_raw: toml::Value = toml::from_str(&substituted).map_err(|e| {
+                crate::exit_code::config_error(format!(
+                    "Failed to parse config file {}: {e}",
+                    config_path.display()
+                ))
+            })?;
+            // The user-level file sits underneath: its [build] keys are
+            // defaults that the repo's own [build] overrides key by key.
+            // Every file merged into `raw` is kept as a source: a
+            // mistake is found in the merged value, which has no
+            // positions, and is located in these afterwards.
+            let mut files: Vec<SourceFile> = Vec::new();
+            let mut raw = match read_user_build_config()? {
+                Some((user_raw, user_file)) => {
+                    files.push(user_file);
+                    user_raw
                 }
-                set_python_interpreter(&raw, &sources)?;
-                let mut all_errors = validate_processor_fields_raw(&raw);
-                all_errors.extend(validate_analyzer_fields_raw(&raw));
-                if !all_errors.is_empty() {
-                    return Err(crate::exit_code::config_error(format!(
-                        "Invalid config:\n{}",
-                        describe_issues(&all_errors, &sources)
-                    )));
-                }
-                // Then the rest of each project file. The user config holds
-                // only `[build]`, checked above; with its `[tables]` it is
-                // not a `Config`.
-                let project_files = sources.files().iter().filter(|f| !f.build_only);
-                if let Some(message) = parse_error_in::<Self>(project_files) {
-                    return Err(crate::exit_code::config_error(message));
-                }
-                let mut config: Self = raw.try_into().map_err(|e| {
-                    crate::exit_code::config_error(format!(
-                        "Failed to parse {}: {e}",
-                        merged_from(&sources)
-                    ))
-                })?;
-                validate_build_config(&config.build).map_err(|i| i.into_error(&sources))?;
-                validate_cache_config(&config.cache).map_err(|i| i.into_error(&sources))?;
-                config.sources = sources;
-                // Capture byte-level spans from the substituted sources so we can
-                // report user-set fields as `rsconstruct.toml:<line>` (or
-                // `rsconstruct.local.toml:<line>`) instead of the sentinel
-                // `line: 0` we seeded during deserialization.
-                let (spans, global_spans) = provenance::build_span_maps(&substituted);
-                let (local_spans, local_global_spans) = match &local_substituted {
-                    Some(content) => provenance::build_span_maps(content),
-                    None => (SpanMap::new(), provenance::GlobalSpanMap::new()),
-                };
-                (config, spans, global_spans, local_spans, local_global_spans)
-            } else {
-                if local_path.exists() {
-                    return Err(crate::exit_code::config_error(format!(
-                        "{LOCAL_CONFIG_FILE} found without {CONFIG_FILE} — the local overlay only extends a main config file",
-                    )));
-                }
-                let config: Self = match read_user_build_config()? {
-                    Some((raw, user_file)) => {
-                        let sources = SourceFiles::new(vec![user_file]);
-                        let mut config: Self = raw.try_into().map_err(|e| {
-                            crate::exit_code::config_error(
-                                parse_error_in::<BuildSection>(sources.files().iter())
-                                    .unwrap_or_else(|| {
-                                        format!("Failed to parse {}: {e}", merged_from(&sources))
-                                    }),
-                            )
-                        })?;
-                        config.sources = sources;
-                        config
-                    }
-                    None => Self::default(),
-                };
-                // No processor sections here, so nothing was deserialized
-                // against the interpreter yet; recording it now suffices.
-                crate::python_env::set_interpreter(&config.build.python);
-                validate_build_config(&config.build).map_err(|i| i.into_error(&config.sources))?;
-                (
-                    config,
-                    SpanMap::new(),
-                    provenance::GlobalSpanMap::new(),
-                    SpanMap::new(),
-                    provenance::GlobalSpanMap::new(),
-                )
+                None => toml::Value::Table(toml::map::Map::new()),
             };
+            merge_toml_values(&mut raw, repo_raw);
+            files.push(SourceFile {
+                name: config_path.display().to_string(),
+                content: substituted.clone(),
+                build_only: false,
+            });
+            // Highest precedence first: the first file that has a key is
+            // the one whose value won the merge.
+            files.reverse();
+            let sources = SourceFiles::new(files);
+            // Run both schema validators before serde sees the config, so users
+            // get pretty per-section errors instead of serde's raw messages.
+            // Errors from both validators are surfaced together under a single
+            // "Invalid config:" header.
+            // `[build]` of every file first: the interpreter below is
+            // read from it, and the user config holds nothing else.
+            if let Some(message) = parse_error_in::<BuildSection>(sources.files().iter()) {
+                return Err(crate::exit_code::config_error(message));
+            }
+            set_python_interpreter(&raw, &sources)?;
+            let mut all_errors = validate_processor_fields_raw(&raw);
+            all_errors.extend(validate_analyzer_fields_raw(&raw));
+            if !all_errors.is_empty() {
+                return Err(crate::exit_code::config_error(format!(
+                    "Invalid config:\n{}",
+                    describe_issues(&all_errors, &sources)
+                )));
+            }
+            // Then the rest of the project file. The user config holds
+            // only `[build]`, checked above; with its `[tables]` it is
+            // not a `Config`.
+            let project_files = sources.files().iter().filter(|f| !f.build_only);
+            if let Some(message) = parse_error_in::<Self>(project_files) {
+                return Err(crate::exit_code::config_error(message));
+            }
+            let mut config: Self = raw.try_into().map_err(|e| {
+                crate::exit_code::config_error(format!(
+                    "Failed to parse {}: {e}",
+                    merged_from(&sources)
+                ))
+            })?;
+            validate_build_config(&config.build).map_err(|i| i.into_error(&sources))?;
+            validate_cache_config(&config.cache).map_err(|i| i.into_error(&sources))?;
+            config.sources = sources;
+            // Capture byte-level spans from the substituted source so we can
+            // report user-set fields as `rsconstruct.toml:<line>` instead
+            // of the sentinel `line: 0` we seeded during deserialization.
+            let (spans, global_spans) = provenance::build_span_maps(&substituted);
+            (config, spans, global_spans)
+        } else {
+            let config: Self = match read_user_build_config()? {
+                Some((raw, user_file)) => {
+                    let sources = SourceFiles::new(vec![user_file]);
+                    let mut config: Self = raw.try_into().map_err(|e| {
+                        crate::exit_code::config_error(
+                            parse_error_in::<BuildSection>(sources.files().iter()).unwrap_or_else(
+                                || format!("Failed to parse {}: {e}", merged_from(&sources)),
+                            ),
+                        )
+                    })?;
+                    config.sources = sources;
+                    config
+                }
+                None => Self::default(),
+            };
+            // No processor sections here, so nothing was deserialized
+            // against the interpreter yet; recording it now suffices.
+            crate::python_env::set_interpreter(&config.build.python);
+            validate_build_config(&config.build).map_err(|i| i.into_error(&config.sources))?;
+            (config, SpanMap::new(), provenance::GlobalSpanMap::new())
+        };
         config.processor.resolve_scan_defaults();
         config
             .processor
             .apply_output_dir_defaults(&config.build.output_dir);
-        config.apply_span_map(&span_map, &local_span_map);
+        config.apply_span_map(&span_map);
         config.apply_dir_conditions();
         validate_dep_auto_exist(&config.processor.instances, &config.build)?;
         validate_no_dot_src_dirs(&config.processor.instances, &config.build)?;
-        config.populate_global_provenance(&global_span_map, &local_global_span_map)?;
+        config.populate_global_provenance(&global_span_map)?;
         crate::phases::run_post_config_hooks(&mut config)?;
         Ok(config)
     }
@@ -1278,7 +1214,6 @@ impl Config {
     fn populate_global_provenance(
         &mut self,
         global_spans: &provenance::GlobalSpanMap,
-        local_global_spans: &provenance::GlobalSpanMap,
     ) -> Result<()> {
         // Serialize the whole config once so we can walk each section's
         // effective keys without reaching into every section struct.
@@ -1297,14 +1232,9 @@ impl Config {
                 continue;
             };
             let user_fields = global_spans.get(section_name);
-            let local_fields = local_global_spans.get(section_name);
             let mut map = ProvenanceMap::new();
             for field in section_table.keys() {
-                // The local overlay wins the merge, so a field set in both
-                // files is attributed to rsconstruct.local.toml.
-                let source = if let Some(&line) = local_fields.and_then(|f| f.get(field)) {
-                    FieldProvenance::LocalToml { line }
-                } else if let Some(&line) = user_fields.and_then(|f| f.get(field)) {
+                let source = if let Some(&line) = user_fields.and_then(|f| f.get(field)) {
                     FieldProvenance::UserToml { line }
                 } else {
                     FieldProvenance::SerdeDefault
@@ -1320,12 +1250,11 @@ impl Config {
     /// from the `toml_edit` pass. Any user-set field that didn't get a span
     /// stays at line 0 (fine — the `config show` formatter falls back to
     /// "from rsconstruct.toml" without a line number).
-    fn apply_span_map(&mut self, spans: &SpanMap, local_spans: &SpanMap) {
+    fn apply_span_map(&mut self, spans: &SpanMap) {
         for inst in &mut self.processor.instances {
             apply_spans_to_instance(
                 &mut inst.provenance,
                 spans,
-                local_spans,
                 Section::Processor,
                 &inst.instance_name,
             );
@@ -1334,7 +1263,6 @@ impl Config {
             apply_spans_to_instance(
                 &mut inst.provenance,
                 spans,
-                local_spans,
                 Section::Analyzer,
                 &inst.instance_name,
             );
@@ -1345,7 +1273,6 @@ impl Config {
 fn apply_spans_to_instance(
     provenance: &mut ProvenanceMap,
     spans: &SpanMap,
-    local_spans: &SpanMap,
     section: Section,
     instance_name: &str,
 ) {
@@ -1356,11 +1283,7 @@ fn apply_spans_to_instance(
                 continue; // already enriched
             }
             let span_key = (section, instance_name.to_string(), key.clone());
-            // The local overlay wins the merge, so a field set in both files
-            // is attributed to rsconstruct.local.toml.
-            if let Some(&real_line) = local_spans.get(&span_key) {
-                provenance.insert(key, FieldProvenance::LocalToml { line: real_line });
-            } else if let Some(&real_line) = spans.get(&span_key) {
+            if let Some(&real_line) = spans.get(&span_key) {
                 provenance.insert(key, FieldProvenance::UserToml { line: real_line });
             }
         }

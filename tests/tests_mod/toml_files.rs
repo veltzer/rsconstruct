@@ -39,19 +39,8 @@ fn toml_files_lists_chain_and_existence() {
     assert!(project_line.contains("rsconstruct.toml"));
     assert!(project_line.contains("present"), "{project_line}");
 
-    let overlay_line = stdout
-        .lines()
-        .find(|l| l.contains("local overlay"))
-        .expect("overlay line");
-    assert!(overlay_line.contains("rsconstruct.local.toml"));
-    assert!(overlay_line.contains("absent"), "{overlay_line}");
-
-    let order: Vec<usize> = ["user ", "project ", "local overlay"]
-        .iter()
-        .map(|k| stdout.find(k).unwrap())
-        .collect();
     assert!(
-        order[0] < order[1] && order[1] < order[2],
+        stdout.find("user ").unwrap() < stdout.find("project ").unwrap(),
         "precedence order: {stdout}"
     );
 }
@@ -79,7 +68,7 @@ fn toml_files_runs_without_project_config() {
 fn toml_files_json_is_machine_readable() {
     let project = TempDir::new().unwrap();
     let xdg = TempDir::new().unwrap();
-    write_file(project.path(), "rsconstruct.local.toml", "[build]\n");
+    write_file(project.path(), "rsconstruct.lock", "");
     let output = run_rsconstruct_with_env(
         project.path(),
         &["--json", "toml", "files"],
@@ -107,7 +96,6 @@ fn toml_files_json_is_machine_readable() {
     );
     assert_eq!(by_role("project")["precedence"], 2);
     assert_eq!(by_role("project")["exists"], false);
-    assert_eq!(by_role("local overlay")["precedence"], 3);
-    assert_eq!(by_role("local overlay")["exists"], true);
     assert!(by_role("tool lock")["precedence"].is_null());
+    assert_eq!(by_role("tool lock")["exists"], true);
 }

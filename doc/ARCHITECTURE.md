@@ -160,8 +160,8 @@ the `BuildContext`, installs the Ctrl+C handler, then dispatches on
 `Commands`. For `build`:
 
 1. **`Builder::new_with_overrides`** (`builder/mod.rs`).
-   `Config::load` merges user config, then `rsconstruct.toml`, then
-   `rsconstruct.local.toml`, after per-file `[vars]` substitution; validates;
+   `Config::load` merges the user config's `[build]` under `rsconstruct.toml`,
+   after `[vars]` substitution; validates;
    runs post-config hooks (`phases.rs`). The builder then opens the
    `ObjectStore` and builds the `FileIndex`. This is the only filesystem
    walk. It honors `.gitignore` and `.rsconstructignore`, and never walks

@@ -531,7 +531,7 @@ fn analyzer_validator_is_noop_without_analyzer_section() {
     assert!(errors.is_empty(), "{errors:?}");
 }
 
-// Tests for merge_toml_values (rsconstruct.local.toml overlay semantics)
+// Tests for merge_toml_values (how rsconstruct.toml is laid over the user config)
 
 use crate::config::merge_toml_values;
 

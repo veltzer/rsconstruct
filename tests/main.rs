@@ -11,6 +11,8 @@ mod cache;
 mod clean_all;
 #[path = "tests_mod/complete.rs"]
 mod complete;
+#[path = "tests_mod/config_load.rs"]
+mod config_load;
 #[path = "tests_mod/dir_condition.rs"]
 mod dir_condition;
 #[path = "tests_mod/doctor.rs"]
@@ -29,8 +31,6 @@ mod incremental;
 mod init;
 #[path = "tests_mod/iset_pset.rs"]
 mod iset_pset;
-#[path = "tests_mod/local_overlay.rs"]
-mod local_overlay;
 #[path = "tests_mod/pages.rs"]
 mod pages;
 #[path = "tests_mod/processor_cmd.rs"]

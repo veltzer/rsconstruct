@@ -1,9 +1,7 @@
 # Configuration
 
 RSConstruct is configured via an `rsconstruct.toml` file in the project root.
-An optional `rsconstruct.local.toml` overlay, when present, is merged over the
-main file at load time — see [Local overlay](#local-overlay-rsconstructlocaltoml).
-An optional user-level file can set `[build]` defaults underneath both and
+An optional user-level file can set `[build]` defaults underneath it and
 choose the columns the CLI's tables show — see
 [User config](#user-config-configrsconstructconfigtoml).
 
@@ -152,44 +150,6 @@ src_exclude_dirs = "${kernel_excludes}"
 
 Variables are substituted before TOML parsing. The `"${var_name}"` (including quotes) is replaced with the TOML-serialized value, preserving types (arrays stay arrays, strings stay strings). A reference must constitute the **entire quoted value** — an embedded reference like `"${base}/src"` cannot be substituted and is a config error, as is any undefined variable reference.
 
-## Local overlay (`rsconstruct.local.toml`)
-
-If a file named `rsconstruct.local.toml` exists next to `rsconstruct.toml`, it
-is loaded automatically and deep-merged over the main config. This lets many
-repos share one canonical, identical `rsconstruct.toml` while keeping
-repo-specific configuration — `[dependencies]` lists, `[processor.explicit.*]`
-generators, exclude lists, one-off workarounds — in the local file.
-
-Merge semantics:
-
-- **Tables merge recursively.** A local `[processor.checker.mypy]` with only
-  `batch = false` adds that one key to the main file's mypy section; the rest
-  of the section is untouched.
-- **Arrays and scalars replace wholesale.** If the local file sets
-  `src_dirs`, that exact list is used — values are never concatenated, so the
-  local file can also *remove* entries by setting a shorter list.
-- **Local-only sections are added.** The overlay can declare whole processors,
-  analyzers, or global sections the main file doesn't have.
-
-Rules and caveats:
-
-- The overlay only extends a main config: `rsconstruct.local.toml` without an
-  `rsconstruct.toml` is an error.
-- `[vars]` substitution is per-file — each file's `${...}` references resolve
-  against its own `[vars]` section only.
-- The merged result is validated as one config, so unknown fields or type
-  errors in the local file are reported the same way as in the main file.
-- `rsconstruct processor config <iname>` shows the merged values.
-- In watch mode, both files are watched for changes.
-
-This supports a shared-config pattern: one `rsconstruct.toml` distributed
-across many repos plus a small optional `rsconstruct.local.toml` per repo for
-what's genuinely repo-specific. Note that every `src_dirs` entry must exist in
-every repo that carries it (see [Missing `src_dirs` and `src_files`
-entries](#missing-src_dirs-and-src_files-entries)); a shared file can no longer
-list directories only some repos have, and `[build] allow_missing_src_dirs`
-exists for a project that still wants that.
-
 ## User config (`~/.config/rsconstruct/config.toml`)
 
 A per-user file, read from `$XDG_CONFIG_HOME/rsconstruct/config.toml` (or
@@ -201,7 +161,6 @@ A per-user file, read from `$XDG_CONFIG_HOME/rsconstruct/config.toml` (or
 1. built-in defaults
 2. the user config
 3. `rsconstruct.toml`
-4. `rsconstruct.local.toml`
 
 Keys merge one by one, so a repo that sets a `[build]` key overrides the user
 value for that key only. Example:
@@ -292,19 +251,18 @@ is hidden by default:
 
 ## Where a config error points
 
-Up to three files are merged into one config (user config, `rsconstruct.toml`,
-`rsconstruct.local.toml`), and most mistakes are found in the merged result.
-Every config error is reported at the file and line to edit, whichever file
-that is:
+The user config's `[build]` is merged under `rsconstruct.toml`, and most
+mistakes are found in the merged result. Every config error is reported at the
+file and line to edit, whichever file that is:
 
 ```text
 Invalid config:
 rsconstruct.toml:12: [processor.checker.ruff]: unknown field 'arg' (valid fields: ...)
-rsconstruct.local.toml:4: [processor.checker.pylint.core]: 'max_jobs' must be greater than 0 (...)
+rsconstruct.toml:20: [processor.checker.pylint.core]: 'max_jobs' must be greater than 0 (...)
 ```
 
-- An unknown or mistyped field is at its own line. When a key is set in more
-  than one file, the line is in the file whose value won the merge.
+- An unknown or mistyped field is at its own line. A `[build]` key set in
+  both files is at its line in `rsconstruct.toml`, whose value won the merge.
 - A required field that is missing has no line: the error is at the header
   of the stanza it has to be added to. The same holds for a value only the
   processor's own config rejects (`max_jobs = -1`).
@@ -314,9 +272,9 @@ rsconstruct.local.toml:4: [processor.checker.pylint.core]: 'max_jobs' must be gr
 - An undefined `${variable}` names its line in the file it is in.
 
 The top-level sections of each file are checked on their own, not only after
-the merge. A mistyped `[build] parallel` in the user config or in
-`rsconstruct.toml` is an error even when a later file overrides it: the
-override would otherwise hide the mistake until the day it is removed.
+the merge. A mistyped `[build] parallel` in the user config is an error even
+when `rsconstruct.toml` overrides it: the override would otherwise hide the
+mistake until the day it is removed.
 
 A mistake that exists only on the command line (`--iset`, `--pset`) is
 reported without a location: the files are fine.

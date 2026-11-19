@@ -1,8 +1,8 @@
-//! Tests for two config features:
+//! Tests for loading the config:
 //! - Missing `src_dirs` entries are a config error; `[build]
 //!   allow_missing_src_dirs = true` restores the old skip.
-//! - `rsconstruct.local.toml` — a per-repo overlay deep-merged over the main
-//!   config at load time.
+//! - The user config sets `[build]` defaults under `rsconstruct.toml`.
+//! - A config error names the file and line to edit.
 
 use crate::common::{
     run_rsconstruct, run_rsconstruct_with_env, setup_project_with_config, write_file,
@@ -140,48 +140,20 @@ fn tools_install_skips_repo_local_script_commands() {
     );
 }
 
+/// `rsconstruct.local.toml` was a per-repo overlay merged over the main
+/// config until 0.9.177. No repo used it; the file is now an ordinary file
+/// that nothing reads, so what it says changes nothing.
 #[test]
-fn local_overlay_disables_processor() {
+fn a_local_toml_file_is_not_read() {
     let temp_dir =
         setup_project_with_config("[processor.generator.tera]\nsrc_dirs = [\"tera.templates\"]\n");
     let project = temp_dir.path();
     write_file(project, "tera.templates/gen.txt.tera", "generated");
-    fs::write(
-        project.join("rsconstruct.local.toml"),
+    write_file(
+        project,
+        "rsconstruct.local.toml",
         "[processor.generator.tera]\nenabled = false\n",
-    )
-    .unwrap();
-
-    let output = run_rsconstruct(project, &["build"]);
-    assert!(
-        output.status.success(),
-        "build failed: {}",
-        String::from_utf8_lossy(&output.stderr)
     );
-    // The overlay disabled tera, so nothing was rendered.
-    assert!(!project.join("gen.txt").exists());
-}
-
-#[test]
-fn local_overlay_adds_sections() {
-    let temp_dir =
-        setup_project_with_config("[processor.generator.tera]\nsrc_dirs = [\"tera.templates\"]\n");
-    let project = temp_dir.path();
-    write_file(project, "tera.templates/gen.txt.tera", "generated");
-    // The overlay adds a global [build] setting and a whole new processor
-    // section — both must merge in.
-    fs::write(
-        project.join("rsconstruct.local.toml"),
-        concat!(
-            "[build]\n",
-            "max_discovery_passes = 7\n",
-            "\n",
-            "[processor.checker.zspell]\n",
-            "src_dirs = [\"empty_docs\"]\n",
-        ),
-    )
-    .unwrap();
-    fs::create_dir_all(project.join("empty_docs")).unwrap();
 
     let output = run_rsconstruct(project, &["build"]);
     assert!(
@@ -190,70 +162,6 @@ fn local_overlay_adds_sections() {
         String::from_utf8_lossy(&output.stderr)
     );
     assert!(project.join("gen.txt").exists());
-
-    // Both overlay sections merged: the [build] value is visible in the
-    // merged config, and the added processor section is a known instance.
-    let cfg = run_rsconstruct(
-        project,
-        &["processor", "config", "processor.checker.zspell"],
-    );
-    assert!(
-        cfg.status.success(),
-        "overlay-added [processor.checker.zspell] should exist in the merged config: {}",
-        String::from_utf8_lossy(&cfg.stderr)
-    );
-}
-
-#[test]
-fn local_overlay_field_wins_over_main() {
-    let temp_dir =
-        setup_project_with_config("[processor.generator.tera]\ndep_inputs = [\"config/a.py\"]\n");
-    let project = temp_dir.path();
-    fs::write(
-        project.join("rsconstruct.local.toml"),
-        "[processor.generator.tera]\ndep_inputs = [\"config/b.py\"]\n",
-    )
-    .unwrap();
-
-    let output = run_rsconstruct(
-        project,
-        &["processor", "config", "processor.generator.tera"],
-    );
-    assert!(
-        output.status.success(),
-        "processor config failed: {}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    assert!(
-        stdout.contains("b.py"),
-        "local value should win, got: {stdout}"
-    );
-    assert!(
-        !stdout.contains("a.py"),
-        "main value should be replaced, got: {stdout}"
-    );
-}
-
-#[test]
-fn local_overlay_without_main_config_fails() {
-    let temp_dir = TempDir::new().expect("Failed to create temp dir");
-    fs::write(
-        temp_dir.path().join("rsconstruct.local.toml"),
-        "[processor.generator.tera]\n",
-    )
-    .unwrap();
-
-    let output = run_rsconstruct(temp_dir.path(), &["build"]);
-    assert!(
-        !output.status.success(),
-        "build should fail without a main config"
-    );
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(
-        stderr.contains("rsconstruct.local.toml found without rsconstruct.toml"),
-        "expected overlay-without-main error, got: {stderr}"
-    );
 }
 
 /// The user-level config (`$XDG_CONFIG_HOME/rsconstruct/config.toml`) sets
@@ -352,28 +260,6 @@ fn user_config_rejects_sections_other_than_build() {
     );
 }
 
-/// A type or unknown-field error is found in the merged config. The message
-/// names the one file that holds it: it used to name rsconstruct.toml alone
-/// even when the typo was in the overlay, and then every merged file with
-/// "the error is in one of them".
-#[test]
-fn config_error_names_the_file_that_holds_it() {
-    let temp_dir = setup_project_with_config("[build]\nparallel = 2\n");
-    write_file(
-        temp_dir.path(),
-        "rsconstruct.local.toml",
-        "[build]\nparalel = 4\n",
-    );
-    let output = run_rsconstruct(temp_dir.path(), &["toml", "check"]);
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    assert_eq!(output.status.code(), Some(2), "{stderr}");
-    assert!(
-        stderr.contains("Failed to parse config file rsconstruct.local.toml")
-            && stderr.contains("line 2, column 1"),
-        "error must name the overlay and the line: {stderr}"
-    );
-}
-
 /// `toml check` rejects what every building command rejects: compression
 /// with the hardlink restore method used to pass the check and fail later.
 #[test]
@@ -404,15 +290,20 @@ fn one_discovery_pass_is_enough_when_nothing_is_routed() {
     assert!(temp_dir.path().join("hello.txt").exists());
 }
 
-/// What `toml check` prints on stderr for a project with these two files
-/// (the overlay is left out when `local` is empty). Every case here is a
-/// config error.
-fn check_stderr(main: &str, local: &str) -> String {
+/// What `toml check` prints on stderr for a project with this
+/// `rsconstruct.toml` and this user config (none when `user` is empty).
+/// Every case here is a config error.
+fn check_stderr(main: &str, user: &str) -> String {
     let temp_dir = setup_project_with_config(main);
-    if !local.is_empty() {
-        write_file(temp_dir.path(), "rsconstruct.local.toml", local);
+    let xdg = TempDir::new().unwrap();
+    if !user.is_empty() {
+        write_file(xdg.path(), "rsconstruct/config.toml", user);
     }
-    let output = run_rsconstruct(temp_dir.path(), &["toml", "check"]);
+    let output = run_rsconstruct_with_env(
+        temp_dir.path(),
+        &["toml", "check"],
+        &[("XDG_CONFIG_HOME", xdg.path().to_str().unwrap())],
+    );
     let stderr = String::from_utf8_lossy(&output.stderr).into_owned();
     assert_eq!(output.status.code(), Some(2), "{stderr}");
     stderr
@@ -420,8 +311,7 @@ fn check_stderr(main: &str, local: &str) -> String {
 
 /// A schema mistake is found in the merged config, which has no positions:
 /// the message used to name the section and leave the file and the line to
-/// the reader. Each one now leads with the file and line of its key, and a
-/// key set in the overlay is reported in the overlay.
+/// the reader. Each one now leads with the file and line of its key.
 #[test]
 fn schema_errors_name_the_file_and_line() {
     let main = "# main\n[processor.checker.ruff]\nbogus = 1\n\n[processor.ruff]\n\n[analyzer.python]\nenabeld = true\n";
@@ -436,15 +326,6 @@ fn schema_errors_name_the_file_and_line() {
             "missing `{expected}` in: {stderr}"
         );
     }
-
-    let stderr = check_stderr(
-        "[processor.checker.ruff]\nargs = [\"-q\"]\n",
-        "\n\n[processor.checker.ruff]\nmax_jobs = 0\n",
-    );
-    assert!(
-        stderr.contains("rsconstruct.local.toml:4: [processor.checker.ruff]: 'max_jobs'"),
-        "{stderr}"
-    );
 }
 
 /// A required field that is missing has no line of its own: the stanza's
@@ -468,12 +349,11 @@ fn a_missing_required_field_is_located_at_its_stanza() {
 #[test]
 fn a_type_error_is_reported_in_the_file_that_holds_it() {
     let stderr = check_stderr(
-        "[build]\nparallel = 2\n",
-        "# overlay\n[build]\nparallel = \"x\"\n",
+        "[cache]\ncompression = false\n",
+        "# user\n[build]\nparalel = 4\n",
     );
     assert!(
-        stderr.contains("Failed to parse config file rsconstruct.local.toml")
-            && stderr.contains("line 3, column 12"),
+        stderr.contains("rsconstruct/config.toml") && stderr.contains("line 3, column 1"),
         "{stderr}"
     );
     assert!(!stderr.contains("merged from"), "{stderr}");
@@ -495,7 +375,7 @@ fn a_type_error_is_reported_in_the_file_that_holds_it() {
 fn value_checks_name_the_file_and_line() {
     let stderr = check_stderr("[build]\nparallel = 2\n", "[build]\n\nmax_arg_len = 0\n");
     assert!(
-        stderr.contains("rsconstruct.local.toml:3: [build] max_arg_len"),
+        stderr.contains("rsconstruct/config.toml:3: [build] max_arg_len"),
         "{stderr}"
     );
     let stderr = check_stderr(
@@ -544,33 +424,15 @@ fn variable_errors_name_the_line() {
     );
 }
 
-/// Each file is type-checked on its own. A mistyped value that a later
-/// file overrides is gone from the merged config, so it used to pass until
-/// the day the override was removed — in the project file under an
-/// overlay, and in the user config under the project file.
+/// Each file is type-checked on its own. A mistyped value in the user
+/// config that the project file overrides is gone from the merged config,
+/// so it used to pass until the day the override was removed.
 #[test]
 fn an_overridden_mistake_is_still_reported() {
-    let stderr = check_stderr("[build]\nparallel = \"x\"\n", "[build]\nparallel = 3\n");
-    assert!(
-        stderr.contains("Failed to parse config file rsconstruct.toml")
-            && stderr.contains("line 2, column 12"),
-        "{stderr}"
-    );
-
-    let temp_dir = setup_project_with_config("[build]\nparallel = 2\n");
-    let xdg = TempDir::new().unwrap();
-    write_file(
-        xdg.path(),
-        "rsconstruct/config.toml",
+    let stderr = check_stderr(
+        "[build]\nparallel = 2\n",
         "[tables]\n\n[build]\nparallel = \"x\"\n",
     );
-    let output = run_rsconstruct_with_env(
-        temp_dir.path(),
-        &["toml", "check"],
-        &[("XDG_CONFIG_HOME", xdg.path().to_str().unwrap())],
-    );
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    assert_eq!(output.status.code(), Some(2), "{stderr}");
     assert!(
         stderr.contains("rsconstruct/config.toml") && stderr.contains("line 4, column 12"),
         "{stderr}"

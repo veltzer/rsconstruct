@@ -905,8 +905,8 @@ rsconstruct toml files   # list every config file rsconstruct may read and wheth
 
 `toml files` needs no config. It prints the merge chain lowest precedence
 first — the user config (`$XDG_CONFIG_HOME/rsconstruct/config.toml`, see
-[User config](configuration.md#user-config-configrsconstructconfigtoml)),
-`rsconstruct.toml` and `rsconstruct.local.toml` — followed by the other
+[User config](configuration.md#user-config-configrsconstructconfigtoml))
+and `rsconstruct.toml` — followed by the other
 project files rsconstruct reads (`.rsconstructignore`, `rsconstruct.lock`),
 each with its resolved path and whether it is present. Use it to find out
 which file a setting is coming from, or where the user config lives on a

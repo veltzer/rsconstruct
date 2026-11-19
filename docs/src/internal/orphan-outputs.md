@@ -14,8 +14,7 @@ Later layers win, key by key:
 1. built-in default: `true`;
 2. `~/.config/rsconstruct/config.toml`: for every project you build on this
    machine;
-3. `rsconstruct.toml`: for one project, everywhere it is built, CI included;
-4. `rsconstruct.local.toml`: for one project, on this machine only.
+3. `rsconstruct.toml`: for one project, everywhere it is built, CI included.
 
 To turn it off, keeping every output as earlier versions did:
 
