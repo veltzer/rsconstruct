@@ -9,6 +9,7 @@
 - [Shell Completions](completions.md)
 - [Configuration](configuration.md)
 - [Tool Lock](tool-lock.md)
+- [Tool Caches](tool-caches.md)
 - [Remote Caching](remote-caching.md)
 - [Project Structure](project-structure.md)
 - [Dependency Analyzers](analyzers.md)

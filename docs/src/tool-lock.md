@@ -147,7 +147,8 @@ holds tools, not build state.
 hard-linked copy: no second download or compile, and no second copy on disk.
 Where a hard link is impossible (the store on another filesystem) the files are
 copied. Store files are read-only, since a hard link shares the file with every
-other project.
+other project. See [Tool Caches](tool-caches.md) for its layout, its use in CI, and what
+deleting it costs.
 
 **The download cache.** The release assets themselves are kept too, once per
 machine, in `$RSCONSTRUCT_DOWNLOAD_CACHE`, else
@@ -163,7 +164,7 @@ that name one release are cached, which is every URL the lock records; a
 an install refuses bytes that differ from the lock, and one whose cached copy
 differs drops it and fetches again. The cache sits beside the tool store, not
 in it, so the CI cache of the store does not carry the archives as well. It is
-never pruned; deleting the directory is always safe.
+never pruned; deleting the directory is always safe. See [Tool Caches](tool-caches.md).
 
 A release binary is usually one executable. Some need the directories beside
 it: protoc reads the well-known `.proto` files from its `include/`, qpdf loads
