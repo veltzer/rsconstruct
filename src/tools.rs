@@ -477,6 +477,19 @@ fn install_binary_into_prefix(
             pin.url
         );
     }
+    // Both hashes held, so the lock entry is what this asset makes: record
+    // it, for `tool lock` elsewhere and for pruning the asset later.
+    if url_names_a_fixed_release(&recipe, &pin.url)
+        && crate::tool_cache::read_pin_record(&cache, &pin.url)?.is_none()
+    {
+        crate::tool_cache::write_pin_record(
+            &cache,
+            &crate::tool_cache::PinRecord {
+                name: name.to_string(),
+                pin: pin.clone(),
+            },
+        )?;
+    }
     if let ArchiveKind::Tree { exe, .. } = recipe.archive {
         // The unpacked prefix is the package's: its top-level entries move up.
         let tree = std::path::PathBuf::from(tree_dir(&work.to_string_lossy(), recipe.dest))
@@ -1474,11 +1487,25 @@ pub fn lock_binary(
     } else {
         unpinned_binary_url(&recipe)?
     };
+    // A release already downloaded once on this machine was recorded then:
+    // its record makes the same entry without the download.
+    let cache = crate::tool_store::download_cache_root()?;
+    let cacheable = url_names_a_fixed_release(&recipe, &url);
+    if cacheable
+        && let Some(record) = crate::tool_cache::read_pin_record(&cache, &url)?
+        && record.name == pkg
+        && record.pin.url == url
+    {
+        crate::tool_cache::mark_used(&crate::tool_cache::pin_record_path(&cache, &url))?;
+        if verbose {
+            println!("{url}: using the recorded hashes");
+        }
+        return Ok(record.pin);
+    }
     let base = std::env::temp_dir().join(format!("rsconstruct-lock-{}-{pkg}", std::process::id()));
     std::fs::create_dir_all(&base)
         .with_context(|| format!("Failed to create {}", base.display()))?;
     let result = (|| {
-        let cache = crate::tool_store::download_cache_root()?;
         let fetched = fetch_binary(
             &recipe,
             &url,
@@ -1521,6 +1548,15 @@ pub fn lock_binary(
             }
         } else {
             pin.executable_sha256 = Some(file_sha256(std::path::Path::new(&fetched.payload))?);
+        }
+        if cacheable {
+            crate::tool_cache::write_pin_record(
+                &cache,
+                &crate::tool_cache::PinRecord {
+                    name: pkg.to_string(),
+                    pin: pin.clone(),
+                },
+            )?;
         }
         Ok(pin)
     })();

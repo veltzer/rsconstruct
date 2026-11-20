@@ -160,7 +160,9 @@ projects lock it: in a fleet, `tool lock --upgrade` downloads a new release in
 the first repository and reads it from the cache in every other one. Only URLs
 that name one release are cached, which is every URL the lock records; a
 `releases/latest` URL and a vendor URL that always serves the current build
-(Chrome's `.deb`) are always fetched. A cached copy is hashed like a download:
+(Chrome's `.deb`) are always fetched. Beside each asset the cache keeps its
+pin record, the lock entry it makes, so `tool lock` records a release
+already seen on the machine without the asset. A cached copy is hashed like a download:
 an install refuses bytes that differ from the lock, and one whose cached copy
 differs drops it and fetches again. The cache sits beside the tool store, not
 in it, so the CI cache of the store does not carry the archives as well.

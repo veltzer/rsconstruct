@@ -379,6 +379,13 @@ pub fn read_lock_file() -> Result<Option<ToolLock>> {
     parse_lock(&content).map(Some)
 }
 
+/// Read the rsconstruct.lock at `path` (another project's, for one).
+pub fn read_lock_at(path: &Path) -> Result<ToolLock> {
+    let content =
+        fs::read_to_string(path).with_context(|| format!("Failed to read {}", path.display()))?;
+    parse_lock(&content).with_context(|| format!("in {}", path.display()))
+}
+
 fn parse_lock(content: &str) -> Result<ToolLock> {
     let lock: ToolLock = toml::from_str(content)
         .map_err(|e| crate::exit_code::config_error(format!("Failed to parse {LOCK_FILE}: {e}")))?;

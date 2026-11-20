@@ -630,11 +630,23 @@ pub enum ToolCacheAction {
     Clear,
     /// Show each entry of the tool store and the download cache, its size and when it was last used
     List,
-    /// Remove the entries not used for a given time
+    /// Remove the entries that meet every criterion given: unused for a time, used by no project, or an archive the store already holds
+    #[command(group(
+        clap::ArgGroup::new("criterion")
+            .required(true)
+            .multiple(true)
+            .args(["older_than", "unreferenced_under", "installed_archives"])
+    ))]
     Prune {
         /// Remove entries last used longer ago than this many days (`60d`)
         #[arg(long, value_name = "DAYS", value_parser = crate::tool_cache::parse_age)]
-        older_than: std::time::Duration,
+        older_than: Option<std::time::Duration>,
+        /// Remove entries that no project under DIR uses: neither its tool directory nor its rsconstruct.lock names them (repeatable)
+        #[arg(long, value_name = "DIR")]
+        unreferenced_under: Vec<std::path::PathBuf>,
+        /// Remove downloaded archives whose tool the store already holds, keeping their recorded hashes so `tool lock` needs no download
+        #[arg(long)]
+        installed_archives: bool,
         /// Show what would be removed, and remove nothing
         #[arg(long)]
         dry_run: bool,

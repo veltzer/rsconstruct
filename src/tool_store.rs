@@ -75,7 +75,7 @@ impl Package {
 
     /// The directory name of this package, under its method's directory. A
     /// scoped npm name's `/` becomes `+`, which no package name contains.
-    fn key(&self) -> String {
+    pub fn key(&self) -> String {
         format!("{}@{}", self.name.replace('/', "+"), self.version)
     }
 }

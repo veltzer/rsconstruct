@@ -640,6 +640,8 @@ List or check external tools required by declared processors. `list` reads only 
 rsconstruct tool cache list        # Each entry of the tool store and the download cache, its size and last use
 rsconstruct tool cache prune --older-than 60d   # Remove entries not used in 60 days
 rsconstruct tool cache prune --older-than 60d --dry-run   # Show what that would remove
+rsconstruct tool cache prune --unreferenced-under ~/git   # Remove what no project under ~/git uses
+rsconstruct tool cache prune --installed-archives   # Remove archives the store already holds, keeping their hashes
 rsconstruct tool cache clear       # Remove every entry of both caches
 rsconstruct tool list              # List all tools known to rsconstruct (from the tool registry)
 rsconstruct tool list -M           # ...with every install method for each tool

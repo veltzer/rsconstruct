@@ -61,7 +61,12 @@ still finds them.
 **What it holds.** The release assets of the `binary` method exactly as
 downloaded (the tarball, zip, raw executable or `.deb`), one file per URL,
 named by a hash of the URL and the asset's own name
-(`3f9c0e1a2b4d5e6f-zizmor-x86_64-unknown-linux-gnu.tar.gz`).
+(`3f9c0e1a2b4d5e6f-zizmor-x86_64-unknown-linux-gnu.tar.gz`). Beside each
+asset is its pin record (the same name with `.pin`): the lock entry the
+asset makes, that is its SHA-256 and the installed executable's (or a
+`.deb`'s package and version). `tool lock` writes the record when it
+downloads an asset, and an install writes it once both hashes have
+passed.
 
 **Who uses it.** Every download of a release binary goes through it: `tool
 lock` (which downloads each binary to record the hashes the lock holds),
@@ -70,7 +75,9 @@ Each looks in the cache before the network and adds what it downloads. In a
 fleet of repositories, `tool lock --upgrade` downloads a new release once, in
 the first repository, and reads it from the cache in every other one: on a
 repository locking six binaries, a lock with a cold cache took 44 seconds and
-one with a warm cache 3.7.
+one with a warm cache 3.7. `tool lock` reads a release's pin record first,
+when there is one, and then needs neither the asset nor the network beyond
+finding which release is the latest.
 
 **What is never cached.** Only a URL that names one release is cached, which
 is every URL `rsconstruct.lock` records. A `releases/latest` URL serves
@@ -90,6 +97,9 @@ store's installs were unpacked from would only double what that cache
 carries.
 
 **What deleting an entry costs.** Nothing but the next download of that asset.
+A pin record is trusted as it is, like the asset it was made from: an
+install still checks every download against the lock, so a wrong record
+can only make an install fail, never install the wrong bytes.
 Tests point it at a directory of their own, so a test run never fills the
 user's cache.
 
@@ -104,8 +114,29 @@ lock upgrade. `rsconstruct tool cache` looks after them:
 rsconstruct tool cache list                     # every entry, its size and when it was last used
 rsconstruct tool cache prune --older-than 60d   # remove what was not used in 60 days
 rsconstruct tool cache prune --older-than 60d --dry-run   # list it, remove nothing
+rsconstruct tool cache prune --unreferenced-under ~/git   # remove what no project there uses
+rsconstruct tool cache prune --installed-archives   # remove archives the store holds
 rsconstruct tool cache clear                    # remove everything in both caches
 ```
+
+`prune` removes the entries that meet every criterion it is given, so
+`--unreferenced-under ~/git --older-than 30d` removes only what no project
+uses and nothing has used for a month:
+
+- `--older-than N`d: last used more than N days ago (see below).
+- `--unreferenced-under DIR` (repeatable): used by no project under DIR.
+  A project is a directory with an `rsconstruct.lock`; hidden directories,
+  `node_modules` and `target` are not searched. A store entry is used when
+  the project's tool directory links it or its lock names it, and an asset
+  or pin record when the lock names its URL. This is the criterion that
+  frees disk space: an entry no project links has no other copy of its
+  files.
+- `--installed-archives`: a downloaded asset whose pin record names an
+  executable the tool store already holds. Its record stays, so `tool
+  lock` still needs no download; only an install after the store entry is
+  gone downloads the asset again. An asset without a record (downloaded
+  before records were kept) and a `.deb`, which is not installed into the
+  store, stay.
 
 `--json` gives each of them as JSON. A download cache entry is named after the
 asset it holds (`<hash of the URL>-<asset name>`), so the list says what each
