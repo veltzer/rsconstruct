@@ -223,6 +223,12 @@ pub mod defs {
         ],
         &["Install"],
     );
+    pub const TOOL_CACHE: TableDef = def(
+        "tool_cache",
+        "tool cache list",
+        &["Cache", "Entry", "Size", "Last used"],
+        &[],
+    );
     pub const TOOL_RUNTIMES: TableDef = def(
         "tool_runtimes",
         "tool stats",
@@ -266,6 +272,7 @@ pub mod defs {
         &TAG_COVERAGE,
         &TAG_MATRIX,
         &TAG_SUGGEST,
+        &TOOL_CACHE,
         &TOOL_LIST,
         &TOOL_RUNTIMES,
         &TOOL_STATS,

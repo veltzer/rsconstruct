@@ -577,6 +577,11 @@ pub enum FunctionAction {
 
 #[derive(Subcommand)]
 pub enum ToolAction {
+    /// List or prune the machine-wide tool store and download cache (no config needed)
+    Cache {
+        #[command(subcommand)]
+        action: ToolCacheAction,
+    },
     /// Verify that rsconstruct.lock covers the project and the installed tools are the locked ones (requires config)
     Check,
     /// Show tool-to-processor dependency graph (uses config if available)
@@ -617,6 +622,23 @@ pub enum ToolAction {
     },
     /// Show tool availability statistics (uses config if available)
     Stats,
+}
+
+#[derive(Subcommand)]
+pub enum ToolCacheAction {
+    /// Remove every entry of the tool store and the download cache
+    Clear,
+    /// Show each entry of the tool store and the download cache, its size and when it was last used
+    List,
+    /// Remove the entries not used for a given time
+    Prune {
+        /// Remove entries last used longer ago than this many days (`60d`)
+        #[arg(long, value_name = "DAYS", value_parser = crate::tool_cache::parse_age)]
+        older_than: std::time::Duration,
+        /// Show what would be removed, and remove nothing
+        #[arg(long)]
+        dry_run: bool,
+    },
 }
 
 #[derive(Subcommand)]

@@ -60,7 +60,8 @@ still finds them.
 
 **What it holds.** The release assets of the `binary` method exactly as
 downloaded (the tarball, zip, raw executable or `.deb`), one file per URL,
-named by the SHA-256 of the URL.
+named by a hash of the URL and the asset's own name
+(`3f9c0e1a2b4d5e6f-zizmor-x86_64-unknown-linux-gnu.tar.gz`).
 
 **Who uses it.** Every download of a release binary goes through it: `tool
 lock` (which downloads each binary to record the hashes the lock holds),
@@ -88,14 +89,39 @@ installing at once) sees a whole file or none.
 store's installs were unpacked from would only double what that cache
 carries.
 
-**What deleting it costs.** Nothing but the next download of each asset.
+**What deleting an entry costs.** Nothing but the next download of that asset.
 Tests point it at a directory of their own, so a test run never fills the
 user's cache.
 
-## Size
+## Size and pruning
 
-Neither cache is pruned: every version installed and every asset downloaded
-stays until the directory is deleted. Each new release of a tool a project
-locks adds one store entry and one download, so both grow with every lock
-upgrade. `du -sh ~/.cache/rsconstruct/*` shows how much each holds; deleting
-either directory, or any entry in it, is always safe.
+Nothing is removed automatically: every version installed and every asset
+downloaded stays until it is pruned. Each new release of a tool a project
+locks adds one store entry and one download, so both caches grow with every
+lock upgrade. `rsconstruct tool cache` looks after them:
+
+```bash
+rsconstruct tool cache list                     # every entry, its size and when it was last used
+rsconstruct tool cache prune --older-than 60d   # remove what was not used in 60 days
+rsconstruct tool cache prune --older-than 60d --dry-run   # list it, remove nothing
+rsconstruct tool cache clear                    # remove everything in both caches
+```
+
+`--json` gives each of them as JSON. A download cache entry is named after the
+asset it holds (`<hash of the URL>-<asset name>`), so the list says what each
+one is.
+
+**What "last used" means.** A store entry is used when a project links it
+(`tool install project` in a project that lacks that version); a download
+when `tool lock` or an install is served from it. Running a tool does not
+count: once a project has its copy, it never goes back to the store. So
+`prune --older-than` can remove a store entry that projects still run.
+That is harmless, since a project's tools are hard links that keep their
+files, but the disk space of such an entry is only freed once no project
+links its files any more, and a project that later needs the version again
+installs it anew. The sizes `list` shows count each entry's files, whether or
+not a project shares them.
+
+Do not prune or clear while an install is running: an entry removed half-way
+through being linked fails that install, which then has to be run again.
+Everything else about pruning is safe at any time.

@@ -101,6 +101,7 @@ mod runtime_flags;
 mod sandbox;
 mod stats;
 mod tables;
+mod tool_cache;
 mod tool_lock;
 mod tool_store;
 mod tools;

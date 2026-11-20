@@ -244,6 +244,7 @@ is hidden by default:
 | `tag_coverage` | `rsconstruct tag coverage` | `Category`, `Files`, `Coverage` |
 | `tag_matrix` | `rsconstruct tag matrix` | `File`, then one column per tag category |
 | `tag_suggest` | `rsconstruct tag suggest` | `Tag`, `Score` |
+| `tool_cache` | `rsconstruct tool cache list` | `Cache`, `Entry`, `Size`, `Last used` |
 | `tool_list` | `rsconstruct tool list` | `Tool`, `Status`, `Runtime`, `Target`, `Processors`, `Install` *(verbose)* |
 | `tool_runtimes` | `rsconstruct tool stats` | `Runtime`, `Installed` |
 | `tool_stats` | `rsconstruct tool stats` | `Tool`, `Status`, `Processors`, `Install` |

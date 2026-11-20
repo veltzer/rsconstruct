@@ -444,6 +444,7 @@ fn run_tools_command(
     }
 
     match action {
+        ToolAction::Cache { action } => crate::tool_cache::handle(action)?,
         ToolAction::List { .. } => {
             // Registry-wide list: every tool rsconstruct knows how to install,
             // independent of which processors are configured. Mirrors

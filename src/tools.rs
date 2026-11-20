@@ -1241,9 +1241,10 @@ fn fetch_binary(
     let download = std::path::Path::new(&plan.download);
     let cached = cache
         .filter(|_| url_names_a_fixed_release(recipe, url))
-        .map(|dir| dir.join(crate::checksum::bytes_checksum(url.as_bytes())));
+        .map(|dir| crate::tool_cache::download_entry(dir, url));
     let mut from_cache = false;
     if let Some(entry) = cached.as_deref().filter(|entry| entry.is_file()) {
+        crate::tool_cache::mark_used(entry)?;
         std::fs::copy(entry, download).with_context(|| {
             format!(
                 "Failed to copy the cached download {} to {}",
@@ -2887,7 +2888,7 @@ mod tests {
         };
 
         let first = fetch_binary(&recipe, &url, None, &work("w1"), Some(&cache), false).unwrap();
-        let entry = cache.join(crate::checksum::bytes_checksum(url.as_bytes()));
+        let entry = crate::tool_cache::download_entry(&cache, &url);
         assert!(entry.is_file(), "the download was cached");
 
         // The source is gone: only the cache can serve the second fetch.

@@ -163,8 +163,9 @@ that name one release are cached, which is every URL the lock records; a
 (Chrome's `.deb`) are always fetched. A cached copy is hashed like a download:
 an install refuses bytes that differ from the lock, and one whose cached copy
 differs drops it and fetches again. The cache sits beside the tool store, not
-in it, so the CI cache of the store does not carry the archives as well. It is
-never pruned; deleting the directory is always safe. See [Tool Caches](tool-caches.md).
+in it, so the CI cache of the store does not carry the archives as well.
+`rsconstruct tool cache` lists and prunes both caches; see
+[Tool Caches](tool-caches.md).
 
 A release binary is usually one executable. Some need the directories beside
 it: protoc reads the well-known `.proto` files from its `include/`, qpdf loads

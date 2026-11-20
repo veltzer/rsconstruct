@@ -350,6 +350,8 @@ fn ensure_in_store(
 ) -> Result<(PathBuf, bool)> {
     let dir = store.join(&pkg.method).join(pkg.key());
     if dir.is_dir() {
+        // `tool cache prune --older-than` goes by this.
+        crate::tool_cache::mark_used(&dir)?;
         return Ok((dir, false));
     }
     let parent = dir.parent().context("a store entry always has a parent")?;
