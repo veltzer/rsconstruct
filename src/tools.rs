@@ -1563,6 +1563,13 @@ fn binary_recipe(pkg: &str) -> Option<BinaryRecipe> {
             archive: ArchiveKind::Raw,
             dest: "jq",
         }),
+        // Tracks latest like hadolint: every rspandoc release carries the
+        // raw `rspandoc-linux-x86_64` asset under that same name.
+        "rspandoc" => Some(BinaryRecipe {
+            url: "https://github.com/veltzer/rspandoc/releases/latest/download/rspandoc-linux-x86_64",
+            archive: ArchiveKind::Raw,
+            dest: "rspandoc",
+        }),
         // Pinned like actionlint: pandoc's release assets embed the version
         // in the filename and in the tarball's top directory. The binary is
         // statically linked; pandoc-server and pandoc-lua beside it are not
@@ -2537,6 +2544,7 @@ mod tests {
             "shellcheck",
             "jq",
             "pandoc",
+            "rspandoc",
             "protoc",
             "qpdf",
             "uv",

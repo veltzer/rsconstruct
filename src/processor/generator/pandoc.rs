@@ -157,6 +157,15 @@ inventory::submit! { crate::tools::ToolInfo {
     machine: Some(crate::tools::InstallMethod::new("apt", "pandoc")),
     alternatives: &[], prefer: None, sandbox_writable: &[], needs_network: false,
 } }
+// rspandoc is the Rust replacement: it takes pandoc's command line, so a
+// stanza switches to it with `command = "rspandoc"` and nothing else.
+inventory::submit! { crate::tools::ToolInfo {
+    name: "rspandoc", runtime: "rust",
+    project: Some(crate::tools::InstallMethod::new("binary", "rspandoc")),
+    machine: Some(crate::tools::InstallMethod::new("binary", "rspandoc")),
+    alternatives: &[crate::tools::InstallMethod::new("cargo", "rspandoc")],
+    prefer: None, sandbox_writable: &[], needs_network: false,
+} }
 // xelatex ships in texlive-xetex, not in a package of its own; pandoc's
 // `pdf_engine = "xelatex"` needs the binary, so probe the binary and
 // install the distribution that provides it.
