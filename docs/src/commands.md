@@ -503,6 +503,18 @@ rsconstruct smart reset                  # Remove all processor sections
 rsconstruct smart remove-no-file-processors  # Remove processors that don't match any files (skips enabled = false)
 ```
 
+With `--json` each of these prints one JSON object saying what it did
+instead of a sentence: `{"processor": "<name>", "added": true}` for `enable`
+(`false` when the section was already there) and the same with `removed` for
+`disable`; a count for `enable-all`, `enable-detected` and
+`enable-if-available` (`{"added": 3}`) and for `disable-all` and `reset`
+(`{"removed": 3}`); the names for `auto` (`{"added": [...]}`),
+`remove-no-file-processors` (`{"removed": [...]}`), and `only` and `minimal`
+(`{"active": [...]}`). `processor` and `analyzer` `enable`, `disable` and
+`delete` print `{"processor": "<iname>", "enabled": true}` or
+`{"processor": "<iname>", "deleted": true}` (with `analyzer` as the key for
+an analyzer).
+
 ## `rsconstruct processor`
 
 | Subcommand | Config required? |

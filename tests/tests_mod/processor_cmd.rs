@@ -939,3 +939,45 @@ fn processor_used_names_allowlist_skip_disabled_stanzas() {
         "config must still show a disabled stanza: {stdout}"
     );
 }
+
+/// Under `--json` the commands that edit rsconstruct.toml print one JSON
+/// object saying what they did, not prose.
+#[test]
+fn config_editing_commands_report_in_json() {
+    let temp_dir = setup_project_with_config("");
+    let project_path = temp_dir.path();
+    let iname = "processor.checker.shellcheck";
+    let run = |args: &[&str]| -> serde_json::Value {
+        let mut all = vec!["--json"];
+        all.extend_from_slice(args);
+        let output = run_rsconstruct_with_env(project_path, &all, &[("NO_COLOR", "1")]);
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        assert!(output.status.success(), "{args:?} failed: {stdout}");
+        serde_json::from_str(stdout.trim())
+            .unwrap_or_else(|e| panic!("{args:?} printed non-JSON ({e}): {stdout}"))
+    };
+    assert_eq!(
+        run(&["smart", "enable", iname]),
+        serde_json::json!({ "processor": iname, "added": true })
+    );
+    assert_eq!(
+        run(&["smart", "enable", iname]),
+        serde_json::json!({ "processor": iname, "added": false })
+    );
+    assert_eq!(
+        run(&["processor", "disable", iname]),
+        serde_json::json!({ "processor": iname, "enabled": false })
+    );
+    assert_eq!(
+        run(&["processor", "delete", iname]),
+        serde_json::json!({ "processor": iname, "deleted": true })
+    );
+    assert_eq!(
+        run(&["smart", "only", iname]),
+        serde_json::json!({ "active": [iname] })
+    );
+    assert_eq!(
+        run(&["smart", "reset"]),
+        serde_json::json!({ "removed": 1 })
+    );
+}

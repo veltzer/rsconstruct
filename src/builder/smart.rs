@@ -6,6 +6,15 @@ use crate::registries::{all_pnames, find_plugin, parse_name};
 
 const CONFIG_FILE: &str = "rsconstruct.toml";
 
+/// Say what a command did: `json` on one line under `--json`, else `text`.
+fn report(text: &str, json: &serde_json::Value) {
+    if crate::json_output::is_json_mode() {
+        println!("{json}");
+    } else {
+        println!("{text}");
+    }
+}
+
 /// Load rsconstruct.toml as a `toml_edit` document.
 fn load_doc() -> Result<toml_edit::DocumentMut> {
     // The same "no rsconstruct.toml" config error every other command
@@ -176,7 +185,10 @@ pub fn disable_all() -> Result<()> {
     let count = remove_all_sections(table);
 
     save_doc(&doc)?;
-    println!("Removed {count} processor sections from {CONFIG_FILE}.");
+    report(
+        &format!("Removed {count} processor sections from {CONFIG_FILE}."),
+        &serde_json::json!({ "removed": count }),
+    );
     Ok(())
 }
 
@@ -224,7 +236,10 @@ pub fn enable_all() -> Result<()> {
     }
 
     save_doc(&doc)?;
-    println!("Added {count} processor sections to {CONFIG_FILE}.");
+    report(
+        &format!("Added {count} processor sections to {CONFIG_FILE}."),
+        &serde_json::json!({ "added": count }),
+    );
     Ok(())
 }
 
@@ -234,12 +249,17 @@ pub fn disable(name: &str) -> Result<()> {
     let mut doc = load_doc()?;
     let table = processor_table(&mut doc)?;
 
-    if remove_section(table, "processor", name) {
+    let removed = remove_section(table, "processor", name);
+    let text = if removed {
         save_doc(&doc)?;
-        println!("Removed processor '{name}'.");
+        format!("Removed processor '{name}'.")
     } else {
-        println!("Processor '{name}' is not declared.");
-    }
+        format!("Processor '{name}' is not declared.")
+    };
+    report(
+        &text,
+        &serde_json::json!({ "processor": name, "removed": removed }),
+    );
     Ok(())
 }
 
@@ -249,12 +269,17 @@ pub fn enable(name: &str) -> Result<()> {
     let mut doc = load_doc()?;
     let table = processor_table(&mut doc)?;
 
-    if add_section(table, "processor", name)? {
+    let added = add_section(table, "processor", name)?;
+    let text = if added {
         save_doc(&doc)?;
-        println!("Added processor '{name}'.");
+        format!("Added processor '{name}'.")
     } else {
-        println!("Processor '{name}' is already declared.");
-    }
+        format!("Processor '{name}' is already declared.")
+    };
+    report(
+        &text,
+        &serde_json::json!({ "processor": name, "added": added }),
+    );
     Ok(())
 }
 
@@ -281,7 +306,10 @@ pub fn enable_detected(detected: &HashSet<String>) -> Result<()> {
     }
 
     save_doc(&doc)?;
-    println!("Added {count} detected processor sections to {CONFIG_FILE}.");
+    report(
+        &format!("Added {count} detected processor sections to {CONFIG_FILE}."),
+        &serde_json::json!({ "added": count }),
+    );
     Ok(())
 }
 
@@ -304,7 +332,10 @@ pub fn only(names: &[String]) -> Result<()> {
     }
 
     save_doc(&doc)?;
-    println!("Active processors: {}", names.join(", "));
+    report(
+        &format!("Active processors: {}", names.join(", ")),
+        &serde_json::json!({ "active": names }),
+    );
     Ok(())
 }
 
@@ -319,18 +350,19 @@ pub fn minimal(detected: &HashSet<String>) -> Result<()> {
     }
 
     save_doc(&doc)?;
-    if detected.is_empty() {
-        println!("No processors detected.");
+    let text = if detected.is_empty() {
+        "No processors detected.".to_string()
     } else {
-        println!(
+        format!(
             "Minimal config: {}",
             names
                 .iter()
                 .map(|s| s.as_str())
                 .collect::<Vec<_>>()
                 .join(", ")
-        );
-    }
+        )
+    };
+    report(&text, &serde_json::json!({ "active": names }));
     Ok(())
 }
 
@@ -353,14 +385,13 @@ pub fn auto(available: &HashSet<String>) -> Result<()> {
         }
     }
 
-    if added.is_empty() {
-        println!("No new processors to add (all detected processors are already declared).");
+    let text = if added.is_empty() {
+        "No new processors to add (all detected processors are already declared).".to_string()
     } else {
         save_doc(&doc)?;
-        let mut added = added;
-        added.sort_unstable();
-        println!("Added {} processor(s): {}", added.len(), added.join(", "));
-    }
+        format!("Added {} processor(s): {}", added.len(), added.join(", "))
+    };
+    report(&text, &serde_json::json!({ "added": added }));
     Ok(())
 }
 
@@ -414,7 +445,10 @@ fn set_enabled(section: &str, iname: &str, value: bool) -> Result<()> {
     set_enabled_in(&mut doc, section, iname, value)?;
     save_doc(&doc)?;
     let verb = if value { "Enabled" } else { "Disabled" };
-    println!("{verb} {section} '{iname}'.");
+    report(
+        &format!("{verb} {section} '{iname}'."),
+        &serde_json::json!({ section: iname, "enabled": value }),
+    );
     Ok(())
 }
 
@@ -423,7 +457,10 @@ fn delete(section: &str, iname: &str) -> Result<()> {
     let mut doc = load_doc()?;
     delete_in(&mut doc, section, iname)?;
     save_doc(&doc)?;
-    println!("Deleted {section} '{iname}'.");
+    report(
+        &format!("Deleted {section} '{iname}'."),
+        &serde_json::json!({ section: iname, "deleted": true }),
+    );
     Ok(())
 }
 
@@ -460,7 +497,10 @@ pub fn enable_analyzer(iname: &str) -> Result<()> {
 /// Remove processors from rsconstruct.toml that don't match any files.
 pub fn remove_no_file_processors(empty_processors: &[String]) -> Result<()> {
     if empty_processors.is_empty() {
-        println!("All processors match at least one file.");
+        report(
+            "All processors match at least one file.",
+            &serde_json::json!({ "removed": [] }),
+        );
         return Ok(());
     }
 
@@ -474,16 +514,17 @@ pub fn remove_no_file_processors(empty_processors: &[String]) -> Result<()> {
         }
     }
 
-    if removed.is_empty() {
-        println!("No processors to remove.");
+    let text = if removed.is_empty() {
+        "No processors to remove.".to_string()
     } else {
         save_doc(&doc)?;
-        println!(
+        format!(
             "Removed {} processor(s) with no files: {}",
             removed.len(),
             removed.join(", ")
-        );
-    }
+        )
+    };
+    report(&text, &serde_json::json!({ "removed": removed }));
     Ok(())
 }
 
