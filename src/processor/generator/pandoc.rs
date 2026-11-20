@@ -77,6 +77,15 @@ fn pdf_engine_tools(config: &PandocConfig) -> Vec<String> {
     }
 }
 
+/// The word a converter wants between its name and pandoc's options.
+/// pandoc takes the options directly; rspandoc is `rspandoc <command>` and
+/// takes them under `convert`. `command` may be a path, so its file name
+/// decides.
+fn subcommand(command: &str) -> Option<&'static str> {
+    let name = std::path::Path::new(command).file_name()?;
+    (name == "rspandoc").then_some("convert")
+}
+
 fn execute_pandoc(
     ctx: &crate::build_context::BuildContext,
     config: &PandocConfig,
@@ -90,8 +99,12 @@ fn execute_pandoc(
         .to_string_lossy();
     ensure_output_dir(output)?;
 
-    let mut cmd = Command::new(config.standard.require_command("pandoc")?);
+    let command = config.standard.require_command("pandoc")?;
+    let mut cmd = Command::new(command);
     cmd.env("SOURCE_DATE_EPOCH", "0");
+    if let Some(word) = subcommand(command) {
+        cmd.arg(word);
+    }
     cmd.arg("--to").arg(format.as_ref());
     if format.as_ref() == "pdf" {
         // \pdftrailerid is a pdflatex primitive and would be undefined
@@ -157,8 +170,9 @@ inventory::submit! { crate::tools::ToolInfo {
     machine: Some(crate::tools::InstallMethod::new("apt", "pandoc")),
     alternatives: &[], prefer: None, sandbox_writable: &[], needs_network: false,
 } }
-// rspandoc is the Rust replacement: it takes pandoc's command line, so a
-// stanza switches to it with `command = "rspandoc"` and nothing else.
+// rspandoc is the Rust replacement: `rspandoc convert` takes pandoc's
+// options (see `subcommand`), so a stanza switches to it with
+// `command = "rspandoc"` and nothing else.
 inventory::submit! { crate::tools::ToolInfo {
     name: "rspandoc", runtime: "rust",
     project: Some(crate::tools::InstallMethod::new("binary", "rspandoc")),
@@ -175,3 +189,20 @@ inventory::submit! { crate::tools::ToolInfo {
     machine: Some(crate::tools::InstallMethod::new("apt", "texlive-xetex")),
     alternatives: &[], prefer: None, sandbox_writable: &[], needs_network: false,
 } }
+
+#[cfg(test)]
+mod tests {
+    use super::subcommand;
+
+    #[test]
+    fn rspandoc_converts_under_a_subcommand() {
+        assert_eq!(subcommand("rspandoc"), Some("convert"));
+        assert_eq!(subcommand(".rsconstruct/tools/rspandoc"), Some("convert"));
+    }
+
+    #[test]
+    fn pandoc_takes_its_options_directly() {
+        assert_eq!(subcommand("pandoc"), None);
+        assert_eq!(subcommand("/usr/bin/pandoc"), None);
+    }
+}

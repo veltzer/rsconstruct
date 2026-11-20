@@ -4,9 +4,10 @@
 
 Converts documents between formats using [pandoc](https://pandoc.org/).
 
-A Rust alternative is [rspandoc](https://github.com/veltzer/rspandoc), which
-takes pandoc's command line: set `command = "rspandoc"` and leave the rest of
-the stanza as it is. It covers Markdown to HTML, DOCX and PDF with the options
+A Rust alternative is [rspandoc](https://github.com/veltzer/rspandoc), whose
+`convert` command takes pandoc's options: set `command = "rspandoc"` and leave
+the rest of the stanza as it is (rsconstruct runs it as `rspandoc convert`,
+which needs rspandoc 0.1.12 or later). It covers Markdown to HTML, DOCX and PDF with the options
 on this page, and refuses a document or option it does not support instead of
 approximating it, so a stanza that builds with it builds the same documents.
 The PDF engine is still the one `pdf_engine` names.
