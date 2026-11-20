@@ -114,6 +114,45 @@ fn github_token_var_from(lookup: impl Fn(&str) -> Option<String>) -> Option<&'st
         .find(|name| lookup(name).is_some_and(|token| !token.trim().is_empty()))
 }
 
+/// The token api.github.com requests carry, worked out once per process:
+/// the environment's ([`github_token_var`]), or else the one the `gh` CLI
+/// is logged in with.
+///
+/// A developer machine usually has neither variable set: `gh` keeps its
+/// token in the system keyring and exports nothing. Without this, `tool
+/// lock` there was anonymous, and locking one new tool across the fleet
+/// ran out of the 60 requests/hour after about sixty repos (403, "rate
+/// limit exceeded"). Asking `gh` costs one subprocess, and the token is
+/// only ever held in memory.
+fn github_api_token() -> Option<String> {
+    static TOKEN: std::sync::OnceLock<Option<String>> = std::sync::OnceLock::new();
+    TOKEN
+        .get_or_init(|| {
+            github_token_var()
+                .and_then(|name| std::env::var(name).ok())
+                .or_else(gh_cli_token)
+        })
+        .clone()
+}
+
+/// The token `gh auth token` prints, when `gh` is installed and logged in.
+fn gh_cli_token() -> Option<String> {
+    let output = Command::new("gh")
+        .args(["auth", "token"])
+        .stdin(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .output()
+        .ok()?;
+    gh_token_from_output(output.status.success(), &output.stdout)
+}
+
+/// What `gh auth token` said: a token only when it succeeded and printed
+/// one. Not logged in, it exits non-zero with nothing on stdout.
+fn gh_token_from_output(success: bool, stdout: &[u8]) -> Option<String> {
+    let token = String::from_utf8_lossy(stdout).trim().to_string();
+    (success && !token.is_empty()).then_some(token)
+}
+
 /// Apply the shared retry and timeout flags to an already-configured curl
 /// `Command`.
 ///
@@ -138,7 +177,7 @@ pub fn get_json(url: &str) -> anyhow::Result<serde_json::Value> {
     // Read once, outside the retry closure: the environment cannot change
     // between attempts.
     let token = if url.starts_with("https://api.github.com/") {
-        github_token_var().and_then(|name| std::env::var(name).ok())
+        github_api_token()
     } else {
         None
     };
@@ -196,6 +235,20 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// `gh auth token` gives a token only when it succeeds and prints one:
+    /// a logged-out `gh` (non-zero exit, or nothing printed) leaves the
+    /// request anonymous instead of sending an empty `Bearer`.
+    #[test]
+    fn gh_token_needs_success_and_output() {
+        assert_eq!(
+            gh_token_from_output(true, b"gho_abc\n"),
+            Some("gho_abc".to_string())
+        );
+        assert_eq!(gh_token_from_output(false, b"gho_abc\n"), None);
+        assert_eq!(gh_token_from_output(true, b"\n"), None);
+        assert_eq!(gh_token_from_output(true, b""), None);
+    }
 
     #[test]
     fn curl_argv_includes_retry_flags() {

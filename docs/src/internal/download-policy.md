@@ -110,6 +110,17 @@ never holds the secret. Other hosts get no header. The releases API lookup
 (`tools::resolve_latest_deb_asset`) is authenticated the same way, from the
 same variable choice (`download::github_token_var`).
 
+Requests to `api.github.com` (`download::get_json`: `tool lock` resolving a
+tool's latest release, the `.deb` resolver) have one more source. A
+developer machine usually has neither variable set, because the `gh` CLI
+keeps its token in the system keyring and exports nothing; `tool lock` was
+therefore anonymous there, and locking one new tool across the fleet ran
+out of the 60 requests/hour after about sixty repositories. So when
+neither variable is set, rsconstruct asks `gh auth token` once per process
+and sends that token. It is held in memory only, never written anywhere
+and never put on a command line. Where `gh` is missing or logged out the
+request is anonymous, as before.
+
 ## Adding a new download
 
 1. **Downloading a URL to a file?** Use `curl_argv`. Do not write a `curl`
