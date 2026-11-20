@@ -1074,14 +1074,29 @@ impl Journal {
     }
 
     /// Take `real` out of the tree, whatever it is; absent is fine.
+    ///
+    /// Absence is found out by the rename itself, not by looking first:
+    /// two runs settling side by side may both replace one file (ruff's
+    /// `.ruff_cache/CACHEDIR.TAG`, say), and between a look and the rename
+    /// the other run can take the file away. That is the same as the file
+    /// never having been there: nothing to set aside, nothing to put back.
     fn set_aside(&mut self, real: &Path) -> Result<()> {
-        if fs::symlink_metadata(real).is_err() {
-            return Ok(());
-        }
         fs::create_dir_all(&self.aside)
             .with_context(|| format!("Failed to create directory {}", self.aside.display()))?;
         let kept = self.aside.join(self.steps.len().to_string());
-        self.move_path(real, &kept)
+        match fs::rename(real, &kept) {
+            Ok(()) => {
+                self.steps.push(Step::Moved {
+                    from: real.to_path_buf(),
+                    to: kept,
+                });
+                Ok(())
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(()),
+            Err(e) => Err(e).with_context(|| {
+                format!("Failed to move {} to {}", real.display(), kept.display())
+            }),
+        }
     }
 
     /// Create the directories above `path` that do not exist yet.
@@ -1888,6 +1903,43 @@ mod tests {
         assert_eq!(fs::read_to_string(root.join("out/gone")).unwrap(), "kept");
         assert_eq!(fs::read_to_string(root.join("out/z/inner")).unwrap(), "i");
         assert!(!root.join("out/new").exists());
+    }
+
+    /// Runs that settle side by side may replace the same file. Each sets
+    /// it aside by renaming it, and only one rename can win: the others
+    /// find the file gone, which is not an error and leaves them nothing
+    /// to put back. Checking for the file first and renaming afterwards
+    /// failed the losers with "No such file or directory".
+    #[test]
+    fn runs_replacing_the_same_file_do_not_fail_each_other() {
+        let tmp = tempfile::tempdir().unwrap();
+        let shared = tmp.path().join("CACHEDIR.TAG");
+        for round in 0..50 {
+            fs::write(&shared, "tag").unwrap();
+            let barrier = std::sync::Barrier::new(8);
+            let moved: usize = std::thread::scope(|scope| {
+                let handles: Vec<_> = (0..8)
+                    .map(|n| {
+                        let aside = tmp.path().join(format!("aside-{round}-{n}"));
+                        let (shared, barrier) = (&shared, &barrier);
+                        scope.spawn(move || {
+                            let mut journal = Journal::new(aside);
+                            barrier.wait();
+                            journal.set_aside(shared).unwrap();
+                            journal.steps.len()
+                        })
+                    })
+                    .collect();
+                handles.into_iter().map(|h| h.join().unwrap()).sum()
+            });
+            assert_eq!(moved, 1, "exactly one run set the file aside");
+            assert!(!shared.exists());
+        }
+        // A file that was never there is the same case.
+        let mut journal = Journal::new(tmp.path().join("aside-none"));
+        journal.set_aside(&tmp.path().join("absent")).unwrap();
+        assert!(journal.steps.is_empty());
+        journal.undo().unwrap();
     }
 
     /// `finish` undoes a failed apply and removes the run's directory.
