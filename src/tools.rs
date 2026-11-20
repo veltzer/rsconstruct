@@ -460,11 +460,13 @@ fn install_binary_into_prefix(
     let work = prefix.join(".work");
     std::fs::create_dir_all(&work)
         .with_context(|| format!("Failed to create {}", work.display()))?;
+    let cache = crate::tool_store::download_cache_root()?;
     let fetched = fetch_binary(
         &recipe,
         &pin.url,
         Some(&pin.sha256),
         &work.to_string_lossy(),
+        Some(&cache),
         ctx.verbose,
     )?;
     let payload = std::path::Path::new(&fetched.payload);
@@ -1219,19 +1221,65 @@ struct FetchedBinary {
 /// Shared by `run_binary` (base [`install_work_dir`], the paths
 /// `describe_binary` shows) and `tool lock` (a private directory), so a
 /// locked hash is always the hash of exactly what an install downloads.
+///
+/// With `cache` (the machine-wide [`crate::tool_store::download_cache_root`]),
+/// a URL that names a fixed release is downloaded once per machine: a copy
+/// already in the cache is used instead of the network, and a fresh
+/// download is added to it once its hash has passed. A cached copy is
+/// hashed like a download, so one whose bytes are not the locked ones is
+/// dropped and fetched again.
 fn fetch_binary(
     recipe: &BinaryRecipe,
     url: &str,
     expected_sha256: Option<&str>,
     base: &str,
+    cache: Option<&std::path::Path>,
     verbose: bool,
 ) -> anyhow::Result<FetchedBinary> {
+    use anyhow::Context as _;
     let plan = fetch_plan(recipe, url, base);
-    exec_inherited(
-        &plan.curl.iter().map(String::as_str).collect::<Vec<_>>(),
-        verbose,
-    )?;
-    let download_sha256 = file_sha256(std::path::Path::new(&plan.download))?;
+    let download = std::path::Path::new(&plan.download);
+    let cached = cache
+        .filter(|_| url_names_a_fixed_release(recipe, url))
+        .map(|dir| dir.join(crate::checksum::bytes_checksum(url.as_bytes())));
+    let mut from_cache = false;
+    if let Some(entry) = cached.as_deref().filter(|entry| entry.is_file()) {
+        std::fs::copy(entry, download).with_context(|| {
+            format!(
+                "Failed to copy the cached download {} to {}",
+                entry.display(),
+                download.display()
+            )
+        })?;
+        from_cache = true;
+        if verbose {
+            println!("{url}: using the cached download {}", entry.display());
+        }
+    } else {
+        exec_inherited(
+            &plan.curl.iter().map(String::as_str).collect::<Vec<_>>(),
+            verbose,
+        )?;
+    }
+    let mut download_sha256 = file_sha256(download)?;
+    if from_cache
+        && let Some(expected) = expected_sha256
+        && expected != download_sha256
+        && let Some(entry) = cached.as_deref()
+    {
+        // Not the bytes the lock names: the cache entry is no good to
+        // anyone. Drop it and ask the server, which has the last word.
+        std::fs::remove_file(entry)
+            .with_context(|| format!("Failed to remove {}", entry.display()))?;
+        std::fs::remove_file(download)
+            .with_context(|| format!("Failed to remove {}", download.display()))?;
+        exec_inherited(
+            &plan.curl.iter().map(String::as_str).collect::<Vec<_>>(),
+            verbose,
+        )?;
+        from_cache = false;
+        download_sha256 = file_sha256(download)?;
+    }
     if let Some(expected) = expected_sha256
         && expected != download_sha256
     {
@@ -1240,12 +1288,64 @@ fn fetch_binary(
             "{url} does not match rsconstruct.lock: sha256 {download_sha256}, locked {expected}"
         );
     }
+    if !from_cache && let Some(entry) = cached.as_deref() {
+        add_to_download_cache(download, entry)?;
+    }
     for step in &plan.unpack {
         step.run(verbose)?;
     }
     Ok(FetchedBinary {
         download_sha256,
         payload: plan.payload,
+    })
+}
+
+/// Whether the bytes at `url` are fixed, so that a copy fetched once can
+/// stand in for every later fetch. A `releases/latest` URL serves whatever
+/// was released last, and a vendor `.deb` URL (Chrome's) the current
+/// build: neither may be cached. Every other recipe URL, and every URL
+/// rsconstruct.lock records, names one release.
+fn url_names_a_fixed_release(recipe: &BinaryRecipe, url: &str) -> bool {
+    !url.contains(GITHUB_LATEST_DOWNLOAD)
+        && !matches!(
+            recipe.archive,
+            ArchiveKind::Deb {
+                source: DebSource::Url(_)
+            }
+        )
+}
+
+/// Put a copy of `download` in the cache as `entry`. The copy is written
+/// beside the entry and renamed into place, so a concurrent reader (other
+/// projects installing at the same time) sees the whole file or none of
+/// it; two writers of one entry write the same bytes.
+fn add_to_download_cache(
+    download: &std::path::Path,
+    entry: &std::path::Path,
+) -> anyhow::Result<()> {
+    use anyhow::Context as _;
+    let dir = entry
+        .parent()
+        .context("a download cache entry always has a parent")?;
+    std::fs::create_dir_all(dir).with_context(|| format!("Failed to create {}", dir.display()))?;
+    let name = entry
+        .file_name()
+        .context("a download cache entry always has a name")?
+        .to_string_lossy();
+    let tmp = dir.join(format!(".{name}.{}.tmp", std::process::id()));
+    std::fs::copy(download, &tmp).with_context(|| {
+        format!(
+            "Failed to copy {} into the download cache as {}",
+            download.display(),
+            tmp.display()
+        )
+    })?;
+    std::fs::rename(&tmp, entry).with_context(|| {
+        format!(
+            "Failed to move {} into place as {}",
+            tmp.display(),
+            entry.display()
+        )
     })
 }
 
@@ -1295,11 +1395,13 @@ fn run_binary(pkg: &str, ctx: &InstallCtx) -> anyhow::Result<()> {
     crate::platform::create_private_dir(std::path::Path::new(&work_dir)).with_context(|| {
         format!("Failed to create the install work directory {work_dir} (remove it if a crashed install left it)")
     })?;
+    let cache = crate::tool_store::download_cache_root()?;
     let result = fetch_binary(
         &recipe,
         &url,
         pin.map(|p| p.sha256.as_str()),
         &work_dir,
+        Some(&cache),
         ctx.verbose,
     )
     .and_then(|fetched| {
@@ -1375,7 +1477,15 @@ pub fn lock_binary(
     std::fs::create_dir_all(&base)
         .with_context(|| format!("Failed to create {}", base.display()))?;
     let result = (|| {
-        let fetched = fetch_binary(&recipe, &url, None, &base.to_string_lossy(), verbose)?;
+        let cache = crate::tool_store::download_cache_root()?;
+        let fetched = fetch_binary(
+            &recipe,
+            &url,
+            None,
+            &base.to_string_lossy(),
+            Some(&cache),
+            verbose,
+        )?;
         let mut pin = crate::tool_lock::BinaryPin {
             url: url.clone(),
             sha256: fetched.download_sha256,
@@ -2706,7 +2816,7 @@ mod tests {
             dest: "fake-gz-tool",
         };
         let url = format!("file://{}", src.join("payload.gz").display());
-        let fetched = fetch_binary(&recipe, &url, None, &base, false).unwrap();
+        let fetched = fetch_binary(&recipe, &url, None, &base, None, false).unwrap();
         assert_eq!(fetched.payload, format!("{base}/fake-gz-tool"));
         assert_eq!(
             std::fs::read(&fetched.payload).unwrap(),
@@ -2738,19 +2848,105 @@ mod tests {
             dest: "fake-tar-tool",
         };
         let url = format!("file://{}", src.join("tool.tar.gz").display());
-        let fetched = fetch_binary(&recipe, &url, None, &base, false).unwrap();
+        let fetched = fetch_binary(&recipe, &url, None, &base, None, false).unwrap();
         assert_eq!(fetched.payload, format!("{base}/fake-tar-tool"));
         assert_eq!(std::fs::read(&fetched.payload).unwrap(), b"tar member");
         assert!(is_executable(&fetched.payload));
         assert!(!tmp.path().join("tool-x86_64-unknown-linux-gnu").exists());
         assert!(!tmp.path().join("fake-tar-tool.dl").exists());
 
-        let err = fetch_binary(&recipe, &url, Some("0000"), &base, false).unwrap_err();
+        let err = fetch_binary(&recipe, &url, Some("0000"), &base, None, false).unwrap_err();
         assert!(
             err.to_string().contains("does not match rsconstruct.lock"),
             "{err}"
         );
         assert!(!tmp.path().join("fake-tar-tool.dl").exists());
+    }
+
+    /// With a cache, a fixed-release URL is fetched once: the second fetch
+    /// is served from the cache even after the source is gone, a cached
+    /// copy whose bytes are not the locked ones is dropped and fetched
+    /// again, and a `releases/latest` URL is never cached.
+    #[test]
+    fn fetch_binary_serves_a_fixed_release_from_the_cache() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let cache = tmp.path().join("cache");
+        let src = tmp.path().join("src");
+        std::fs::create_dir_all(&src).unwrap();
+        std::fs::write(src.join("tool"), b"#!/bin/sh\necho v1\n").unwrap();
+        let recipe = BinaryRecipe {
+            url: "",
+            archive: ArchiveKind::Raw,
+            dest: "fake-raw-tool",
+        };
+        let url = format!("file://{}", src.join("tool").display());
+        let work = |n: &str| {
+            let dir = tmp.path().join(n);
+            std::fs::create_dir_all(&dir).unwrap();
+            dir.to_string_lossy().into_owned()
+        };
+
+        let first = fetch_binary(&recipe, &url, None, &work("w1"), Some(&cache), false).unwrap();
+        let entry = cache.join(crate::checksum::bytes_checksum(url.as_bytes()));
+        assert!(entry.is_file(), "the download was cached");
+
+        // The source is gone: only the cache can serve the second fetch.
+        std::fs::remove_file(src.join("tool")).unwrap();
+        let locked = first.download_sha256;
+        let second = fetch_binary(
+            &recipe,
+            &url,
+            Some(&locked),
+            &work("w2"),
+            Some(&cache),
+            false,
+        )
+        .unwrap();
+        assert_eq!(second.download_sha256, locked);
+        assert_eq!(
+            std::fs::read(&second.payload).unwrap(),
+            b"#!/bin/sh\necho v1\n"
+        );
+
+        // A cached copy that is not what the lock names is dropped, and the
+        // server's answer decides: here, the bytes the lock does name.
+        std::fs::write(&entry, b"tampered").unwrap();
+        std::fs::write(src.join("tool"), b"#!/bin/sh\necho v1\n").unwrap();
+        let third = fetch_binary(
+            &recipe,
+            &url,
+            Some(&locked),
+            &work("w3"),
+            Some(&cache),
+            false,
+        )
+        .unwrap();
+        assert_eq!(third.download_sha256, locked);
+        assert_eq!(std::fs::read(&entry).unwrap(), b"#!/bin/sh\necho v1\n");
+
+        // No temporary copies are left in the cache.
+        let names: Vec<String> = std::fs::read_dir(&cache)
+            .unwrap()
+            .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(names.len(), 1, "{names:?}");
+
+        assert!(url_names_a_fixed_release(&recipe, &url));
+        assert!(!url_names_a_fixed_release(
+            &recipe,
+            "https://github.com/o/r/releases/latest/download/tool"
+        ));
+        let vendor = BinaryRecipe {
+            url: "",
+            archive: ArchiveKind::Deb {
+                source: DebSource::Url("https://dl.example.com/current.deb"),
+            },
+            dest: "vendor",
+        };
+        assert!(!url_names_a_fixed_release(
+            &vendor,
+            "https://dl.example.com/current.deb"
+        ));
     }
 
     /// A release kept whole unpacks to a tree beside the work files: the
@@ -2780,7 +2976,7 @@ mod tests {
             dest: "fake-tree-tool",
         };
         let url = format!("file://{}", tmp.path().join("tool.zip").display());
-        let fetched = fetch_binary(&recipe, &url, None, &base, false).unwrap();
+        let fetched = fetch_binary(&recipe, &url, None, &base, None, false).unwrap();
         let tree = tree_dir(&base, "fake-tree-tool");
         assert_eq!(fetched.payload, format!("{tree}/bin/tool"));
         let meta = std::fs::metadata(&fetched.payload).unwrap();
@@ -2810,7 +3006,7 @@ mod tests {
             dest: "fake-tar-tree-tool",
         };
         let url = format!("file://{}", tmp.path().join("tool.tar.xz").display());
-        let fetched = fetch_binary(&recipe, &url, None, &base, false).unwrap();
+        let fetched = fetch_binary(&recipe, &url, None, &base, None, false).unwrap();
         let tree = tree_dir(&base, "fake-tar-tree-tool");
         assert_eq!(fetched.payload, format!("{tree}/tool-1.0/bin/tool"));
         let meta = std::fs::metadata(&fetched.payload).unwrap();

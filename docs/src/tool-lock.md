@@ -149,6 +149,22 @@ Where a hard link is impossible (the store on another filesystem) the files are
 copied. Store files are read-only, since a hard link shares the file with every
 other project.
 
+**The download cache.** The release assets themselves are kept too, once per
+machine, in `$RSCONSTRUCT_DOWNLOAD_CACHE`, else
+`$XDG_CACHE_HOME/rsconstruct/downloads`, else `~/.cache/rsconstruct/downloads`,
+one file per URL. `tool lock` (which downloads each binary to record its
+hashes) and the installs (`tool install project`, `tool install machine`) look
+there before the network, so a release asset is fetched once however many
+projects lock it: in a fleet, `tool lock --upgrade` downloads a new release in
+the first repository and reads it from the cache in every other one. Only URLs
+that name one release are cached, which is every URL the lock records; a
+`releases/latest` URL and a vendor URL that always serves the current build
+(Chrome's `.deb`) are always fetched. A cached copy is hashed like a download:
+an install refuses bytes that differ from the lock, and one whose cached copy
+differs drops it and fetches again. The cache sits beside the tool store, not
+in it, so the CI cache of the store does not carry the archives as well. It is
+never pruned; deleting the directory is always safe.
+
 A release binary is usually one executable. Some need the directories beside
 it: protoc reads the well-known `.proto` files from its `include/`, qpdf loads
 its libraries from its `lib/`, node's `npm` lives in its `lib/node_modules/`,

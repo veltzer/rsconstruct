@@ -117,6 +117,36 @@ pub fn store_root() -> Result<PathBuf> {
         })
 }
 
+/// Overrides where downloaded release assets are kept (see
+/// [`download_cache_root`]).
+pub const DOWNLOAD_CACHE_ENV: &str = "RSCONSTRUCT_DOWNLOAD_CACHE";
+
+/// The machine-wide cache of downloaded release assets
+/// (`$RSCONSTRUCT_DOWNLOAD_CACHE`, else `$XDG_CACHE_HOME/rsconstruct/downloads`,
+/// else `~/.cache/rsconstruct/downloads`), shared by every project: `tool
+/// lock` and the installs download a given release asset once per
+/// machine, not once per project.
+///
+/// Beside the tool store, not inside it, because CI caches the store
+/// between runs keyed on rsconstruct.lock, and the archives the store's
+/// installs were unpacked from would only double what that cache carries.
+pub fn download_cache_root() -> Result<PathBuf> {
+    let non_empty = |v: &std::ffi::OsString| !v.is_empty();
+    if let Some(dir) = std::env::var_os(DOWNLOAD_CACHE_ENV).filter(non_empty) {
+        return Ok(PathBuf::from(dir));
+    }
+    std::env::var_os("XDG_CACHE_HOME")
+        .filter(non_empty)
+        .map(PathBuf::from)
+        .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".cache")))
+        .map(|base| base.join("rsconstruct").join("downloads"))
+        .with_context(|| {
+            format!(
+                "cannot locate the download cache: set {DOWNLOAD_CACHE_ENV}, XDG_CACHE_HOME or HOME"
+            )
+        })
+}
+
 fn tools_dir(root: &Path) -> PathBuf {
     root.join(REPO_TOOLS_DIR)
 }

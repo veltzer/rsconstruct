@@ -45,6 +45,11 @@ fn test_tool_store() -> std::path::PathBuf {
     std::env::temp_dir().join("rsconstruct-tests-tool-store")
 }
 
+/// The download cache every test run shares, beside the test tool store.
+fn test_download_cache() -> std::path::PathBuf {
+    std::env::temp_dir().join("rsconstruct-tests-download-cache")
+}
+
 /// Assert that an external tool is available on PATH.
 /// Panics if the tool is missing — a missing tool must fail the test,
 /// never silently skip it. Only presence is checked (some tools, like
@@ -103,6 +108,8 @@ pub fn rsconstruct_command(dir: &Path) -> Command {
     let mut cmd = Command::new(rsconstruct_path);
     cmd.env("XDG_CONFIG_HOME", test_user_config_dir());
     cmd.env("RSCONSTRUCT_TOOL_STORE", test_tool_store());
+    // Downloads made by tests stay out of the user's own cache.
+    cmd.env("RSCONSTRUCT_DOWNLOAD_CACHE", test_download_cache());
     cmd.env_remove("CI");
     cmd.current_dir(dir);
     cmd
