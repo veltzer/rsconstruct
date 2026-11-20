@@ -515,8 +515,16 @@ impl ExtraTool {
     }
 }
 
-/// Validate `dep_inputs` paths exist and return them as `PathBufs`.
+/// The `dep_inputs` as `PathBufs`, globs expanded to the files they match.
 /// Paths are relative to project root (which is cwd).
+///
+/// A literal entry is returned whether or not it is on disk: it may name a
+/// file an upstream processor only produces during the build (a compiled
+/// dictionary a spellcheck reads), and the product must carry it as an input
+/// for the two to be ordered. Whether such an entry is backed by anything is
+/// checked once discovery has settled (`Builder::discover_products`), which
+/// fails with a "`dep_inputs` file not found" error for one that is neither on disk
+/// nor a declared output.
 pub fn resolve_extra_inputs(dep_inputs: &[String]) -> Result<Vec<PathBuf>> {
     let mut resolved = Vec::new();
     for p in dep_inputs {
@@ -532,11 +540,7 @@ pub fn resolve_extra_inputs(dep_inputs: &[String]) -> Result<Vec<PathBuf>> {
                 }
             }
         } else {
-            let path = PathBuf::from(p);
-            if !path.exists() {
-                anyhow::bail!("dep_inputs file not found: {p}");
-            }
-            resolved.push(path);
+            resolved.push(PathBuf::from(p));
         }
     }
     Ok(resolved)

@@ -160,7 +160,25 @@ dep_inputs = ["Makefile.inc"]
 dep_inputs = ["custom-dictionary.txt"]
 ```
 
-Paths are relative to the project root. Missing files cause a build error, so all listed files must exist.
+Paths are relative to the project root. An entry must name a file that exists, or one that another processor declares as its output; anything else is a config error (`dep_inputs file not found`).
+
+Naming a generated file is how a processor is made to wait for it. A spellcheck that reads a compiled dictionary lists the dictionary, not the word list it is compiled from:
+
+```toml
+[processor.generator.generic.dictionary]
+command = "scripts/build_dict.sh"
+src_files = ["words.txt"]
+output_dir = "out"
+output_extension = "dict"
+
+[processor.checker.script.spellcheck]
+command = "scripts/spellcheck.sh"
+src_dirs = ["docs"]
+src_extensions = [".md"]
+dep_inputs = ["out/words.dict"]
+```
+
+The dictionary is then built before any document is checked, on a cold build and after every edit of `words.txt`. With `dep_inputs = ["words.txt"]` the check would rerun when the list changed, but nothing would order it after the rebuild, so it could read the old dictionary.
 
 The `dep_inputs` paths are included in the processor's config hash, so adding or removing entries triggers a rebuild even if the files themselves haven't changed. The file contents are also checksummed as part of the product's input set, so any content change is detected by the incremental build system.
 

@@ -294,3 +294,92 @@ fn script_command_timeout_kills_an_overrunning_command_when_set() {
         "the command must be killed at the limit, not run to completion ({elapsed:?})"
     );
 }
+
+/// A project whose checker reads a file a generator compiles: `words.txt`
+/// becomes `out/words.dict`, and the checker passes a file only when every
+/// line of it is in that dictionary.
+fn dictionary_project(dep_input: &str) -> TempDir {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let project_path = temp_dir.path();
+    fs::write(
+        project_path.join("rsconstruct.toml"),
+        format!(
+            concat!(
+                "[processor.generator.generic.dict]\n",
+                "command = \"./build_dict.sh\"\n",
+                "src_files = [\"words.txt\"]\n",
+                "output_dir = \"out\"\n",
+                "output_extension = \"dict\"\n",
+                "[processor.checker.script.spell]\n",
+                "command = \"./check.sh\"\n",
+                "src_dirs = [\"docs\"]\n",
+                "src_extensions = [\".txt\"]\n",
+                "dep_inputs = [\"{}\"]\n",
+            ),
+            dep_input
+        ),
+    )
+    .unwrap();
+    let scripts = [
+        (
+            "build_dict.sh",
+            "#!/bin/sh\nmkdir -p out && sort words.txt > out/words.dict\n",
+        ),
+        (
+            "check.sh",
+            "#!/bin/sh\nfor f in \"$@\"; do grep -qxFf out/words.dict \"$f\" || exit 1; done\n",
+        ),
+    ];
+    for (name, body) in scripts {
+        let path = project_path.join(name);
+        fs::write(&path, body).unwrap();
+        fs::set_permissions(&path, fs::Permissions::from_mode(0o755)).unwrap();
+    }
+    fs::write(project_path.join("words.txt"), "alpha\n").unwrap();
+    fs::create_dir(project_path.join("docs")).unwrap();
+    fs::write(project_path.join("docs/a.txt"), "alpha\n").unwrap();
+    temp_dir
+}
+
+/// `dep_inputs` may name a file another processor produces. The file is not
+/// on disk on a cold build, and the checker must still wait for it; and when
+/// its source changes, the checker must run against the new file, not the
+/// old one. Before this was allowed the entry had to exist at config time,
+/// so such a checker depended on the dictionary's *source* instead and ran
+/// before the dictionary was rebuilt.
+#[test]
+fn script_dep_inputs_may_name_a_generated_file() {
+    let temp_dir = dictionary_project("out/words.dict");
+    let project_path = temp_dir.path();
+
+    let cold = run_rsconstruct_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    assert!(
+        cold.status.success(),
+        "cold build should order the dictionary before its reader: stdout={}, stderr={}",
+        String::from_utf8_lossy(&cold.stdout),
+        String::from_utf8_lossy(&cold.stderr)
+    );
+
+    // A new word, in the list and in a document, in the same build.
+    fs::write(project_path.join("words.txt"), "alpha\nbeta\n").unwrap();
+    fs::write(project_path.join("docs/a.txt"), "beta\n").unwrap();
+    let warm = run_rsconstruct_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    assert!(
+        warm.status.success(),
+        "the checker should read the rebuilt dictionary: stdout={}, stderr={}",
+        String::from_utf8_lossy(&warm.stdout),
+        String::from_utf8_lossy(&warm.stderr)
+    );
+}
+
+#[test]
+fn script_dep_inputs_that_nothing_backs_is_a_config_error() {
+    let temp_dir = dictionary_project("out/words.dicX");
+    let output = run_rsconstruct_with_env(temp_dir.path(), &["build"], &[("NO_COLOR", "1")]);
+    assert!(!output.status.success(), "a mistyped dep_inputs must fail");
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(
+        stderr.contains("dep_inputs file not found: out/words.dicX"),
+        "the error should name the entry: {stderr}"
+    );
+}

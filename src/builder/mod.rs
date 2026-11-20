@@ -898,6 +898,37 @@ impl Builder {
                     ));
                 }
             }
+            // A literal `dep_inputs` entry is the same kind of claim again:
+            // a file on disk, or one an upstream processor declares as its
+            // output (a spellcheck's `dep_inputs` naming the dictionary a
+            // generator compiles, which is what orders the two). Processors
+            // put the entry on their products unchecked, so it is checked
+            // here, for every processor that has a product to read it.
+            // Globs are not claims about one file and match what they match.
+            let with_products: std::collections::HashSet<&str> = graph
+                .products()
+                .iter()
+                .map(|p| p.processor.as_str())
+                .collect();
+            for name in active {
+                let name = name.as_ref();
+                let scan = processors[name].scan_config();
+                if !scan.enabled || !with_products.contains(name) {
+                    continue;
+                }
+                for dep in &scan.dep_inputs {
+                    if dep.contains('*') || dep.contains('?') || dep.contains('[') {
+                        continue;
+                    }
+                    let path = std::path::Path::new(dep);
+                    if path.exists() || file_index.contains(path) {
+                        continue;
+                    }
+                    missing_inputs.push(format!(
+                        "  [{name}] dep_inputs file not found: {dep} (not on disk, and no processor declares it as an output)"
+                    ));
+                }
+            }
             // A stanza whose inputs resolved to nothing waits round by
             // round for an upstream output to appear (see its `discover`).
             // Still without a product now, nothing will ever feed it: a
@@ -929,8 +960,9 @@ impl Builder {
         missing.extend(missing_inputs);
         Err(crate::exit_code::config_error(format!(
             "Invalid config:\n{}\nEvery src_dirs entry must name a directory that exists, and every \
-             src_files entry and every explicit inputs entry a file that exists (or a path an \
-             upstream processor declares as its output), and every explicit stanza must have at \
+             src_files entry, every explicit inputs entry and every dep_inputs entry a file that \
+             exists (or a path an upstream processor declares as its output), and every explicit \
+             stanza must have at \
              least one input — fix the path or remove the entry; \
              [build] allow_missing_src_dirs = true skips absent directories as before, never \
              absent files",
