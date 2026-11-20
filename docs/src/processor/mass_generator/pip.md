@@ -4,6 +4,8 @@
 
 Installs Python dependencies from `requirements.txt` files using pip.
 
+A Rust alternative is [uv](uv.md).
+
 ## How It Works
 
 Discovers `requirements.txt` files in the project and runs `pip install -r`

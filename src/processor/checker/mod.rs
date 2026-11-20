@@ -71,4 +71,5 @@ mod marp_images;
 mod mdl;
 mod script;
 pub mod terms;
+mod zizmor;
 mod zspell;

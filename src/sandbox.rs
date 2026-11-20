@@ -1510,7 +1510,8 @@ mod tests {
     }
 
     /// The tools that reach the network are exactly the ones that install
-    /// packages or fetch remote data on every run.
+    /// packages or fetch remote data on every run (tectonic fetches the TeX
+    /// files a document needs that its cache does not hold yet).
     #[test]
     fn network_tools_are_the_installers_and_fetchers() {
         let mut names: Vec<&str> = crate::tools::all_tools()
@@ -1520,7 +1521,16 @@ mod tests {
         names.sort_unstable();
         assert_eq!(
             names,
-            ["bundle", "cargo", "cargo-deny", "npm", "pip", "taplo", "uv"]
+            [
+                "bundle",
+                "cargo",
+                "cargo-deny",
+                "npm",
+                "pip",
+                "taplo",
+                "tectonic",
+                "uv"
+            ]
         );
     }
 

@@ -21,6 +21,7 @@ mod pdfunite;
 mod protobuf;
 mod rust_single_file;
 mod sass;
+mod tectonic;
 mod yaml2json;
 
 mod requirements;

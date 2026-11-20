@@ -124,6 +124,7 @@ mod processor {
         pub mod xmllint;
         pub mod yamllint;
         pub mod yq;
+        pub mod zizmor;
         pub mod zspell;
     }
     pub mod explicit {
@@ -151,6 +152,7 @@ mod processor {
         pub mod rust_single_file;
         pub mod sass;
         pub mod tags;
+        pub mod tectonic;
         pub mod tera;
     }
     pub mod mass_generator {
@@ -164,6 +166,7 @@ mod processor {
         pub mod npm;
         pub mod pip;
         pub mod sphinx;
+        pub mod uv;
         pub mod zola;
     }
     pub mod shared_output_dir;

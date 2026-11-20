@@ -74,7 +74,7 @@ Scans for `.md` files, checks spelling with the built-in zspell engine.
 
 ### Built-in checkers
 
-actionlint, ascii, aspell, biome, black, checkpatch, checkstyle, clang_tidy, clippy, cmake, cppcheck, cpplint, doctest, duplicate_files, encoding, eslint, hadolint, htmlhint, htmllint, iactionlint, icpplint, idockerfile, ijq, ijsonlint, iluacheck, isvglint, itaplo, itidy, ixmllint, iyamllint, iyamlschema, iyq, jq, jshint, jslint, json_schema, jsonlint, license_header, luacheck, make, markdownlint, marp_images, mdl, mypy, oxlint, perlcritic, php_lint, prettier, pylint, pyrefly, pytest, ruff, rumdl, script, selene, shellcheck, slidev, standard, stylelint, svglint, svgo, taplo, terms, tidy, vnu, xmllint, yamllint, yq, zspell
+actionlint, ascii, aspell, biome, black, checkpatch, checkstyle, clang_tidy, clippy, cmake, cppcheck, cpplint, doctest, duplicate_files, encoding, eslint, hadolint, htmlhint, htmllint, iactionlint, icpplint, idockerfile, ijq, ijsonlint, iluacheck, isvglint, itaplo, itidy, ixmllint, iyamllint, iyamlschema, iyq, jq, jshint, jslint, json_schema, jsonlint, license_header, luacheck, make, markdownlint, marp_images, mdl, mypy, oxlint, perlcritic, php_lint, prettier, pylint, pyrefly, pytest, ruff, rumdl, script, selene, shellcheck, slidev, standard, stylelint, svglint, svgo, taplo, terms, tidy, vnu, xmllint, yamllint, yq, zizmor, zspell
 
 ## Generator
 
@@ -173,7 +173,7 @@ sass/styles.scss → out/processor.generator.sass/styles.css
 
 ### Built-in generators
 
-a2x, cc_single_file, chromium, drawio, generic, ijinja2, imarkdown2html, ipdfunite, iprotobuf, isass, jinja2, libreoffice, mako, markdown2html, marp, mermaid, objdump, pandoc, pdflatex, pdfunite, protobuf, requirements, rust_single_file, sass, tags, tera, yaml2json
+a2x, cc_single_file, chromium, drawio, generic, ijinja2, imarkdown2html, ipdfunite, iprotobuf, isass, jinja2, libreoffice, mako, markdown2html, marp, mermaid, objdump, pandoc, pdflatex, pdfunite, protobuf, requirements, rust_single_file, sass, tags, tectonic, tera, yaml2json
 
 ## Explicit
 
@@ -276,7 +276,7 @@ sphinx/*, src/mypkg/**/*.py → docs/index.html, docs/mypkg.html, docs/_static/b
 
 ### Built-in mass generators
 
-cargo, cc, gem, generic, jekyll, linux_module, mdbook, npm, pip, sphinx, zola
+cargo, cc, gem, generic, jekyll, linux_module, mdbook, npm, pip, sphinx, uv, zola
 
 Any tool that honors the manifest contract plugs into the config-driven `generic` mass generator via `[processor.mass_generator.generic.NAME]`; see [Mass Generator](processor/mass_generator/generic.md).
 

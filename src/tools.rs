@@ -1650,6 +1650,24 @@ fn binary_recipe(pkg: &str) -> Option<BinaryRecipe> {
             },
             dest: "uv",
         }),
+        // Tracks latest like hadolint: every zizmor release carries this
+        // asset under the same name, the binary at the tarball's root.
+        "zizmor" => Some(BinaryRecipe {
+            url: "https://github.com/zizmorcore/zizmor/releases/latest/download/zizmor-x86_64-unknown-linux-gnu.tar.gz",
+            archive: ArchiveKind::TarGz { inner: "zizmor" },
+            dest: "zizmor",
+        }),
+        // Pinned like actionlint: tectonic's release assets embed the
+        // version in the filename, and its tags are `tectonic@<version>`
+        // (the `%40` below). The musl build: it is statically linked, where
+        // the glibc one loads the machine's fontconfig, harfbuzz and ICU. A
+        // new tectonic can change typeset documents, so bump this
+        // deliberately.
+        "tectonic" => Some(BinaryRecipe {
+            url: "https://github.com/tectonic-typesetting/tectonic/releases/download/tectonic%400.17.0/tectonic-0.17.0-x86_64-unknown-linux-musl.tar.gz",
+            archive: ArchiveKind::TarGz { inner: "tectonic" },
+            dest: "tectonic",
+        }),
         // checkpatch.pl ships only inside the kernel tree — there is no release
         // artifact and no distro package. Fetching the single script from
         // torvalds/linux master is the automatable equivalent of "copy it out
@@ -1784,22 +1802,8 @@ pub struct ToolInfo {
 /// processor's file instead (see `inventory::collect!(ToolInfo)` below);
 /// `central_registry_holds_only_unowned_tools` keeps the split honest.
 pub static TOOLS: &[ToolInfo] = &[
-    // Python
-    // uv builds the project's .venv (`tool install project` runs `uv
-    // sync`), so it cannot come from that venv: its release binary goes into
-    // the project's tool directory, installed ahead of the sync.
-    ToolInfo {
-        name: "uv",
-        runtime: "python",
-        project: Some(InstallMethod::new("binary", "uv")),
-        machine: Some(InstallMethod::new("pip", "uv")),
-        alternatives: &[],
-        prefer: None,
-        // `uv sync` builds the project's environment.
-        sandbox_writable: &[".venv"],
-        // `uv sync` downloads the packages it installs.
-        needs_network: true,
-    },
+    // Python. uv, which `tool install project` runs to build the .venv, is
+    // declared in `processor/mass_generator/uv.rs`: one processor runs it.
     ToolInfo {
         name: "python",
         runtime: "python",

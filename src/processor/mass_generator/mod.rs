@@ -18,6 +18,7 @@ mod mdbook;
 mod npm;
 mod pip;
 mod sphinx;
+mod uv;
 mod zola;
 
 use anyhow::{Context, Result};

@@ -11,6 +11,9 @@ same `.github/actionlint.yaml`, the same messages, in-process. Switching is
 `shellcheck` or `pyflakes` over `run:` scripts; a repository that relies on
 that stays here.
 
+[zizmor](zizmor.md), also Rust, audits the same files for security problems
+in more depth; it is an addition, not a replacement.
+
 ## How It Works
 
 Discovers `.yml`/`.yaml` files in the configured directories, runs

@@ -4,6 +4,8 @@
 
 Compiles LaTeX documents to PDF using [pdflatex](https://www.tug.org/applications/pdftex/).
 
+A Rust alternative is [tectonic](tectonic.md).
+
 ## How It Works
 
 Discovers `.tex` files in the project and runs `pdflatex` on each file. Runs
