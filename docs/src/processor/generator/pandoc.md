@@ -86,6 +86,43 @@ Notes:
   injected when the engine is pdflatex (or the empty default). Other engines
   would error on it.
 
+### Why the fleet uses xelatex, not tectonic
+
+Every PDF stanza in the fleet sets `pdf_engine = "xelatex"`. On 2026-11-20
+tectonic 0.17.0 was tried in its place, through rspandoc, on the hardest
+fleet documents, against XeTeX from TeX Live 2025:
+
+| Document | xelatex | tectonic |
+|---|---|---|
+| data `cv.he.md` (Hebrew, babel with bidi) | 1.09 s, 5 pages | builds; same pages |
+| demos-ai-coding exercise (box-drawing characters) | 0.93 s, 2 pages | builds; same pages |
+| business-syllabi syllabus (azure theme fonts) | 1.05 s, 4 pages | fails |
+
+- **The themed syllabi do not build.** The shared-themes LaTeX theme loads
+  its fonts by file (`\setmainfont{Outfit}[Path=\sharedthemesfontdir, ...]`),
+  with a path relative to the repository. xelatex resolves it against the
+  directory it runs in; tectonic does not, and stops with
+  `The font "Outfit-Regular" cannot be found`. That is every document of
+  teaching-syllabi and business-syllabi. It could be made to work (an
+  absolute font path, or tectonic's search-path options), but it is not a
+  drop-in swap.
+- **Where it builds, the output is the same.** Rendered page by page, the
+  tectonic and xelatex PDFs differed in under 0.3% of pixels
+  (anti-aliasing), with the same fonts and page counts.
+- **It is not faster.** Tectonic runs the engine once where pandoc runs
+  xelatex twice, but each of its runs is slower: with its package cache warm
+  it took 1.18 s on the Hebrew CV, against xelatex's 1.09 s. The first run on
+  a machine took 7.7 s, downloading packages.
+- **It would add a network dependency to CI.** Tectonic fetches TeX packages
+  on demand from its own server into `~/.cache/tectonic`. With a warm cache
+  it built with no network at all, but a fresh CI runner starts cold: the
+  build would need the network inside rsconstruct's sandbox (off by
+  default, `sandbox_network`) and tectonic's server to be up. The runner's
+  TeX Live has neither need.
+
+Tectonic's advantage is not needing a TeX Live installation, and every
+machine the fleet builds on has one. Reconsider only if that changes.
+
 ## Installation
 
 `rsconstruct tool install project` downloads the statically linked Linux
