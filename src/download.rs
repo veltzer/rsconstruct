@@ -64,8 +64,8 @@ pub fn curl_argv(url: &str, dest: &str) -> Vec<String> {
 /// GitHub token is set. Anonymous requests there are rate-limited per
 /// source IP, and GitHub-hosted runners share egress IPs, so a busy pool
 /// gets HTTP 429 no matter how often it retries (CI run 37439740429,
-/// fetching `checkpatch.pl`). It is the same limit, and the same remedy,
-/// as the releases API (see `tools::resolve_latest_deb_asset`).
+/// fetching `checkpatch.pl`, which now comes from git.kernel.org). It is
+/// the same limit, and the same remedy, as the API (see [`get_json`]).
 ///
 /// The token never appears in argv: `--variable %NAME` has curl read it
 /// from the environment and `--expand-header` substitutes it, so argv —
@@ -166,7 +166,7 @@ pub fn apply_retry_args(cmd: &mut Command) {
 /// GET `url` and parse the body as JSON, retried like every other fetch.
 ///
 /// The one in-process HTTP path for the registry and release APIs that
-/// `tool lock` and the `.deb` resolver query (crates.io, `PyPI`, npm,
+/// `tool lock` queries (crates.io, `PyPI`, npm,
 /// rubygems.org, api.github.com). Requests to api.github.com carry the
 /// GitHub token when one is set: unauthenticated, the API allows 60
 /// requests/hour per source IP, and GitHub-hosted runners share egress IPs,

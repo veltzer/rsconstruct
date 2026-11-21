@@ -1758,9 +1758,15 @@ fn binary_recipe(pkg: &str) -> Option<BinaryRecipe> {
         }),
         // checkpatch.pl ships only inside the kernel tree — there is no release
         // artifact and no distro package. Fetching the single script from
-        // torvalds/linux master is the automatable equivalent of "copy it out
-        // of a kernel checkout", and keeps the tool out of the manual-only
-        // bucket that `tool install machine --all` rejects.
+        // the kernel tree is the automatable equivalent of "copy it out of a
+        // kernel checkout", and keeps the tool out of the manual-only bucket
+        // that `tool install machine --all` rejects.
+        //
+        // From git.kernel.org, the kernel's own repository, not the GitHub
+        // mirror: raw.githubusercontent.com answered HTTP 429 for every
+        // torvalds/linux path, authenticated or not, for hours on 2026-11-21
+        // and blocked the 0.9.194 release (run 44888008849). Same commit,
+        // byte-identical file (sha256 2553cc1a…820a).
         //
         // Pinned to one kernel commit, not master: icheckpatch is a port of
         // this exact script and its tests compare the two line for line, so
@@ -1769,7 +1775,7 @@ fn binary_recipe(pkg: &str) -> Option<BinaryRecipe> {
         // between the two commits into src/engines/checkpatch/ - do both in
         // the same change.
         "checkpatch.pl" => Some(BinaryRecipe {
-            url: "https://raw.githubusercontent.com/torvalds/linux/e5f92606156a6a823992294d214c285b49cd72e9/scripts/checkpatch.pl",
+            url: "https://git.kernel.org/pub/scm/linux/kernel/git/torvalds/linux.git/plain/scripts/checkpatch.pl?id=e5f92606156a6a823992294d214c285b49cd72e9",
             archive: ArchiveKind::Raw,
             dest: "checkpatch.pl",
         }),

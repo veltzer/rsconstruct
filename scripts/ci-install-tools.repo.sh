@@ -38,10 +38,9 @@ cp target/debug/rsconstruct "${CARGO_HOME:-${HOME}/.cargo}/bin/rsconstruct"
 # the matrix. It is a superset of the `tool install machine` the shared
 # script runs next, which then finds everything in place.
 #
-# Some downloads come from GitHub (checkpatch.pl from
-# raw.githubusercontent.com), so this inherits GITHUB_TOKEN from the
-# workflow step to stay under the authenticated rate limit (see the comment
-# on that step in ci.yml). Unset locally, where one machine never
+# This inherits GITHUB_TOKEN from the workflow step (see the comment on that
+# step in ci.yml), which src/download.rs sends to GitHub hosts to stay under
+# the authenticated rate limit. Unset locally, where one machine never
 # approaches the anonymous limit.
 #
 # --allow-unpinned: the matrix is the registry's every release binary at

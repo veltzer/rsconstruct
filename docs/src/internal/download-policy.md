@@ -106,12 +106,19 @@ install step), `curl_argv` authenticates downloads from
 
 curl reads the token from the environment itself (curl 8.3+), so argv —
 printed by `tool install -i` and visible in `ps` — names the variable and
-never holds the secret. Other hosts get no header. The releases API lookup
-(`tools::resolve_latest_deb_asset`) is authenticated the same way, from the
-same variable choice (`download::github_token_var`).
+never holds the secret. Other hosts get no header.
+
+Authenticating did not save the 2026-11-21 release (run 44888008849):
+`raw.githubusercontent.com` then answered 429 for every `torvalds/linux`
+path, with a token or without, for hours, while other repositories' raw
+files and the contents API served normally. That is a per-repository
+throttle on GitHub's side that no client setting reaches, so
+`checkpatch.pl` now comes from `git.kernel.org`, the kernel's own
+repository, at the same commit. A file that exists outside GitHub is
+better fetched from its origin than from the mirror.
 
 Requests to `api.github.com` (`download::get_json`: `tool lock` resolving a
-tool's latest release, the `.deb` resolver) have one more source. A
+tool's latest release) have one more source. A
 developer machine usually has neither variable set, because the `gh` CLI
 keeps its token in the system keyring and exports nothing; `tool lock` was
 therefore anonymous there, and locking one new tool across the fleet ran
