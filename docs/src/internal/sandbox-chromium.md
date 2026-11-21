@@ -1,9 +1,9 @@
 # Sandboxing Chromium
 
-Four processors render through Chromium: `chromium` (google-chrome, HTML to
-PDF), `marp` (marp-cli, slides), `mermaid` (mmdc, diagrams, via puppeteer)
-and `drawio` (draw.io desktop, an Electron app). Until 2026-11-08 all four
-were marked `sandboxable: false`, and a build that would run one under
+Three processors render through Chromium: `chromium` (google-chrome, HTML to
+PDF), `marp` (marp-cli, slides) and `mermaid` (mmdc, diagrams, via
+puppeteer). A fourth, `drawio` (an Electron app), was removed on 2026-11-21
+because it crashed too often. Until 2026-11-08 all of them were marked `sandboxable: false`, and a build that would run one under
 `execution_model = "sandbox"` failed at the start with a config error. They
 now run sandboxed. This page records why they failed, what was measured,
 and what the processors do about it. For the sandbox itself, see
@@ -29,8 +29,7 @@ helper binary was found, but is not configured correctly.
 
 The tools built on Chromium report the same failure their own way: marp
 prints "Failed converting Markdown. (Failed to launch the browser process",
-mmdc prints "Error: Failed to launch the browser process", and drawio exits
-with an error.
+and mmdc prints "Error: Failed to launch the browser process".
 
 This is a property of the environment (Ubuntu's AppArmor setup), not of the
 build: rsconstruct cannot change it. What it can do is tell Chromium not to
@@ -48,16 +47,15 @@ with Chromium's own sandbox turned off:
 | google-chrome | aborts (SUID sandbox helper) | works | `--no-sandbox` |
 | marp | fails to launch the browser | works | env `CHROME_NO_SANDBOX=1` (read by marp-cli) |
 | mmdc | fails to launch the browser | works | puppeteer config `{"args":["--no-sandbox"]}` passed with `-p` |
-| drawio | fails | works | `--no-sandbox` |
 
 Every "works" run produced a real output (a PDF or an SVG). Natively all
-four work as is, with one exception noted below.
+three work as is, with one exception noted below.
 
 Then the processors themselves, built with the change below, ran in a
 scratch project with one input each and `execution_model = "sandbox"`, through
 rsconstruct's real sandbox (overlay included):
 
-- All four built and their outputs reached the tree, with `-j 1` and `-j 4`
+- All three built and their outputs reached the tree, with `-j 1` and `-j 4`
   and with each one left out in turn.
 - Eight repeated forced builds with `-j 4`: all passed, about 1–2 s each.
 - The very first build in that project had marp time out three times (20 s
@@ -95,7 +93,6 @@ inside bwrap". Each processor turns Chromium's sandbox off only when
 - **chromium** (`src/processor/generator/chromium.rs`): already passes
   `--no-sandbox` on every run, natively too, so it needed no code change, only
   `sandboxable: true`.
-- **drawio** (`drawio.rs`): appends `--no-sandbox` when sandboxed.
 - **marp** (`marp.rs`): sets `CHROME_NO_SANDBOX=1` in the tool's environment
   when sandboxed.
 - **mermaid** (`mermaid.rs`): when sandboxed, writes
@@ -105,7 +102,7 @@ inside bwrap". Each processor turns Chromium's sandbox off only when
   config (`-p`, `--puppeteerConfigFile`), that one is used as is and
   nothing is added: the user owns that choice.
 
-All four are now `sandboxable: true`. The `sandboxable` flag and the up-front
+All three are now `sandboxable: true`. The `sandboxable` flag and the up-front
 config error (`sandbox::check_sandboxable`) stay for any future processor
 that genuinely cannot run sandboxed; today none is marked that way.
 
@@ -128,6 +125,6 @@ until it dropped mermaid.
 
 ## Fleet
 
-No fleet repository configures any of the four processors today, so they
+No fleet repository configures any of the three processors today, so they
 never blocked the sandbox for the fleet in practice. The change matters for
 a project that adds one of them.

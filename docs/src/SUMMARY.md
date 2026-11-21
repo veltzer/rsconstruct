@@ -100,7 +100,6 @@
         - [A2x](processor/generator/a2x.md)
         - [CC Single File](processor/generator/cc_single_file.md)
         - [Chromium](processor/generator/chromium.md)
-        - [Drawio](processor/generator/drawio.md)
         - [Generator](processor/generator/generic.md)
         - [Ijinja2](processor/generator/ijinja2.md)
         - [Imarkdown2html](processor/generator/imarkdown2html.md)

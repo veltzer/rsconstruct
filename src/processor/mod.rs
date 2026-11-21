@@ -1744,7 +1744,6 @@ mod tests {
             ("processor.generator.objdump", false),
             ("processor.generator.mermaid", false),
             ("processor.generator.libreoffice", false),
-            ("processor.generator.drawio", false),
             ("processor.generator.pandoc", false),
         ];
 

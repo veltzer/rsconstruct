@@ -287,7 +287,7 @@ products' outputs.
 - **Processors that cannot be sandboxed.** Every plugin entry carries
   `sandboxable` (`ProcessorPlugin` in `src/registries/processor.rs`),
   shown by `processor list` as `Sandbox`. Today every processor is `true`:
-  marp, mermaid, chromium and drawio were `false` until they learned to turn
+  marp, mermaid and chromium were `false` until they learned to turn
   Chromium's own sandbox off when sandboxed (open question 1,
   [Sandboxing Chromium](sandbox-chromium.md)). Before anything else, `build` calls
   `sandbox::check_sandboxable` over the configured instances: an enabled
@@ -436,12 +436,12 @@ down from 6.78 s. The table above shows the numbers from before the fix.
    found, but is not configured correctly"). Anything built on Chromium
    (marp, mermaid, chromium, puppeteer-based tools) therefore fails under
    the sandbox on Ubuntu. Measured on 2026-11-07, outside any other
-   sandbox: marp and google-chrome work natively and abort inside bwrap;
-   drawio (Electron) aborts the same way. It is an environment limitation,
+   sandbox: marp and google-chrome work natively and abort inside bwrap.
+   It is an environment limitation,
    not a correctness finding. **Resolved on 2026-11-08:** when sandboxed,
-   each of the four turns Chromium's own sandbox off (`--no-sandbox`,
+   each of them turns Chromium's own sandbox off (`--no-sandbox`,
    `CHROME_NO_SANDBOX=1`, or a puppeteer config) and bwrap confines the run
-   instead; all four are now `sandboxable: true`. Measurements and details:
+   instead; all of them are now `sandboxable: true`. Measurements and details:
    [Sandboxing Chromium](sandbox-chromium.md).
 2. **Changes to the real tree during a run.** overlayfs documents changes
    to the lower layer while it is mounted as undefined behaviour. With

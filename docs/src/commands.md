@@ -578,7 +578,7 @@ lost by skipping the run; `No` for pip, npm and gem, which install into an
 environment and write only a stamp — the stamp is cached while the installed
 packages may be gone), and `Sandbox` (whether the processor can run under
 `execution_model = "sandbox"`; currently `Yes` for every processor: marp,
-mermaid, chromium and drawio, which launch Chromium, turn Chromium's own
+mermaid and chromium, which launch Chromium, turn Chromium's own
 sandbox off when sandboxed, see
 [Sandboxing Chromium](internal/sandbox-chromium.md)).
 The JSON form carries the same as `builtin`, `rust`, `supports_batch`,

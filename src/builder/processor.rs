@@ -323,11 +323,6 @@ pub fn list_recommendations() {
             "render Mermaid diagrams",
         ),
         (
-            ".drawio",
-            "processor.generator.drawio",
-            "export draw.io diagrams",
-        ),
-        (
             ".tera",
             "processor.generator.tera",
             "Tera template renderer",

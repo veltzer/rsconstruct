@@ -801,21 +801,6 @@ fn describe_binary(
         (
             None,
             ArchiveKind::Deb {
-                source:
-                    DebSource::GithubRelease {
-                        repo,
-                        asset_pattern,
-                    },
-            },
-        ) => {
-            steps.push(vec![format!(
-                "# resolve latest '{asset_pattern}' .deb asset from {repo}"
-            )]);
-            "<resolved-asset-url>".to_string()
-        }
-        (
-            None,
-            ArchiveKind::Deb {
                 source: DebSource::Url(url),
             },
         ) => (*url).to_string(),
@@ -1069,32 +1054,6 @@ fn github_repo_of(url: &str) -> Option<&str> {
         .find('/')
         .map_or(rest.len(), |i| owner_end + 1 + i);
     Some(&rest[..repo_end])
-}
-
-/// Resolve the browser-download URL of the newest release asset in `repo`
-/// whose name contains `asset_pattern` and ends in `.deb`. Resolving at
-/// install time (instead of pinning a URL in the recipe) is what keeps the
-/// recipe from breaking every time upstream cuts a release.
-fn resolve_latest_deb_asset(repo: &str, asset_pattern: &str) -> anyhow::Result<String> {
-    use anyhow::Context as _;
-    // Authenticated and retried by download::get_json; see there for why.
-    let release = latest_github_release(repo)?;
-    release["assets"]
-        .as_array()
-        .with_context(|| format!("GitHub release for {repo} has no 'assets' array"))?
-        .iter()
-        .find_map(|a| {
-            let name = a["name"].as_str()?;
-            let is_deb = std::path::Path::new(name)
-                .extension()
-                .is_some_and(|ext| ext.eq_ignore_ascii_case("deb"));
-            (name.contains(asset_pattern) && is_deb)
-                .then(|| a["browser_download_url"].as_str())?
-                .map(std::string::ToString::to_string)
-        })
-        .with_context(|| {
-            format!("No .deb asset matching '{asset_pattern}' in the latest {repo} release")
-        })
 }
 
 /// Run `argv` with the terminal inherited, failing on a non-zero exit.
@@ -1353,21 +1312,13 @@ fn add_to_download_cache(
 }
 
 /// The URL `pkg`'s recipe downloads when no lock entry says otherwise: a
-/// GitHub-release `.deb` resolved to today's latest asset, a vendor URL as
-/// is, and anything else straight from the recipe.
-fn unpinned_binary_url(recipe: &BinaryRecipe) -> anyhow::Result<String> {
+/// vendor `.deb` URL as is, and anything else straight from the recipe.
+fn unpinned_binary_url(recipe: &BinaryRecipe) -> String {
     match recipe.archive {
         ArchiveKind::Deb {
-            source:
-                DebSource::GithubRelease {
-                    repo,
-                    asset_pattern,
-                },
-        } => resolve_latest_deb_asset(repo, asset_pattern),
-        ArchiveKind::Deb {
             source: DebSource::Url(url),
-        } => Ok(url.to_string()),
-        _ => Ok(recipe.url.to_string()),
+        } => url.to_string(),
+        _ => recipe.url.to_string(),
     }
 }
 
@@ -1391,7 +1342,7 @@ fn run_binary(pkg: &str, ctx: &InstallCtx) -> anyhow::Result<()> {
     }
     let url = match pin {
         Some(pin) => pin.url.clone(),
-        None => unpinned_binary_url(&recipe)?,
+        None => unpinned_binary_url(&recipe),
     };
     use anyhow::Context as _;
     let work_dir = install_work_dir();
@@ -1474,7 +1425,7 @@ pub fn lock_binary(
         pin_github_latest_url(recipe.url, tag)
             .with_context(|| format!("cannot pin {} to release {tag}", recipe.url))?
     } else {
-        unpinned_binary_url(&recipe)?
+        unpinned_binary_url(&recipe)
     };
     // A release already downloaded once on this machine was recorded then:
     // its record makes the same entry without the download.
@@ -1604,12 +1555,6 @@ enum Packing {
 
 /// Where a [`ArchiveKind::Deb`] payload is fetched from.
 enum DebSource {
-    /// Newest asset in `repo`'s latest release whose name contains
-    /// `asset_pattern` and ends in `.deb`.
-    GithubRelease {
-        repo: &'static str,
-        asset_pattern: &'static str,
-    },
     /// A vendor URL that always points at the current build.
     Url(&'static str),
 }
@@ -1843,19 +1788,6 @@ fn binary_recipe(pkg: &str) -> Option<BinaryRecipe> {
                 inner: "package/build/dist/vnu.jar",
             },
             dest: "vnu.jar",
-        }),
-        // drawio ships an official .deb but has no apt repo, and its snap
-        // needs a running snapd — unavailable in containers and flaky on CI
-        // runners, which made this the one tool `--all` could not provision.
-        "drawio" => Some(BinaryRecipe {
-            url: "https://github.com/jgraph/drawio-desktop/releases/latest",
-            archive: ArchiveKind::Deb {
-                source: DebSource::GithubRelease {
-                    repo: "jgraph/drawio-desktop",
-                    asset_pattern: "amd64",
-                },
-            },
-            dest: "drawio",
         }),
         // Chrome is not in the Ubuntu archive — `apt install
         // google-chrome-stable` only works after adding Google's repo. The
@@ -2635,7 +2567,7 @@ mod tests {
     #[test]
     fn only_versioned_binary_recipes_are_pinnable() {
         assert!(!binary_is_pinnable("google-chrome-stable"));
-        for pkg in ["rumdl", "taplo", "hadolint", "drawio", "checkpatch.pl"] {
+        for pkg in ["rumdl", "taplo", "hadolint", "checkpatch.pl"] {
             assert!(binary_is_pinnable(pkg), "{pkg}");
         }
         assert!(!binary_is_pinnable("no-such-recipe"));

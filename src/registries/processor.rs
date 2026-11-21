@@ -87,8 +87,8 @@ pub struct ProcessorPlugin {
     /// `false` for a processor whose tool cannot work inside bubblewrap at
     /// all, so a build that would sandbox it fails at the start instead of on
     /// every product. Shown by `processor list` as `Sandbox`. No processor is
-    /// `false` today: the Chromium-based ones (marp, mermaid, chromium,
-    /// drawio) turn Chromium's own sandbox off when sandboxed; see
+    /// `false` today: the Chromium-based ones (marp, mermaid, chromium) turn
+    /// Chromium's own sandbox off when sandboxed; see
     /// `docs/src/internal/sandbox-chromium.md`.
     pub sandboxable: bool,
     /// Hard cap on parallel jobs for this processor. `None` means no cap.

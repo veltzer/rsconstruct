@@ -337,7 +337,7 @@ impractical to reimplement:
 - **marp** — Presentation framework (spawns Chromium)
 - **mdbook, jekyll** — Full documentation/site generators
 - **aspell** — Spell checker with language dictionaries
-- **chromium, libreoffice, drawio** — GUI applications used for rendering
+- **chromium, libreoffice** — GUI applications used for rendering
 - **protobuf** — Protocol buffer compiler
 - **pdflatex** — LaTeX to PDF (entire TeX distribution)
 

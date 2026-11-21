@@ -1537,7 +1537,7 @@ mod dpkg_status_tests {
             "binary",
             vec![
                 "taplo".to_string(),
-                "drawio".to_string(),
+                "hadolint".to_string(),
                 "google-chrome-stable".to_string(),
             ],
         )];
@@ -1545,7 +1545,7 @@ mod dpkg_status_tests {
             .unwrap_err()
             .to_string();
         assert!(
-            err.contains("does not pin: drawio, google-chrome-stable")
+            err.contains("does not pin: hadolint, google-chrome-stable")
                 && err.contains("--allow-unpinned"),
             "{err}"
         );

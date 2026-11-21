@@ -173,7 +173,7 @@ sass/styles.scss → out/processor.generator.sass/styles.css
 
 ### Built-in generators
 
-a2x, cc_single_file, chromium, drawio, generic, ijinja2, imarkdown2html, ipdfunite, iprotobuf, isass, jinja2, libreoffice, mako, markdown2html, marp, mermaid, objdump, pandoc, pdflatex, pdfunite, protobuf, requirements, rust_single_file, sass, tags, tectonic, tera, yaml2json
+a2x, cc_single_file, chromium, generic, ijinja2, imarkdown2html, ipdfunite, iprotobuf, isass, jinja2, libreoffice, mako, markdown2html, marp, mermaid, objdump, pandoc, pdflatex, pdfunite, protobuf, requirements, rust_single_file, sass, tags, tectonic, tera, yaml2json
 
 ## Explicit
 

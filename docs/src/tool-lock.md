@@ -206,7 +206,7 @@ URL serves that day, installed onto the machine with nothing to check it
 against, so `tool install machine` refuses it before installing anything:
 
 ```text
-Refusing to install release binaries that rsconstruct.lock does not pin: drawio
+Refusing to install release binaries that rsconstruct.lock does not pin: hadolint
 ```
 
 A binary is unpinned when the project's lock has no entry for it (run

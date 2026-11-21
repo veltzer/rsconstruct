@@ -75,7 +75,7 @@ fn tools_list_json_names_each_tools_processors() {
 /// `--json tool list` says where each install goes: per tool its preferred
 /// target, per method the targets it can reach and the slots it fills.
 /// ruff's pip install fills both slots, so the project is preferred; a
-/// `.deb` (drawio) reaches only the machine; cargo is selene's alternative.
+/// `.deb` (Chrome) reaches only the machine; cargo is selene's alternative.
 #[test]
 fn tools_list_json_names_install_targets() {
     let temp_dir = setup_test_project();
@@ -109,9 +109,9 @@ fn tools_list_json_names_install_targets() {
         method("ruff", "pip")["targets"],
         serde_json::json!(["project", "machine"])
     );
-    assert_eq!(entry("drawio")["preferred"], "machine");
+    assert_eq!(entry("google-chrome")["preferred"], "machine");
     assert_eq!(
-        method("drawio", "binary")["targets"],
+        method("google-chrome", "binary")["targets"],
         serde_json::json!(["machine"])
     );
     assert_eq!(entry("clojure")["preferred"], "machine");
@@ -851,11 +851,12 @@ fn tools_install_project_name_follows_the_project_slot() {
     let temp_dir = setup_test_project();
     let root = temp_dir.path();
 
-    let output = run_rsconstruct_with_env(root, &["tool", "install", "project", "drawio"], &[]);
+    let output =
+        run_rsconstruct_with_env(root, &["tool", "install", "project", "google-chrome"], &[]);
     assert!(!output.status.success());
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
-        stderr.contains("tool install machine drawio"),
+        stderr.contains("tool install machine google-chrome"),
         "a tool with no project install should point at the machine: {stderr}"
     );
 

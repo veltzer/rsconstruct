@@ -133,7 +133,6 @@ mod processor {
     pub mod generator {
         pub mod a2x;
         pub mod cc_single_file;
-        pub mod drawio;
         pub mod generic;
         pub mod ijinja2;
         pub mod iprotobuf;
