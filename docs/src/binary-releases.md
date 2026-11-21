@@ -10,13 +10,12 @@ commit it pushes.
 |---|---|
 | Linux x86_64 | `rsconstruct-linux-x86_64` |
 | Linux aarch64 (arm64) | `rsconstruct-linux-aarch64` |
-| macOS x86_64 | `rsconstruct-macos-x86_64` |
-| macOS aarch64 (Apple Silicon) | `rsconstruct-macos-aarch64` |
 
 RSConstruct is unix-only. There is no Windows build: the release matrix in
 `.github/workflows/ci.yml` has never contained a Windows target, and the
 codebase assumes unix throughout (`flock`, `/dev/null`, `$HOME`, apt-based
-tool installation).
+tool installation). macOS binaries are no longer released either: the two
+darwin entries in the release matrix are commented out.
 
 ## How It Works
 
