@@ -242,8 +242,8 @@ fn cache_clear_removes_everything() {
         "Objects dir should exist after build"
     );
     assert!(
-        project_path.join(".rsconstruct/descriptors").exists(),
-        "Descriptors dir should exist after build"
+        project_path.join(".rsconstruct/db.redb").exists(),
+        "The cache database (descriptors) should exist after build"
     );
 
     // Clear cache
@@ -258,10 +258,6 @@ fn cache_clear_removes_everything() {
     assert!(
         !project_path.join(".rsconstruct/objects").exists(),
         "Objects dir should not exist after cache clear"
-    );
-    assert!(
-        !project_path.join(".rsconstruct/descriptors").exists(),
-        "Descriptors dir should not exist after cache clear"
     );
 
     // Rebuild should work from scratch (full rebuild, no restore)
@@ -728,17 +724,26 @@ fn a_damaged_descriptor_fails_every_cache_listing() {
     let build = run_rsconstruct(project_path, &["build"]);
     assert!(build.status.success());
 
-    let damaged = project_path.join(".rsconstruct/descriptors/zz");
-    fs::create_dir_all(&damaged).unwrap();
-    fs::write(damaged.join("junk"), "garbage").unwrap();
+    // Descriptors live in the cache database's `descriptors` table; no
+    // rsconstruct is running, so the database can be opened here.
+    {
+        let db = redb::Database::create(project_path.join(".rsconstruct/db.redb")).unwrap();
+        let table: redb::TableDefinition<&str, &[u8]> = redb::TableDefinition::new("descriptors");
+        let txn = db.begin_write().unwrap();
+        txn.open_table(table)
+            .unwrap()
+            .insert("zzjunk", b"garbage".as_slice())
+            .unwrap();
+        txn.commit().unwrap();
+    }
 
     for action in ["list", "stats", "trim"] {
         let output = run_rsconstruct(project_path, &["cache", action]);
         let stderr = String::from_utf8_lossy(&output.stderr);
         assert!(!output.status.success(), "cache {action} must fail");
         assert!(
-            stderr.contains("descriptors/zz/junk"),
-            "cache {action} must name the file: {stderr}"
+            stderr.contains("zzjunk"),
+            "cache {action} must name the entry: {stderr}"
         );
     }
 }

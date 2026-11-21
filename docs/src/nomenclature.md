@@ -38,7 +38,7 @@ This page defines the terminology used throughout RSConstruct's code, configurat
 | **blob** | A file's raw content stored in the object store, addressed by SHA-256 hash. Blobs have no path — the consumer knows where to restore them. |
 | **tree** | A serialized list of `(path, mode, blob_checksum)` entries describing a set of output files. Stored in the descriptor store. |
 | **marker** | A zero-byte descriptor indicating a checker passed. Its presence is the cached result. |
-| **descriptor** | A cache entry (blob reference, tree, or marker) stored in `.rsconstruct/descriptors/`, keyed by the descriptor key. |
+| **descriptor** | A cache entry (blob reference, tree, or marker) stored in the `descriptors` table of `.rsconstruct/db.redb`, keyed by the descriptor key. |
 | **descriptor key** | A content-addressed hash of `(pname, config_hash, variant, input_checksum)`. Changes when processor config or input content changes. Does NOT include file paths — renaming a file with identical content produces the same key. |
 | **input checksum** | Combined SHA-256 hash of all input file contents for a product. |
 

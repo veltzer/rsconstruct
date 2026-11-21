@@ -1,38 +1,26 @@
 use anyhow::{Context, Result};
 use std::collections::BTreeMap;
 use std::fs;
-use std::path::Path;
 
 use super::{
     CacheDescriptor, CacheListEntry, CacheListOutput, ObjectStore, ProcessorCacheStats, walk_files,
 };
 
-/// Whether `path` is a temp file a crashed descriptor write left behind
-/// (`store_descriptor` writes `.tmp-<pid>-<n>`, then renames). It is not a
-/// descriptor and may be truncated.
-fn is_descriptor_temp(path: &Path) -> bool {
-    path.file_name()
-        .and_then(|n| n.to_str())
-        .is_some_and(|n| n.starts_with(".tmp-"))
-}
-
-/// Read and parse the descriptor file at `path`. Every management command
-/// goes through this, so a damaged descriptor is the same named error in
-/// `list`, `stats` and `trim` instead of an entry two of them leave out.
-fn read_descriptor_file(path: &Path) -> Result<CacheDescriptor> {
-    let data = fs::read(path)
-        .with_context(|| format!("Failed to read cache descriptor: {}", path.display()))?;
-    serde_json::from_slice(&data).with_context(|| {
+/// Parse one stored descriptor. Every management command goes through this,
+/// so a damaged descriptor is the same named error in `list`, `stats` and
+/// `trim` instead of an entry two of them leave out.
+fn parse_descriptor(key: &str, data: &[u8]) -> Result<CacheDescriptor> {
+    serde_json::from_slice(data).with_context(|| {
         format!(
-            "Failed to parse cache descriptor: {} (remove it to proceed)",
-            path.display()
+            "Failed to parse cache descriptor {key} (run `rsconstruct cache clear` to start the \
+             cache over)"
         )
     })
 }
 
-/// What the cache holds on disk: its total size, and how many objects
-/// (the stored content of outputs) and entries (one descriptor per cached
-/// product) make it up.
+/// What the cache holds: its total size, and how many objects (the stored
+/// content of outputs) and entries (one descriptor per cached product) make
+/// it up.
 pub struct CacheSize {
     pub bytes: u64,
     pub objects: usize,
@@ -40,30 +28,28 @@ pub struct CacheSize {
 }
 
 impl ObjectStore {
-    /// Get the cache's size on disk. Objects and entries are counted
-    /// apart: lumped together as "objects" the figure matched neither
-    /// `cache trim`, which calls only the stored content objects, nor
-    /// `cache stats`, which counts entries.
+    /// Get the cache's size: the objects on disk plus the stored
+    /// descriptors. Objects and entries are counted apart: lumped together
+    /// as "objects" the figure matched neither `cache trim`, which calls
+    /// only the stored content objects, nor `cache stats`, which counts
+    /// entries.
     pub fn size(&self) -> Result<CacheSize> {
         let mut size = CacheSize {
             bytes: 0,
             objects: 0,
             entries: 0,
         };
-        for (dir, is_objects) in [(&self.objects_dir, true), (&self.descriptors_dir, false)] {
-            if !dir.exists() {
-                continue;
-            }
-            for path in walk_files(dir)? {
+        if self.objects_dir.exists() {
+            for path in walk_files(&self.objects_dir)? {
                 let metadata = fs::metadata(&path)
                     .with_context(|| format!("Failed to stat cache file {}", path.display()))?;
                 size.bytes += metadata.len();
-                if is_objects {
-                    size.objects += 1;
-                } else {
-                    size.entries += 1;
-                }
+                size.objects += 1;
             }
+        }
+        for (key, data) in self.descriptor_rows()? {
+            size.bytes += (key.len() + data.len()) as u64;
+            size.entries += 1;
         }
         Ok(size)
     }
@@ -81,31 +67,16 @@ impl ObjectStore {
         // unreadable or unparsable descriptor must abort the trim: skipping it
         // would garbage-collect every blob it references as "unreferenced".
         let mut referenced: std::collections::HashSet<String> = std::collections::HashSet::new();
-        if self.descriptors_dir.exists() {
-            for path in walk_files(&self.descriptors_dir)? {
-                // Parsing a leftover temp file would abort every trim until
-                // someone removed it by hand. It is garbage, so it is
-                // collected here. redb's exclusive lock means no other
-                // process is mid-write.
-                if is_descriptor_temp(&path) {
-                    fs::remove_file(&path).with_context(|| {
-                        format!(
-                            "Failed to remove leftover descriptor temp file: {}",
-                            path.display()
-                        )
-                    })?;
-                    continue;
+        for (key, data) in self.descriptor_rows()? {
+            match parse_descriptor(&key, &data)? {
+                CacheDescriptor::Marker => {}
+                CacheDescriptor::Blob { checksum, .. } => {
+                    referenced.insert(checksum);
                 }
-                match read_descriptor_file(&path)? {
-                    CacheDescriptor::Marker => {}
-                    CacheDescriptor::Blob { checksum, .. } => {
-                        referenced.insert(checksum);
-                    }
-                    CacheDescriptor::Tree { entries } => {
-                        for entry in entries {
-                            if entry.link.is_none() {
-                                referenced.insert(entry.checksum);
-                            }
+                CacheDescriptor::Tree { entries } => {
+                    for entry in entries {
+                        if entry.link.is_none() {
+                            referenced.insert(entry.checksum);
                         }
                     }
                 }
@@ -163,26 +134,15 @@ impl ObjectStore {
     /// so the product it describes builds again instead of restoring. The
     /// blobs it pointed at stay for `trim`. Returns whether one was removed.
     pub fn remove_descriptor(&self, descriptor_key: &str) -> Result<bool> {
-        let path = self.descriptor_path(descriptor_key);
-        if !path.is_file() {
-            return Ok(false);
-        }
-        // Descriptors are read-only (see `store_descriptor`); make this one
-        // writable for the unlink that follows, as `trim` does.
-        #[allow(clippy::permissions_set_readonly_false)]
-        if let Ok(mut perms) = fs::metadata(&path).map(|m| m.permissions()) {
-            perms.set_readonly(false);
-            fs::set_permissions(&path, perms).with_context(|| {
-                format!("Failed to make descriptor writable: {}", path.display())
-            })?;
-        }
-        fs::remove_file(&path)
-            .with_context(|| format!("Failed to remove descriptor: {}", path.display()))?;
-        if let Some(parent) = path.parent() {
-            // Best-effort: remove empty parent dir (fails silently if not empty)
-            let _ = fs::remove_dir(parent);
-        }
-        Ok(true)
+        let mut removed = false;
+        self.write_descriptors(|table| {
+            removed = table
+                .remove(descriptor_key)
+                .with_context(|| format!("Failed to remove cache descriptor {descriptor_key}"))?
+                .is_some();
+            Ok(())
+        })?;
+        Ok(removed)
     }
 
     /// Remove stale descriptor entries whose cache keys are not in the valid set.
@@ -191,76 +151,31 @@ impl ObjectStore {
         &self,
         valid_descriptor_keys: &std::collections::HashSet<String>,
     ) -> Result<usize> {
-        let mut count = 0;
-
-        if !self.descriptors_dir.exists() {
+        let stale: Vec<String> = self
+            .descriptor_rows()?
+            .into_iter()
+            .map(|(key, _)| key)
+            .filter(|key| !valid_descriptor_keys.contains(key))
+            .collect();
+        if stale.is_empty() {
             return Ok(0);
         }
-
-        for path in walk_files(&self.descriptors_dir)? {
-            // Reconstruct descriptor key from path
-            if let (Some(prefix), Some(rest)) = (
-                path.parent()
-                    .and_then(|p| p.file_name())
-                    .and_then(|n| n.to_str()),
-                path.file_name().and_then(|n| n.to_str()),
-            ) {
-                let key = format!("{prefix}{rest}");
-                if !valid_descriptor_keys.contains(&key) {
-                    // Same as in `trim`: descriptors are read-only, and this
-                    // one is unlinked immediately below.
-                    #[allow(clippy::permissions_set_readonly_false)]
-                    if let Ok(mut perms) = fs::metadata(&path).map(|m| m.permissions()) {
-                        perms.set_readonly(false);
-                        fs::set_permissions(&path, perms).with_context(|| {
-                            format!(
-                                "Failed to make stale descriptor writable: {}",
-                                path.display()
-                            )
-                        })?;
-                    }
-                    fs::remove_file(&path).with_context(|| {
-                        format!("Failed to remove stale descriptor: {}", path.display())
-                    })?;
-                    count += 1;
-                    if let Some(parent) = path.parent() {
-                        // Best-effort: remove empty parent dir (fails silently if not empty)
-                        let _ = fs::remove_dir(parent);
-                    }
-                }
+        self.write_descriptors(|table| {
+            for key in &stale {
+                table
+                    .remove(key.as_str())
+                    .with_context(|| format!("Failed to remove stale cache descriptor {key}"))?;
             }
-        }
-
-        Ok(count)
+            Ok(())
+        })?;
+        Ok(stale.len())
     }
 
     /// List all cache descriptors
     pub fn list(&self) -> Result<Vec<CacheListEntry>> {
-        if !self.descriptors_dir.exists() {
-            return Ok(Vec::new());
-        }
-
         let mut entries: Vec<CacheListEntry> = Vec::new();
-        for path in walk_files(&self.descriptors_dir)? {
-            if is_descriptor_temp(&path) {
-                continue;
-            }
-            let desc = read_descriptor_file(&path)?;
-
-            // Reconstruct descriptor key from path
-            let (Some(prefix), Some(rest)) = (
-                path.parent()
-                    .and_then(|p| p.file_name())
-                    .and_then(|n| n.to_str()),
-                path.file_name().and_then(|n| n.to_str()),
-            ) else {
-                anyhow::bail!(
-                    "Cache descriptor path is not valid UTF-8: {}",
-                    path.display()
-                );
-            };
-            let cache_key = format!("{prefix}{rest}");
-
+        for (cache_key, data) in self.descriptor_rows()? {
+            let desc = parse_descriptor(&cache_key, &data)?;
             let outputs = match desc {
                 CacheDescriptor::Marker => Vec::new(),
                 CacheDescriptor::Blob { ref checksum, .. } => {
@@ -291,15 +206,8 @@ impl ObjectStore {
     pub fn stats_by_processor(&self) -> Result<BTreeMap<String, ProcessorCacheStats>> {
         let mut stats: BTreeMap<String, ProcessorCacheStats> = BTreeMap::new();
 
-        if !self.descriptors_dir.exists() {
-            return Ok(stats);
-        }
-
-        for path in walk_files(&self.descriptors_dir)? {
-            if is_descriptor_temp(&path) {
-                continue;
-            }
-            let desc = read_descriptor_file(&path)?;
+        for (key, data) in self.descriptor_rows()? {
+            let desc = parse_descriptor(&key, &data)?;
 
             // We can't extract processor name from a hashed descriptor key.
             // Use "all" as a single bucket for now.

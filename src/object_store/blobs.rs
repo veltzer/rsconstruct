@@ -312,10 +312,8 @@ mod tests {
     fn compression_toggle_roundtrip() {
         let tmp = tempfile::TempDir::new().unwrap();
 
-        let compressed_store = ObjectStore {
-            compression: true,
-            ..store_with_db(tmp.path(), "db1.redb")
-        };
+        let mut compressed_store = store_with_db(tmp.path(), "db1.redb");
+        compressed_store.compression = true;
         let checksum = compressed_store
             .store_object(b"compressed at store time")
             .unwrap();

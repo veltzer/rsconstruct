@@ -189,9 +189,10 @@ fn is_object_checksum(text: &str) -> bool {
 
 const RSBUILD_DIR: &str = ".rsconstruct";
 const OBJECTS_DIR: &str = "objects";
-const DESCRIPTORS_DIR: &str = "descriptors";
 const DB_FILE: &str = "db.redb";
 
+/// Descriptor key → the descriptor, as JSON. See `descriptors.rs`.
+const DESCRIPTORS_TABLE: TableDefinition<&str, &[u8]> = TableDefinition::new("descriptors");
 const CONFIGS_TABLE: TableDefinition<&str, &[u8]> = TableDefinition::new("processor_configs");
 /// `Product::owner_key` → the descriptor key whose tree is on disk for that
 /// product. See `ObjectStore::record_last_tree`.
@@ -248,7 +249,8 @@ impl std::fmt::Display for ExplainAction {
 
 /// Object store for caching build outputs.
 /// Uses git-like object storage: .rsconstruct/objects/[2 chars]/[rest of hash]
-/// Index is stored in a redb embedded key/value database at .rsconstruct/db.redb
+/// Descriptors and the index are stored in a redb embedded key/value
+/// database at .rsconstruct/db.redb
 ///
 /// Methods are split across submodules:
 /// - `blobs.rs` — content-addressed blob read/write/restore
@@ -259,13 +261,30 @@ impl std::fmt::Display for ExplainAction {
 /// - `config_diff.rs` — processor config change tracking
 pub struct ObjectStore {
     pub(super) objects_dir: PathBuf,
-    pub(super) descriptors_dir: PathBuf,
     pub(super) db: Database,
+    /// When descriptor writes last reached the disk, and whether any have
+    /// been committed since without reaching it. See
+    /// `ObjectStore::write_descriptors`.
+    pub(super) descriptor_sync: std::sync::Mutex<descriptors::DescriptorSync>,
     pub(super) restore_method: RestoreMethod,
     pub(super) compression: bool,
     pub(super) remote: Option<Box<dyn RemoteCache>>,
     pub(super) remote_push: bool,
     pub(super) remote_pull: bool,
+}
+
+/// The end of every command that opened the store: deferred descriptor
+/// writes reach the disk (see `descriptors.rs`). A failure here cannot fail
+/// the command any more, so it is reported; the cost is products that
+/// rebuild next time.
+impl Drop for ObjectStore {
+    fn drop(&mut self) {
+        if let Err(e) = self.persist() {
+            crate::output::warn(&format!(
+                "cache entries from this run may not have been saved: {e:#}"
+            ));
+        }
+    }
 }
 
 /// A cache descriptor stored in the object store at the cache key path.
@@ -339,12 +358,11 @@ impl ObjectStore {
         fs::create_dir_all(&rsconstruct_dir).context("Failed to create .rsconstruct directory")?;
 
         let db = crate::db::open(&db_path, "Cache database")?;
-        let descriptors_dir = rsconstruct_dir.join(DESCRIPTORS_DIR);
 
         Ok(Self {
             objects_dir,
-            descriptors_dir,
             db,
+            descriptor_sync: std::sync::Mutex::default(),
             restore_method: opts.restore_method,
             compression: opts.compression,
             remote: opts.remote,
@@ -362,8 +380,8 @@ impl ObjectStore {
     pub(crate) fn new_at(dir: &Path, db_name: &str) -> Self {
         Self {
             objects_dir: dir.join(OBJECTS_DIR),
-            descriptors_dir: dir.join(DESCRIPTORS_DIR),
             db: crate::db::open(&dir.join(db_name), "test cache database").unwrap(),
+            descriptor_sync: std::sync::Mutex::default(),
             restore_method: RestoreMethod::Hardlink,
             compression: false,
             remote: None,

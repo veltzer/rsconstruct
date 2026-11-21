@@ -565,6 +565,9 @@ impl Builder {
         // Written even when the build failed: its products were still
         // hashed. Reported after the build's own outcome, which matters more.
         let flushed = crate::checksum::flush_mtime_cache(ctx);
+        // The cache entries this run wrote reach the disk now, not when the
+        // store is dropped: under `watch` the store lives on between runs.
+        let persisted = self.object_store.persist();
         // What sandboxed children downloaded (iyamlschema's schemas), now
         // that none is running and holding the webcache open.
         let stored = crate::webcache::store_pending();
@@ -596,6 +599,7 @@ impl Builder {
 
         let mut stats = result?;
         flushed?;
+        persisted?;
         stored?;
 
         // Add phase timings to stats

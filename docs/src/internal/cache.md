@@ -8,11 +8,11 @@ The cache lives in `.rsconstruct/` and consists of:
 
 - `objects/` — content-addressed blob store, sharded by the first two hex
   characters of the content hash
-- `descriptors/` — cache descriptors (marker/blob/tree JSON), sharded the
-  same way but addressed by the descriptor key rather than by content
-- `db.redb` — redb database holding the `processor_configs` table used for
-  config-change diffing and the `product_last_tree` table used to unlink
-  stale outputs (see [Stale outputs before a rebuild](#stale-outputs-before-a-rebuild))
+- `db.redb` — redb database holding the `descriptors` table (cache
+  descriptors, marker/blob/tree JSON, addressed by the descriptor key rather
+  than by content), the `processor_configs` table used for config-change
+  diffing and the `product_last_tree` table used to unlink stale outputs
+  (see [Stale outputs before a rebuild](#stale-outputs-before-a-rebuild))
 - `deps.redb` — source file dependency cache (see [Dependency Caching](dependency-caching.md))
 - `mtime.redb` — mtime→checksum pre-check cache that lets unchanged files
   skip re-hashing
@@ -39,15 +39,15 @@ A blob is pure content — it has no knowledge of where it will be restored. Thi
 
 ### Trees
 
-A tree is a serialized list of `(path, mode, blob_checksum)` entries describing a set of output files. Trees are stored as descriptors under `descriptors/`, addressed by the descriptor key (not by content hash). A tree maps relative file paths to content-addressed blobs. Multiple trees can point to the same blobs — deduplication happens at the blob level.
+A tree is a serialized list of `(path, mode, blob_checksum)` entries describing a set of output files. Trees are stored as descriptors in the `descriptors` table, addressed by the descriptor key (not by content hash). A tree maps relative file paths to content-addressed blobs. Multiple trees can point to the same blobs — deduplication happens at the blob level.
 
 ### Markers
 
-A marker is a minimal descriptor indicating that a check passed. Markers are stored under `descriptors/`, addressed by the descriptor key, and reference no blobs.
+A marker is a minimal descriptor indicating that a check passed. Markers are stored in the `descriptors` table, addressed by the descriptor key, and reference no blobs.
 
 ### Cache entries
 
-A cache entry is a small JSON descriptor stored under `.rsconstruct/descriptors/` at the path derived from the descriptor key. It contains:
+A cache entry is a small JSON descriptor stored in the `descriptors` table of `.rsconstruct/db.redb`, under the descriptor key. It contains:
 
 ```json
 {"type": "blob", "checksum": "abc123...", "mode": 493}
@@ -75,13 +75,27 @@ The actual file content lives in separate content-addressed blob objects. The ca
 .rsconstruct/objects/
   a1/b2c3d4...    # blob (raw file content), addressed by content hash
   cd/ef5678...    # another blob (".zst" suffix when compressed)
-.rsconstruct/descriptors/
-  ff/0011aa...    # descriptor (JSON), addressed by descriptor key
+.rsconstruct/db.redb
+  descriptors table: ff0011aa... -> descriptor (JSON), by descriptor key
 ```
 
-Descriptors and blobs live in separate directories with the same two-hex-char
-sharding. Keeping them separate is what lets `cache trim` delete unreferenced
-blobs by scanning the descriptors.
+Blobs are files; descriptors are rows. `cache trim` deletes unreferenced
+blobs by scanning the descriptor table.
+
+Descriptors used to be one file each under `.rsconstruct/descriptors/`,
+sharded like the blobs. That cost every build an open, a read and a close
+per product: 18k of each for a no-op build of an 18k-product project, and
+most of a cold-cache build's time, since each was a separate random read.
+They moved into redb on 2026-11-21; a cache from before then has its
+descriptors in the old directory, which nothing reads, so its products
+rebuild once (`rsconstruct cache clear` removes the leftovers).
+
+Descriptor writes come one per built product, so most are committed
+without an fsync (`redb::Durability::None`), with a durable commit at
+least once a second while writes keep coming, after every build, and when
+the store is dropped at the end of a command. A process killed outright
+loses at most the last second's entries, which only means rebuilding those
+products.
 
 ## Cache keys
 

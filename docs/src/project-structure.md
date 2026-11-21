@@ -15,8 +15,7 @@ project/
 ├── out/
 │   └── processor.generator.cc_single_file/   # Compiled executables (one directory per generating processor, named after it)
 └── .rsconstruct/             # Cache directory
-    ├── db.redb       # Cache index (processor configs, product -> cached tree)
-    ├── descriptors/  # Per-product descriptors: which cached objects make up each product's outputs
+    ├── db.redb       # Cache index: per-product descriptors (which cached objects make up each product's outputs), processor configs, product -> cached tree
     ├── objects/      # Content-addressed cached build artifacts
     ├── deps.redb     # Dependency cache (analyzer results)
     └── mtime.redb    # Persistent mtime checksum cache

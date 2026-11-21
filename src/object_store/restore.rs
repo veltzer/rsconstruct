@@ -592,12 +592,8 @@ mod tests {
             "explaining must not populate the local descriptor store"
         );
         assert!(
-            !consumer.descriptors_dir.exists()
-                || fs::read_dir(&consumer.descriptors_dir)
-                    .unwrap()
-                    .next()
-                    .is_none(),
-            "no descriptor shard was created by the read-only lookup"
+            consumer.descriptor_rows().unwrap().is_empty(),
+            "no descriptor was stored by the read-only lookup"
         );
         assert!(
             !consumer.has_object(&ObjectStore::calculate_checksum_bytes(b"produced bytes")),
