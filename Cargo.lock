@@ -2460,7 +2460,7 @@ dependencies = [
 
 [[package]]
 name = "rsconstruct"
-version = "0.9.195"
+version = "0.9.196"
 dependencies = [
  "anstream",
  "anyhow",
