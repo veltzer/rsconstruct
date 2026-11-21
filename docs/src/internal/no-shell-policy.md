@@ -58,7 +58,7 @@ the target program identical to the bytes our code constructed.
 ### 3. We do not need it
 
 Every structured package manager rsconstruct talks to (apt, dnf, pacman,
-brew, pip, npm, gem, cargo, snap) accepts package names and flags as separate
+pip, npm, gem, cargo, snap) accepts package names and flags as separate
 argv elements. A shell adds nothing to those calls except risk.
 
 ## Exceptions

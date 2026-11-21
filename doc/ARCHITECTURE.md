@@ -20,7 +20,7 @@ Size: about 350 `.rs` files under `src/`. About 110,000 of the lines are
 `src/engines/` (ports of external linters); the build system itself, outside
 `src/engines/` and `src/processor/<type>/`, is roughly 45,000 lines.
 
-Unix only (Linux, macOS). The repo builds itself: CI runs `rsconstruct build`
+Linux only. The repo builds itself: CI runs `rsconstruct build`
 against this repo's own `rsconstruct.toml`.
 
 ## Other documents, and which to trust

@@ -1,7 +1,7 @@
 //! Unix-specific OS operations, isolated behind named wrappers.
 //!
-//! `RSConstruct` is unix-only (Linux and macOS — the platforms the release
-//! matrix builds). This module exists to keep `std::os::unix` imports and
+//! `RSConstruct` is Linux-only (the platform the release matrix builds).
+//! This module exists to keep `std::os::unix` imports and
 //! `libc` calls out of the rest of the codebase, not to abstract over a
 //! second platform: there are no `#[cfg(not(unix))]` branches here, because
 //! there is no non-unix build to serve.

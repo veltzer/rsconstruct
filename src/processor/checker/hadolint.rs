@@ -39,10 +39,7 @@ inventory::submit! { crate::tools::ToolInfo {
     name: "hadolint", runtime: "system",
     project: Some(crate::tools::InstallMethod::new("binary", "hadolint")),
     machine: Some(crate::tools::InstallMethod::new("binary", "hadolint")),
-    alternatives: &[
-        crate::tools::InstallMethod::new("brew", "hadolint"),
-        crate::tools::InstallMethod::new("apt", "hadolint"),
-    ],
+    alternatives: &[crate::tools::InstallMethod::new("apt", "hadolint")],
     prefer: None,
     sandbox_writable: &[],
     needs_network: false,

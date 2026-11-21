@@ -165,7 +165,7 @@ Grades:
 
 ### Build notifications
 - Desktop notifications when builds complete, especially for long builds.
-- Platform-specific: `notify-send` (Linux), `osascript` (macOS).
+- Via `notify-send`.
 - Config: `notify = true`, `notify_on_success = false`.
 - **Urgency**: low | **Complexity**: low
 

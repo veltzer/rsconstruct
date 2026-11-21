@@ -722,7 +722,7 @@ Every install goes to one of two targets: the **project** (its
 `.rsconstruct/tools` directory, or the venv inside the repo) or the
 **machine** (a system package manager, a user-wide prefix such as
 `~/.cargo/bin` or `npm -g`, or a venv outside the repo). A system package
-manager (apt, dnf, pacman, brew, snap) and a `.deb` binary can only reach the
+manager (apt, dnf, pacman, snap) and a `.deb` binary can only reach the
 machine; a release kept whole (protoc beside its `include/`, qpdf beside its
 `lib/`) needs a prefix of its own and can only reach the project; pip, uv,
 npm, cargo, gem and other release binaries can reach either, depending on
@@ -742,8 +742,8 @@ machine` installs a tool the project needs; naming a tool (`install project
 NAME`, `install machine NAME`) picks the slot directly. For pip the project
 install means the repo's `.venv` through `uv sync`, never `pip install`.
 Any other methods a tool
-lists are alternatives (brew for macOS, a crate where a release binary is
-preferred): shown by `list -M`, never chosen by an install. `list` shows the
+lists are alternatives (a crate where a release binary is preferred, a
+distro package): shown by `list -M`, never chosen by an install. `list` shows the
 preferred target in its Target column; `list -M` labels each method with the
 slots it fills (`project`, `machine`, or `alt`); `--json tool list` carries,
 per method, the targets it can reach (`targets`) and the slots it fills
@@ -872,7 +872,7 @@ versions, and declared `[dependencies]` (Python deps declared in
 `pyproject.toml` are checked too; see the `[dependencies]` section in
 Configuration). Tools are probed by running them; `system` dependencies are
 packages, not tools, so they are probed through the platform's package manager
-(dpkg-query/rpm/pacman/brew) — a binary-less package like `aspell-en` counts
+(dpkg-query/rpm/pacman) — a binary-less package like `aspell-en` counts
 as installed even though no binary carries its name.
 
 ```bash

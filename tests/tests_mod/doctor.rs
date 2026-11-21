@@ -118,7 +118,7 @@ fn doctor_rejects_package_json_without_lock() {
 /// The test plants a fake binary on PATH whose name is not a real package.
 /// The old which()-based doctor reported it ok; the package-manager probe
 /// must report it missing. This assumes a supported package manager exists
-/// (dpkg/rpm/pacman/brew) — on a machine without one, `tool install
+/// (dpkg/rpm/pacman) — on a machine without one, `tool install
 /// machine` bails
 /// anyway, so that environment is already unsupported.
 #[test]

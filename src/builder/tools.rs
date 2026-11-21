@@ -13,7 +13,7 @@ use std::io::Write;
 use std::process::Command;
 
 /// Check if a system package is installed using the platform's package manager.
-/// Tries dpkg-query (Debian/Ubuntu), rpm (Fedora/RHEL), pacman (Arch), and brew (macOS).
+/// Tries dpkg-query (Debian/Ubuntu), rpm (Fedora/RHEL), and pacman (Arch).
 ///
 /// Probes run through the central runner so a `tool check` over a long
 /// package list stays interruptible — `dpkg-query` on a large system is not
@@ -56,9 +56,6 @@ pub(super) fn is_system_package_installed(
     }
     if which::which("pacman").is_ok() {
         return probe("pacman", &["-Q", pkg]);
-    }
-    if which::which("brew").is_ok() {
-        return probe("brew", &["list", pkg]);
     }
     // Fallback: check if the package name is available as a command
     which::which(pkg).is_ok()
@@ -836,21 +833,16 @@ fn refuse_unpinned_binaries(
 /// system packages go first, because language packages (pip, gem, npm)
 /// often build native extensions that link against them.
 const MACHINE_METHOD_ORDER: &[&str] = &[
-    "apt", "dnf", "pacman", "brew", "snap", "pip", "npm", "cargo", "gem", "binary",
+    "apt", "dnf", "pacman", "snap", "pip", "npm", "cargo", "gem", "binary",
 ];
 
 /// The install method for `[dependencies]` system packages: the first
 /// system package manager found on this machine.
 fn system_package_method() -> Option<&'static str> {
-    [
-        ("apt-get", "apt"),
-        ("dnf", "dnf"),
-        ("pacman", "pacman"),
-        ("brew", "brew"),
-    ]
-    .into_iter()
-    .find(|(program, _)| which::which(program).is_ok())
-    .map(|(_, method)| method)
+    [("apt-get", "apt"), ("dnf", "dnf"), ("pacman", "pacman")]
+        .into_iter()
+        .find(|(program, _)| which::which(program).is_ok())
+        .map(|(_, method)| method)
 }
 
 /// A tool error, reported with the tool-error exit code.
@@ -1075,7 +1067,7 @@ fn install_machine(
     if !system_packages.is_empty() {
         let method = system_package_method().ok_or_else(|| {
             anyhow::anyhow!(
-                "No supported package manager found (apt-get, dnf, pacman, brew); \
+                "No supported package manager found (apt-get, dnf, pacman); \
                  install these system packages manually: {}",
                 system_packages.join(", ")
             )

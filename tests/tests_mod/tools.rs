@@ -75,7 +75,7 @@ fn tools_list_json_names_each_tools_processors() {
 /// `--json tool list` says where each install goes: per tool its preferred
 /// target, per method the targets it can reach and the slots it fills.
 /// ruff's pip install fills both slots, so the project is preferred; a
-/// `.deb` (drawio) reaches only the machine; brew is clojure's alternative.
+/// `.deb` (drawio) reaches only the machine; cargo is selene's alternative.
 #[test]
 fn tools_list_json_names_install_targets() {
     let temp_dir = setup_test_project();
@@ -115,7 +115,7 @@ fn tools_list_json_names_install_targets() {
         serde_json::json!(["machine"])
     );
     assert_eq!(entry("clojure")["preferred"], "machine");
-    assert_eq!(method("clojure", "brew")["slots"], serde_json::json!([]));
+    assert_eq!(method("selene", "cargo")["slots"], serde_json::json!([]));
 }
 
 #[test]
@@ -697,7 +697,6 @@ fn tools_list_uses_only_implemented_install_methods() {
         "apt",
         "dnf",
         "pacman",
-        "brew",
         "snap",
         "pip",
         "npm",

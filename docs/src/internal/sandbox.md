@@ -60,7 +60,7 @@ tests").
   "Missing required tools: bwrap" and an install hint (strict by default,
   and a fallback would make the check silently disappear on exactly the
   machines nobody looks at). `tool install machine` installs it on Linux.
-  A machine that cannot have it (macOS, a minimal container) builds by
+  A machine that cannot have it (a minimal container) builds by
   setting `execution_model = "native"`, in the project or in the user
   config.
 - **A nested build runs natively.** An rsconstruct started inside a
@@ -252,14 +252,10 @@ products' outputs.
 - It keeps namespace and mount code (unsafe, Linux-specific, easy to get
   wrong) out of `src/platform.rs`. The only platform helpers the sandbox
   needs are whiteout detection and an xattr read (through the `xattr`
-  crate, which builds on macOS too).
+  crate).
 - It fits the tool model: `bwrap` has a central `ToolInfo` entry (apt
   `bubblewrap`), because rsconstruct itself runs it, not any one processor.
 - Overlay support needs bubblewrap 0.9 or newer. Developed against 0.11.1.
-
-**macOS** has no bwrap. A build that enables the sandbox there fails the
-preflight; a build that does not is unaffected. `sandbox-exec` could be
-added later as a second backend, chosen at run time (no `#[cfg]`).
 
 ### Where it hooks in
 

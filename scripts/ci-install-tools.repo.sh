@@ -10,9 +10,8 @@ set -euo pipefail
 
 # TARGET is set only by ci.yml's release build job, which runs nothing but
 # `cargo build --release`. rsconstruct links no system library (mlua-sys and
-# zstd-sys build from vendored sources; the macOS release jobs, which never
-# run this script, prove the build needs nothing from it), so the release
-# job has nothing to install. Installing the test matrix there anyway put
+# zstd-sys build from vendored sources), so the release job has nothing to
+# install. Installing the test matrix there anyway put
 # every release behind ~10 downloads no step uses, and one of them,
 # checkpatch.pl from raw.githubusercontent.com, failed a release on an
 # anonymous-rate-limit 429 (run 37225847062).

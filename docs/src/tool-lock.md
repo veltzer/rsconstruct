@@ -44,7 +44,7 @@ These are not locked:
   could only disagree with it. This holds only while that file is the
   configured source (`npm_source = "package-lock"`, the default): with
   `npm_source = "package-json"` it pins nothing, so the tool is locked here.
-- **System packages** (`apt`, `dnf`, `pacman`, `brew`, `snap`) come with the OS
+- **System packages** (`apt`, `dnf`, `pacman`, `snap`) come with the OS
   image.
 - **The Chrome `.deb`.** Its vendor URL always serves the current build, so
   there is no release to record.

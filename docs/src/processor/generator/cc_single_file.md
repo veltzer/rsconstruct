@@ -56,7 +56,7 @@ Execute via `sh -c` (full shell syntax):
 
 ```c
 // EXTRA_COMPILE_SHELL=echo -DLEVEL2_CACHE_LINESIZE=$(getconf LEVEL2_CACHE_LINESIZE)
-// EXTRA_LINK_SHELL=echo -L$(brew --prefix openssl)/lib
+// EXTRA_LINK_SHELL=echo -L$(pkg-config --variable=libdir openssl)
 ```
 
 ### Backtick substitution

@@ -104,7 +104,7 @@ Agent suggested replacing `assert_eq!` with `anyhow::bail!` for batch result cou
 
 **Flagged in:** rounds 9, 10, 11, 12
 
-Multiple agents flagged `std::os::unix` usage without `#[cfg(unix)]` guards, and missing `#[cfg(windows)]`/`#[cfg(target_os = "macos")]` blocks. RSConstruct is Linux-only. No platform compatibility code will be added.
+Multiple agents flagged `std::os::unix` usage without `#[cfg(unix)]` guards, and missing `#[cfg(windows)]`/`#[cfg(target_os = "macos")]` blocks. RSConstruct is Linux-only. No platform compatibility code will be added. macOS release binaries and Homebrew installs were removed on 2026-11-21, so not even the macOS build that once existed is supported any more.
 
 ## DB recovery — file might not exist
 

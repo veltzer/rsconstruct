@@ -76,7 +76,7 @@ impl InstallMethod {
         const MACHINE: &[InstallTarget] = &[InstallTarget::Machine];
         const BOTH: &[InstallTarget] = &[InstallTarget::Project, InstallTarget::Machine];
         match self.method {
-            "apt" | "dnf" | "pacman" | "brew" | "snap" => MACHINE,
+            "apt" | "dnf" | "pacman" | "snap" => MACHINE,
             "pip" | "npm" | "cargo" | "gem" => BOTH,
             "uv-sync" | "npm-ci" | "npm-install" => &[InstallTarget::Project],
             "binary" => match binary_recipe(self.package) {
@@ -203,11 +203,6 @@ pub fn describe(
             argv.extend(packages.iter().map(|s| (*s).to_string()));
             vec![argv]
         }
-        "brew" => {
-            let mut argv = strs(&["brew", "install"]);
-            argv.extend(packages.iter().map(|s| (*s).to_string()));
-            vec![argv]
-        }
         "snap" => {
             let mut argv = prefix(&["snap", "install"], &[]);
             argv.extend(packages.iter().map(|s| (*s).to_string()));
@@ -319,12 +314,6 @@ pub fn run(method: &str, packages: &[&str], ctx: &InstallCtx) -> anyhow::Result<
         }
         "pacman" => {
             let mut argv = pkgmgr_argv(&["pacman", "-S", "--noconfirm"]);
-            argv.extend(packages.iter().map(|s| (*s).to_string()));
-            exec(&argv)
-        }
-        "brew" => {
-            // brew is macOS-only; no sudo, no eatmydata.
-            let mut argv = vec!["brew".to_string(), "install".to_string()];
             argv.extend(packages.iter().map(|s| (*s).to_string()));
             exec(&argv)
         }
@@ -1916,8 +1905,8 @@ pub struct ToolInfo {
     pub project: Option<InstallMethod>,
     /// The preferred way to install the tool onto the machine.
     pub machine: Option<InstallMethod>,
-    /// Other known ways to install it (brew for macOS, a crate where a
-    /// release binary is preferred, ...). Listed by `tool list -M`, never
+    /// Other known ways to install it (a crate where a release binary is
+    /// preferred, a distro package, ...). Listed by `tool list -M`, never
     /// chosen by an install.
     pub alternatives: &'static [InstallMethod],
     /// The preferred target overall, when it is not the default (the
@@ -2201,14 +2190,14 @@ pub static TOOLS: &[ToolInfo] = &[
         needs_network: false,
     },
     // Debian/Ubuntu package the Clojure CLI, which is what makes this
-    // installable without the official shell installer; brew is the macOS
-    // route. See https://clojure.org/guides/install_clojure
+    // installable without the official shell installer.
+    // See https://clojure.org/guides/install_clojure
     ToolInfo {
         name: "clojure",
         runtime: "jvm",
         project: None,
         machine: Some(InstallMethod::new("apt", "clojure")),
-        alternatives: &[InstallMethod::new("brew", "clojure/tools/clojure")],
+        alternatives: &[],
         prefer: None,
         // The CLI caches the resolved classpath in the project.
         sandbox_writable: &[".cpcache"],

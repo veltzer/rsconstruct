@@ -149,11 +149,11 @@ all 1M into the ring at once — the SQ has finite size.
   `Vec<statx>` of the right size.
 - **Runtime setup**: `tokio-uring` requires explicit `tokio_uring::start`;
   it is not a drop-in replacement for `tokio::main`.
-- **Linux vs macOS**: io_uring is Linux-only, and macOS is a supported
-  target, so this is the one place a real platform split would be needed.
-  Any usage must live behind `src/platform.rs`, which owns every OS call
-  (see [Coding Standards](coding-standards.md)). The macOS fallback would
-  be parallel `fs::metadata`.
+- **Linux only**: io_uring is Linux-only, which is no obstacle now that
+  rsconstruct targets Linux alone. Any usage must still live behind
+  `src/platform.rs`, which owns every OS call (see
+  [Coding Standards](coding-standards.md)). A kernel too old for io_uring
+  would need parallel `fs::metadata`.
 
 ## Relevance to rsconstruct
 
@@ -229,13 +229,13 @@ so future work doesn't have to redo it) showed the following:
    `Vec<ChecksumPath>` and callers need to attribute results back to
    products.
 
-4. **Linux/macOS constraint.** Per `CLAUDE.md`, every OS call lives in
+4. **Platform constraint.** Per `CLAUDE.md`, every OS call lives in
    `src/platform.rs`. The io_uring bits would be a **platform shim** —
    a thin wrapper like `pub fn batch_mtimes(paths: &[&Path]) ->
    Vec<io::Result<(i64, u32)>>` whose only job is to expose one OS-agnostic
-   API to callers, with a Linux impl using the `io-uring` crate and a
-   non-Linux fallback (serial `fs::metadata` or rayon). Callers stay
-   clean; the `#[cfg]` lives in exactly one place. This part of the
+   API to callers, implemented with the `io-uring` crate. rsconstruct is
+   Linux-only, so there is no second implementation and no `#[cfg]`.
+   Callers stay clean. This part of the
    refactor is mechanical — the abstraction boundary already exists
    (see `platform::set_permissions_mode` for the existing pattern).
 

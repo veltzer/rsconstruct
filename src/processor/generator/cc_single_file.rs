@@ -110,7 +110,7 @@ fn should_exclude_for_profile(source: &Path, profile_name: &str) -> bool {
 ///   // EXTRA_COMPILE_CMD=pkg-config --cflags ACE
 ///   // EXTRA_LINK_CMD=pkg-config --libs ACE
 ///   // `EXTRA_COMPILE_SHELL=echo` -`DLEVEL2_CACHE_LINESIZE=$(getconf` `LEVEL2_CACHE_LINESIZE`)
-///   // `EXTRA_LINK_SHELL=echo` -L$(brew --prefix openssl)/lib
+///   // `EXTRA_LINK_SHELL=echo` -L$(pkg-config --variable=libdir openssl)
 ///
 /// Compiler profile-specific flags (only applied when compiling with the named profile):
 ///   // `EXTRA_COMPILE_FLAGS_BEFORE`[gcc]=-femit-struct-debug-baseonly
