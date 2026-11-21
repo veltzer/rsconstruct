@@ -486,6 +486,7 @@ impl Builder {
             }
             println!("[build] {} products to check for updates", order.len());
         }
+        let effective_parallel = self.effective_parallel(opts);
         let policy = crate::executor::IncrementalPolicy;
         let classification = crate::executor::classify_products(
             ctx,
@@ -494,6 +495,7 @@ impl Builder {
             &order,
             &self.object_store,
             opts.force,
+            effective_parallel,
         );
         // Classify checksummed every input; write those entries before the
         // long phase starts, so an interrupted build keeps them.
@@ -517,20 +519,6 @@ impl Builder {
         // predicted to change that never ran. After a failure the products
         // it blocked keep their outputs.
 
-        // Create executor with parallelism from command line, env var, or config
-        let parallel = opts
-            .jobs
-            .or_else(|| {
-                std::env::var("RSCONSTRUCT_THREADS")
-                    .ok()
-                    .and_then(|v| v.parse().ok())
-            })
-            .unwrap_or(self.config.build.parallel);
-        let effective_parallel = if parallel == 0 {
-            std::thread::available_parallelism().map_or(1, std::num::NonZero::get)
-        } else {
-            parallel
-        };
         if crate::json_output::human_output_enabled() {
             println!("[rsconstruct] using {effective_parallel} threads");
         }
@@ -716,6 +704,25 @@ fn output_dir_files(
 }
 
 impl Builder {
+    /// Worker threads for this build: `-j`, else `RSCONSTRUCT_THREADS`, else
+    /// `[build] parallel`, where 0 means one per core. Classify and the
+    /// executor both use it.
+    fn effective_parallel(&self, opts: &BuildOptions) -> usize {
+        let parallel = opts
+            .jobs
+            .or_else(|| {
+                std::env::var("RSCONSTRUCT_THREADS")
+                    .ok()
+                    .and_then(|v| v.parse().ok())
+            })
+            .unwrap_or(self.config.build.parallel);
+        if parallel == 0 {
+            std::thread::available_parallelism().map_or(1, std::num::NonZero::get)
+        } else {
+            parallel
+        }
+    }
+
     /// Show what a build with these options would do, without executing
     /// anything: the same plan (`-p`, `-x`, `--target`, overrides) and the
     /// same prediction (`classify_products`) as [`build`](Self::build), so a
@@ -744,6 +751,7 @@ impl Builder {
             &order,
             &self.object_store,
             opts.force,
+            self.effective_parallel(opts),
         );
         let entries: Vec<_> = classification
             .products

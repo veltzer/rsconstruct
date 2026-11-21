@@ -78,6 +78,20 @@ struct LevelWork {
     non_batch_items: Vec<WorkItem>,
 }
 
+impl LevelWork {
+    /// Remove and return every item the policy decided to skip. Batch
+    /// grouping is unaffected: it was decided on the items that run.
+    fn take_skips(&mut self) -> Vec<WorkItem> {
+        let is_skip = |item: &mut WorkItem| item.action == ProductAction::Skip;
+        let mut skips: Vec<WorkItem> = self.non_batch_items.extract_if(.., is_skip).collect();
+        for items in self.batch_groups.values_mut() {
+            skips.extend(items.extract_if(.., is_skip));
+        }
+        self.batch_groups.retain(|_, items| !items.is_empty());
+        skips
+    }
+}
+
 /// Options for configuring an Executor instance.
 #[derive(Debug)]
 pub struct ExecutorOptions {
@@ -166,6 +180,15 @@ pub struct Classification {
 /// The policy only sees products whose inputs are settled. At dispatch the
 /// executor asks the policy again with the real inputs, so a dependency that
 /// rebuilt to identical bytes still lets the product skip or restore.
+///
+/// The work (stat and checksum every input, read every descriptor, verify
+/// outputs) runs on up to `parallel` threads, one dependency level at a
+/// time: a product's level is one more than its deepest dependency's, so
+/// the products of one level never depend on each other and the "will a
+/// dependency change" question is answered from finished levels only. The
+/// policy is consulted for exactly the products the one-thread walk
+/// consulted it for — which matters because asking it can pull from the
+/// remote cache. The result lists products in `order`.
 pub fn classify_products(
     ctx: &crate::build_context::BuildContext,
     policy: &dyn BuildPolicy,
@@ -173,65 +196,111 @@ pub fn classify_products(
     order: &[usize],
     object_store: &ObjectStore,
     force: bool,
+    parallel: usize,
 ) -> Classification {
-    let mut skip_count = 0;
-    let mut restore_count = 0;
-    let mut build_count = 0;
-    let mut will_change: HashSet<usize> = HashSet::new();
-    let mut products: Vec<ClassifiedProduct> = Vec::with_capacity(order.len());
-
-    for &id in order {
+    let classify_one = |id: usize, will_change: &HashSet<usize>| -> ClassifiedProduct {
         let product = graph.get_product(id).expect(errors::INVALID_PRODUCT_ID);
         let dep_changed = graph
             .get_dependencies(id)
             .iter()
             .any(|d| will_change.contains(d));
-
         let Ok(input_checksum) = crate::checksum::combined_input_checksum(ctx, &product.inputs)
         else {
-            build_count += 1;
-            will_change.insert(id);
-            products.push(ClassifiedProduct {
+            return ClassifiedProduct {
                 id,
                 action: ProductAction::Build,
                 input_checksum: String::new(),
                 dep_changed: false,
-            });
-            continue;
+            };
         };
-
         let action = if dep_changed {
             ProductAction::Build
         } else {
             policy.classify(ctx, product, object_store, &input_checksum, force)
         };
-        match action {
-            ProductAction::Skip => {
-                skip_count += 1;
-            }
-            ProductAction::Restore => {
-                restore_count += 1;
-                will_change.insert(id);
-            }
-            ProductAction::Build => {
-                build_count += 1;
-                will_change.insert(id);
-            }
-        }
-        products.push(ClassifiedProduct {
+        ClassifiedProduct {
             id,
             action,
             input_checksum,
             dep_changed,
-        });
+        }
+    };
+
+    let mut will_change: HashSet<usize> = HashSet::new();
+    let mut by_position: Vec<Option<ClassifiedProduct>> = Vec::new();
+    by_position.resize_with(order.len(), || None);
+    for level in dependency_levels(graph, order) {
+        let results = map_in_parallel(&level, parallel, |&(_, id)| classify_one(id, &will_change));
+        for (&(position, id), classified) in level.iter().zip(results) {
+            if classified.action != ProductAction::Skip {
+                will_change.insert(id);
+            }
+            by_position[position] = Some(classified);
+        }
     }
 
+    let products: Vec<ClassifiedProduct> = by_position
+        .into_iter()
+        .map(|c| c.expect("every product in order belongs to one level"))
+        .collect();
+    let count = |action| products.iter().filter(|c| c.action == action).count();
     Classification {
-        skip_count,
-        restore_count,
-        build_count,
+        skip_count: count(ProductAction::Skip),
+        restore_count: count(ProductAction::Restore),
+        build_count: count(ProductAction::Build),
         products,
     }
+}
+
+/// `order` (a topological order) split into dependency levels, each a list
+/// of (position in `order`, product id). Level 0 holds the products with no
+/// dependencies; every other product sits one level above its deepest
+/// dependency.
+fn dependency_levels(graph: &BuildGraph, order: &[usize]) -> Vec<Vec<(usize, usize)>> {
+    let mut level_of: HashMap<usize, usize> = HashMap::with_capacity(order.len());
+    let mut levels: Vec<Vec<(usize, usize)>> = Vec::new();
+    for (position, &id) in order.iter().enumerate() {
+        let level = graph
+            .get_dependencies(id)
+            .iter()
+            .filter_map(|d| level_of.get(d))
+            .max()
+            .map_or(0, |deepest| deepest + 1);
+        level_of.insert(id, level);
+        if levels.len() <= level {
+            levels.resize_with(level + 1, Vec::new);
+        }
+        levels[level].push((position, id));
+    }
+    levels
+}
+
+/// Below this many items a level is classified on the calling thread:
+/// starting threads would cost more than the work.
+const MIN_ITEMS_PER_THREAD: usize = 64;
+
+/// `f` applied to every item, on up to `parallel` scoped threads, results
+/// in item order. Each thread takes one contiguous chunk.
+fn map_in_parallel<T: Sync, R: Send>(
+    items: &[T],
+    parallel: usize,
+    f: impl Fn(&T) -> R + Sync,
+) -> Vec<R> {
+    let threads = parallel.min(items.len() / MIN_ITEMS_PER_THREAD).max(1);
+    if threads == 1 {
+        return items.iter().map(&f).collect();
+    }
+    let chunk = items.len().div_ceil(threads);
+    std::thread::scope(|scope| {
+        let handles: Vec<_> = items
+            .chunks(chunk)
+            .map(|part| scope.spawn(|| part.iter().map(&f).collect::<Vec<R>>()))
+            .collect();
+        handles
+            .into_iter()
+            .flat_map(|h| h.join().expect("a classify thread panicked"))
+            .collect()
+    })
 }
 
 /// Executor handles running products through their processors
@@ -735,7 +804,8 @@ mod tests {
         store.store_marker(&ctx, &marker_key).unwrap();
 
         let order = g.topological_sort().unwrap();
-        let classification = classify_products(&ctx, &IncrementalPolicy, &g, &order, &store, false);
+        let classification =
+            classify_products(&ctx, &IncrementalPolicy, &g, &order, &store, false, 1);
         let action_of = |id: usize| {
             classification
                 .products
@@ -756,6 +826,111 @@ mod tests {
             ProductAction::Skip,
             "the policy alone, on unchanged inputs, would skip it"
         );
+    }
+
+    /// The threaded walk gives the one-thread answer: a level large enough
+    /// to be split across threads still sees which dependencies change, and
+    /// the products come back in `order`.
+    #[test]
+    fn parallel_classify_matches_the_one_thread_walk() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let store = ObjectStore::new_in(tmp.path());
+        let ctx = crate::build_context::BuildContext::new();
+        ctx.set_mtime_check(false);
+
+        // 300 producer -> checker pairs. Even pairs are fully cached (both
+        // skip); odd pairs have no cache entry for the producer, so it
+        // builds and its checker is predicted to build too.
+        let mut g = BuildGraph::new();
+        let mut pairs = Vec::new();
+        for i in 0..300 {
+            let src = tmp.path().join(format!("{i}.src"));
+            let mid = tmp.path().join(format!("{i}.mid"));
+            std::fs::write(&src, format!("s{i}")).unwrap();
+            std::fs::write(&mid, format!("m{i}")).unwrap();
+            let producer = g
+                .add_product(vec![src.clone()], vec![mid.clone()], "gen", None)
+                .unwrap();
+            let checker = g
+                .add_product(vec![mid.clone()], vec![], "check", None)
+                .unwrap();
+            pairs.push((i, producer, checker, src, mid));
+        }
+        g.resolve_dependencies();
+        for (i, producer, checker, src, mid) in &pairs {
+            let mid_sum =
+                crate::checksum::combined_input_checksum(&ctx, std::slice::from_ref(mid)).unwrap();
+            let checker_key = g.get_product(*checker).unwrap().descriptor_key(&mid_sum);
+            store.store_marker(&ctx, &checker_key).unwrap();
+            if i % 2 == 0 {
+                let src_sum =
+                    crate::checksum::combined_input_checksum(&ctx, std::slice::from_ref(src))
+                        .unwrap();
+                let producer_key = g.get_product(*producer).unwrap().descriptor_key(&src_sum);
+                store.store_marker(&ctx, &producer_key).unwrap();
+            }
+        }
+
+        let order = g.topological_sort().unwrap();
+        let one = classify_products(&ctx, &IncrementalPolicy, &g, &order, &store, false, 1);
+        let many = classify_products(&ctx, &IncrementalPolicy, &g, &order, &store, false, 8);
+        let summary = |c: &Classification| -> Vec<(usize, ProductAction, bool)> {
+            c.products
+                .iter()
+                .map(|p| (p.id, p.action, p.dep_changed))
+                .collect()
+        };
+        assert_eq!(summary(&one), summary(&many));
+        assert_eq!(
+            many.products.iter().map(|p| p.id).collect::<Vec<_>>(),
+            order,
+            "products come back in order"
+        );
+        assert_eq!(
+            (many.skip_count, many.restore_count, many.build_count),
+            (300, 0, 300)
+        );
+        for (i, _, checker, _, _) in &pairs {
+            let c = many.products.iter().find(|p| p.id == *checker).unwrap();
+            assert_eq!(c.dep_changed, i % 2 == 1, "pair {i}");
+        }
+    }
+
+    /// Levels put every product strictly above its dependencies.
+    #[test]
+    fn dependency_levels_follow_the_deepest_dependency() {
+        let mut graph = BuildGraph::new();
+        let first = graph
+            .add_product(vec!["a.src".into()], vec!["a.o".into()], "cc", None)
+            .unwrap();
+        let second = graph
+            .add_product(vec!["a.o".into()], vec!["b.o".into()], "cc", None)
+            .unwrap();
+        let both = graph
+            .add_product(
+                vec!["a.o".into(), "b.o".into()],
+                vec!["c.o".into()],
+                "cc",
+                None,
+            )
+            .unwrap();
+        let alone = graph
+            .add_product(vec!["d.src".into()], vec!["d.o".into()], "cc", None)
+            .unwrap();
+        graph.resolve_dependencies();
+        let order = graph.topological_sort().unwrap();
+        let ids = |level: &Vec<(usize, usize)>| -> Vec<usize> {
+            let mut ids: Vec<usize> = level.iter().map(|&(_, id)| id).collect();
+            ids.sort_unstable();
+            ids
+        };
+        let levels = dependency_levels(&graph, &order);
+        let mut roots = vec![first, alone];
+        roots.sort_unstable();
+        assert_eq!(levels.len(), 3);
+        assert_eq!(ids(&levels[0]), roots);
+        assert_eq!(ids(&levels[1]), vec![second]);
+        assert_eq!(ids(&levels[2]), vec![both]);
     }
 
     /// Every product is handed out exactly once — a dropped product would

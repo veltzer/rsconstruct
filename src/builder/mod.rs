@@ -546,29 +546,13 @@ impl Builder {
             }
         }
 
-        // Stage 2: pre-scan classify. Walk the deduped (analyzer, source) set
-        // and classify each pair exactly once. Splits the hit count into mtime
-        // vs checksum so the user can see how much of the cache work was
-        // I/O-free (mtime matched) vs had to re-hash the file (mtime stale but
-        // content unchanged, e.g. a touched file).
-        let mut mtime_hits: usize = 0;
-        let mut content_hits: usize = 0;
-        let mut misses: usize = 0;
-        for (index, source) in &unique_pairs {
-            match analysis.classify(ctx, *index, source) {
-                crate::deps_cache::ClassifyResult::MtimeHit => mtime_hits += 1,
-                crate::deps_cache::ClassifyResult::ContentHit => content_hits += 1,
-                crate::deps_cache::ClassifyResult::Miss => misses += 1,
-            }
-        }
-        if unique_count > 0 && !suppress {
-            let cached = mtime_hits + content_hits;
-            println!(
-                "[deps] {misses} to rescan ({cached} cached: {mtime_hits} mtime, {content_hits} checksum)",
-            );
-        }
-
-        // Stage 3: actual scan. Progress bar still ticks per-product since
+        // Stage 2: the scan. There is no separate prediction pass: one used
+        // to validate every cached entry (the source and each dependency)
+        // only to print a "to rescan" count, then the scan validated them
+        // all again, doubling this phase. The summary below reports the
+        // same split from the scan itself.
+        //
+        // Progress bar still ticks per-product since
         // `analyze_graph` ticks once per consuming product (so the bar
         // matches what users expect from the build graph).
         let hidden = verbose || crate::json_output::is_json_mode() || crate::runtime_flags::quiet();

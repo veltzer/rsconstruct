@@ -30,16 +30,84 @@ struct MtimeEntry {
     checksum: String,
 }
 
-/// Mtime entries computed this session and not yet written, by path key.
+/// The session's view of the mtime cache, by path key.
 ///
+/// `stored` is the database table, read into memory on the first lookup.
+/// Looking each file up in redb cost a read transaction, a B-tree walk and
+/// a lock on the one shared database handle per file — 75k of them for a
+/// build that changes nothing — and the lock serialized every thread that
+/// checksums. One read of the table up front makes each lookup a hash-map
+/// probe under a read lock, which any number of threads take at once.
+///
+/// `pending` holds entries computed this session and not yet written.
 /// Writing each entry as it was computed cost one durable redb commit (an
 /// fdatasync) per checksummed file. Entries are staged here instead and
 /// written by `flush_mtime_cache` at a few points in a run: after classify,
-/// after execute, and when the command ends. Lookups see a staged entry at
-/// once. An entry lost to a crash only costs a re-hash on the next run.
+/// after execute, and when the command ends; the flush moves them into
+/// `stored`. Lookups see a staged entry at once. An entry lost to a crash
+/// only costs a re-hash on the next run.
+///
+/// Another process writing the database meanwhile cannot make `stored`
+/// wrong, only stale: every entry is checked against the file's stamp, so a
+/// stale one is a miss and a re-hash.
 #[derive(Default)]
-pub struct PendingMtime {
-    entries: HashMap<String, MtimeEntry>,
+pub struct MtimeState {
+    stored: Option<HashMap<String, MtimeEntry>>,
+    pending: HashMap<String, MtimeEntry>,
+}
+
+impl MtimeState {
+    fn get(&self, path_str: &str) -> Option<&MtimeEntry> {
+        self.pending
+            .get(path_str)
+            .or_else(|| self.stored.as_ref()?.get(path_str))
+    }
+}
+
+/// Read the whole mtime table into memory. A table that does not exist yet
+/// is a fresh cache: empty. An entry that does not parse (written by
+/// another rsconstruct version) is left out, so it is a miss: the file is
+/// re-hashed and the entry rewritten. Any other storage error is reported
+/// rather than turning the mtime cache off without a word.
+fn load_mtime_table(ctx: &BuildContext) -> Result<HashMap<String, MtimeEntry>> {
+    let db_guard = get_mtime_db(ctx)?;
+    let db = crate::errors::ctx_opt(db_guard.as_ref(), "Mtime database not available")?;
+    let read_txn = crate::errors::ctx(
+        db.begin_read(),
+        "Failed to begin read transaction for mtime cache",
+    )?;
+    let table = match read_txn.open_table(MTIME_TABLE) {
+        Ok(table) => table,
+        Err(redb::TableError::TableDoesNotExist(_)) => return Ok(HashMap::new()),
+        Err(e) => {
+            return Err(anyhow::Error::from(e).context("Failed to open the mtime cache table"));
+        }
+    };
+    let mut stored = HashMap::new();
+    for row in table.iter().context("Failed to iterate the mtime cache")? {
+        let (key, value) = row.context("Failed to read an mtime cache entry")?;
+        if let Ok(entry) = serde_json::from_slice::<MtimeEntry>(value.value()) {
+            stored.insert(key.value().to_string(), entry);
+        }
+    }
+    Ok(stored)
+}
+
+/// The cached entry for `path_str`, staged or stored, loading the table on
+/// first use.
+fn lookup_mtime_entry(ctx: &BuildContext, path_str: &str) -> Result<Option<MtimeEntry>> {
+    {
+        let state = ctx.mtime_state.read().unwrap();
+        if state.stored.is_some() {
+            return Ok(state.get(path_str).cloned());
+        }
+    }
+    let mut state = ctx.mtime_state.write().unwrap();
+    // Another thread may have loaded it while this one waited.
+    if state.stored.is_none() {
+        state.stored = Some(load_mtime_table(ctx)?);
+    }
+    Ok(state.get(path_str).cloned())
 }
 
 /// Seconds within which a file counts as just changed: no entry is stored
@@ -172,45 +240,22 @@ fn fast_checksum(
 ) -> Result<(String, ChecksumPath, Option<DirtyMtimeEntry>)> {
     let metadata =
         fs::metadata(path).with_context(|| format!("Failed to stat file: {}", path.display()))?;
-    let stamp = crate::platform::file_stamp(&metadata);
+    fast_checksum_with_metadata(ctx, path, &metadata)
+}
+
+/// [`fast_checksum`] for a caller that has already stat'ed `path`, so the
+/// file is not stat'ed a second time.
+fn fast_checksum_with_metadata(
+    ctx: &BuildContext,
+    path: &Path,
+    metadata: &fs::Metadata,
+) -> Result<(String, ChecksumPath, Option<DirtyMtimeEntry>)> {
+    let stamp = crate::platform::file_stamp(metadata);
 
     let path_str = path.display().to_string();
 
-    // Check the staged entries, then the mtime cache in DB
-    let staged = ctx
-        .mtime_pending
-        .lock()
-        .unwrap()
-        .entries
-        .get(&path_str)
-        .cloned();
-    let db_guard = get_mtime_db(ctx)?;
-    let cached = if staged.is_some() {
-        staged
-    } else if let Some(ref db) = *db_guard {
-        let read_txn = crate::errors::ctx(
-            db.begin_read(),
-            "Failed to begin read transaction for mtime cache",
-        )?;
-        // A table that does not exist yet is a fresh cache: a miss. Any other
-        // storage error is reported rather than turning the mtime cache off
-        // for good without a word. An entry that does not parse (written by
-        // another rsconstruct version) is a miss: the file is re-hashed and
-        // the entry rewritten.
-        match read_txn.open_table(MTIME_TABLE) {
-            Ok(table) => table
-                .get(path_str.as_str())
-                .with_context(|| format!("Failed to read the mtime cache entry of {path_str}"))?
-                .and_then(|data| serde_json::from_slice::<MtimeEntry>(data.value()).ok()),
-            Err(redb::TableError::TableDoesNotExist(_)) => None,
-            Err(e) => {
-                return Err(anyhow::Error::from(e).context("Failed to open the mtime cache table"));
-            }
-        }
-    } else {
-        None
-    };
-    drop(db_guard);
+    // The staged entries, then the stored table (see `MtimeState`).
+    let cached = lookup_mtime_entry(ctx, &path_str)?;
 
     if let Some(ref entry) = cached
         && entry.stamp == stamp
@@ -264,15 +309,24 @@ fn stage_mtime_entries(ctx: &BuildContext, dirty: Vec<DirtyMtimeEntry>) {
     if dirty.is_empty() {
         return;
     }
-    ctx.mtime_pending.lock().unwrap().entries.extend(dirty);
+    ctx.mtime_state.write().unwrap().pending.extend(dirty);
 }
 
-/// Write every staged mtime entry in a single write transaction.
+/// Write every staged mtime entry in a single write transaction, then move
+/// them into the session's copy of the table.
+///
+/// The staged entries stay visible to lookups until the commit is done: they
+/// are copied out under the lock, not taken, and removed only afterwards
+/// (unless a newer entry for the same path was staged meanwhile).
 pub fn flush_mtime_cache(ctx: &BuildContext) -> Result<()> {
-    let dirty: Vec<DirtyMtimeEntry> =
-        std::mem::take(&mut ctx.mtime_pending.lock().unwrap().entries)
-            .into_iter()
-            .collect();
+    let dirty: Vec<DirtyMtimeEntry> = ctx
+        .mtime_state
+        .read()
+        .unwrap()
+        .pending
+        .iter()
+        .map(|(k, v)| (k.clone(), v.clone()))
+        .collect();
     if dirty.is_empty() {
         return Ok(());
     }
@@ -294,6 +348,20 @@ pub fn flush_mtime_cache(ctx: &BuildContext) -> Result<()> {
         }
     }
     crate::errors::ctx(write_txn.commit(), "Failed to commit mtime cache entries")?;
+    drop(db_guard);
+    let mut state = ctx.mtime_state.write().unwrap();
+    for (path_str, entry) in dirty {
+        if state
+            .pending
+            .get(&path_str)
+            .is_some_and(|p| p.stamp == entry.stamp && p.checksum == entry.checksum)
+        {
+            state.pending.remove(&path_str);
+        }
+        if let Some(stored) = state.stored.as_mut() {
+            stored.insert(path_str, entry);
+        }
+    }
     Ok(())
 }
 
@@ -385,6 +453,12 @@ pub fn prune_mtime_cache(ctx: &BuildContext) -> Result<usize> {
         }
     }
     crate::errors::ctx(write_txn.commit(), "Failed to commit mtime cache prune")?;
+    drop(db_guard);
+    if let Some(stored) = ctx.mtime_state.write().unwrap().stored.as_mut() {
+        for path_str in &stale {
+            stored.remove(path_str);
+        }
+    }
     Ok(stale.len())
 }
 
@@ -438,18 +512,20 @@ fn compute_combined_input_checksum(ctx: &BuildContext, inputs: &[PathBuf]) -> Re
     let mut dirty_entries = Vec::new();
 
     for input in inputs {
-        if input.exists() {
-            if mtime_enabled {
-                let (checksum, _, dirty) = fast_checksum(ctx, input)?;
-                checksums.push(checksum);
-                if let Some(entry) = dirty {
-                    dirty_entries.push(entry);
-                }
-            } else {
-                checksums.push(file_checksum(ctx, input)?);
+        // One stat answers both "does it exist" and "what is its stamp".
+        // Any stat failure counts as missing, as `Path::exists` did here.
+        let Ok(metadata) = fs::metadata(input) else {
+            checksums.push(format!("MISSING:{}", input.display()));
+            continue;
+        };
+        if mtime_enabled {
+            let (checksum, _, dirty) = fast_checksum_with_metadata(ctx, input, &metadata)?;
+            checksums.push(checksum);
+            if let Some(entry) = dirty {
+                dirty_entries.push(entry);
             }
         } else {
-            checksums.push(format!("MISSING:{}", input.display()));
+            checksums.push(file_checksum(ctx, input)?);
         }
     }
 
@@ -538,7 +614,48 @@ mod tests {
 
         flush_mtime_cache(&ctx).unwrap();
         assert_eq!(stored(&ctx), Some("staged".to_string()));
-        assert!(ctx.mtime_pending.lock().unwrap().entries.is_empty());
+        let state = ctx.mtime_state.read().unwrap();
+        assert!(state.pending.is_empty());
+        assert_eq!(
+            state.get(&key).map(|e| e.checksum.as_str()),
+            Some("staged"),
+            "the flushed entry moved into the session's copy of the table"
+        );
+    }
+
+    /// The table is read once and then served from memory, and an entry
+    /// another rsconstruct version wrote (one that does not parse) is a miss
+    /// rather than an error.
+    #[test]
+    fn stored_table_is_loaded_once_and_skips_unparsable_entries() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let ctx = BuildContext::new();
+        let db = redb::Database::create(tmp.path().join("mtime.redb")).unwrap();
+        let path = tmp.path().join("f.txt");
+        fs::write(&path, "content").unwrap();
+        let key = path.display().to_string();
+        let entry = MtimeEntry {
+            stamp: crate::platform::file_stamp(&fs::metadata(&path).unwrap()),
+            checksum: "from-db".to_string(),
+        };
+        let txn = db.begin_write().unwrap();
+        {
+            let mut table = txn.open_table(MTIME_TABLE).unwrap();
+            let value = serde_json::to_vec(&entry).unwrap();
+            table.insert(key.as_str(), value.as_slice()).unwrap();
+            table.insert("garbage", b"not json".as_slice()).unwrap();
+        }
+        txn.commit().unwrap();
+        *ctx.mtime_db.lock().unwrap() = Some(db);
+
+        assert_eq!(
+            checksum_fast(&ctx, &path).unwrap(),
+            ("from-db".to_string(), ChecksumPath::MtimeShortcut)
+        );
+        let state = ctx.mtime_state.read().unwrap();
+        let stored = state.stored.as_ref().expect("loaded by the first lookup");
+        assert!(stored.contains_key(&key));
+        assert!(!stored.contains_key("garbage"));
     }
 
     /// A file whose ctime is recent counts as just changed even when its

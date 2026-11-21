@@ -77,19 +77,6 @@ pub struct AnalyzerId<'a> {
     pub fingerprint: &'a str,
 }
 
-/// Result of a `classify` call — the predict-pass analogue of `DepsCacheStats`.
-/// `MtimeHit` + `ContentHit` = a hit that `get` would also report; Miss means
-/// `get` would rescan.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum ClassifyResult {
-    /// Cache valid, mtime-cache shortcut applied (no I/O needed).
-    MtimeHit,
-    /// Cache valid, but mtime was stale so the file was read and re-hashed.
-    ContentHit,
-    /// Cache invalid or absent.
-    Miss,
-}
-
 /// Statistics about dependency cache usage.
 /// `mtime_hits + content_hits == hits` always holds.
 #[derive(Debug, Default, Clone)]
@@ -162,25 +149,7 @@ impl DepsCache {
         Some(deps)
     }
 
-    /// Dry-run of `get`: predict whether this (analyzer, source) pair would
-    /// hit the cache, and if so whether the mtime shortcut would apply.
-    /// Used by the pre-scan classify pass to count expected hits vs rescans
-    /// before the actual scan runs. Identical validity rules to `get`.
-    /// Does not touch stats.
-    pub fn classify(
-        &self,
-        ctx: &BuildContext,
-        analyzer: AnalyzerId<'_>,
-        source: &Path,
-    ) -> ClassifyResult {
-        match self.lookup(ctx, analyzer, source) {
-            None => ClassifyResult::Miss,
-            Some((_, ChecksumPath::MtimeShortcut)) => ClassifyResult::MtimeHit,
-            Some((_, ChecksumPath::FullRead)) => ClassifyResult::ContentHit,
-        }
-    }
-
-    /// The validity rules shared by `get` and `classify`: the cached list for
+    /// The validity rules `get` applies: the cached list for
     /// `source` and how its checksum was confirmed, or None when the entry
     /// cannot be trusted.
     ///
@@ -655,7 +624,6 @@ mod tests {
             fingerprint: "config-b",
         };
         assert_eq!(cache.get(&ctx, other, &source), None);
-        assert_eq!(cache.classify(&ctx, other, &source), ClassifyResult::Miss);
     }
 
     /// A probe path that was missing when the source was scanned must still
@@ -687,7 +655,6 @@ mod tests {
 
         fs::write(&shadow, "\n").unwrap();
         assert_eq!(cache.get(&ctx, ICPP, &source), None);
-        assert_eq!(cache.classify(&ctx, ICPP, &source), ClassifyResult::Miss);
     }
 
     /// Regression guard: every `get` call must increment exactly one counter.

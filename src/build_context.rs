@@ -1,8 +1,8 @@
 use redb::Database;
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
-use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Mutex, RwLock};
 use tokio::runtime::Runtime;
 use tokio::sync::watch;
 
@@ -23,9 +23,11 @@ pub struct BuildContext {
     pub(crate) checksum_cache: Mutex<Option<HashMap<PathBuf, String>>>,
     /// Persistent mtime database — maps (path, mtime) → checksum across builds.
     pub(crate) mtime_db: Mutex<Option<Database>>,
-    /// Mtime entries computed this session and not yet written to `mtime_db`.
-    /// See `checksum::flush_mtime_cache`.
-    pub(crate) mtime_pending: Mutex<crate::checksum::PendingMtime>,
+    /// The mtime table read into memory, plus entries computed this session
+    /// and not yet written to `mtime_db`. A read-write lock so threads that
+    /// checksum in parallel look entries up at once. See
+    /// `checksum::MtimeState`.
+    pub(crate) mtime_state: RwLock<crate::checksum::MtimeState>,
     /// Whether mtime pre-check is enabled by configuration (`[cache]
     /// mtime_check`). Re-applied from the config on every builder
     /// construction, so a config edit under `rsconstruct watch` takes effect
@@ -76,7 +78,7 @@ impl BuildContext {
             interrupt_rx,
             checksum_cache: Mutex::new(None),
             mtime_db: Mutex::new(None),
-            mtime_pending: Mutex::new(crate::checksum::PendingMtime::default()),
+            mtime_state: RwLock::new(crate::checksum::MtimeState::default()),
             mtime_config_enabled: AtomicBool::new(true),
             mtime_forced_off: AtomicBool::new(false),
             max_arg_len: std::sync::atomic::AtomicUsize::new(1_000_000),

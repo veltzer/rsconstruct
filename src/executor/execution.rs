@@ -593,7 +593,7 @@ impl Executor<'_> {
             // Only the workers hold senders now: if they all exit, the
             // coordinator's receive fails instead of waiting forever.
             drop(tx);
-            let outcome = self.coordinate(&graph_lock, &queue, &rx, object_store, &shared, refresh);
+            let outcome = self.coordinate(&lctx, &queue, &rx, refresh);
             // Release the workers whatever happened, or the scope never ends.
             queue.close();
             outcome
@@ -672,13 +672,12 @@ impl Executor<'_> {
     /// running products drained.
     fn coordinate(
         &self,
-        graph: &RwLock<BuildGraph>,
+        lctx: &LevelContext<'_>,
         queue: &WorkQueue,
         finished: &mpsc::Receiver<Vec<usize>>,
-        object_store: &ObjectStore,
-        shared: &SharedState,
         mut refresh: Option<&mut GraphRefresh<'_>>,
     ) -> Result<()> {
+        let (graph, object_store, shared) = (lctx.graph, lctx.object_store, lctx.shared);
         // Batching checkers run once over all their files (see
         // `ReadyTracker`); with batching off every product is its own
         // invocation and there is nothing to hold together.
@@ -712,7 +711,19 @@ impl Executor<'_> {
             if !stopping {
                 let wave = tracker.take_ready();
                 if !wave.is_empty() {
-                    let work = self.prepare_level_work(&graph.read(), &wave, object_store, shared);
+                    let mut work =
+                        self.prepare_level_work(&graph.read(), &wave, object_store, shared);
+                    // A product that skips does no work: settle it here
+                    // rather than queue it. Through the queue every skip
+                    // cost a worker hand-off, a completion message and
+                    // their allocations, and on a build where most
+                    // products skip, the workers spent their time
+                    // contending for the allocator and the shared locks
+                    // instead (a no-op build of 18k products lost ~100 ms
+                    // to it). Settled products are finished below.
+                    for item in work.take_skips() {
+                        self.try_skip_or_restore(&item, &item.product.processor, lctx);
+                    }
                     let units = self.units_of(work);
                     let queued: HashSet<usize> = units.iter().flat_map(Unit::product_ids).collect();
                     // Products prepare settled without running — a failed

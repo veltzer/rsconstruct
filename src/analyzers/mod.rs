@@ -10,7 +10,7 @@ pub mod python;
 mod sass;
 mod tera;
 
-use crate::deps_cache::{AnalyzerId, ClassifyResult, DepsCache, DepsCacheStats};
+use crate::deps_cache::{AnalyzerId, DepsCache, DepsCacheStats};
 use crate::file_index::FileIndex;
 use crate::graph::{BuildGraph, Product};
 use crate::processor::{format_command, run_command_capture};
@@ -71,9 +71,9 @@ pub trait DepAnalyzer: Sync + Send {
     }
 
     /// Return the source paths this analyzer would scan, one entry per
-    /// (product, source) pair. Used by the pre-scan classify pass to predict
-    /// cache-hit / rescan counts before any work runs. Default impl iterates
-    /// over products and collects each `match_sources` result.
+    /// (product, source) pair. Used to announce how many unique files the
+    /// dependency phase will check. Default impl iterates over products and
+    /// collects each `match_sources` result.
     fn matching_sources(&self, graph: &BuildGraph) -> Vec<PathBuf> {
         graph
             .products()
@@ -430,21 +430,6 @@ impl Analysis {
             .collect()
     }
 
-    /// Predict what scanning one (analyzer, source) pair will cost. An
-    /// analyzer that always rescans never hits the cache.
-    pub fn classify(
-        &self,
-        ctx: &crate::build_context::BuildContext,
-        index: usize,
-        source: &Path,
-    ) -> ClassifyResult {
-        let a = &self.analyzers[index];
-        if a.analyzer.always_rescan() {
-            return ClassifyResult::Miss;
-        }
-        self.deps_cache.classify(ctx, a.id(), source)
-    }
-
     pub const fn stats(&self) -> &DepsCacheStats {
         self.deps_cache.stats()
     }
@@ -599,8 +584,8 @@ impl Analysis {
                 return Ok(ScanResult::deps(deps, Vec::new()));
             }
         } else {
-            // Matches the pre-scan prediction (`classify`), which counts
-            // every always-rescan source as a rescan.
+            // Counted as a rescan so the summary's miss count is every
+            // source actually scanned.
             deps_cache.count_uncached_scan();
         }
         let source_checksum = DepsCache::source_checksum(ctx, source)?;

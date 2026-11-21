@@ -261,6 +261,70 @@ half.
 3. **SHA-256** (~3 %) — already hardware-accelerated; the only lever is
    fewer calls, via memoized `input_checksum` or better batch reuse.
 
+## Run: 2026-11-21 — rsconstruct 0.9.195 — no-op `build` on `teaching-slides`
+
+### Target
+
+- Command: `rsconstruct --quiet --color=never build`, nothing to do.
+- Project: `../teaching-slides`, now 18,018 products and 74,705 input
+  references (51,187 unique inputs).
+- Measured with `/usr/bin/time`, `--trace`, `strace -c` and `perf record -g`
+  on a release build with line tables and frame pointers. Note: the
+  `profiling` profile (fat LTO plus full debug info) peaked at 8 GB and was
+  OOM-killed on a 30 GB desktop; build a thin-LTO release with
+  `CARGO_PROFILE_RELEASE_STRIP=false` and
+  `CARGO_PROFILE_RELEASE_DEBUG=line-tables-only` instead.
+
+### Before
+
+0.76 s wall (2.3 s with a cold page cache), more system than user time:
+381k `statx` calls (about five per input) and 39k files opened. Classify was
+236 ms of it, on one thread; the dependency phase 105 ms.
+
+### Changes
+
+1. **Classify runs in parallel**, one dependency level at a time
+   (`executor::classify_products`). Products of one level do not depend on
+   each other, so "will a dependency change" is answered from finished
+   levels and the policy is consulted for exactly the products the serial
+   walk consulted it for.
+2. **The mtime table is read into memory once** (`checksum::MtimeState`),
+   behind a read-write lock. Each lookup used to open a redb read
+   transaction under one global mutex, which also serialized any threads
+   that checksum.
+3. **The dependency phase validates each cached source once.** A
+   prediction pass used to validate every entry (source plus every
+   dependency) only to print a "to rescan" count, then the scan validated
+   them all again.
+4. **One `stat` per input** in `combined_input_checksum` instead of
+   `exists()` followed by `metadata()`.
+5. **Skipped products are settled by the coordinator** instead of being
+   queued to workers. Once classify got fast, 16 workers handling 18k
+   trivial skip units spent their time contending for the allocator lock
+   and the shared stats locks (perf: `futex_wait` under `free`).
+
+### After
+
+| Threads | 0.9.195 | after |
+|---|---|---|
+| 1 | 0.757 s | 0.530 s |
+| 4 | 0.773 s | 0.453 s |
+| 16 | 0.790 s | 0.447 s |
+
+`statx` calls fell from 381k to 224k; classify from 236 ms to about 50 ms.
+
+### Candidate next targets
+
+- **Descriptors are 18k small JSON files**, one opened and parsed per
+  product on every build, twice (classify, then the executor's re-check).
+  This is most of the cold-cache time. Keeping them in redb, or a
+  per-product "last good" record, would remove the opens.
+- **The executor re-checks every product serially** (`prepare_level_work`):
+  it re-takes every input checksum and re-reads every descriptor that
+  classify just did, about 100 ms here. The re-check is needed for products
+  downstream of something that ran; a product whose dependencies all
+  skipped could reuse its classify result.
+
 ## See also
 
 - [Path Interning](path-interning.md) — the optimization applied in the
