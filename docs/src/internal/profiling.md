@@ -352,10 +352,26 @@ Cache](checksum-cache.md).
 
 The remaining `statx` calls are one per input plus about 800 others. The
 benchmark has no shared inputs, so it shows only the executor's second
-look disappearing. A project like `teaching-slides` (75k input references
-to 51k files) also loses the repeats across products. The win should be
-largest with a cold page cache, which was not measured (dropping it needs
-root).
+look disappearing.
+
+On `teaching-slides` (18,018 products, 75k input references to 51k files),
+same cache, mean of 10 runs, 0.9.197 built from its tag for the
+comparison:
+
+| | 0.9.195 | 0.9.197 | 0.9.198 |
+|---|---|---|---|
+| `statx` calls | 381k | 188k | 44k |
+| files opened | 39k | 3.3k | 3.3k |
+| `-j1` wall | 0.757 s | 0.47 s | 0.32 s |
+| `-j16` wall | 0.790 s | 0.39 s | 0.285 s |
+| system time | more than user | 0.20 s | 0.09 s |
+
+Half of the remaining `statx` calls fail and cost little (59 ms of kernel
+time for all 44k). About 13k are the `ignore` walker looking for `.git`,
+`.jj`, `.ignore`, `.gitignore` and `.rsconstructignore` in each of the
+project's 2.6k directories. About 5.4k are `.svg` paths that do not exist.
+A build with a cold page cache was not measured: dropping the cache needs
+root.
 
 ## See also
 
