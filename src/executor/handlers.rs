@@ -48,7 +48,7 @@ impl Executor<'_> {
         );
         Self::update_stats(shared, &product.processor, |s| s.failed += 1);
         shared.failed_products.lock().insert(id);
-        crate::checksum::forget_in_session(self.build_ctx, &product.outputs);
+        crate::checksum::forget_in_session(self.build_ctx, &product.outputs, &product.output_dirs);
 
         let msg = self.failure_message(product, error);
         if self.keep_going {
@@ -131,7 +131,11 @@ impl Executor<'_> {
             Ok(true) => {
                 // The restore rewrote the outputs on disk; evict any
                 // pre-restore checksums from the in-session cache.
-                crate::checksum::forget_in_session(self.build_ctx, &ctx.product.outputs);
+                crate::checksum::forget_in_session(
+                    self.build_ctx,
+                    &ctx.product.outputs,
+                    &ctx.product.output_dirs,
+                );
                 ctx.shared.changed.lock().push(ctx.id);
                 crate::output::detail(
                     self.verbose,
@@ -190,9 +194,13 @@ impl Executor<'_> {
         // in-session checksum cache so every later read — the recompute
         // below when outputs double as inputs, and downstream products
         // consuming them — hashes the new bytes instead of returning the
-        // pre-write value. `fast_checksum` re-hashes on mtime change, but
-        // with mtime checking off `file_checksum` has no other invalidation.
-        crate::checksum::forget_in_session(self.build_ctx, &ctx.product.outputs);
+        // pre-write value: the session's checksums are served without a
+        // stat, so this eviction is their only invalidation.
+        crate::checksum::forget_in_session(
+            self.build_ctx,
+            &ctx.product.outputs,
+            &ctx.product.output_dirs,
+        );
         ctx.shared.changed.lock().push(ctx.id);
 
         // The outputs are cached under the checksum taken at dispatch
@@ -203,15 +211,17 @@ impl Executor<'_> {
         // outputs; caching under the old would serve them if that content
         // ever came back. So they are not cached at all, and the next build
         // runs the product again against whatever the input is then.
-        let post_input_checksum =
-            match crate::checksum::combined_input_checksum(self.build_ctx, &ctx.product.inputs) {
-                Ok(cs) => cs,
-                Err(e) => {
-                    let e = e.context("Failed to compute post-execution input checksum");
-                    self.fail_product(ctx.shared, ctx.id, ctx.product, &e, duration, false);
-                    return false;
-                }
-            };
+        let post_input_checksum = match crate::checksum::fresh_combined_input_checksum(
+            self.build_ctx,
+            &ctx.product.inputs,
+        ) {
+            Ok(cs) => cs,
+            Err(e) => {
+                let e = e.context("Failed to compute post-execution input checksum");
+                self.fail_product(ctx.shared, ctx.id, ctx.product, &e, duration, false);
+                return false;
+            }
+        };
         if post_input_checksum != ctx.input_checksum {
             crate::output::warn(&format!(
                 "[{}] {}: inputs changed while it ran; outputs not cached, it will run again next build",

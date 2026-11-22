@@ -138,34 +138,63 @@ fn get_mtime_db(ctx: &BuildContext) -> Result<std::sync::MutexGuard<'_, Option<r
 /// `HASH_BUF_SIZE` regardless of file size — a 100 MB binary doesn't
 /// allocate a 100 MB Vec.
 pub fn file_checksum(ctx: &BuildContext, path: &Path) -> Result<String> {
-    let mut guard = ctx.checksum_cache.lock().unwrap();
-    let cache = guard.get_or_insert_with(HashMap::new);
-    if let Some(cached) = cache.get(path) {
-        return Ok(cached.clone());
+    if let Some(cached) = session_checksum(ctx, path) {
+        return Ok(cached);
     }
+    // Hashed outside the lock, so other threads keep reading meanwhile.
     let checksum = stream_file_checksum(path)?;
-    cache.insert(path.to_path_buf(), checksum.clone());
+    remember_in_session(ctx, path, &checksum);
     Ok(checksum)
 }
 
-/// Evict paths from the in-session checksum cache. The executor calls this
-/// whenever it writes or restores files (a product's outputs): the
-/// in-session cache assumes content is stable across one build run, and
-/// these are exactly the writes that break that assumption. Without
-/// eviction, the non-mtime path (`file_checksum`) serves the pre-write
-/// checksum to every later reader — including the post-execution
-/// descriptor-key recompute, which then keys the cache by content that no
-/// longer exists. (`fast_checksum` re-hashes on mtime change, so only
-/// `mtime_check = false` builds were affected.)
-pub fn forget_in_session(ctx: &BuildContext, paths: &[std::path::PathBuf]) {
-    let mut guard = ctx.checksum_cache.lock().unwrap();
-    if let Some(cache) = guard.as_mut() {
+/// The checksum this session already took of `path`, if any.
+///
+/// Within one build run an input's checksum is taken once and then served
+/// from here, without a `stat`: content is assumed stable for the run except
+/// where the build itself writes, and every such write goes through
+/// [`forget_in_session`]. A build of 18k products referencing 75k inputs
+/// (51k distinct) used to stat each reference at classify and again in the
+/// executor, about 224k `statx` calls for a build that changed nothing.
+///
+/// The one reader that must not trust it is the check, after a product ran,
+/// that its inputs were not edited while the tool ran; it calls
+/// [`fresh_combined_input_checksum`].
+fn session_checksum(ctx: &BuildContext, path: &Path) -> Option<String> {
+    ctx.checksum_cache.read().unwrap().get(path).cloned()
+}
+
+fn remember_in_session(ctx: &BuildContext, path: &Path, checksum: &str) {
+    ctx.checksum_cache
+        .write()
+        .unwrap()
+        .insert(path.to_path_buf(), checksum.to_string());
+}
+
+/// Evict the files a product writes from the in-session caches: its
+/// declared `paths`, and every file under its declared output `dirs`, whose
+/// contents are not listed one by one. The executor calls this whenever it
+/// writes or restores a product's outputs, the writes that break the
+/// in-session assumption that content is stable for the run. Without it, the
+/// rewritten file's old checksum would be served to every later reader,
+/// starting with the executor's check of the downstream products that
+/// consume it.
+pub fn forget_in_session(ctx: &BuildContext, paths: &[PathBuf], dirs: &[std::sync::Arc<PathBuf>]) {
+    let under_a_dir = |path: &Path| dirs.iter().any(|d| path.starts_with(d.as_path()));
+    {
+        let mut cache = ctx.checksum_cache.write().unwrap();
         for path in paths {
             cache.remove(path);
         }
+        if !dirs.is_empty() {
+            cache.retain(|path, _| !under_a_dir(path));
+        }
     }
-    drop(guard);
-    ctx.combined_memo.lock().unwrap().forget(paths);
+    let mut memo = ctx.combined_memo.lock().unwrap();
+    if paths.iter().any(|p| memo.covered.contains(p))
+        || (!dirs.is_empty() && memo.covered.iter().any(|p| under_a_dir(p)))
+    {
+        *memo = CombinedMemo::default();
+    }
 }
 
 /// Input lists at least this long have their combined checksum memoized for
@@ -197,13 +226,6 @@ impl CombinedMemo {
     fn insert(&mut self, inputs: &[PathBuf], combined: String) {
         self.covered.extend(inputs.iter().cloned());
         self.by_inputs.insert(inputs.to_vec(), combined);
-    }
-
-    fn forget(&mut self, paths: &[PathBuf]) {
-        if paths.iter().any(|p| self.covered.contains(p)) {
-            self.by_inputs.clear();
-            self.covered.clear();
-        }
     }
 }
 
@@ -260,25 +282,17 @@ fn fast_checksum_with_metadata(
     if let Some(ref entry) = cached
         && entry.stamp == stamp
     {
-        let mut guard = ctx.checksum_cache.lock().unwrap();
-        let cache = guard.get_or_insert_with(HashMap::new);
-        cache.insert(path.to_path_buf(), entry.checksum.clone());
+        remember_in_session(ctx, path, &entry.checksum);
         return Ok((entry.checksum.clone(), ChecksumPath::MtimeShortcut, None));
     }
 
     // mtime changed or no cache entry — recompute checksum from disk.
     //
-    // We bypass `file_checksum` (which would consult `ctx.checksum_cache`)
-    // because the in-session cache assumes file content is stable across a
-    // single build run. That assumption is wrong when an upstream product
-    // writes a file mid-build: a stale entry from a pre-rebuild read would
-    // be returned here even though mtime told us the file changed. Hash
-    // the bytes directly, then refresh the in-session cache.
+    // The caller stat'ed the file, so it wants what is on disk now, not a
+    // checksum this session took earlier: hash the bytes directly, then
+    // refresh the in-session cache.
     let checksum = stream_file_checksum(path)?;
-    let mut guard = ctx.checksum_cache.lock().unwrap();
-    let cache = guard.get_or_insert_with(HashMap::new);
-    cache.insert(path.to_path_buf(), checksum.clone());
-    drop(guard);
+    remember_in_session(ctx, path, &checksum);
     // Don't persist an entry for a file changed moments ago: on coarse-
     // timestamp filesystems a write landing in the same tick after we
     // hashed would leave a permanently valid-looking (stamp, checksum) pair
@@ -462,10 +476,14 @@ pub fn prune_mtime_cache(ctx: &BuildContext) -> Result<usize> {
     Ok(stale.len())
 }
 
-/// Compute a file's checksum, consulting the persistent mtime cache first.
+/// Compute an input file's checksum: the one this session already took (see
+/// [`session_checksum`]), else through the persistent mtime cache.
 pub fn checksum_fast(ctx: &BuildContext, path: &Path) -> Result<(String, ChecksumPath)> {
     if !ctx.mtime_check_enabled() {
         return Ok((file_checksum(ctx, path)?, ChecksumPath::FullRead));
+    }
+    if let Some(checksum) = session_checksum(ctx, path) {
+        return Ok((checksum, ChecksumPath::MtimeShortcut));
     }
     let (checksum, path_taken, dirty) = fast_checksum(ctx, path)?;
     stage_mtime_entries(ctx, dirty.into_iter().collect());
@@ -495,7 +513,7 @@ pub fn combined_input_checksum(ctx: &BuildContext, inputs: &[PathBuf]) -> Result
     if memoize && let Some(combined) = ctx.combined_memo.lock().unwrap().get(inputs) {
         return Ok(combined);
     }
-    let combined = compute_combined_input_checksum(ctx, inputs)?;
+    let combined = compute_combined_input_checksum(ctx, inputs, Session::Trust)?;
     if memoize {
         ctx.combined_memo
             .lock()
@@ -505,33 +523,97 @@ pub fn combined_input_checksum(ctx: &BuildContext, inputs: &[PathBuf]) -> Result
     Ok(combined)
 }
 
-fn compute_combined_input_checksum(ctx: &BuildContext, inputs: &[PathBuf]) -> Result<String> {
-    let mtime_enabled = ctx.mtime_check_enabled();
+/// [`combined_input_checksum`] of the inputs as they are on disk now,
+/// ignoring every checksum this session took earlier (the memo and
+/// [`session_checksum`]). For the check, after a product ran, that none of
+/// its inputs was edited while its tool ran: an edit by anyone but the build
+/// itself never reaches [`forget_in_session`], so only a fresh look sees it.
+/// The fresh values replace the session's.
+pub fn fresh_combined_input_checksum(ctx: &BuildContext, inputs: &[PathBuf]) -> Result<String> {
+    compute_combined_input_checksum(ctx, inputs, Session::Ignore)
+}
 
+/// Whether a combined checksum may use the checksums this session already
+/// took.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Session {
+    Trust,
+    Ignore,
+}
+
+fn compute_combined_input_checksum(
+    ctx: &BuildContext,
+    inputs: &[PathBuf],
+    session: Session,
+) -> Result<String> {
     let mut checksums = Vec::with_capacity(inputs.len());
     let mut dirty_entries = Vec::new();
 
     for input in inputs {
-        // One stat answers both "does it exist" and "what is its stamp".
-        // Any stat failure counts as missing, as `Path::exists` did here.
-        let Ok(metadata) = fs::metadata(input) else {
-            checksums.push(format!("MISSING:{}", input.display()));
-            continue;
-        };
-        if mtime_enabled {
-            let (checksum, _, dirty) = fast_checksum_with_metadata(ctx, input, &metadata)?;
-            checksums.push(checksum);
-            if let Some(entry) = dirty {
-                dirty_entries.push(entry);
+        match input_checksum(ctx, input, session)? {
+            InputChecksum::Missing => checksums.push(format!("MISSING:{}", input.display())),
+            InputChecksum::Present(checksum, dirty) => {
+                checksums.push(checksum);
+                dirty_entries.extend(dirty);
             }
-        } else {
-            checksums.push(file_checksum(ctx, input)?);
         }
     }
 
     stage_mtime_entries(ctx, dirty_entries);
 
     Ok(hash_checksums(&checksums))
+}
+
+/// One input's contribution to a combined checksum.
+enum InputChecksum {
+    /// The file cannot be stat'ed. Not remembered for the session: a missing
+    /// input is usually an upstream output not written yet.
+    Missing,
+    /// Its checksum, with an mtime-cache entry to stage when one was minted.
+    Present(String, Option<DirtyMtimeEntry>),
+}
+
+fn input_checksum(ctx: &BuildContext, input: &Path, session: Session) -> Result<InputChecksum> {
+    if session == Session::Trust
+        && let Some(checksum) = session_checksum(ctx, input)
+    {
+        return Ok(InputChecksum::Present(checksum, None));
+    }
+    // One stat answers both "does it exist" and "what is its stamp". Any
+    // stat failure counts as missing, as `Path::exists` did here.
+    let Ok(metadata) = fs::metadata(input) else {
+        return Ok(InputChecksum::Missing);
+    };
+    if ctx.mtime_check_enabled() {
+        let (checksum, _, dirty) = fast_checksum_with_metadata(ctx, input, &metadata)?;
+        return Ok(InputChecksum::Present(checksum, dirty));
+    }
+    let checksum = stream_file_checksum(input)?;
+    remember_in_session(ctx, input, &checksum);
+    Ok(InputChecksum::Present(checksum, None))
+}
+
+/// Take the session checksum of every file in `inputs`, `parallel` threads
+/// at a time, before classify asks for them product by product.
+///
+/// Classify runs one dependency level at a time, and a level can be small
+/// or share most of its inputs; filling the session first makes the stat,
+/// mtime lookup or hash of each distinct file one evenly spread job, and
+/// leaves classify only hash-map reads.
+///
+/// A file that cannot be read is left out rather than reported: whoever
+/// asks for it next reads it again and reports the error where it means
+/// something (classify counts the product as to be built, the executor fails
+/// it). Missing files are left out too, as in [`InputChecksum::Missing`].
+pub fn fill_session(ctx: &BuildContext, inputs: &[&Path], parallel: usize) {
+    let staged: Vec<Option<DirtyMtimeEntry>> =
+        crate::executor::map_in_parallel(inputs, parallel, |input| {
+            match input_checksum(ctx, input, Session::Trust) {
+                Ok(InputChecksum::Present(_, dirty)) => dirty,
+                Ok(InputChecksum::Missing) | Err(_) => None,
+            }
+        });
+    stage_mtime_entries(ctx, staged.into_iter().flatten().collect());
 }
 
 /// Calculate SHA-256 checksum of a byte slice. Not cached — pure function.
@@ -761,7 +843,7 @@ mod tests {
             "un-evicted reads serve the in-session cached checksum"
         );
 
-        forget_in_session(&ctx, std::slice::from_ref(&path));
+        forget_in_session(&ctx, std::slice::from_ref(&path), &[]);
         let second = file_checksum(&ctx, &path).unwrap();
         assert_ne!(second, first, "eviction must expose the new content");
 
@@ -811,7 +893,7 @@ mod tests {
             "the memo is empty after a clear"
         );
         assert!(
-            ctx.checksum_cache.lock().unwrap().is_none(),
+            ctx.checksum_cache.read().unwrap().is_empty(),
             "the in-session checksum cache is empty after a clear"
         );
         let second = combined_input_checksum(&ctx, &inputs).unwrap();
@@ -825,6 +907,106 @@ mod tests {
             combined_input_checksum(&fresh_ctx, &inputs).unwrap(),
             second,
             "and agrees with a fresh context"
+        );
+    }
+
+    /// A context whose checksums never touch the project's mtime database
+    /// (see the note in the test above).
+    fn session_only_ctx() -> BuildContext {
+        let ctx = BuildContext::new();
+        ctx.set_mtime_check(false);
+        ctx
+    }
+
+    /// Within a run an input is looked at once: a later edit that nothing
+    /// told the session about is not seen by `combined_input_checksum`, and
+    /// is seen by `fresh_combined_input_checksum`, which also refreshes the
+    /// session's value.
+    #[test]
+    fn fresh_checksum_sees_an_edit_the_session_does_not() {
+        let ctx = session_only_ctx();
+        let tmp = tempfile::TempDir::new().unwrap();
+        let path = tmp.path().join("in.txt");
+        fs::write(&path, "one").unwrap();
+        let inputs = std::slice::from_ref(&path);
+
+        let first = combined_input_checksum(&ctx, inputs).unwrap();
+        fs::write(&path, "two").unwrap();
+        assert_eq!(combined_input_checksum(&ctx, inputs).unwrap(), first);
+
+        let fresh = fresh_combined_input_checksum(&ctx, inputs).unwrap();
+        assert_ne!(fresh, first, "a fresh look reads the edited file");
+        assert_eq!(
+            combined_input_checksum(&ctx, inputs).unwrap(),
+            fresh,
+            "and the session now serves the fresh value"
+        );
+    }
+
+    /// An output directory's files are not listed one by one, so evicting a
+    /// product's outputs must cover every file under its output directories,
+    /// in the session checksums and in the memo.
+    #[test]
+    fn forgetting_an_output_dir_evicts_the_files_under_it() {
+        let ctx = session_only_ctx();
+        let tmp = tempfile::TempDir::new().unwrap();
+        let dir = tmp.path().join("site");
+        fs::create_dir(&dir).unwrap();
+        let inside: Vec<PathBuf> = (0..MEMO_MIN_INPUTS)
+            .map(|i| {
+                let p = dir.join(format!("page{i}.html"));
+                fs::write(&p, format!("v1-{i}")).unwrap();
+                p
+            })
+            .collect();
+        let outside = tmp.path().join("other.txt");
+        fs::write(&outside, "x").unwrap();
+
+        let first = combined_input_checksum(&ctx, &inside).unwrap();
+        file_checksum(&ctx, &outside).unwrap();
+        fs::write(&inside[0], "v2-0").unwrap();
+
+        forget_in_session(&ctx, &[], &[std::sync::Arc::new(dir)]);
+        assert!(ctx.combined_memo.lock().unwrap().get(&inside).is_none());
+        assert!(session_checksum(&ctx, &inside[0]).is_none());
+        assert!(
+            session_checksum(&ctx, &outside).is_some(),
+            "files outside the directory stay"
+        );
+        assert_ne!(combined_input_checksum(&ctx, &inside).unwrap(), first);
+    }
+
+    /// `fill_session` takes every present input's checksum up front, on
+    /// several threads, and leaves missing files for the per-product walk.
+    #[test]
+    fn fill_session_takes_present_inputs_and_skips_missing_ones() {
+        let ctx = session_only_ctx();
+        let tmp = tempfile::TempDir::new().unwrap();
+        let present: Vec<PathBuf> = (0..300)
+            .map(|i| {
+                let p = tmp.path().join(format!("f{i}.txt"));
+                fs::write(&p, format!("content {i}")).unwrap();
+                p
+            })
+            .collect();
+        let missing = tmp.path().join("not-yet-written.txt");
+        let mut wanted: Vec<&Path> = present.iter().map(PathBuf::as_path).collect();
+        wanted.push(&missing);
+
+        fill_session(&ctx, &wanted, 4);
+
+        for path in &present {
+            assert_eq!(
+                session_checksum(&ctx, path),
+                Some(stream_file_checksum(path).unwrap())
+            );
+        }
+        assert!(session_checksum(&ctx, &missing).is_none());
+        assert_eq!(
+            combined_input_checksum(&ctx, std::slice::from_ref(&missing)).unwrap(),
+            fresh_combined_input_checksum(&session_only_ctx(), std::slice::from_ref(&missing))
+                .unwrap(),
+            "a missing input still counts as missing"
         );
     }
 }

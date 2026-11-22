@@ -1576,8 +1576,10 @@ impl Executor<'_> {
                 // Take the input checksum here (per-level, in topological
                 // order) rather than reusing the classify-time value. By the
                 // time we reach this level, every upstream level has completed,
-                // so reading inputs from disk gives the post-upstream content
-                // that the cache descriptor must be keyed by — critical for
+                // so the inputs give the post-upstream content that the cache
+                // descriptor must be keyed by (an input an upstream product
+                // wrote or restored was evicted from the session's checksums
+                // by `forget_in_session`, so it is read afresh) — critical for
                 // products whose primary inputs are produced by an upstream
                 // (e.g., ipdfunite consuming marp's PDF). The classify-time
                 // value can carry MISSING: for inputs that didn't exist yet,

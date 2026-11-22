@@ -8,11 +8,15 @@ All file checksum operations go through a single entry point: `checksum::file_ch
 
 ### Layer 1: In-memory cache (per build run)
 
-A global `HashMap<PathBuf, String>` stores checksums computed during the current build. When a file is checksummed for the first time, the result is cached. Any subsequent request for the same file returns the cached value without reading the file again.
+A `HashMap<PathBuf, String>` on the `BuildContext` (`checksum_cache`, behind a read-write lock) stores checksums taken during the current build. Once an input's checksum is in it, every later request for that input is answered from the map **without a `stat`** (`checksum::session_checksum`). Content is assumed stable for one run except where the build writes, and every such write evicts what it wrote: the executor calls `forget_in_session` with the product's declared outputs and its output directories (every file under them) whenever it builds, restores or fails a product.
 
-This handles the common case where the same file appears as an input to multiple products (e.g., a shared header file), or when the checksum is needed both for classification (skip/restore/build) and for cache storage.
+This covers a file shared by many products (a header, a content tree) and the two looks the build takes at every product: classify, then the executor's check just before running it. On a 20k-file benchmark it halved the `statx` calls of a build that changes nothing, down to one per file.
 
-The in-memory cache lives for the duration of the process and is not persisted.
+Before classify, `checksum::fill_session` takes the checksum of every distinct input of the graph on several threads (`[build] parallel`), so classify itself only reads the map. Missing files are not remembered (they are usually upstream outputs not written yet), and an unreadable file is left for whoever asks next to report.
+
+One reader must not trust the map: after a product ran, `handle_success` re-checks its inputs to catch an edit made while the tool ran (see `architecture-observations.md`, R2). An edit by the user never reaches `forget_in_session`, so that check calls `fresh_combined_input_checksum`, which stats and looks at every input afresh and bypasses the combined-input memo too. Output files are never served from the map either (`checksum_output`).
+
+The in-memory cache lives for one build run. `rsconstruct watch`, which reuses a context across rebuilds, clears it before each one (`BuildContext::clear_session_caches`).
 
 ### Layer 2: Mtime database (across builds)
 
@@ -63,7 +67,7 @@ The `rsconstruct status` command also disables mtime checking internally to ensu
 
 ## Database location
 
-The mtime database is stored at `.rsconstruct/mtime.redb`, separate from the build cache (`objects/` and `descriptors/`) and the config tracking database. This separation means:
+The mtime database is stored at `.rsconstruct/mtime.redb`, separate from the build cache (`objects/` and `db.redb`) and the config tracking database. This separation means:
 
 - `rsconstruct cache clear` removes the entire `.rsconstruct/` directory — build cache AND mtime database (see `cache.md`; the clear must work even when a database is corrupted, so it deletes the whole state dir)
 - The mtime database can be deleted independently without affecting cached build outputs

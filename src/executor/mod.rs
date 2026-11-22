@@ -8,6 +8,7 @@ use anyhow::Result;
 use indicatif::ProgressBar;
 use parking_lot::Mutex;
 use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
@@ -226,6 +227,21 @@ pub fn classify_products(
         }
     };
 
+    // Every distinct input once, in parallel, before the per-level walk.
+    let mut seen: HashSet<&Path> = HashSet::new();
+    let inputs: Vec<&Path> = order
+        .iter()
+        .flat_map(|&id| {
+            &graph
+                .get_product(id)
+                .expect(errors::INVALID_PRODUCT_ID)
+                .inputs
+        })
+        .map(PathBuf::as_path)
+        .filter(|p| seen.insert(p))
+        .collect();
+    crate::checksum::fill_session(ctx, &inputs, parallel);
+
     let mut will_change: HashSet<usize> = HashSet::new();
     let mut by_position: Vec<Option<ClassifiedProduct>> = Vec::new();
     by_position.resize_with(order.len(), || None);
@@ -281,7 +297,7 @@ const MIN_ITEMS_PER_THREAD: usize = 64;
 
 /// `f` applied to every item, on up to `parallel` scoped threads, results
 /// in item order. Each thread takes one contiguous chunk.
-fn map_in_parallel<T: Sync, R: Send>(
+pub fn map_in_parallel<T: Sync, R: Send>(
     items: &[T],
     parallel: usize,
     f: impl Fn(&T) -> R + Sync,
@@ -298,7 +314,7 @@ fn map_in_parallel<T: Sync, R: Send>(
             .collect();
         handles
             .into_iter()
-            .flat_map(|h| h.join().expect("a classify thread panicked"))
+            .flat_map(|h| h.join().expect("a map_in_parallel thread panicked"))
             .collect()
     })
 }

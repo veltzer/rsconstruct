@@ -157,7 +157,18 @@ all 1M into the ring at once — the SQ has finite size.
 
 ## Relevance to rsconstruct
 
-Today, `combined_input_checksum` in `src/checksum.rs` calls `fs::metadata`
+**Status, 2026-11-22.** The first two steps of the sequence below are
+done, though not the way the code scan below expected. Each input is
+stat'ed once per build run and its checksum served from the session map
+afterwards (`checksum::session_checksum`, see [Checksum
+Cache](checksum-cache.md)). Every distinct input is checked up front on
+several threads (`checksum::fill_session`), so the loop did not need
+inverting. The `statx` count of a no-op build fell to one per distinct
+input. io_uring would replace only the inside of `fill_session`'s per-file
+call. Measure a build with a cold page cache before taking that step. The
+text below is the analysis from before.
+
+Before that, `combined_input_checksum` in `src/checksum.rs` calls `fs::metadata`
 serially per input file to read mtime. The latest profiling run (see
 [Profiling](profiling.md)) shows `statx` at ~0.19% of CPU on a 10k-product
 project — not currently a bottleneck.

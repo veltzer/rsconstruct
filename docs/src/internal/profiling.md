@@ -325,6 +325,38 @@ half.
   downstream of something that ran; a product whose dependencies all
   skipped could reuse its classify result.
 
+## Run: 2026-11-22 — one `stat` per input per build
+
+### Target
+
+No-op `build` of a synthetic project: 20,000 JSON files, each checked by
+`processor.checker.ijsonlint` (one input per product, no shared inputs),
+warm page cache. Compared against the installed 0.9.197.
+
+### Change
+
+Each input's checksum is taken once per build run and then served from
+the session map without a `stat` (`checksum::session_checksum`). Writes by
+the build evict what they wrote (`forget_in_session`, now also covering
+output directories). Before classify, every distinct input is checked on
+`parallel` threads (`checksum::fill_session`). See [Checksum
+Cache](checksum-cache.md).
+
+### After
+
+| | 0.9.197 | after |
+|---|---|---|
+| `statx` calls | 40,796 | 20,796 |
+| `-j1` wall | 0.167 s | 0.152 s |
+| `-j16` wall | 0.134 s | 0.130 s |
+
+The remaining `statx` calls are one per input plus about 800 others. The
+benchmark has no shared inputs, so it shows only the executor's second
+look disappearing. A project like `teaching-slides` (75k input references
+to 51k files) also loses the repeats across products. The win should be
+largest with a cold page cache, which was not measured (dropping it needs
+root).
+
 ## See also
 
 - [Path Interning](path-interning.md) — the optimization applied in the

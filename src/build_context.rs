@@ -18,9 +18,12 @@ pub struct BuildContext {
     interrupted: AtomicBool,
     interrupt_tx: watch::Sender<bool>,
     interrupt_rx: watch::Receiver<bool>,
-    /// In-memory checksum cache — avoids re-reading and re-hashing the same
-    /// file multiple times within a single build run.
-    pub(crate) checksum_cache: Mutex<Option<HashMap<PathBuf, String>>>,
+    /// The session's checksum of each input file it has already looked at,
+    /// so a file shared by many products, or checked by classify and again
+    /// by the executor, is stat'ed and looked up once per build run. A
+    /// read-write lock so classify's threads read it at once. See
+    /// `checksum::session_checksum`.
+    pub(crate) checksum_cache: RwLock<HashMap<PathBuf, String>>,
     /// Persistent mtime database — maps (path, mtime) → checksum across builds.
     pub(crate) mtime_db: Mutex<Option<Database>>,
     /// The mtime table read into memory, plus entries computed this session
@@ -76,7 +79,7 @@ impl BuildContext {
             interrupted: AtomicBool::new(false),
             interrupt_tx,
             interrupt_rx,
-            checksum_cache: Mutex::new(None),
+            checksum_cache: RwLock::new(HashMap::new()),
             mtime_db: Mutex::new(None),
             mtime_state: RwLock::new(crate::checksum::MtimeState::default()),
             mtime_config_enabled: AtomicBool::new(true),
@@ -195,7 +198,7 @@ impl BuildContext {
     /// entries stay: they are validated against the file stamp on every
     /// lookup, so an edited file misses them and is re-hashed.
     pub(crate) fn clear_session_caches(&self) {
-        *self.checksum_cache.lock().unwrap() = None;
+        self.checksum_cache.write().unwrap().clear();
         *self.combined_memo.lock().unwrap() = crate::checksum::CombinedMemo::default();
     }
 

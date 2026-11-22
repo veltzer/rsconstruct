@@ -393,10 +393,11 @@ output belonged to the new content: the next build skipped, stale.
 **Fix:** a product's own outputs are never its inputs
 (`graph::without_own_outputs`). Outputs are cached under the dispatch-time
 checksum; when the post-run checksum differs, the outputs are not cached
-and a warning says so, so the next build reruns the product. Limitation:
-the in-session checksum caches assume content is stable within a build —
-input lists of 32+ files are memoized, and with `--no-mtime-cache` every
-file is — so a mid-run edit is only detected through the mtime check.
+and a warning says so, so the next build reruns the product. The post-run
+check uses `checksum::fresh_combined_input_checksum`, which ignores the
+in-session checksums and the combined-input memo (both assume content is
+stable within a build, and are what every other reader uses), so a
+mid-run edit is detected with or without the mtime cache.
 
 ### R3. Analyzers wrote inputs behind the graph's indexes — RESOLVED
 
