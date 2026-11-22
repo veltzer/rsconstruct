@@ -7,6 +7,7 @@ Validates YAML files against JSON schemas referenced by a `$schema` URL field in
 ## How It Works
 
 For each YAML file:
+
 1. Parses the YAML content
 2. Reads the `$schema` field to get the schema URL
 3. Fetches the schema (cached in `.rsconstruct/webcache.redb`)

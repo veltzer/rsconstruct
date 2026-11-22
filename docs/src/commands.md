@@ -127,12 +127,14 @@ Batch-capable processors run their rebuilding products in a single tool invocati
 The `-p` flag supports `@`-prefixed shortcuts that expand to groups of processors:
 
 **By type:**
+
 - `@checker` — all checker processors (ruff, pylint, shellcheck, etc.)
 - `@generator` — all generator processors (tera, cc_single_file, etc.)
 - `@explicit` — all explicit processors
 - `@mass_generator` — all mass generator processors
 
 **By tool or name** — any other `@x` selects both of these:
+
 - every processor that requires tool `x` (`@python`, `@node`; matched
   against each processor's `required_tools()`)
 - every processor whose short name is `x`, with all its instances
@@ -152,6 +154,7 @@ rsconstruct build -p @checker,tera         # Mix shortcuts with processor names
 ```
 
 The `--stop-after` flag allows stopping the build at a specific phase:
+
 - `discover` — stop after discovering products (before dependency scanning)
 - `add-dependencies` — stop after adding dependencies (before resolving graph)
 - `resolve` — stop after resolving the dependency graph (before execution)
@@ -468,6 +471,7 @@ Example output for `rsconstruct analyzer stats`:
 `show`, `stats` and `clean` read the dependency cache directly. If it is empty, run `rsconstruct analyzer build` (or a build) first to populate it.
 
 These commands are useful for:
+
 - Debugging why a file is being rebuilt
 - Understanding the include/import structure of your project
 - Verifying that dependency analyzers are finding the right files

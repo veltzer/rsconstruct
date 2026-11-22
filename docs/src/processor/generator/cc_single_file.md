@@ -83,6 +83,7 @@ When using multiple compiler profiles, you can specify flags that only apply to 
 ```
 
 In this example:
+
 - `-g` is applied to all compilers
 - `-femit-struct-debug-baseonly` is only applied when compiling with the "gcc" profile
 - `-gline-tables-only` is only applied when compiling with the "clang" profile
@@ -100,6 +101,7 @@ cc = "clang"
 ```
 
 This works with all directive types:
+
 - `EXTRA_COMPILE_FLAGS_BEFORE[profile]`
 - `EXTRA_COMPILE_FLAGS_AFTER[profile]`
 - `EXTRA_LINK_FLAGS_BEFORE[profile]`
@@ -254,6 +256,7 @@ src/main.c  →  out/processor.generator.cc_single_file/gcc/main.elf
 ```
 
 Each source file is compiled once per compiler profile, allowing you to:
+
 - Test code with multiple compilers to catch different warnings
 - Compare output between compilers
 - Build for different targets (cross-compilation)

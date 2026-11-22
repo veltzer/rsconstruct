@@ -6,6 +6,7 @@ separate from `suggestions.md` (which is tactical features and bugs) because
 these are about *how the code is put together*, not about what it does.
 
 Each entry has:
+
 - A short title naming the pattern or tension.
 - What the current code does.
 - What that implies for changes / extensions / users.
@@ -80,6 +81,7 @@ have to expose more schema information than it does today.
 ### 3. Config defaults are scattered, not composed — PARTIALLY ADDRESSED
 
 Three sources of defaults apply in sequence:
+
 1. Per-processor defaults (e.g. `ruff` → `command = "ruff"`) in a giant
    match-or-registry lookup.
 2. Scan defaults (src_dirs, src_extensions) via a separate mechanism
@@ -160,6 +162,7 @@ An analyzer scans the sources of existing products, and the framework
 walk the graph themselves through `DepAnalyzer::analyze()`; since R3/R5
 they only implement `scan()`.)
 It cannot:
+
 - Create new products (the cpp analyzer can't spawn a product for a header
   it discovered).
 - Remove products.
@@ -208,6 +211,7 @@ provenance lives on the config side, not the runtime processor side.
 
 **Update:** all mutable process globals have been moved into `BuildContext`
 (`src/build_context.rs`):
+
 - The three processor globals (`INTERRUPTED`, `RUNTIME`, `INTERRUPT_SENDER`)
   are replaced and deleted. `run_command` takes `&BuildContext` explicitly.
 - The three checksum globals (`CACHE`, `MTIME_DB`, `MTIME_ENABLED`) are
@@ -215,6 +219,7 @@ provenance lives on the config side, not the runtime processor side.
   take `&BuildContext`.
 
 Remaining process-wide state is all immutable or correctly scoped:
+
 - `RuntimeFlags` — immutable after startup, doesn't vary between contexts.
 - `DECLARED_TOOLS` — `thread_local!`, debug-only.
 - Compiled regexes — `LazyLock<Regex>`, stateless.
@@ -275,6 +280,7 @@ and likely requires CLI reorganization. Bigger than it sounds.
 ### 11. Object store as a multi-responsibility module — RESOLVED
 
 **Update:** `ObjectStore` has been decomposed into focused submodules:
+
 - `blobs.rs` — content-addressed blob storage (store, read, restore, checksum)
 - `descriptors.rs` — cache descriptor CRUD (store_marker, store_blob, store_tree)
 - `restore.rs` — cache query and restoration (restore_from_descriptor,
@@ -298,6 +304,7 @@ Every processor that shells out to a subprocess rolls its own `Command`
 building: env vars, arg construction, timeout, output capture, error
 classification. Shared helpers (`run_command`, `check_command_output`)
 exist but are minimal. Processor implementations still have to know about:
+
 - How to pass files (positional args vs. `--file=X` vs. stdin vs.
   response file when argv is too long).
 - How to interpret exit codes (some tools return 1 for "found issues",

@@ -107,6 +107,7 @@ hash(processor_name, processor_version, cache_key_digest, input_content_hash)
 ```
 
 Where:
+
 - `processor_name` — the processor type (e.g., `pandoc`, `ruff`)
 - `processor_version` — the processor's cache version from the plugin
   registry; bumping it invalidates every entry the processor ever produced
@@ -180,15 +181,18 @@ build after it rebuilds. Tests: `renamed_input_restores_by_default` and
 ### Cache (after successful build)
 
 **Checker:**
+
 1. Store a `{"type": "marker"}` entry at the cache key
 
 **Generator, or mass generator product (single output):**
+
 1. Store the output file content as a content-addressed blob
 2. Store a `{"type": "blob", "checksum": "..."}` entry at the cache key
 
 A mass generator runs its tool once, but every predicted file is its own product, so each gets its own blob entry.
 
 **Several outputs, or `output_dirs` (explicit stanzas):**
+
 1. Walk the declared output files and output directories, skipping files declared as outputs of other products
 2. Store each file as a content-addressed blob
 3. Build the tree entries: `[{"path": "...", "checksum": "...", "mode": ...}, ...]`
@@ -199,10 +203,12 @@ A mass generator runs its tool once, but every predicted file is its own product
 **Checker:** Nothing to restore. Cache entry exists = check passed.
 
 **Generator:**
+
 1. Read the cache entry, get the blob checksum
 2. Hardlink or copy the blob to the output path
 
 **Tree (several outputs or `output_dirs`):**
+
 1. Read the cache entry, get the tree entries
 2. For each `(path, checksum, mode)`: restore the blob to the path, set permissions
 

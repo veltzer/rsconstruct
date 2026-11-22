@@ -26,11 +26,13 @@ Compute a SHA of the rsconstruct binary itself at program start. Mix that hash i
 **How it works:** Any change to any part of rsconstruct — processors, core executor, cache code, even comments — invalidates every cache entry.
 
 **Pros:**
+
 - Trivially correct. If any code changed, caches are invalidated.
 - Zero developer action.
 - No risk of forgotten invalidation.
 
 **Cons:**
+
 - **Massively over-invalidates.** Fixing a typo in a docstring or reformatting the `clean` command wipes every user's cache across every processor.
 - Makes iterating on rsconstruct itself painful — developers constantly rebuild everything.
 - Version bumps of unrelated dependencies (regex bumps, anyhow bumps) change the binary and also invalidate.
@@ -42,11 +44,13 @@ Compute a SHA of the rsconstruct binary itself at program start. Mix that hash i
 **How it works:** Modify `src/processor/checker/ruff.rs`, next build picks up a new hash, ruff's caches invalidate. Other processors are unaffected.
 
 **Pros:**
+
 - Zero developer action — hashes are automatic.
 - More precise than Option A — only the changed processor invalidates.
 - Never forget to bump.
 
 **Cons:**
+
 - **Too sensitive.** Whitespace changes, comment fixes, rustfmt reformats, renames of private helpers — all invalidate the cache even though behavior is identical.
 - **Doesn't catch indirect changes.** If a processor calls shared helpers in `processor/mod.rs` and those change, the processor's file hash hasn't changed but its behavior has. We need to hash transitive dependencies, and Rust doesn't give us an easy way.
 - **Non-deterministic sources of churn:** different rustfmt versions produce different hashes for the same intent, CI vs. local editor differences cause spurious invalidation.
@@ -59,10 +63,12 @@ Hash the entire processors directory at compile time. Any change to anything und
 **How it works:** Middle ground between A and B.
 
 **Pros:**
+
 - Catches shared-helper changes automatically (since helpers are in the same subtree).
 - Less aggressive than A — core-executor tweaks don't invalidate.
 
 **Cons:**
+
 - Still over-invalidates — a fix to processor X wipes processor Y's cache.
 - Still vulnerable to formatting/comment churn.
 
@@ -83,6 +89,7 @@ inventory::submit! { ProcessorPlugin {
 Commit `Processor ruff: change default flags` becomes the same commit as `version: 1 → version: 2`.
 
 **Pros:**
+
 - **Precise.** Only bumps when the developer decides behavior actually changed.
 - **Stable.** Reformats, comment edits, renames do not invalidate caches.
 - **Auditable.** Every version bump is visible in git history as a deliberate one-line change with its own rationale.
@@ -90,6 +97,7 @@ Commit `Processor ruff: change default flags` becomes the same commit as `versio
 - **Signal stays meaningful** — users see a rebuild only when something actually changed.
 
 **Cons:**
+
 - **Relies on developer discipline.** Forgetting to bump after a behavior change leaves stale caches surviving — a silent correctness bug, arguably worse than no invalidation (because it creates a false sense of safety).
 - Requires a documented bump rule so the convention is followed.
 - Can be mitigated by code review (diffs show version bumps) and optional CI checks (warn when a processor file changes without a version bump).

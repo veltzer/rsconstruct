@@ -177,6 +177,7 @@ impl Processor for RequirementsProcessor {
 ## Cache behavior
 
 Falls naturally out of the descriptor-based cache:
+
 - Inputs: every `.py` file + config hash.
 - Output: `requirements.txt`.
 - Adding/removing an import changes file contents, triggers rebuild.

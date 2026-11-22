@@ -57,6 +57,7 @@ does not enforce hermeticity today. A worker with a different version of `ruff`
 or `cppcheck` than the local machine will produce different results.
 
 This is the hardest problem. Options:
+
 - **Ignore it** — document that workers must have identical tool versions;
   use tool locking (`rsconstruct tool lock`) to detect divergence.
 - **Containers** — run each product in a container image that includes all
@@ -67,6 +68,7 @@ This is the hardest problem. Options:
 ### Scheduling and load balancing
 
 Which products go to which worker? A central coordinator must:
+
 1. Know the graph (dependency order).
 2. Dispatch products whose dependencies are already satisfied.
 3. Avoid overloading any single worker.

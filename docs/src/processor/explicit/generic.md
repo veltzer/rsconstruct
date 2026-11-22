@@ -8,6 +8,7 @@ declares exactly which files are inputs and which are outputs. Nothing is
 discovered or inferred.
 
 Names considered:
+
 - **explicit** — chosen. Directly communicates the key difference: everything
   is declared rather than discovered.
 - **custom** — too generic. Doesn't say what makes it different from the
@@ -28,6 +29,7 @@ feeding into all declared outputs.
 
 This is ideal for build steps that aggregate many files into one or a few
 outputs, such as:
+
 - Generating an index page from all HTML files in a directory
 - Building a bundle from multiple source files
 - Creating a report from multiple data files
@@ -39,6 +41,7 @@ patterns) into a flat file list. It creates a single product with these files
 as inputs and the declared `output_files` and `output_dirs` as outputs.
 
 Rsconstruct uses this information for:
+
 - **Rebuild detection**: if any input changes, the product is rebuilt
 - **Dependency ordering**: if an input is an output of another processor,
   that processor runs first (automatic via `resolve_dependencies()`)
@@ -95,6 +98,7 @@ command [args...] --inputs <input1> <input2> ... [--output-files <file>...] [--o
 ### Input ordering
 
 Inputs are passed in a deterministic order:
+
 1. `inputs` entries first, in config file order
 2. `input_globs` results second, one glob at a time in config file order,
    files within each glob sorted alphabetically
@@ -146,6 +150,7 @@ of `output_files` or `output_dirs`.
 ### Glob patterns
 
 `input_globs` supports standard glob syntax:
+
 - `*` matches any sequence of characters within a path component
 - `**` matches any number of path components (recursive)
 - `?` matches a single character
@@ -160,6 +165,7 @@ discovery loop).
 The explicit processor works naturally with the fixed-point discovery loop.
 If `input_globs` matches files that are outputs of other processors (e.g.,
 pandoc-generated HTML files), rsconstruct automatically:
+
 1. Injects those declared outputs as virtual files during discovery
 2. Resolves dependency edges so upstream processors run first
 3. Rebuilds the explicit processor when upstream outputs change

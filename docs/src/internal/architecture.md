@@ -295,6 +295,7 @@ Only checkers are held: nothing depends on a checker's products, so the hold
 delays nothing else, while a generator's products may feed one another.
 
 For each product:
+
 1. Compute input checksum (if not already done in classify)
 2. Check cache — skip or restore if possible
 3. Execute the processor's command
@@ -375,12 +376,14 @@ When running with `-j`, each thread spawns its own subprocess. Each subprocess g
 **All paths are relative to project root.** RSConstruct assumes it is run from the project root directory (where `rsconstruct.toml` lives).
 
 ### Internal paths (always relative)
+
 - `Product.inputs` and `Product.outputs` — stored as relative paths
 - `FileIndex` — returns relative paths from `scan()` and `query()`
 - Cache keys (`Product::descriptor_key()`) — contain no machine-specific paths (the key hashes processor identity, config, and input content), enabling cache sharing across different checkout locations
 - Cache entries (`CacheEntry.outputs[].path`) — stored as relative paths
 
 ### Processor execution
+
 - Processors pass relative paths directly to external tools
 - Processors set `cmd.current_dir(project_root)` to ensure tools resolve paths correctly
 - `fs::read()`, `fs::write()`, etc. work directly with relative paths since cwd is project root
@@ -388,11 +391,13 @@ When running with `-j`, each thread spawns its own subprocess. Each subprocess g
 ### Exception: Processors requiring absolute paths
 
 If a processor absolutely must use absolute paths (e.g., for a tool that doesn't respect current directory), it should:
+
 1. Store the `project_root` in the processor struct
 2. Join paths with `project_root` only at execution time
 3. Never store absolute paths in `Product.inputs` or `Product.outputs`
 
 ### Why relative paths?
+
 - **Cache portability** — cache keys don't include machine-specific absolute paths
 - **Remote cache sharing** — same project checked out to different paths can share cache
 - **Simpler code** — no need to strip prefixes for display or storage

@@ -21,6 +21,7 @@ remote = "s3://bucket-name/optional/prefix"
 ```
 
 Requires:
+
 - AWS CLI installed (`aws` command)
 - AWS credentials configured (`~/.aws/credentials` or environment variables)
 
@@ -43,10 +44,12 @@ remote = "https://cache-server.example.com/rsconstruct"
 ```
 
 Requires:
+
 - `curl` command
 - Server that supports GET and PUT requests
 
 The HTTP backend expects:
+
 - `GET /path` to return the object or 404
 - `PUT /path` to store the object
 - `HEAD /path` to check existence (returns 200 or 404)
@@ -59,6 +62,7 @@ remote = "file:///shared/cache/rsconstruct"
 ```
 
 Useful for:
+
 - Network-mounted filesystems (NFS, CIFS)
 - Testing remote cache behavior locally
 
@@ -181,6 +185,7 @@ remote_pull = true
 ### Cache Invalidation
 
 Cache entries are keyed by:
+
 - Processor name
 - Source file path
 - Processor configuration hash
@@ -214,6 +219,7 @@ Ensure your server accepts PUT requests. Many static file servers are read-only.
 ### Slow Remote Cache
 
 Consider:
+
 - Using a closer region for S3
 - Enabling S3 Transfer Acceleration
 - Using a caching proxy
