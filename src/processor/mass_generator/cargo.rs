@@ -388,6 +388,172 @@ fn collect_package_artifacts(
     Ok(())
 }
 
+/// The `(name, directory)` of every package a `cargo build` run in the
+/// directory of `cargo_toml` compiles itself: the manifest's own package when
+/// cargo's selection includes it, and the workspace members it builds
+/// ([`workspace_build_selection`]). Directories are project-relative.
+fn built_packages(
+    cargo_toml: &Path,
+    doc: &toml::Value,
+    all_members: bool,
+) -> Result<Vec<(String, PathBuf)>> {
+    let mut out = Vec::new();
+    let mut push = |toml_path: &Path, doc: &toml::Value| {
+        if let Some(name) = doc
+            .get("package")
+            .and_then(|p| p.get("name"))
+            .and_then(toml::Value::as_str)
+        {
+            out.push((
+                name.to_string(),
+                crate::processor::parent_dir_or_empty(toml_path).to_path_buf(),
+            ));
+        }
+    };
+    let (root_selected, member_dirs) = workspace_build_selection(cargo_toml, doc, all_members)?;
+    if root_selected {
+        push(cargo_toml, doc);
+    }
+    for member_dir in member_dirs {
+        let member_toml = member_dir.join("Cargo.toml");
+        push(&member_toml, &read_manifest(&member_toml)?);
+    }
+    Ok(out)
+}
+
+/// The `output` file of the last run of `package`'s build script under
+/// `build_dir` (`target/<profile_dir>/build`), if it has run: cargo keeps one
+/// `<package>-<16 hex digits>` directory per build-script unit (features and
+/// profiles each get their own, and old ones are never swept), so the most
+/// recently written `output` among them is the one the current tree produced.
+fn latest_build_script_output(build_dir: &Path, package: &str) -> Option<PathBuf> {
+    let prefix = format!("{package}-");
+    fs::read_dir(build_dir)
+        .ok()?
+        .filter_map(Result::ok)
+        .filter(|entry| {
+            entry
+                .file_name()
+                .to_str()
+                .and_then(|name| name.strip_prefix(&prefix))
+                .is_some_and(|hash| hash.len() == 16 && hash.bytes().all(|b| b.is_ascii_hexdigit()))
+        })
+        .filter_map(|entry| {
+            let output = entry.path().join("output");
+            let mtime = fs::metadata(&output).and_then(|m| m.modified()).ok()?;
+            Some((mtime, output))
+        })
+        .max_by_key(|(mtime, _)| *mtime)
+        .map(|(_, output)| output)
+}
+
+/// What a build script's `output` tells cargo to watch: the paths of its
+/// `cargo:rerun-if-changed=` lines and the variable names of its
+/// `cargo:rerun-if-env-changed=` lines (either spelling, `cargo:` or
+/// `cargo::`), in order of appearance.
+fn parse_build_script_watches(output: &str) -> (Vec<&str>, Vec<&str>) {
+    let mut paths = Vec::new();
+    let mut env_vars = Vec::new();
+    for line in output.lines() {
+        let Some(directive) = line
+            .strip_prefix("cargo::")
+            .or_else(|| line.strip_prefix("cargo:"))
+        else {
+            continue;
+        };
+        if let Some(path) = directive.strip_prefix("rerun-if-changed=") {
+            paths.push(path);
+        } else if let Some(var) = directive.strip_prefix("rerun-if-env-changed=") {
+            env_vars.push(var);
+        }
+    }
+    (paths, env_vars)
+}
+
+/// `path` (as cargo got it from a build script of the package in
+/// `package_dir`) as a graph path, with each directory expanded to the
+/// files under it, as cargo watches a directory by everything in it. A
+/// relative path is the package directory's, as for cargo; an absolute one
+/// counts only when it lies inside the project (`project_root`), since
+/// graph paths are project-relative. A path that does not exist is passed
+/// over: there is nothing to hash, and cargo itself reruns such a script on
+/// every build, which no input could mirror.
+fn watched_files(package_dir: &Path, path: &str, project_root: &Path) -> Vec<PathBuf> {
+    let raw = Path::new(path);
+    let resolved = if raw.is_absolute() {
+        match raw.strip_prefix(project_root) {
+            Ok(rel) => rel.to_path_buf(),
+            Err(_) => return Vec::new(),
+        }
+    } else {
+        lexical_normalize(&crate::processor::resolve_anchor_path(package_dir, path))
+    };
+    if resolved.is_file() {
+        return vec![resolved];
+    }
+    if !resolved.is_dir() {
+        return Vec::new();
+    }
+    let mut files: Vec<PathBuf> = ignore::WalkBuilder::new(&resolved)
+        .standard_filters(false)
+        .build()
+        .filter_map(Result::ok)
+        .filter(|entry| entry.file_type().is_some_and(|t| t.is_file()))
+        .map(ignore::DirEntry::into_path)
+        .collect();
+    files.sort();
+    files
+}
+
+/// What the build scripts of the packages a `cargo build` of `cargo_toml`
+/// compiles told cargo, on their last run in `target/<profile_dir>/`, to
+/// rerun them for: the watched files (graph paths, sorted, each once) and
+/// the watched environment variables as `NAME=value` (`NAME` alone when
+/// unset), sorted.
+///
+/// A build script makes the artifacts depend on whatever it reads, and
+/// cargo relinks them whenever one of those changes. When rsconstruct does
+/// not know that input, its cache key stays put while cargo's artifact
+/// moves on: the build restores the stale cached artifact on every run, and
+/// the next cargo invocation over the same `target/` (`cargo nextest run`)
+/// relinks the current one under it. The fleet's build.rs, which embeds the
+/// git SHA, dirty flag and build time and watches `.git/HEAD`, `.git/index`
+/// and every tracked file, hit exactly that after every commit and every
+/// edit to a non-Rust file. Nothing is found before the first build, which
+/// is right: with no cache entry the first build runs cargo anyway.
+fn build_script_watches(
+    cargo_toml: &Path,
+    doc: &toml::Value,
+    all_members: bool,
+    profile_dir: &str,
+) -> Result<(Vec<PathBuf>, Vec<String>)> {
+    let project_root = std::env::current_dir().context("Failed to read the current directory")?;
+    let build_dir = target_root(cargo_toml, doc)?
+        .join("target")
+        .join(profile_dir)
+        .join("build");
+    let mut files = std::collections::BTreeSet::new();
+    let mut env = std::collections::BTreeSet::new();
+    for (package, package_dir) in built_packages(cargo_toml, doc, all_members)? {
+        let Some(output) = latest_build_script_output(&build_dir, &package) else {
+            continue;
+        };
+        let text = fs::read_to_string(&output)
+            .with_context(|| format!("Failed to read {}", output.display()))?;
+        let (paths, env_vars) = parse_build_script_watches(&text);
+        for path in paths {
+            files.extend(watched_files(&package_dir, path, &project_root));
+        }
+        for var in env_vars {
+            env.insert(match std::env::var(var) {
+                Ok(value) => format!("{var}={value}"),
+                Err(_) => var.to_string(),
+            });
+        }
+    }
+    Ok((files.into_iter().collect(), env.into_iter().collect()))
+}
+
 pub struct CargoProcessor {
     config: CargoConfig,
     runs: Mutex<BTreeMap<(PathBuf, String), Arc<OnceTool>>>,
@@ -580,14 +746,26 @@ impl Processor for CargoProcessor {
 
             for profile in &self.config.profiles {
                 let (outputs, _) = self.planned_outputs(anchor, profile)?;
+                let (watched, watched_env) = build_script_watches(
+                    anchor,
+                    &doc,
+                    self.builds_all_members(),
+                    profile_dir_name(profile),
+                )?;
+                let mut inputs = base_inputs.clone();
+                let mut seen: std::collections::BTreeSet<PathBuf> =
+                    inputs.iter().cloned().collect();
+                inputs.extend(watched.into_iter().filter(|p| seen.insert(p.clone())));
+                let watched_env = watched_env.join("\n");
                 for output_path in outputs {
                     let hash = crate::checksum::hash_parts(&[
                         &config_hash,
                         profile,
                         &output_path.display().to_string(),
+                        &watched_env,
                     ]);
                     graph.add_product_with(
-                        base_inputs.clone(),
+                        inputs.clone(),
                         vec![output_path],
                         instance_name,
                         Some(hash),
@@ -685,6 +863,82 @@ mod tests {
         cfg.standard.command = "build".to_string();
         cfg.standard.args = args.iter().map(|a| (*a).to_string()).collect();
         CargoProcessor::new(cfg)
+    }
+
+    #[test]
+    fn build_script_watches_parse_both_spellings_and_ignore_the_rest() {
+        let output = "cargo:rustc-env=GIT_SHA=abc\n\
+                      cargo:rerun-if-changed=.git/HEAD\n\
+                      cargo::rerun-if-changed=src/main.rs\n\
+                      cargo:rerun-if-env-changed=SOURCE_DATE_EPOCH\n\
+                      cargo::rerun-if-env-changed=CC\n\
+                      warning: cargo:rerun-if-changed=not-a-directive\n";
+        let (paths, env) = parse_build_script_watches(output);
+        assert_eq!(paths, vec![".git/HEAD", "src/main.rs"]);
+        assert_eq!(env, vec!["SOURCE_DATE_EPOCH", "CC"]);
+    }
+
+    /// The newest `output` of the package's own `<name>-<hash>` directories
+    /// wins; a package whose name merely starts with it (`foo-bar`) and a
+    /// directory with no `output` (the compiled script's) are not it.
+    #[test]
+    fn latest_build_script_output_picks_the_newest_of_the_package() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let build = tmp.path();
+        let write = |dir: &str, secs: u64| {
+            std::fs::create_dir_all(build.join(dir)).unwrap();
+            let out = build.join(dir).join("output");
+            std::fs::write(&out, dir).unwrap();
+            let t = std::time::UNIX_EPOCH + std::time::Duration::from_secs(secs);
+            std::fs::File::options()
+                .write(true)
+                .open(&out)
+                .unwrap()
+                .set_modified(t)
+                .unwrap();
+        };
+        write("foo-0123456789abcdef", 1_000);
+        write("foo-fedcba9876543210", 2_000);
+        write("foo-bar-0123456789abcdef", 3_000);
+        std::fs::create_dir_all(build.join("foo-aaaaaaaaaaaaaaaa")).unwrap();
+        assert_eq!(
+            latest_build_script_output(build, "foo"),
+            Some(build.join("foo-fedcba9876543210/output"))
+        );
+        assert_eq!(latest_build_script_output(build, "baz"), None);
+        assert_eq!(
+            latest_build_script_output(&build.join("missing"), "foo"),
+            None
+        );
+    }
+
+    /// Relative paths are the package directory's, a directory stands for
+    /// the files under it, and what does not exist or lies outside the
+    /// project is passed over.
+    #[test]
+    fn watched_files_resolve_expand_and_skip() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        let pkg = tmp.path().join("pkg");
+        std::fs::create_dir_all(pkg.join("assets/sub")).unwrap();
+        std::fs::write(pkg.join("build.rs"), "").unwrap();
+        std::fs::write(pkg.join("assets/a.txt"), "").unwrap();
+        std::fs::write(pkg.join("assets/sub/b.txt"), "").unwrap();
+        assert_eq!(
+            watched_files(&pkg, "build.rs", tmp.path()),
+            vec![pkg.join("build.rs")]
+        );
+        assert_eq!(
+            watched_files(&pkg, "assets", tmp.path()),
+            vec![pkg.join("assets/a.txt"), pkg.join("assets/sub/b.txt")]
+        );
+        assert_eq!(
+            watched_files(&pkg, "missing.txt", tmp.path()),
+            Vec::<PathBuf>::new()
+        );
+        assert_eq!(
+            watched_files(&pkg, "/etc/hostname", tmp.path()),
+            Vec::<PathBuf>::new()
+        );
     }
 
     #[test]

@@ -23,6 +23,27 @@ directory tree as inputs. This includes:
 
 When any tracked file changes, rsconstruct will re-run cargo.
 
+### Build-Script Inputs
+
+A build script (`build.rs`) makes the artifacts depend on whatever it reads,
+and cargo relinks them whenever one of the files its last run named in a
+`cargo:rerun-if-changed=` line changes, or one of the variables named in a
+`cargo:rerun-if-env-changed=` line. The processor reads those lines from the
+build script's `output` under `target/<profile_dir>/build/<package>-<hash>/`
+(the newest one, for every package the build compiles) and makes the watched
+files inputs of the product, and the watched variables' values part of its
+cache key. Relative paths are the package directory's, a directory stands for
+every file under it, and a path that does not exist or lies outside the
+project is passed over.
+
+Without this, an artifact whose build script embeds outside state (a git SHA
+watched through `.git/HEAD`, a dirty flag watched through every tracked file)
+changes while its cache key does not: every build restores the stale cached
+artifact, and the next cargo command over the same `target/` (`cargo nextest
+run`) relinks the current one under it. Before the first build there is no
+build-script output to read, and none is needed: with no cache entry, that
+build runs cargo anyway.
+
 ### Workspaces
 
 Cargo keeps one `target/` per workspace, in the workspace root's directory,
