@@ -38,9 +38,16 @@ src_exclude_paths = ["docs/src/SUMMARY.md"]
 # target/ is not cached: it is many gigabytes and cargo already keeps its
 # own incremental state there, so copying it into the rsconstruct store
 # would cost far more than it could ever save.
+# --all-targets resolves features with the dev-dependencies in, as the
+# nextest build below does. Without it a dev-dependency that widens a shared
+# crate's features (tempfile turning on rustix's "fs") makes the two builds
+# link different binaries into the same target/debug/<bin>: nextest then
+# overwrites its own dep_input while it runs, is never cached, and this
+# product is restored again on every build.
 [processor.mass_generator.cargo]
 src_files = ["Cargo.toml"]
 profiles = ["dev"]
+args = ["--all-targets"]
 
 # The clippy processor is "run `cargo <command> <args>` once per Cargo.toml,
 # re-run when any .rs or .toml under it changes". That is exactly the shape
