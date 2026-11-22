@@ -24,6 +24,48 @@ pub fn handle(ctx: &crate::build_context::BuildContext, action: CacheAction) -> 
                 crate::output::info("Cache cleared.");
             }
         }
+        CacheAction::Compact => {
+            // Works on the files directly, without a Builder: compacting
+            // needs no configuration, as clearing does not.
+            let compacted = crate::db::compact_all(std::path::Path::new(".rsconstruct"))?;
+            let before: u64 = compacted.iter().map(|c| c.before).sum();
+            let after: u64 = compacted.iter().map(|c| c.after).sum();
+            if json_output::is_json_mode() {
+                let files: Vec<_> = compacted
+                    .iter()
+                    .map(|c| {
+                        serde_json::json!({
+                            "path": c.path.display().to_string(),
+                            "bytes_before": c.before,
+                            "bytes_after": c.after,
+                        })
+                    })
+                    .collect();
+                let out = serde_json::json!({
+                    "files": files,
+                    "bytes_before": before,
+                    "bytes_after": after,
+                });
+                println!("{}", serde_json::to_string_pretty(&out)?);
+            } else {
+                let size = |n: u64| humansize::format_size(n, humansize::BINARY);
+                for c in &compacted {
+                    println!(
+                        "{}: {} -> {}",
+                        c.path.display(),
+                        size(c.before),
+                        size(c.after)
+                    );
+                }
+                println!(
+                    "Compacted {} databases: {} -> {} (freed {})",
+                    compacted.len(),
+                    size(before),
+                    size(after),
+                    size(before.saturating_sub(after))
+                );
+            }
+        }
         CacheAction::Size => {
             let builder = Builder::new(ctx)?;
             let size = builder.object_store().size()?;

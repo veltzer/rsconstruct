@@ -364,6 +364,7 @@ Manage the build cache.
 | Subcommand | Config required? |
 |------------|-----------------|
 | `clear` | No |
+| `compact` | No |
 | `size` | Yes |
 | `trim` | Yes |
 | `list` | Yes |
@@ -373,6 +374,7 @@ Manage the build cache.
 
 ```bash
 rsconstruct cache clear         # Clear the entire cache (.rsconstruct/ except the installed tools in .rsconstruct/tools/)
+rsconstruct cache compact       # Shrink every .rsconstruct/*.redb database to the space its entries use
 rsconstruct cache size          # Show cache size
 rsconstruct cache trim          # Remove unreferenced objects
 rsconstruct cache list          # List all cache entries and their status
@@ -380,6 +382,8 @@ rsconstruct cache stale         # Show which cache entries are stale vs current
 rsconstruct cache stats         # Show per-processor cache statistics
 rsconstruct cache remove-stale  # Remove stale index entries not matching any current product
 ```
+
+The databases in `.rsconstruct/` (`db.redb`, `deps.redb`, `mtime.redb`, `webcache.redb`) reuse the space of deleted entries but never give it back to the file system, so each keeps the size it had at its largest. `cache compact` rewrites them to their current contents; run it after `cache trim` or `cache remove-stale` to return the space they freed. It needs no configuration, and fails if a build in the same project holds the databases open.
 
 ## `rsconstruct webcache`
 

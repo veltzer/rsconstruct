@@ -435,6 +435,8 @@ pub enum CleanAction {
 pub enum CacheAction {
     /// Clear the entire cache (no config needed)
     Clear,
+    /// Shrink the cache databases to the space their entries use (no config needed)
+    Compact,
     /// List all cache entries and their status (requires config)
     List,
     /// Remove stale index entries not matching any current product (requires config)

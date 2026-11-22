@@ -80,6 +80,61 @@ fn cache_operations() {
     assert!(size_after_stdout.contains("0 objects"));
 }
 
+/// `cache compact` needs no configuration, reports each database it
+/// compacted, and leaves the cache working: the next build skips.
+#[test]
+fn cache_compact_keeps_the_cache_usable() {
+    let temp_dir = setup_test_project();
+    let project_path = temp_dir.path();
+    fs::write(
+        project_path.join("tera.templates/compact.txt.tera"),
+        "compacted",
+    )
+    .unwrap();
+    assert!(run_rsconstruct(project_path, &["build"]).status.success());
+
+    fs::remove_file(project_path.join("rsconstruct.toml")).unwrap();
+    let output = run_rsconstruct(project_path, &["cache", "compact"]);
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(
+        output.status.success(),
+        "{stdout}{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(stdout.contains(".rsconstruct/db.redb: "), "{stdout}");
+    assert!(stdout.contains("Compacted "), "{stdout}");
+
+    let empty = TempDir::new().unwrap();
+    let output = run_rsconstruct(empty.path(), &["cache", "compact"]);
+    assert!(output.status.success());
+    assert!(String::from_utf8_lossy(&output.stdout).contains("Compacted 0 databases"));
+}
+
+/// After compacting, the cached results are all still there.
+#[test]
+fn a_compacted_cache_still_skips_unchanged_products() {
+    let temp_dir = setup_test_project();
+    let project_path = temp_dir.path();
+    fs::write(
+        project_path.join("tera.templates/compact.txt.tera"),
+        "compacted",
+    )
+    .unwrap();
+    assert!(run_rsconstruct(project_path, &["build"]).status.success());
+    assert!(
+        run_rsconstruct(project_path, &["cache", "compact"])
+            .status
+            .success()
+    );
+
+    fs::remove_file(project_path.join("compact.txt")).unwrap();
+    let output =
+        run_rsconstruct_with_env(project_path, &["build", "--verbose"], &[("NO_COLOR", "1")]);
+    assert!(output.status.success());
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    assert!(stdout.contains("Restored from cache:"), "{stdout}");
+}
+
 #[test]
 fn cache_list_shows_entries() {
     let temp_dir = setup_test_project();
