@@ -73,6 +73,8 @@ src_files = ["Cargo.toml"]
 command = "nextest"
 args = ["run"]
 sandbox_network = true
+# after the cargo build of the same target/: it relinks the binaries the tests run
+dep_inputs = ["target/debug/rsconstruct"]
 
 # No doctest instance: nextest does not run doctests, but `cargo test --doc`
 # errors outright on a binary-only crate, and this crate has no src/lib.rs.

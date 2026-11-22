@@ -16,19 +16,23 @@ database enables querying files by tags via `rsconstruct tag` subcommands.
 Two kinds of frontmatter fields are indexed:
 
 - **List fields** — each item becomes a tag as-is.
+
   ```yaml
   tags:
     - tools:docker
     - tools:python
   ```
+
   Produces tags: `tools:docker`, `tools:python`.
 
 - **Scalar fields** — indexed as `key:value` (colon separator).
+
   ```yaml
   level: beginner
   category: big-data
   duration_hours: 24
   ```
+
   Produces tags: `level:beginner`, `category:big-data`, `duration_hours:24`.
 
 Both inline YAML lists (`tags: [a, b, c]`) and multi-line lists are supported.

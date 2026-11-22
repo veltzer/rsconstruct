@@ -71,6 +71,7 @@ Hash the entire processors directory at compile time. Any change to anything und
 Each processor declares a `version: u32` in its plugin entry. The developer bumps it when making a behavior-changing modification. Cache key includes the version.
 
 **How it works:**
+
 ```rust
 inventory::submit! { ProcessorPlugin {
     name: "ruff",

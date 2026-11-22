@@ -236,11 +236,13 @@ Grades:
     - `rsconstruct build -p processor.checker.ruff,python_package` → includes both, including the opt-in one.
     - `rsconstruct build --all` (new flag) → includes everything including on-demand processors. Useful for CI that wants to verify the opt-in path doesn't bitrot.
 - Example config:
+
   ```toml
   [processor.python_package]
   build_by_default = false
   src_dirs = ["."]
   ```
+
 - Design considerations:
     - **`@all` meta-shortcut:** the existing `@checker` / `@generator` aliases should continue to mean "all of that type, subject to the default-off filter." Users who want "all checkers including on-demand ones" would say `rsconstruct build --all -p @checker` — rare enough that the composition is fine.
     - **Error on contradiction:** `-p X -x X` already errors; `-p X` where X has `build_by_default = false` should just work (explicit opt-in wins over declarative opt-out).
@@ -408,7 +410,7 @@ Grades:
 - Add `batch_size` field to individual processor configs, overriding the global default.
 - **Urgency**: medium | **Complexity**: low
 
-## Processor Ecosystem
+## Processor Ecosystem: New Tools
 
 ### Flake8 (Python linter)
 - Many projects still use flake8 over ruff. Widely adopted.

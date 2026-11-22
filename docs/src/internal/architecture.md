@@ -386,6 +386,7 @@ When running with `-j`, each thread spawns its own subprocess. Each subprocess g
 - `fs::read()`, `fs::write()`, etc. work directly with relative paths since cwd is project root
 
 ### Exception: Processors requiring absolute paths
+
 If a processor absolutely must use absolute paths (e.g., for a tool that doesn't respect current directory), it should:
 1. Store the `project_root` in the processor struct
 2. Join paths with `project_root` only at execution time

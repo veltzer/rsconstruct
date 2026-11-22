@@ -154,16 +154,19 @@ You can exclude multiple profiles by listing them space-separated:
 Directives can appear in any of these comment styles:
 
 **C++ style:**
+
 ```c
 // EXTRA_LINK_FLAGS_AFTER=-lX11
 ```
 
 **C block comment (single line):**
+
 ```c
 /* EXTRA_LINK_FLAGS_AFTER=-lX11 */
 ```
 
 **C block comment (multi-line, star-prefixed):**
+
 ```c
 /*
  * EXTRA_LINK_FLAGS_AFTER=-lX11

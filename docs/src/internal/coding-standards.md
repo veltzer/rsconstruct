@@ -7,12 +7,14 @@ Rules that apply to the RSConstruct codebase and its documentation.
 Every `?` on an IO operation must have `.with_context()` from `anyhow::Context`. A bare `?` on `fs::read`, `fs::write`, `fs::create_dir_all`, `Command::spawn`, or any other syscall-wrapping function is a bug. It produces error messages like "No such file or directory" with no indication of which file or which operation failed.
 
 Good:
+
 ```rust
 fs::read(&path)
     .with_context(|| format!("Failed to read config file: {}", path.display()))?;
 ```
 
 Bad:
+
 ```rust
 fs::read(&path)?;  // useless error message
 ```

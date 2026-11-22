@@ -7,6 +7,7 @@ architecture.
 ## Remote / distributed builds
 
 ### Remote / distributed execution
+
 The executor already schedules products as their dependencies finish, with
 per-processor concurrency caps.
 Extending the executor to dispatch products to remote workers (gRPC/SSH) would
@@ -15,12 +16,14 @@ turn rsconstruct into a Bazel-lite for polyglot projects.
 ## Build intelligence
 
 ### Build profiling & critical-path analysis
+
 `--timings` already records per-product durations and `start_offset`. A
 `rsconstruct analyze timings` command could surface the critical path through
 the graph, the slowest processors, and parallelism efficiency (wall time vs.
 summed CPU time) — telling users where to add `max_jobs` or split work.
 
 ### Cache-hit telemetry / `why-rebuild`
+
 `--explain` shows per-product action. A persistent log of *why* each product
 rebuilt (input changed / config changed / tool version changed / dep changed)
 would help diagnose "why is my incremental build not incremental." The
@@ -28,6 +31,7 @@ would help diagnose "why is my incremental build not incremental." The
 reported.
 
 ### `rsconstruct query` — graph queries
+
 The graph supports DOT/Mermaid/JSON export. A query language ("what depends on
 `foo.h`", "what does `make-docs` produce", "show the path from A to B") would
 help large projects.
@@ -35,16 +39,19 @@ help large projects.
 ## Developer experience
 
 ### LSP / editor integration
+
 A language server for `rsconstruct.toml` giving completion of processor names,
 config field names (`known_fields()` / `field_descriptions()` exist per
 processor), and inline validation. The metadata is all there.
 
 ### `rsconstruct doctor --fix`
+
 `doctor` already exists; auto-installing missing tools via the
 `DependenciesConfig` (pip/npm/gem) and offering to add `[processor.*]` stanzas
 for auto-detected file types would smooth onboarding.
 
 ### Build watch with TUI
+
 The watcher currently prints lines. A live TUI showing the graph, in-flight
 products, cache hit rate, and per-processor progress would be a strong UX
 upgrade.
@@ -52,6 +59,7 @@ upgrade.
 ## Correctness / reproducibility
 
 ### Hermetic / sandboxed execution
+
 Run each processor in a sandbox that only exposes its declared inputs, catching
 under-declared dependencies (the classic incremental-build bug). The graph
 already knows every product's exact input set. An opt-in, correctness-only
@@ -59,11 +67,13 @@ design (undeclared writes and network access, reads left to tracing) is in
 [Sandboxed Execution](internal/sandbox.md).
 
 ### Reproducibility verification mode
+
 The `BuildPolicy` trait doc explicitly mentions "deterministic-verification
 modes" as a future implementation. A policy that rebuilds and byte-compares
 against the cached blob would catch non-deterministic processors.
 
 ### Content-addressed remote artifact sharing / `rsconstruct fetch`
+
 Since blobs are already content-addressed and path-free, a command to pull a
 specific built artifact by target name from the cache (without a full build) is
 natural.
@@ -71,10 +81,12 @@ natural.
 ## Ecosystem
 
 ### CI provider integrations
+
 First-class GitHub Actions / GitLab CI templates that set up the remote cache,
 run `tools verify` against the lock file, and emit the JSON build events
 (`json_output.rs`) as CI annotations.
 
 ### `rsconstruct migrate`
+
 Importers from `Makefile`, `CMakeLists.txt`, or `package.json` scripts that
 generate a starter `rsconstruct.toml`.

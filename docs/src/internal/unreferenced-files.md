@@ -46,16 +46,19 @@ rsconstruct graph unreferenced --extensions .svg[,.png,...] [--rm]
 ### Examples
 
 Find unreferenced SVG files:
+
 ```text
 rsconstruct graph unreferenced --extensions .svg
 ```
 
 Find unreferenced images of any type:
+
 ```text
 rsconstruct graph unreferenced --extensions .svg,.png,.jpg
 ```
 
 Delete unreferenced SVG files:
+
 ```text
 rsconstruct graph unreferenced --extensions .svg --rm
 ```

@@ -101,6 +101,7 @@ both. The build fails (with the overlapping term names listed) if the
 invariant is violated.
 
 Example `programming_languages.txt`:
+
 ```text
 Python
 JavaScript
