@@ -87,7 +87,7 @@ fn iprotobuf_imports_and_descriptor_set() {
         "well-known type mapped to prost_types: {demo}"
     );
     let pb = fs::read(project.join("out/all.pb")).expect("descriptor set written");
-    assert!(!pb.is_empty());
+    assert_ne!(pb, [] as [u8; 0]);
 }
 
 #[test]

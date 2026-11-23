@@ -155,7 +155,7 @@ fn cache_list_shows_entries() {
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
     let entries: serde_json::Value = serde_json::from_str(&stdout)
-        .unwrap_or_else(|e| panic!("Cache list should be valid JSON: {}\nOutput: {}", e, stdout));
+        .unwrap_or_else(|e| panic!("Cache list should be valid JSON: {e}\nOutput: {stdout}"));
     let arr = entries
         .as_array()
         .expect("Cache list should be a JSON array");
@@ -166,8 +166,7 @@ fn cache_list_shows_entries() {
     let first = &arr[0];
     assert!(
         first["cache_key"].as_str().is_some(),
-        "Cache entry should have a cache_key: {}",
-        first
+        "Cache entry should have a cache_key: {first}"
     );
 }
 
@@ -183,14 +182,13 @@ fn cache_list_empty() {
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
     let entries: serde_json::Value = serde_json::from_str(&stdout)
-        .unwrap_or_else(|e| panic!("Cache list should be valid JSON: {}\nOutput: {}", e, stdout));
+        .unwrap_or_else(|e| panic!("Cache list should be valid JSON: {e}\nOutput: {stdout}"));
     let arr = entries
         .as_array()
         .expect("Cache list should be a JSON array");
     assert!(
         arr.is_empty(),
-        "Empty cache should produce an empty JSON array: {}",
-        stdout
+        "Empty cache should produce an empty JSON array: {stdout}"
     );
 }
 
@@ -206,8 +204,7 @@ fn cache_stats_empty() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
         stdout.contains("Cache is empty"),
-        "Expected 'Cache is empty' message, got: {}",
-        stdout
+        "Expected 'Cache is empty' message, got: {stdout}"
     );
 }
 
@@ -232,8 +229,7 @@ fn cache_stats_after_build() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
         stdout.contains("entries"),
-        "Expected 'entries' in stats, got: {}",
-        stdout
+        "Expected 'entries' in stats, got: {stdout}"
     );
 }
 
@@ -260,17 +256,12 @@ fn cache_stats_json() {
     );
     assert!(output.status.success());
     let stdout = String::from_utf8_lossy(&output.stdout);
-    let parsed: serde_json::Value = serde_json::from_str(&stdout).unwrap_or_else(|e| {
-        panic!(
-            "Cache stats JSON should be valid: {}\nOutput: {}",
-            e, stdout
-        )
-    });
-    assert!(parsed.is_object(), "Expected JSON object, got: {}", stdout);
+    let parsed: serde_json::Value = serde_json::from_str(&stdout)
+        .unwrap_or_else(|e| panic!("Cache stats JSON should be valid: {e}\nOutput: {stdout}"));
+    assert!(parsed.is_object(), "Expected JSON object, got: {stdout}");
     assert!(
         parsed.get("all").is_some(),
-        "Expected 'all' key in stats JSON, got: {}",
-        stdout
+        "Expected 'all' key in stats JSON, got: {stdout}"
     );
 }
 
@@ -321,13 +312,11 @@ fn cache_clear_removes_everything() {
     let stdout = String::from_utf8_lossy(&rebuild.stdout);
     assert!(
         stdout.contains("Processing:"),
-        "Should do a full rebuild after cache clear: {}",
-        stdout
+        "Should do a full rebuild after cache clear: {stdout}"
     );
     assert!(
         !stdout.contains("Restored from cache:"),
-        "Should not restore after cache clear: {}",
-        stdout
+        "Should not restore after cache clear: {stdout}"
     );
 }
 
@@ -360,13 +349,11 @@ fn remove_stale_keeps_current_entries() {
     let stale_stdout = String::from_utf8_lossy(&stale.stdout);
     assert!(
         !stale_stdout.lines().any(|l| l.starts_with("stale ")),
-        "Fresh build must have no stale entries: {}",
-        stale_stdout
+        "Fresh build must have no stale entries: {stale_stdout}"
     );
     assert!(
         stale_stdout.lines().any(|l| l.starts_with("current ")),
-        "Fresh build's entries must be recognized as current: {}",
-        stale_stdout
+        "Fresh build's entries must be recognized as current: {stale_stdout}"
     );
 
     // remove-stale must not remove anything
@@ -379,8 +366,7 @@ fn remove_stale_keeps_current_entries() {
     let remove_stdout = String::from_utf8_lossy(&remove.stdout);
     assert!(
         remove_stdout.contains("Removed 0 stale index entries"),
-        "remove-stale after a fresh build must remove nothing: {}",
-        remove_stdout
+        "remove-stale after a fresh build must remove nothing: {remove_stdout}"
     );
 
     // The cache must still work: delete the output and restore from cache
@@ -391,8 +377,7 @@ fn remove_stale_keeps_current_entries() {
     let rebuild_stdout = String::from_utf8_lossy(&rebuild.stdout);
     assert!(
         rebuild_stdout.contains("Restored from cache:"),
-        "Cache must survive remove-stale: {}",
-        rebuild_stdout
+        "Cache must survive remove-stale: {rebuild_stdout}"
     );
 
     // Now actually make the entry stale: change the input content. The old
@@ -408,11 +393,10 @@ fn remove_stale_keeps_current_entries() {
         &[("NO_COLOR", "1")],
     );
     assert!(remove2.status.success());
-    let remove2_stdout = String::from_utf8_lossy(&remove2.stdout);
+    let second_remove_stdout = String::from_utf8_lossy(&remove2.stdout);
     assert!(
-        !remove2_stdout.contains("Removed 0 stale index entries"),
-        "Changing input content must make the old entry stale: {}",
-        remove2_stdout
+        !second_remove_stdout.contains("Removed 0 stale index entries"),
+        "Changing input content must make the old entry stale: {second_remove_stdout}"
     );
 }
 
@@ -453,8 +437,7 @@ fn cache_survives_input_rename() {
     let stdout = String::from_utf8_lossy(&build2.stdout);
     assert!(
         stdout.contains("Restored from cache:"),
-        "Renamed input with same content should restore from cache: {}",
-        stdout
+        "Renamed input with same content should restore from cache: {stdout}"
     );
     assert!(
         project_path.join("renamed.txt").exists(),
@@ -527,8 +510,7 @@ fn tool_upgrade_invalidates_cached_results() {
     let stdout2 = String::from_utf8_lossy(&build2.stdout);
     assert!(
         !stdout2.contains("Processing:"),
-        "unchanged tool + unchanged inputs must not re-run anything: {}",
-        stdout2
+        "unchanged tool + unchanged inputs must not re-run anything: {stdout2}"
     );
 
     // "Upgrade" the tool. Inputs and config are untouched.
@@ -548,8 +530,7 @@ fn tool_upgrade_invalidates_cached_results() {
     let stdout3 = String::from_utf8_lossy(&build3.stdout);
     assert!(
         stdout3.contains("Processing:"),
-        "a tool upgrade must invalidate cached results: {}",
-        stdout3
+        "a tool upgrade must invalidate cached results: {stdout3}"
     );
 }
 
@@ -607,8 +588,7 @@ fn hash_tool_versions_false_ignores_tool_upgrade() {
     let stdout2 = String::from_utf8_lossy(&build2.stdout);
     assert!(
         !stdout2.contains("Processing:"),
-        "with hash_tool_versions=false a tool upgrade must not invalidate: {}",
-        stdout2
+        "with hash_tool_versions=false a tool upgrade must not invalidate: {stdout2}"
     );
 }
 
@@ -732,8 +712,7 @@ fn distinct_processors_do_not_share_cache_entries() {
     let stdout2 = String::from_utf8_lossy(&build2.stdout);
     assert!(
         stdout2.contains("Restored from cache:"),
-        "second build should restore from cache, not rebuild: {}",
-        stdout2
+        "second build should restore from cache, not rebuild: {stdout2}"
     );
 
     assert_eq!(

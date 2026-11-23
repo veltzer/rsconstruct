@@ -496,12 +496,10 @@ fn keep_going_short_flag() {
     let stdout = String::from_utf8_lossy(&output.stdout);
 
     // Should contain error reporting in stdout or stderr
-    let combined = format!("{}{}", stdout, stderr);
+    let combined = format!("{stdout}{stderr}");
     assert!(
         combined.contains("error") || combined.contains("Error"),
-        "Should report errors: stdout={}, stderr={}",
-        stdout,
-        stderr
+        "Should report errors: stdout={stdout}, stderr={stderr}"
     );
 }
 
@@ -593,8 +591,8 @@ fn parallel_build_with_j_flag() {
 
     for name in &["alpha", "beta", "gamma", "delta"] {
         fs::write(
-            project_path.join(format!("tera.templates/{}.txt.tera", name)),
-            format!("content of {}", name),
+            project_path.join(format!("tera.templates/{name}.txt.tera")),
+            format!("content of {name}"),
         )
         .unwrap();
     }
@@ -653,8 +651,8 @@ fn parallel_builds_all_independent_products() {
 
     for i in 0..8 {
         fs::write(
-            project_path.join(format!("tera.templates/task_{:02}.txt.tera", i)),
-            format!("content of task {}", i),
+            project_path.join(format!("tera.templates/task_{i:02}.txt.tera")),
+            format!("content of task {i}"),
         )
         .unwrap();
     }
@@ -696,8 +694,8 @@ fn parallel_timings_flag() {
 
     for name in &["one", "two", "three"] {
         fs::write(
-            project_path.join(format!("tera.templates/{}.txt.tera", name)),
-            format!("hello from {}", name),
+            project_path.join(format!("tera.templates/{name}.txt.tera")),
+            format!("hello from {name}"),
         )
         .unwrap();
     }
@@ -733,8 +731,7 @@ fn parallel_timings_flag() {
         .count();
     assert!(
         timing_lines >= 1,
-        "Should have at least one timing entry: {}",
-        stdout
+        "Should have at least one timing entry: {stdout}"
     );
 }
 
@@ -750,8 +747,8 @@ fn deterministic_build_order() {
             // Create several template files with distinct names and content
             for name in &["zebra", "alpha", "mango", "banana", "cherry"] {
                 fs::write(
-                    project_path.join(format!("tera.templates/{}.txt.tera", name)),
-                    format!("content of {}", name),
+                    project_path.join(format!("tera.templates/{name}.txt.tera")),
+                    format!("content of {name}"),
                 )
                 .unwrap();
             }
@@ -787,8 +784,7 @@ fn deterministic_build_order() {
             assert_eq!(
                 processing_names.len(),
                 5,
-                "Should process all 5 templates: {}",
-                stdout
+                "Should process all 5 templates: {stdout}"
             );
             processing_names
         })
@@ -801,8 +797,8 @@ fn deterministic_build_order() {
     );
 }
 
-/// Test that classify_products propagates dependency changes transitively.
-/// Setup: tera generates step1.txt, a second tera template depends on step1.txt via dep_inputs.
+/// Test that `classify_products` propagates dependency changes transitively.
+/// Setup: tera generates step1.txt, a second tera template depends on step1.txt via `dep_inputs`.
 /// When the first tera template changes, both products should be classified as needing
 /// rebuild — not just the first product.
 #[test]
@@ -857,8 +853,7 @@ fn classify_propagates_through_dependencies() {
     let stdout3 = String::from_utf8_lossy(&output3.stdout);
     assert!(
         stdout3.contains("0 to build, 0 to restore (2 up-to-date)"),
-        "Both products should be up-to-date: {}",
-        stdout3
+        "Both products should be up-to-date: {stdout3}"
     );
 
     // Wait so mtime differs
@@ -881,8 +876,7 @@ fn classify_propagates_through_dependencies() {
     let stdout4 = String::from_utf8_lossy(&output4.stdout);
     assert!(
         stdout4.contains("0 up-to-date"),
-        "No products should be up-to-date when root dependency changed: {}",
-        stdout4
+        "No products should be up-to-date when root dependency changed: {stdout4}"
     );
 }
 
@@ -1031,7 +1025,7 @@ src_extensions = [".txt"]
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     let parsed: Vec<serde_json::Value> = serde_json::from_str(&stdout)
-        .unwrap_or_else(|e| panic!("JSON parse failed: {}\nOutput: {}", e, stdout));
+        .unwrap_or_else(|e| panic!("JSON parse failed: {e}\nOutput: {stdout}"));
 
     // Find the ascii processor's entries
     let ascii_products: Vec<&serde_json::Value> = parsed
@@ -1042,8 +1036,7 @@ src_extensions = [".txt"]
     assert!(
         !ascii_products.is_empty(),
         "ascii processor should have discovered products from tera's output.\n\
-         All products: {:?}",
-        parsed
+         All products: {parsed:?}"
     );
 
     // Verify that generated.txt is an input to ascii
@@ -1056,8 +1049,7 @@ src_extensions = [".txt"]
     });
     assert!(
         has_generated_input,
-        "ascii should have generated.txt as input.\nascii products: {:?}",
-        ascii_products
+        "ascii should have generated.txt as input.\nascii products: {ascii_products:?}"
     );
 }
 
@@ -1167,7 +1159,7 @@ output_files = ["out/all.txt"]
     }
 }
 
-/// Test the explicit processor: declares inputs, input_globs, and outputs explicitly.
+/// Test the explicit processor: declares inputs, `input_globs`, and outputs explicitly.
 /// Verifies discovery creates a single product with all resolved inputs and the declared output.
 #[test]
 fn explicit_processor_discovery() {
@@ -1208,7 +1200,7 @@ src_dirs = ["."]
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     let parsed: Vec<serde_json::Value> = serde_json::from_str(&stdout)
-        .unwrap_or_else(|e| panic!("JSON parse failed: {}\nOutput: {}", e, stdout));
+        .unwrap_or_else(|e| panic!("JSON parse failed: {e}\nOutput: {stdout}"));
 
     // Should have exactly one product
     let explicit_products: Vec<&serde_json::Value> = parsed
@@ -1232,7 +1224,7 @@ src_dirs = ["."]
         .iter()
         .map(|v| v.as_str().unwrap())
         .collect();
-    assert_eq!(inputs.len(), 3, "Expected 3 inputs: {:?}", inputs);
+    assert_eq!(inputs.len(), 3, "Expected 3 inputs: {inputs:?}");
     assert_eq!(inputs[0], "config.txt");
     assert!(
         inputs[1].ends_with("a.csv"),
@@ -1315,7 +1307,7 @@ src_extensions = [".txt"]
 
     let stdout = String::from_utf8_lossy(&output.stdout);
     let parsed: Vec<serde_json::Value> = serde_json::from_str(&stdout)
-        .unwrap_or_else(|e| panic!("JSON parse failed: {}\nOutput: {}", e, stdout));
+        .unwrap_or_else(|e| panic!("JSON parse failed: {e}\nOutput: {stdout}"));
 
     // Tera should have 1 product
     let tera_products: Vec<&serde_json::Value> = parsed
@@ -1325,8 +1317,7 @@ src_extensions = [".txt"]
     assert_eq!(
         tera_products.len(),
         1,
-        "Expected 1 tera product: {:?}",
-        tera_products
+        "Expected 1 tera product: {tera_products:?}"
     );
 
     // ASCII should discover the tera output even though out/generated/ doesn't exist on disk.
@@ -1339,8 +1330,7 @@ src_extensions = [".txt"]
         ascii_products.len(),
         1,
         "ascii should discover 1 product from tera's output in nonexistent dir.\n\
-         All products: {:?}",
-        parsed
+         All products: {parsed:?}"
     );
 
     // Verify the ascii product's input is the tera output
@@ -1349,8 +1339,7 @@ src_extensions = [".txt"]
         .unwrap();
     assert!(
         ascii_input.contains("out/generated/hello.txt"),
-        "ascii input should be out/generated/hello.txt, got: {}",
-        ascii_input
+        "ascii input should be out/generated/hello.txt, got: {ascii_input}"
     );
 }
 
@@ -1424,8 +1413,8 @@ sandbox_writable = [".concurrency_counter", ".concurrency_peak", ".concurrency_l
     fs::create_dir_all(project_path.join("inputs")).unwrap();
     for i in 0..8 {
         fs::write(
-            project_path.join(format!("inputs/file_{:02}.txt", i)),
-            format!("content {}", i),
+            project_path.join(format!("inputs/file_{i:02}.txt")),
+            format!("content {i}"),
         )
         .unwrap();
     }
@@ -1463,13 +1452,11 @@ sandbox_writable = [".concurrency_counter", ".concurrency_peak", ".concurrency_l
 
     assert!(
         peak <= 2,
-        "Peak concurrency was {} but max_jobs=2 should limit it to 2",
-        peak
+        "Peak concurrency was {peak} but max_jobs=2 should limit it to 2"
     );
     assert!(
         peak >= 1,
-        "Peak concurrency should be at least 1, got {}",
-        peak
+        "Peak concurrency should be at least 1, got {peak}"
     );
 }
 
@@ -1531,8 +1518,8 @@ sandbox_writable = [".concurrency_counter", ".concurrency_peak", ".concurrency_l
     fs::create_dir_all(project_path.join("inputs")).unwrap();
     for i in 0..8 {
         fs::write(
-            project_path.join(format!("inputs/file_{:02}.txt", i)),
-            format!("content {}", i),
+            project_path.join(format!("inputs/file_{i:02}.txt")),
+            format!("content {i}"),
         )
         .unwrap();
     }
@@ -1569,8 +1556,7 @@ sandbox_writable = [".concurrency_counter", ".concurrency_peak", ".concurrency_l
     // (on any machine with >= 2 cores)
     assert!(
         peak > 2,
-        "Without max_jobs, peak concurrency should exceed 2 with -j8, got {}",
-        peak
+        "Without max_jobs, peak concurrency should exceed 2 with -j8, got {peak}"
     );
 }
 
@@ -1689,12 +1675,11 @@ fn exclude_processor_runs_everything_else() {
     // Stdout/stderr must not mention processing the ruff product for hello.py.
     assert!(
         !combined.contains("[processor.checker.ruff]"),
-        "ruff must not run when -x ruff is passed: {}",
-        combined
+        "ruff must not run when -x ruff is passed: {combined}"
     );
 }
 
-/// `-x unknown` must fail with a CONFIG_ERROR, same as `-p unknown`.
+/// `-x unknown` must fail with a `CONFIG_ERROR`, same as `-p unknown`.
 #[test]
 fn exclude_unknown_processor_is_config_error() {
     let temp_dir = setup_test_project();
@@ -1707,12 +1692,11 @@ fn exclude_unknown_processor_is_config_error() {
     );
     assert!(!output.status.success());
     let exit_code = output.status.code().unwrap();
-    assert_eq!(exit_code, 2, "Expected CONFIG_ERROR (2), got {}", exit_code);
+    assert_eq!(exit_code, 2, "Expected CONFIG_ERROR (2), got {exit_code}");
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
         stderr.contains("Unknown processor"),
-        "Error should name the unknown processor: {}",
-        stderr
+        "Error should name the unknown processor: {stderr}"
     );
 }
 
@@ -1737,8 +1721,7 @@ fn include_and_exclude_same_processor_is_error() {
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
         stderr.contains("both -p and -x"),
-        "Error should explain the conflict: {}",
-        stderr
+        "Error should explain the conflict: {stderr}"
     );
 }
 
@@ -1839,8 +1822,7 @@ fn svg_change_rebuilds_marp_and_ipdfunite() {
     let classify_out = String::from_utf8_lossy(&classify.stdout);
     assert!(
         !classify_out.contains("(2 up-to-date)"),
-        "After SVG change, not every product should be up-to-date: {}",
-        classify_out
+        "After SVG change, not every product should be up-to-date: {classify_out}"
     );
 
     // Phase 3: actually rebuild and confirm BOTH products ran (or restored).
@@ -1925,7 +1907,7 @@ fn json_mode_stdout_is_pure_json() {
 
 /// No processor scans the project tree by default. An omitted or empty
 /// `src_dirs` matches nothing, so a processor declared without it builds
-/// nothing rather than sweeping node_modules/, .venv/ and vendored code.
+/// nothing rather than sweeping `node_modules`/, .venv/ and vendored code.
 /// Scanning everything stays available, but only as a deliberate opt-in via
 /// the empty string, which means the project root.
 #[test]

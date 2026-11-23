@@ -72,8 +72,7 @@ fn terms_two_dirs_overlap_fails() {
     );
     assert!(
         combined.contains("Docker") && combined.contains("ambiguous"),
-        "Error should mention overlapping term and ambiguous: {}",
-        combined
+        "Error should mention overlapping term and ambiguous: {combined}"
     );
 }
 
@@ -109,8 +108,7 @@ fn terms_backticked_ambiguous_fails_by_default() {
     );
     assert!(
         combined.contains("server") && combined.contains("ambiguous"),
-        "Error must mention 'server' and 'ambiguous': {}",
-        combined
+        "Error must mention 'server' and 'ambiguous': {combined}"
     );
 }
 

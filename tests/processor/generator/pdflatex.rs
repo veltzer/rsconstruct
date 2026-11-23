@@ -32,8 +32,7 @@ fn pdflatex_valid_file() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
         stdout.contains("Processing:"),
-        "Should process pdflatex: {}",
-        stdout
+        "Should process pdflatex: {stdout}"
     );
 }
 
@@ -54,7 +53,6 @@ fn pdflatex_no_project_discovered() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
         stdout.contains("0 products"),
-        "Should discover 0 products: {}",
-        stdout
+        "Should discover 0 products: {stdout}"
     );
 }

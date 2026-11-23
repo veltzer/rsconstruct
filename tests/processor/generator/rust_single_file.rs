@@ -47,8 +47,7 @@ fn rust_single_file_incremental_build() {
     let stdout1 = String::from_utf8_lossy(&output1.stdout);
     assert!(
         stdout1.contains("Processing:"),
-        "Expected 'Processing:' in first build output: {}",
-        stdout1
+        "Expected 'Processing:' in first build output: {stdout1}"
     );
 
     let output2 =
@@ -57,8 +56,7 @@ fn rust_single_file_incremental_build() {
     let stdout2 = String::from_utf8_lossy(&output2.stdout);
     assert!(
         stdout2.contains("[processor.generator.rust_single_file] Skipping (unchanged):"),
-        "Expected skip message in second build: {}",
-        stdout2
+        "Expected skip message in second build: {stdout2}"
     );
 }
 

@@ -94,7 +94,7 @@ pub fn setup_test_project() -> TempDir {
 /// developer's ~/.config/rsconstruct/config.toml, whose `[build]` keys
 /// (`reject_dot_src_dirs = true`, say) would otherwise change what the
 /// binary under test accepts. A test that wants a user config sets
-/// XDG_CONFIG_HOME itself, which overrides this because later env() calls win.
+/// `XDG_CONFIG_HOME` itself, which overrides this because later `env()` calls win.
 ///
 /// `CI` is removed for the same reason: in CI the binary enforces
 /// rsconstruct.lock, which no fixture project carries, so a suite running on
@@ -309,9 +309,9 @@ pub struct ProductResult {
 }
 
 impl BuildResult {
-    /// Parse rsconstruct --json output into structured BuildResult
+    /// Parse rsconstruct --json output into structured `BuildResult`
     pub fn parse(output: &std::process::Output) -> Self {
-        let mut result = BuildResult {
+        let mut result = Self {
             exit_success: output.status.success(),
             ..Default::default()
         };

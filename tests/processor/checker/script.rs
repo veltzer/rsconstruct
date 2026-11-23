@@ -33,8 +33,7 @@ fn script_valid_file() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
         stdout.contains("Processing:"),
-        "Should process script: {}",
-        stdout
+        "Should process script: {stdout}"
     );
 }
 
@@ -67,8 +66,7 @@ fn script_incremental_skip() {
     let stdout2 = String::from_utf8_lossy(&output2.stdout);
     assert!(
         stdout2.contains("[processor.checker.script] Skipping (unchanged):"),
-        "Second build should skip: {}",
-        stdout2
+        "Second build should skip: {stdout2}"
     );
 }
 
@@ -99,15 +97,13 @@ fn script_misspelled_linter_fails_immediately() {
     let exit_code = output.status.code().unwrap();
     assert_eq!(
         exit_code, 3,
-        "Expected exit code 3 (TOOL_ERROR), got {}",
-        exit_code
+        "Expected exit code 3 (TOOL_ERROR), got {exit_code}"
     );
 
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
         stderr.contains("Missing required tools") || stderr.contains("TOOL_ERROR"),
-        "Should report missing tool error: {}",
-        stderr
+        "Should report missing tool error: {stderr}"
     );
 }
 
@@ -144,13 +140,11 @@ fn script_multi_instance_both_discover_files() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
         stdout.contains("[processor.checker.script.lint_a]"),
-        "Should process script.lint_a: {}",
-        stdout
+        "Should process script.lint_a: {stdout}"
     );
     assert!(
         stdout.contains("[processor.checker.script.lint_b]"),
-        "Should process script.lint_b: {}",
-        stdout
+        "Should process script.lint_b: {stdout}"
     );
 }
 
@@ -172,8 +166,7 @@ fn script_no_project_discovered() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
         stdout.contains("0 products"),
-        "Should discover 0 products: {}",
-        stdout
+        "Should discover 0 products: {stdout}"
     );
 }
 
@@ -219,8 +212,7 @@ fn script_rebuilds_when_command_file_changes() {
     let stdout3 = String::from_utf8_lossy(&out3.stdout);
     assert!(
         stdout3.contains("Processing:"),
-        "Third build must rebuild after command file change: {}",
-        stdout3,
+        "Third build must rebuild after command file change: {stdout3}",
     );
 }
 

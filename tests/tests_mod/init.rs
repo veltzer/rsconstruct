@@ -110,8 +110,7 @@ fn init_fails_if_exists() {
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
         stderr.contains("already exists"),
-        "Error should mention 'already exists': {}",
-        stderr
+        "Error should mention 'already exists': {stderr}"
     );
 }
 

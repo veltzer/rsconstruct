@@ -290,8 +290,7 @@ fn two_processors_declaring_same_output_file_errors() {
     );
     assert!(
         combined.to_lowercase().contains("output conflict"),
-        "Expected an 'Output conflict' error in the output, got: {}",
-        combined,
+        "Expected an 'Output conflict' error in the output, got: {combined}",
     );
     assert_eq!(
         output.status.code(),

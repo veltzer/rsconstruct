@@ -49,7 +49,6 @@ fn generic_rebuilds_when_command_file_changes() {
     let stdout3 = String::from_utf8_lossy(&out3.stdout);
     assert!(
         stdout3.contains("Processing:"),
-        "Third build must rebuild after command file change: {}",
-        stdout3,
+        "Third build must rebuild after command file change: {stdout3}",
     );
 }

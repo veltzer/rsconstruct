@@ -31,8 +31,7 @@ fn zspell_correct_spelling() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
         stdout.contains("Processing:"),
-        "Should process zspell: {}",
-        stdout
+        "Should process zspell: {stdout}"
     );
 }
 
@@ -67,8 +66,7 @@ fn zspell_misspelled_word() {
     );
     assert!(
         combined.contains("speling"),
-        "Error should mention the misspelled word: {}",
-        combined
+        "Error should mention the misspelled word: {combined}"
     );
 }
 
@@ -129,8 +127,7 @@ fn zspell_incremental_skip() {
     let stdout1 = String::from_utf8_lossy(&output1.stdout);
     assert!(
         stdout1.contains("Processing:"),
-        "First build should process: {}",
-        stdout1
+        "First build should process: {stdout1}"
     );
 
     // Second build should skip
@@ -140,8 +137,7 @@ fn zspell_incremental_skip() {
     let stdout2 = String::from_utf8_lossy(&output2.stdout);
     assert!(
         stdout2.contains("[processor.checker.zspell] Skipping (unchanged):"),
-        "Second build should skip: {}",
-        stdout2
+        "Second build should skip: {stdout2}"
     );
 }
 
@@ -286,20 +282,17 @@ fn zspell_auto_add_words() {
     let words_content = fs::read_to_string(&words_path).unwrap();
     assert!(
         words_content.contains("rsconstruct"),
-        "Should contain 'rsconstruct': {}",
-        words_content
+        "Should contain 'rsconstruct': {words_content}"
     );
     assert!(
         words_content.contains("tera"),
-        "Should contain 'tera': {}",
-        words_content
+        "Should contain 'tera': {words_content}"
     );
 
     // Verify output mentions adding words
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
         stdout.contains("Added") && stdout.contains("word"),
-        "Should mention adding words: {}",
-        stdout
+        "Should mention adding words: {stdout}"
     );
 }

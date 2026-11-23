@@ -110,7 +110,7 @@ fn assert_no_scratch_left(root: &Path) {
     let left: Vec<String> = fs::read_dir(&dir)
         .unwrap()
         .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
-        .filter(|name| !name.ends_with(".json"))
+        .filter(|name| Path::new(name).extension().is_none_or(|e| e != "json"))
         .collect();
     assert!(left.is_empty(), "scratch directories left behind: {left:?}");
 }

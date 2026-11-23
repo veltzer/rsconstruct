@@ -37,12 +37,12 @@ fn cc_build_static_library() {
 
     setup_cc_project(
         project_path,
-        r#"
+        r"
 libraries:
   - name: mymath
     lib_type: static
     sources: [src/math.c]
-"#,
+",
     );
 
     fs::write(
@@ -74,12 +74,12 @@ fn cc_build_shared_library() {
 
     setup_cc_project(
         project_path,
-        r#"
+        r"
 libraries:
   - name: mymath
     lib_type: shared
     sources: [src/math.c]
-"#,
+",
     );
 
     fs::write(
@@ -111,7 +111,7 @@ fn cc_build_program_with_library() {
 
     setup_cc_project(
         project_path,
-        r#"
+        r"
 libraries:
   - name: mymath
     lib_type: static
@@ -121,7 +121,7 @@ programs:
   - name: main
     sources: [src/main.c]
     link: [mymath]
-"#,
+",
     );
 
     fs::write(
@@ -132,9 +132,9 @@ programs:
 
     fs::write(
         project_path.join("src/main.c"),
-        r#"extern int add(int, int);
+        r"extern int add(int, int);
 int main() { return add(1, 2) - 3; }
-"#,
+",
     )
     .unwrap();
 
@@ -174,11 +174,11 @@ fn cc_incremental_skip() {
 
     setup_cc_project(
         project_path,
-        r#"
+        r"
 programs:
   - name: hello
     sources: [src/hello.c]
-"#,
+",
     );
 
     fs::write(
@@ -193,8 +193,7 @@ programs:
     let stdout1 = String::from_utf8_lossy(&output1.stdout);
     assert!(
         stdout1.contains("Processing:"),
-        "First build should process: {}",
-        stdout1
+        "First build should process: {stdout1}"
     );
 
     // Second build - should skip
@@ -204,8 +203,7 @@ programs:
     let stdout2 = String::from_utf8_lossy(&output2.stdout);
     assert!(
         stdout2.contains("[processor.mass_generator.cc] Skipping (unchanged):"),
-        "Second build should skip: {}",
-        stdout2
+        "Second build should skip: {stdout2}"
     );
 }
 
@@ -222,11 +220,11 @@ fn cc_single_invocation_mode() {
     .unwrap();
     fs::write(
         project_path.join("cc.yaml"),
-        r#"
+        r"
 programs:
   - name: hello
     sources: [src/hello.c]
-"#,
+",
     )
     .unwrap();
     fs::write(
@@ -258,12 +256,12 @@ fn cc_build_both_library_types() {
 
     setup_cc_project(
         project_path,
-        r#"
+        r"
 libraries:
   - name: myutil
     lib_type: both
     sources: [src/util.c]
-"#,
+",
     );
 
     fs::write(
@@ -301,11 +299,11 @@ fn cc_clean_removes_output_dir() {
 
     setup_cc_project(
         project_path,
-        r#"
+        r"
 programs:
   - name: hello
     sources: [src/hello.c]
-"#,
+",
     );
 
     fs::write(
@@ -345,11 +343,11 @@ fn cc_same_stem_sources_do_not_collide() {
 
     setup_cc_project(
         project_path,
-        r#"
+        r"
 programs:
   - name: app
     sources: [src/main.c, src/a/util.c, src/b/util.c]
-"#,
+",
     );
 
     fs::create_dir_all(project_path.join("src/a")).unwrap();
@@ -404,11 +402,11 @@ fn cc_config_flags_are_manifest_defaults() {
     .unwrap();
     fs::write(
         project_path.join("cc.yaml"),
-        r#"
+        r"
 programs:
   - name: app
     sources: [src/main.c]
-"#,
+",
     )
     .unwrap();
     fs::write(
@@ -443,12 +441,12 @@ fn cc_manifest_overrides_config_flags() {
     .unwrap();
     fs::write(
         project_path.join("cc.yaml"),
-        r#"
+        r"
 cflags: []
 programs:
   - name: app
     sources: [src/main.c]
-"#,
+",
     )
     .unwrap();
     fs::write(
@@ -494,12 +492,12 @@ fn cc_manifest_compiler_is_declared() {
     .unwrap();
     fs::write(
         project_path.join("cc.yaml"),
-        r#"
+        r"
 cc: mycustomcc
 programs:
   - name: app
     sources: [src/main.c]
-"#,
+",
     )
     .unwrap();
     fs::write(
@@ -569,7 +567,7 @@ fn cc_header_edit_rebuilds_with_cpp_analyzer() {
     write_project_file(
         project_path,
         "cc.yaml",
-        r#"
+        r"
 include_dirs: [include]
 
 libraries:
@@ -581,7 +579,7 @@ programs:
   - name: main
     sources: [src/main.c]
     link: [mymath]
-"#,
+",
     );
     write_project_file(project_path, "include/mymath.h", "int add(int a, int b);\n");
     write_project_file(project_path, "include/unrelated.h", "#define UNUSED 1\n");
@@ -649,7 +647,7 @@ fn cc_target_flags_follow_the_source_language() {
 
     setup_cc_project(
         project_path,
-        r#"
+        r"
 libraries:
   - name: helper
     lib_type: static
@@ -663,7 +661,7 @@ programs:
     link: [helper]
     cflags: [-DPROG_C=1]
     cxxflags: [-DPROG_CXX=1]
-"#,
+",
     );
     write_project_file(
         project_path,
@@ -719,14 +717,14 @@ fn cc_include_dirs_are_relative_to_a_nested_manifest() {
     write_project_file(
         project_path,
         "sub/cc.yaml",
-        r#"
+        r"
 include_dirs: [include]
 
 programs:
   - name: nested
     sources: [src/main.c]
     include_dirs: [extra]
-"#,
+",
     );
     write_project_file(project_path, "sub/include/a.h", "#define A 0\n");
     write_project_file(project_path, "sub/extra/b.h", "#define B 0\n");
@@ -764,7 +762,7 @@ fn cc_single_invocation_honours_include_dirs_and_program_flags() {
     write_project_file(
         project_path,
         "cc.yaml",
-        r#"
+        r"
 include_dirs: [include]
 
 programs:
@@ -777,7 +775,7 @@ programs:
     sources: [src/main.cpp]
     cflags: [--definitely-not-a-flag]
     cxxflags: [-DNEED_CXX=0]
-"#,
+",
     );
     write_project_file(project_path, "include/a.h", "#define A 0\n");
     write_project_file(project_path, "extra/b.h", "#define B 0\n");

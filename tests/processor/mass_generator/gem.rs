@@ -35,8 +35,7 @@ fn gem_valid_project() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
         stdout.contains("Processing:"),
-        "Should process gem: {}",
-        stdout
+        "Should process gem: {stdout}"
     );
 }
 
@@ -79,8 +78,7 @@ fn gem_incremental_skip() {
     let stdout2 = String::from_utf8_lossy(&output2.stdout);
     assert!(
         stdout2.contains("[processor.mass_generator.gem] Skipping (unchanged):"),
-        "Second build should skip: {}",
-        stdout2
+        "Second build should skip: {stdout2}"
     );
 }
 
@@ -101,8 +99,7 @@ fn gem_no_project_discovered() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
         stdout.contains("0 products"),
-        "Should discover 0 products: {}",
-        stdout
+        "Should discover 0 products: {stdout}"
     );
 }
 

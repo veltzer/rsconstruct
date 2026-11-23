@@ -41,8 +41,7 @@ fn cargo_valid_project() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
         stdout.contains("Processing:"),
-        "Should process cargo: {}",
-        stdout
+        "Should process cargo: {stdout}"
     );
 }
 
@@ -81,8 +80,7 @@ fn cargo_incremental_skip() {
     let stdout2 = String::from_utf8_lossy(&output2.stdout);
     assert!(
         stdout2.contains("[processor.mass_generator.cargo] Skipping (unchanged):"),
-        "Second build should skip: {}",
-        stdout2
+        "Second build should skip: {stdout2}"
     );
 }
 
@@ -127,8 +125,7 @@ fn cargo_rebuild_on_lockfile_change() {
     let stdout2 = String::from_utf8_lossy(&output2.stdout);
     assert!(
         stdout2.contains("Processing:"),
-        "Should rebuild after Cargo.lock change: {}",
-        stdout2
+        "Should rebuild after Cargo.lock change: {stdout2}"
     );
 }
 
@@ -172,8 +169,7 @@ fn cargo_rebuild_on_source_change() {
     let stdout2 = String::from_utf8_lossy(&output2.stdout);
     assert!(
         stdout2.contains("Processing:"),
-        "Should rebuild after source change: {}",
-        stdout2
+        "Should rebuild after source change: {stdout2}"
     );
 }
 
@@ -200,8 +196,7 @@ fn cargo_no_project_discovered() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
         stdout.contains("0 products"),
-        "Should discover 0 products: {}",
-        stdout
+        "Should discover 0 products: {stdout}"
     );
 }
 
@@ -275,8 +270,7 @@ fn cargo_check_command() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
         stdout.contains("Processing:"),
-        "Should process cargo: {}",
-        stdout
+        "Should process cargo: {stdout}"
     );
 }
 
@@ -322,8 +316,7 @@ fn cargo_multi_profile() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
         stdout.contains("2 products"),
-        "Should discover 2 products (dev + release): {}",
-        stdout
+        "Should discover 2 products (dev + release): {stdout}"
     );
 }
 

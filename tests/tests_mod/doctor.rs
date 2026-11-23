@@ -39,7 +39,7 @@ fn doctor_checks_cargo_dependencies_in_the_project_tool_directory() {
 }
 
 /// A package.json dependency is a project-local install: doctor judges it
-/// by the project's own node_modules, not by a global copy or a binary on
+/// by the project's own `node_modules`, not by a global copy or a binary on
 /// PATH, and the fix it names is `tool install project` (which runs `npm
 /// ci`).
 #[test]

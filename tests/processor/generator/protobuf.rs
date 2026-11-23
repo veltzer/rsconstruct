@@ -70,8 +70,7 @@ message Test {
     let stdout2 = String::from_utf8_lossy(&output2.stdout);
     assert!(
         stdout2.contains("Skipping (unchanged):"),
-        "Expected skip message in incremental build: {}",
-        stdout2
+        "Expected skip message in incremental build: {stdout2}"
     );
 }
 
@@ -132,7 +131,6 @@ fn protobuf_no_files_discovered() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
         stdout.contains("0 products"),
-        "Should discover 0 products: {}",
-        stdout
+        "Should discover 0 products: {stdout}"
     );
 }

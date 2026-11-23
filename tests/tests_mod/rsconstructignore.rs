@@ -113,8 +113,7 @@ fn rsconstructignore_no_file() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
         stdout.contains("normal.txt"),
-        "Template should be processed when no .rsconstructignore exists: {}",
-        stdout
+        "Template should be processed when no .rsconstructignore exists: {stdout}"
     );
 }
 

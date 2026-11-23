@@ -3,7 +3,7 @@ use std::path::Path;
 
 use crate::common::{make_executable, run_rsconstruct, write_file};
 
-/// A fake `make` that mimics the parts of kbuild the linux_module processor
+/// A fake `make` that mimics the parts of kbuild the `linux_module` processor
 /// relies on, without needing real kernel headers:
 ///   * `modules` — reads the generated Kbuild in M=<dir>, extracts the module
 ///     name from `obj-m := <name>.o`, and writes `<dir>/<name>.ko`.
@@ -15,7 +15,7 @@ use crate::common::{make_executable, run_rsconstruct, write_file};
 /// `modules` first writes the intermediate `<source>.o` kbuild would, and
 /// fails (exit 1) when a `.fail-modules` marker sits in M=<dir>, so tests
 /// can watch what a failed build leaves behind. It ignores `-C <kdir>`,
-/// ARCH=, CROSS_COMPILE=, V=, W=.
+/// ARCH=, `CROSS_COMPILE`=, V=, W=.
 const FAKE_MAKE: &str = r#"#!/usr/bin/env python
 import os
 import sys
@@ -71,10 +71,10 @@ fn install_fake_make(project: &Path) -> String {
 
 /// Regression test for the root-level manifest bug: when linux-module.yaml sits
 /// at the repo root, the module directory is the repo root, so the output dir
-/// (out/processor.mass_generator.linux_module/) lives *inside* it. kbuild's `make clean` recursively
+/// (`out/processor.mass_generator.linux_module`/) lives *inside* it. kbuild's `make clean` recursively
 /// deletes .ko files under the module dir — which used to wipe the just-copied
 /// output, leaving the declared output missing ("Failed to read output:
-/// out/processor.mass_generator.linux_module/<name>.ko"). The processor must capture the .ko before
+/// `out/processor.mass_generator.linux_module`/<name>.ko"). The processor must capture the .ko before
 /// cleaning and write it out afterwards, so a root-level module builds cleanly.
 #[test]
 fn linux_module_root_level_manifest_output_survives_clean() {
@@ -130,7 +130,7 @@ fn linux_module_root_level_manifest_output_survives_clean() {
 }
 
 /// A manifest in a subdirectory keeps working: the module dir is the subdir,
-/// the output lands under out/processor.mass_generator.linux_module/<subdir>/, and clean over the subdir
+/// the output lands under `out/processor.mass_generator.linux_module`/<subdir>/, and clean over the subdir
 /// does not touch it. This guards the reordered clean/write against a
 /// regression in the common (subdir) layout.
 #[test]

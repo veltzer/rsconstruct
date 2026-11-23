@@ -1,9 +1,9 @@
 //! Integration tests for `rsconstruct product show <path>`.
 //!
-//! These build a small tera project (template + glob/git_count_files calls)
+//! These build a small tera project (template + `glob/git_count_files` calls)
 //! and then exercise the various display paths: lookup by output, lookup by
 //! input, JSON shape, and the descriptor key reflecting analyzer-extended
-//! config_hash.
+//! `config_hash`.
 
 use crate::common::run_rsconstruct_with_env;
 use std::fs;
@@ -51,34 +51,28 @@ fn product_show_resolves_by_output_and_prints_all_sections() {
 
     assert!(
         stdout.contains("processor:") && stdout.contains("tera"),
-        "missing processor section: {}",
-        stdout
+        "missing processor section: {stdout}"
     );
     assert!(
         stdout.contains("primary") && stdout.contains("tera.templates/report.txt.tera"),
-        "missing primary input: {}",
-        stdout
+        "missing primary input: {stdout}"
     );
     assert!(
         stdout.contains("hash_pieces:") && stdout.contains("glob") && stdout.contains("data/*.md"),
-        "missing hash_pieces section: {}",
-        stdout
+        "missing hash_pieces section: {stdout}"
     );
     // Default output collapses *_resolved hash pieces to a count summary.
     assert!(
         stdout.contains("glob_resolved") && stdout.contains("2 files"),
-        "expected collapsed resolved summary: {}",
-        stdout
+        "expected collapsed resolved summary: {stdout}"
     );
     assert!(
         !stdout.contains("data/a.md") && !stdout.contains("data/b.md"),
-        "resolved file list should be hidden without --verbose: {}",
-        stdout
+        "resolved file list should be hidden without --verbose: {stdout}"
     );
     assert!(
         stdout.contains("descriptor_key:") && stdout.contains("cache_state:"),
-        "missing descriptor/cache footer: {}",
-        stdout
+        "missing descriptor/cache footer: {stdout}"
     );
 
     // With --verbose the full resolved list is included.
@@ -95,8 +89,7 @@ fn product_show_resolves_by_output_and_prints_all_sections() {
     let stdout_v = String::from_utf8_lossy(&out_v.stdout);
     assert!(
         stdout_v.contains("data/a.md") && stdout_v.contains("data/b.md"),
-        "expected resolved file list under --verbose: {}",
-        stdout_v
+        "expected resolved file list under --verbose: {stdout_v}"
     );
 }
 
@@ -132,8 +125,7 @@ fn product_show_falls_back_to_primary_input() {
     let stdout = String::from_utf8_lossy(&out.stdout);
     assert!(
         stdout.contains("outputs:") && stdout.contains("report.txt"),
-        "expected output report.txt: {}",
-        stdout
+        "expected output report.txt: {stdout}"
     );
 }
 
@@ -166,8 +158,7 @@ fn product_show_unknown_path_errors() {
     );
     assert!(
         combined.contains("No product owns or consumes"),
-        "expected actionable error: {}",
-        combined
+        "expected actionable error: {combined}"
     );
 }
 
@@ -208,7 +199,7 @@ fn product_show_json_shape() {
     );
     let stdout = String::from_utf8_lossy(&out.stdout);
     let parsed: serde_json::Value = serde_json::from_str(&stdout)
-        .unwrap_or_else(|e| panic!("invalid JSON: {}\n---\n{}", e, stdout));
+        .unwrap_or_else(|e| panic!("invalid JSON: {e}\n---\n{stdout}"));
 
     assert_eq!(parsed["processor"], "processor.generator.tera");
     assert_eq!(parsed["outputs"][0], "report.txt");
@@ -218,7 +209,7 @@ fn product_show_json_shape() {
     );
     let tera_pieces = parsed["hash_pieces"]["tera"]
         .as_array()
-        .unwrap_or_else(|| panic!("hash_pieces.tera missing or not array: {}", stdout));
+        .unwrap_or_else(|| panic!("hash_pieces.tera missing or not array: {stdout}"));
     let joined = tera_pieces
         .iter()
         .filter_map(|v| v.as_str())
@@ -226,8 +217,7 @@ fn product_show_json_shape() {
         .join("\n");
     assert!(
         joined.contains("glob:data/*.md"),
-        "expected glob piece: {}",
-        joined
+        "expected glob piece: {joined}"
     );
     assert!(
         parsed["descriptor_key"].is_string(),

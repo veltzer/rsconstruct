@@ -41,16 +41,14 @@ fn mdl_valid_file() {
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
         stdout.contains("Processing:") || stdout.contains("1 products"),
-        "Should discover and attempt mdl processing: stdout={}, stderr={}",
-        stdout,
-        stderr
+        "Should discover and attempt mdl processing: stdout={stdout}, stderr={stderr}"
     );
 }
 
 /// With `[build] allow_missing_src_dirs = true` a missing entry is skipped
 /// without disturbing the entries beside it:
 ///   [processor.checker.mdl]
-///   src_dirs = ["config", "processor.checker.script"]
+///   `src_dirs` = ["config", "processor.checker.script"]
 /// where `script/` doesn't exist on disk — `config/` must still be scanned.
 #[test]
 fn mdl_missing_src_dir_skips_without_affecting_others_when_allowed() {

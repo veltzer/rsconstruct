@@ -32,8 +32,7 @@ fn watch_does_initial_build() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
         stdout.contains("initial build") || stdout.contains("Processing"),
-        "Watch output should mention initial build: {}",
-        stdout
+        "Watch output should mention initial build: {stdout}"
     );
 }
 

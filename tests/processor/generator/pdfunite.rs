@@ -1,4 +1,5 @@
 use crate::common::{require_tool, run_rsconstruct_with_env};
+use std::fmt::Write as _;
 use std::fs;
 use tempfile::TempDir;
 
@@ -20,8 +21,7 @@ fn pdfunite_no_project_discovered() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
         stdout.contains("0 products"),
-        "Should discover 0 products: {}",
-        stdout
+        "Should discover 0 products: {stdout}"
     );
 }
 
@@ -103,19 +103,18 @@ fn minimal_pdf() -> Vec<u8> {
     let mut offsets = Vec::new();
     for (i, body) in objects.iter().enumerate() {
         offsets.push(out.len());
-        out.push_str(&format!("{} 0 obj\n{body}\nendobj\n", i + 1));
+        write!(out, "{} 0 obj\n{body}\nendobj\n", i + 1).unwrap();
     }
     let xref = out.len();
-    out.push_str(&format!(
-        "xref\n0 {}\n0000000000 65535 f \n",
-        objects.len() + 1
-    ));
+    write!(out, "xref\n0 {}\n0000000000 65535 f \n", objects.len() + 1).unwrap();
     for offset in offsets {
-        out.push_str(&format!("{offset:010} 00000 n \n"));
+        writeln!(out, "{offset:010} 00000 n ").unwrap();
     }
-    out.push_str(&format!(
+    write!(
+        out,
         "trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n",
         objects.len() + 1
-    ));
+    )
+    .unwrap();
     out.into_bytes()
 }

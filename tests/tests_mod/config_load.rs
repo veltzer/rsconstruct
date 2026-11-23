@@ -10,7 +10,7 @@ use crate::common::{
 use std::fs;
 use tempfile::TempDir;
 
-/// A src_dirs entry that doesn't exist is a config error, not a silent skip:
+/// A `src_dirs` entry that doesn't exist is a config error, not a silent skip:
 /// a listed directory that is not there is a stale stanza or a copy of
 /// another repo's config, and either way a processor that checks nothing.
 #[test]
@@ -113,7 +113,7 @@ fn missing_tool_fails_when_processor_has_products() {
 /// The other half of the preflight rule: a repo-local script command is
 /// something the build requires to EXIST, but never something `tool install`
 /// can provision. Treating the path as a registry tool made `tool install`
-/// fail with "No install method for 'scripts/check_md.py'" for a script
+/// fail with "No install method for '`scripts/check_md.py`'" for a script
 /// checked into the repo, which broke CI across every repo using the shared
 /// config.
 #[test]

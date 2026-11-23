@@ -311,8 +311,12 @@ fn zola_build_restore_and_static_precision() {
         String::from_utf8_lossy(&build.stdout),
         String::from_utf8_lossy(&build.stderr)
     );
-    let built = files_below(&root.join("_site"));
-    assert_eq!(built, planned(root), "the build writes exactly the plan");
+    let output_files = files_below(&root.join("_site"));
+    assert_eq!(
+        output_files,
+        planned(root),
+        "the build writes exactly the plan"
+    );
     assert!(
         !root
             .join(".rsconstruct/mass_generator")
@@ -343,7 +347,7 @@ fn zola_build_restore_and_static_precision() {
         !String::from_utf8_lossy(&restore.stderr).contains("zola build"),
         "a full restore must not run zola"
     );
-    assert_eq!(files_below(&root.join("_site")), built);
+    assert_eq!(files_below(&root.join("_site")), output_files);
 }
 
 /// A data file a template loads by a literal path is a source of every

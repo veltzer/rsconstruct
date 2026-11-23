@@ -37,8 +37,7 @@ fn json_schema_valid() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
         stdout.contains("Processing:"),
-        "Should process json_schema: {}",
-        stdout
+        "Should process json_schema: {stdout}"
     );
 }
 
@@ -107,8 +106,7 @@ fn json_schema_incremental_skip() {
     let stdout2 = String::from_utf8_lossy(&output2.stdout);
     assert!(
         stdout2.contains("[processor.checker.json_schema] Skipping (unchanged):"),
-        "Second build should skip: {}",
-        stdout2
+        "Second build should skip: {stdout2}"
     );
 }
 

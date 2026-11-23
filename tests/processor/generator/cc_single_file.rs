@@ -52,8 +52,7 @@ fn cc_single_file_incremental_skip() {
     let stdout1 = String::from_utf8_lossy(&output1.stdout);
     assert!(
         stdout1.contains("Processing:"),
-        "First build should process: {}",
-        stdout1
+        "First build should process: {stdout1}"
     );
 
     // Second build - should skip
@@ -63,8 +62,7 @@ fn cc_single_file_incremental_skip() {
     let stdout2 = String::from_utf8_lossy(&output2.stdout);
     assert!(
         stdout2.contains("[processor.generator.cc_single_file] Skipping (unchanged):"),
-        "Second build should skip: {}",
-        stdout2
+        "Second build should skip: {stdout2}"
     );
 }
 
@@ -119,8 +117,7 @@ fn cc_single_file_header_dependency() {
     let stdout2 = String::from_utf8_lossy(&output2.stdout);
     assert!(
         stdout2.contains("Processing:"),
-        "Should recompile after header change: {}",
-        stdout2
+        "Should recompile after header change: {stdout2}"
     );
 }
 
@@ -224,8 +221,7 @@ fn cc_single_file_dry_run() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
         stdout.contains("BUILD"),
-        "Dry run should show BUILD for cc products: {}",
-        stdout
+        "Dry run should show BUILD for cc products: {stdout}"
     );
 
     // Verify nothing was built
@@ -261,8 +257,7 @@ fn cc_single_file_config_change_triggers_rebuild() {
     let stdout1 = String::from_utf8_lossy(&output1.stdout);
     assert!(
         stdout1.contains("Processing:"),
-        "First build should process: {}",
-        stdout1
+        "First build should process: {stdout1}"
     );
 
     // Second build — should skip (nothing changed)
@@ -272,8 +267,7 @@ fn cc_single_file_config_change_triggers_rebuild() {
     let stdout2 = String::from_utf8_lossy(&output2.stdout);
     assert!(
         stdout2.contains("[processor.generator.cc_single_file] Skipping (unchanged):"),
-        "Second build should skip: {}",
-        stdout2
+        "Second build should skip: {stdout2}"
     );
 
     // Change cflags in rsconstruct.toml
@@ -294,8 +288,7 @@ fn cc_single_file_config_change_triggers_rebuild() {
     let stdout3 = String::from_utf8_lossy(&output3.stdout);
     assert!(
         stdout3.contains("Processing:"),
-        "Build after config change should reprocess, not skip: {}",
-        stdout3
+        "Build after config change should reprocess, not skip: {stdout3}"
     );
 }
 
@@ -771,8 +764,7 @@ fn cc_single_file_direct_header_change_triggers_rebuild() {
     let stdout1 = String::from_utf8_lossy(&output1.stdout);
     assert!(
         stdout1.contains("Processing:"),
-        "First build should process: {}",
-        stdout1
+        "First build should process: {stdout1}"
     );
 
     // Second build — should skip (nothing changed)
@@ -782,8 +774,7 @@ fn cc_single_file_direct_header_change_triggers_rebuild() {
     let stdout2 = String::from_utf8_lossy(&output2.stdout);
     assert!(
         stdout2.contains("[processor.generator.cc_single_file] Skipping (unchanged):"),
-        "Second build should skip: {}",
-        stdout2
+        "Second build should skip: {stdout2}"
     );
 
     // Modify the directly included header
@@ -801,8 +792,7 @@ fn cc_single_file_direct_header_change_triggers_rebuild() {
     let stdout3 = String::from_utf8_lossy(&output3.stdout);
     assert!(
         stdout3.contains("Processing:"),
-        "Should recompile after direct header change: {}",
-        stdout3
+        "Should recompile after direct header change: {stdout3}"
     );
 
     // Verify the new value was compiled in (return 20 - 10 = 10, nonzero exit)
@@ -853,8 +843,7 @@ fn cc_single_file_indirect_header_change_triggers_rebuild() {
     let stdout1 = String::from_utf8_lossy(&output1.stdout);
     assert!(
         stdout1.contains("Processing:"),
-        "First build should process: {}",
-        stdout1
+        "First build should process: {stdout1}"
     );
 
     // Verify exit code 0 (MIDDLE_VAL=6, 6-6=0)
@@ -874,8 +863,7 @@ fn cc_single_file_indirect_header_change_triggers_rebuild() {
     let stdout2 = String::from_utf8_lossy(&output2.stdout);
     assert!(
         stdout2.contains("[processor.generator.cc_single_file] Skipping (unchanged):"),
-        "Second build should skip: {}",
-        stdout2
+        "Second build should skip: {stdout2}"
     );
 
     // Modify the indirect header (not directly included by source)
@@ -897,8 +885,7 @@ fn cc_single_file_indirect_header_change_triggers_rebuild() {
     let stdout3 = String::from_utf8_lossy(&output3.stdout);
     assert!(
         stdout3.contains("Processing:"),
-        "Should recompile after indirect header change: {}",
-        stdout3
+        "Should recompile after indirect header change: {stdout3}"
     );
 
     // Verify the new value was compiled in (MIDDLE_VAL=101, 101-6=95, nonzero exit)
@@ -937,8 +924,7 @@ fn cc_single_file_new_include_triggers_dependency_recomputation() {
     let stdout1 = String::from_utf8_lossy(&output1.stdout);
     assert!(
         stdout1.contains("Processing:"),
-        "First build should process: {}",
-        stdout1
+        "First build should process: {stdout1}"
     );
 
     // Step 2: Second build — should skip (nothing changed)
@@ -948,8 +934,7 @@ fn cc_single_file_new_include_triggers_dependency_recomputation() {
     let stdout2 = String::from_utf8_lossy(&output2.stdout);
     assert!(
         stdout2.contains("[processor.generator.cc_single_file] Skipping (unchanged):"),
-        "Second build should skip: {}",
-        stdout2
+        "Second build should skip: {stdout2}"
     );
 
     // Step 3: Create a new header and modify source to include it
@@ -975,8 +960,7 @@ fn cc_single_file_new_include_triggers_dependency_recomputation() {
     let stdout3 = String::from_utf8_lossy(&output3.stdout);
     assert!(
         stdout3.contains("Processing:"),
-        "Should recompile after source changed to add include: {}",
-        stdout3
+        "Should recompile after source changed to add include: {stdout3}"
     );
 
     // Step 5: Build again — should skip (nothing changed)
@@ -986,8 +970,7 @@ fn cc_single_file_new_include_triggers_dependency_recomputation() {
     let stdout4 = String::from_utf8_lossy(&output4.stdout);
     assert!(
         stdout4.contains("[processor.generator.cc_single_file] Skipping (unchanged):"),
-        "Build should skip after no changes: {}",
-        stdout4
+        "Build should skip after no changes: {stdout4}"
     );
 
     // Step 6: Modify the newly-included header
@@ -1007,8 +990,7 @@ fn cc_single_file_new_include_triggers_dependency_recomputation() {
     let stdout5 = String::from_utf8_lossy(&output5.stdout);
     assert!(
         stdout5.contains("Processing:"),
-        "Should recompile after newly-tracked header changed: {}",
-        stdout5
+        "Should recompile after newly-tracked header changed: {stdout5}"
     );
 
     // Verify the new value was compiled in (NEW_VAL=99, 99-55=44, nonzero exit)
@@ -1072,8 +1054,7 @@ include_paths = ["include"]
     let stdout2 = String::from_utf8_lossy(&output2.stdout);
     assert!(
         stdout2.contains("[processor.generator.cc_single_file] Skipping (unchanged):"),
-        "Second build should skip: {}",
-        stdout2
+        "Second build should skip: {stdout2}"
     );
 
     // Modify the angle-bracket included header
@@ -1095,8 +1076,7 @@ include_paths = ["include"]
     let stdout3 = String::from_utf8_lossy(&output3.stdout);
     assert!(
         stdout3.contains("Processing:"),
-        "Should recompile after angle-bracket header change: {}",
-        stdout3
+        "Should recompile after angle-bracket header change: {stdout3}"
     );
 }
 
@@ -1210,8 +1190,7 @@ int main() { return 0; }
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
         stderr.contains("Include not found") && stderr.contains("nonexistent.h"),
-        "Error should mention missing include: {}",
-        stderr
+        "Error should mention missing include: {stderr}"
     );
 }
 
@@ -1287,8 +1266,7 @@ int main() {
         gcc_stdout.contains("COMMON")
             && gcc_stdout.contains("GCC")
             && !gcc_stdout.contains("CLANG"),
-        "GCC build should have COMMON and GCC defined, got: {}",
-        gcc_stdout
+        "GCC build should have COMMON and GCC defined, got: {gcc_stdout}"
     );
 
     // Run Clang executable - should print "COMMON CLANG"
@@ -1303,8 +1281,7 @@ int main() {
         clang_stdout.contains("COMMON")
             && clang_stdout.contains("CLANG")
             && !clang_stdout.contains("GCC"),
-        "Clang build should have COMMON and CLANG defined, got: {}",
-        clang_stdout
+        "Clang build should have COMMON and CLANG defined, got: {clang_stdout}"
     );
 }
 
@@ -1336,26 +1313,26 @@ cxx = "clang++"
     // Create a file that should be built by both compilers
     fs::write(
         project_path.join("src/both.c"),
-        r#"int main() { return 0; }
-"#,
+        r"int main() { return 0; }
+",
     )
     .unwrap();
 
     // Create a file that should only be built by GCC (excluded from clang)
     fs::write(
         project_path.join("src/gcc_only.c"),
-        r#"// EXCLUDE_PROFILE=clang
+        r"// EXCLUDE_PROFILE=clang
 int main() { return 0; }
-"#,
+",
     )
     .unwrap();
 
     // Create a file that should only be built by Clang (excluded from gcc)
     fs::write(
         project_path.join("src/clang_only.c"),
-        r#"// EXCLUDE_PROFILE=gcc
+        r"// EXCLUDE_PROFILE=gcc
 int main() { return 0; }
-"#,
+",
     )
     .unwrap();
 

@@ -273,7 +273,10 @@ fn iperlcritic_matches_perlcritic() {
         let path = project.join("src").join(&name);
         fs::create_dir_all(path.parent().unwrap()).expect("create a directory");
         fs::write(&path, contents).expect("write a fixture");
-        if name.ends_with(".pl") || name.ends_with(".pm") {
+        if matches!(
+            Path::new(&name).extension().and_then(|e| e.to_str()),
+            Some("pl" | "pm")
+        ) {
             names.push(format!("src/{name}"));
         }
     }
@@ -325,7 +328,7 @@ fn iperlcritic_profile_edit_rechecks() {
 }
 
 /// A `profile` that does not exist fails the build naming it, rather than
-/// checking with Perl::Critic's defaults (only the default `.perlcriticrc`
+/// checking with `Perl::Critic`'s defaults (only the default `.perlcriticrc`
 /// may be absent).
 #[test]
 fn iperlcritic_missing_profile_fails() {

@@ -30,8 +30,7 @@ fn ascii_valid_file() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
         stdout.contains("Processing:"),
-        "Should process ascii: {}",
-        stdout
+        "Should process ascii: {stdout}"
     );
 }
 
@@ -59,8 +58,7 @@ fn ascii_incremental_skip() {
     let stdout2 = String::from_utf8_lossy(&output2.stdout);
     assert!(
         stdout2.contains("[processor.checker.ascii] Skipping (unchanged):"),
-        "Second build should skip: {}",
-        stdout2
+        "Second build should skip: {stdout2}"
     );
 }
 

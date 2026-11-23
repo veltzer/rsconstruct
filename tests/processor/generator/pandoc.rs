@@ -33,8 +33,7 @@ fn pandoc_valid_file() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
         stdout.contains("Processing:"),
-        "Should process pandoc: {}",
-        stdout
+        "Should process pandoc: {stdout}"
     );
 }
 
@@ -68,8 +67,7 @@ fn pandoc_incremental_skip() {
     let stdout2 = String::from_utf8_lossy(&output2.stdout);
     assert!(
         stdout2.contains("[processor.generator.pandoc] Skipping (unchanged):"),
-        "Second build should skip: {}",
-        stdout2
+        "Second build should skip: {stdout2}"
     );
 }
 
@@ -208,8 +206,7 @@ fn pandoc_rejects_unknown_pdf_engine() {
     );
     assert!(
         combined.contains("pdf_engine") && combined.contains("bogusengine"),
-        "Error message should name the bad engine. Got: {}",
-        combined,
+        "Error message should name the bad engine. Got: {combined}",
     );
 }
 

@@ -66,7 +66,6 @@ fn sass_dry_run() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
         stdout.contains("BUILD") || stdout.contains("build"),
-        "Should discover sass product: {}",
-        stdout
+        "Should discover sass product: {stdout}"
     );
 }

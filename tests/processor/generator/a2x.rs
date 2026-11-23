@@ -34,8 +34,7 @@ fn a2x_valid_file() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
         stdout.contains("BUILD") || stdout.contains("build"),
-        "Should discover a2x product: {}",
-        stdout
+        "Should discover a2x product: {stdout}"
     );
 }
 
@@ -56,7 +55,6 @@ fn a2x_no_project_discovered() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
         stdout.contains("0 products"),
-        "Should discover 0 products: {}",
-        stdout
+        "Should discover 0 products: {stdout}"
     );
 }

@@ -6,7 +6,7 @@ use tempfile::TempDir;
 const SCHEMA_URL: &str = "https://example.com/test_schema.json";
 
 /// The schema content for tests. propertyOrdering is ["name", "age"] which
-/// matches the YAML key order in test data (serde_json with preserve_order
+/// matches the YAML key order in test data (`serde_json` with `preserve_order`
 /// feature preserves insertion order from YAML parsing).
 const SCHEMA: &str = r#"{
     "$schema": "http://json-schema.org/draft-07/schema#",
@@ -70,7 +70,7 @@ fn iyamlschema_valid_file() {
 
     fs::write(
         project_path.join("data.yaml"),
-        format!("$schema: \"{}\"\nname: Alice\nage: 30\n", SCHEMA_URL),
+        format!("$schema: \"{SCHEMA_URL}\"\nname: Alice\nage: 30\n"),
     )
     .unwrap();
 
@@ -150,10 +150,7 @@ fn iyamlschema_invalid_data_fails() {
     // "age" should be integer, not string
     fs::write(
         project_path.join("data.yaml"),
-        format!(
-            "$schema: \"{}\"\nname: Alice\nage: not_a_number\n",
-            SCHEMA_URL
-        ),
+        format!("$schema: \"{SCHEMA_URL}\"\nname: Alice\nage: not_a_number\n"),
     )
     .unwrap();
 
@@ -192,7 +189,7 @@ fn iyamlschema_wrong_ordering_fails() {
     // YAML key order is ["name", "age"] but schema expects ["age", "name"]
     fs::write(
         project_path.join("data.yaml"),
-        format!("$schema: \"{}\"\nname: Alice\nage: 30\n", wrong_url),
+        format!("$schema: \"{wrong_url}\"\nname: Alice\nage: 30\n"),
     )
     .unwrap();
 
@@ -204,8 +201,7 @@ fn iyamlschema_wrong_ordering_fails() {
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
         stderr.contains("property ordering"),
-        "Error should mention property ordering: {}",
-        stderr
+        "Error should mention property ordering: {stderr}"
     );
 }
 
@@ -244,7 +240,7 @@ fn iyamlschema_incremental_skip() {
 
     fs::write(
         project_path.join("data.yaml"),
-        format!("$schema: \"{}\"\nname: Alice\nage: 30\n", SCHEMA_URL),
+        format!("$schema: \"{SCHEMA_URL}\"\nname: Alice\nage: 30\n"),
     )
     .unwrap();
 
@@ -264,8 +260,7 @@ fn iyamlschema_incremental_skip() {
     let stdout2 = String::from_utf8_lossy(&output2.stdout);
     assert!(
         stdout2.contains("[processor.checker.iyamlschema] Skipping (unchanged):"),
-        "Second build should skip: {}",
-        stdout2,
+        "Second build should skip: {stdout2}",
     );
 }
 
@@ -292,7 +287,7 @@ fn iyamlschema_expired_webcache_entry_is_refetched() {
 
     fs::write(
         project_path.join("data.yaml"),
-        format!("$schema: \"{}\"\nname: Alice\nage: 30\n", SCHEMA_URL),
+        format!("$schema: \"{SCHEMA_URL}\"\nname: Alice\nage: 30\n"),
     )
     .unwrap();
 
@@ -326,7 +321,7 @@ fn iyamlschema_fresh_webcache_entry_is_served_from_cache() {
 
     fs::write(
         project_path.join("data.yaml"),
-        format!("$schema: \"{}\"\nname: Alice\nage: 30\n", SCHEMA_URL),
+        format!("$schema: \"{SCHEMA_URL}\"\nname: Alice\nage: 30\n"),
     )
     .unwrap();
 

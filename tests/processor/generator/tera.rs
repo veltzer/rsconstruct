@@ -79,7 +79,7 @@ optimization = 3
     assert!(generated_content.contains("build_type = \"debug\""));
     assert!(generated_content.contains("optimization = 0"));
 
-    println!("Generated file content:\n{}", generated_content);
+    println!("Generated file content:\n{generated_content}");
 }
 
 #[test]
@@ -192,8 +192,7 @@ fn tera_dep_inputs_triggers_rebuild() {
     let stdout1 = String::from_utf8_lossy(&output1.stdout);
     assert!(
         stdout1.contains("Processing:"),
-        "First build should process: {}",
-        stdout1
+        "First build should process: {stdout1}"
     );
 
     // Second build — should skip (nothing changed)
@@ -203,8 +202,7 @@ fn tera_dep_inputs_triggers_rebuild() {
     let stdout2 = String::from_utf8_lossy(&output2.stdout);
     assert!(
         stdout2.contains("[processor.generator.tera] Skipping (unchanged):"),
-        "Second build should skip: {}",
-        stdout2
+        "Second build should skip: {stdout2}"
     );
 
     // Wait so mtime differs
@@ -224,16 +222,14 @@ fn tera_dep_inputs_triggers_rebuild() {
     let stdout3 = String::from_utf8_lossy(&output3.stdout);
     assert!(
         stdout3.contains("Processing:"),
-        "Build after extra_input change should reprocess, not skip: {}",
-        stdout3
+        "Build after extra_input change should reprocess, not skip: {stdout3}"
     );
 
     // Verify the output reflects the new config
     let content = fs::read_to_string(project_path.join("output.txt")).unwrap();
     assert!(
         content.contains("Modified"),
-        "Output should reflect the modified config: {}",
-        content
+        "Output should reflect the modified config: {content}"
     );
 }
 
@@ -268,8 +264,7 @@ fn tera_dep_inputs_nonexistent_file_fails() {
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
         stderr.contains("dep_inputs file not found") || stderr.contains("nonexistent_file.txt"),
-        "Error should mention missing dep_inputs file: {}",
-        stderr
+        "Error should mention missing dep_inputs file: {stderr}"
     );
 }
 
@@ -317,7 +312,7 @@ fn tera_subdirectory_output() {
 // setup_test_project() only adds the processor, so we build configs explicitly.
 
 /// Build a self-contained tera project with the given template body.
-/// Returns a TempDir whose path contains rsconstruct.toml + the template +
+/// Returns a `TempDir` whose path contains rsconstruct.toml + the template +
 /// any extra files the caller writes afterwards.
 fn setup_glob_project(template_body: &str) -> TempDir {
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
@@ -357,7 +352,7 @@ fn tera_glob_counts_matching_files() {
     );
 
     let report = fs::read_to_string(p.join("report.txt")).unwrap();
-    assert_eq!(report.trim(), "Total: 3", "Got: {}", report);
+    assert_eq!(report.trim(), "Total: 3", "Got: {report}");
 }
 
 #[test]
@@ -393,8 +388,7 @@ fn tera_glob_invalidates_when_file_added() {
     let stdout2 = String::from_utf8_lossy(&out2.stdout);
     assert!(
         !stdout2.contains("[processor.generator.tera] Skipping (unchanged):"),
-        "Second build should NOT have skipped after adding a glob-matched file. stdout={}",
-        stdout2,
+        "Second build should NOT have skipped after adding a glob-matched file. stdout={stdout2}",
     );
     assert_eq!(
         fs::read_to_string(p.join("report.txt")).unwrap().trim(),
@@ -425,8 +419,7 @@ fn tera_glob_invalidates_when_file_removed() {
     let stdout2 = String::from_utf8_lossy(&out2.stdout);
     assert!(
         !stdout2.contains("[processor.generator.tera] Skipping (unchanged):"),
-        "Second build should NOT have skipped after removing a glob-matched file. stdout={}",
-        stdout2,
+        "Second build should NOT have skipped after removing a glob-matched file. stdout={stdout2}",
     );
     assert_eq!(
         fs::read_to_string(p.join("report.txt")).unwrap().trim(),
@@ -448,7 +441,7 @@ fn tera_glob_invalidates_when_file_renamed() {
     let out1 = run_rsconstruct_with_env(p, &["build"], &[("NO_COLOR", "1")]);
     assert!(out1.status.success());
     let report1 = fs::read_to_string(p.join("report.txt")).unwrap();
-    assert!(report1.contains("old_name.md"), "Got: {}", report1);
+    assert!(report1.contains("old_name.md"), "Got: {report1}");
 
     // Rename the file (content unchanged).
     fs::rename(p.join("data/old_name.md"), p.join("data/new_name.md")).unwrap();
@@ -458,12 +451,11 @@ fn tera_glob_invalidates_when_file_renamed() {
     let stdout2 = String::from_utf8_lossy(&out2.stdout);
     assert!(
         !stdout2.contains("[processor.generator.tera] Skipping (unchanged):"),
-        "Second build should NOT have skipped after rename. stdout={}",
-        stdout2,
+        "Second build should NOT have skipped after rename. stdout={stdout2}",
     );
     let report2 = fs::read_to_string(p.join("report.txt")).unwrap();
-    assert!(report2.contains("new_name.md"), "Got: {}", report2);
-    assert!(!report2.contains("old_name.md"), "Got: {}", report2);
+    assert!(report2.contains("new_name.md"), "Got: {report2}");
+    assert!(!report2.contains("old_name.md"), "Got: {report2}");
 }
 
 #[test]
@@ -487,8 +479,7 @@ fn tera_shell_output_without_depends_on_is_rejected() {
     );
     assert!(
         combined.contains("depends_on"),
-        "Error message should mention depends_on. Got: {}",
-        combined,
+        "Error message should mention depends_on. Got: {combined}",
     );
 }
 
@@ -510,7 +501,7 @@ fn tera_shell_output_with_depends_on_succeeds() {
         String::from_utf8_lossy(&output.stderr),
     );
     let report = fs::read_to_string(p.join("report.txt")).unwrap();
-    assert_eq!(report.trim(), "Count: 2", "Got: {}", report);
+    assert_eq!(report.trim(), "Count: 2", "Got: {report}");
 }
 
 #[test]
@@ -548,8 +539,7 @@ fn tera_shell_output_invalidates_on_matching_file_change() {
     let stdout2 = String::from_utf8_lossy(&out2.stdout);
     assert!(
         !stdout2.contains("[processor.generator.tera] Skipping (unchanged):"),
-        "Second build should NOT have skipped after editing a depends_on-matched file. stdout={}",
-        stdout2,
+        "Second build should NOT have skipped after editing a depends_on-matched file. stdout={stdout2}",
     );
     assert_eq!(
         fs::read_to_string(p.join("report.txt")).unwrap().trim(),
@@ -648,7 +638,7 @@ fn tera_git_count_files_counts_only_tracked() {
     );
 
     let report = fs::read_to_string(p.join("report.txt")).unwrap();
-    assert_eq!(report.trim(), "Total: 2", "Got: {}", report);
+    assert_eq!(report.trim(), "Total: 2", "Got: {report}");
 }
 
 #[test]
@@ -694,8 +684,7 @@ fn tera_git_count_files_invalidates_when_file_committed() {
     let stdout2 = String::from_utf8_lossy(&out2.stdout);
     assert!(
         !stdout2.contains("[processor.generator.tera] Skipping (unchanged):"),
-        "Second build should NOT have skipped after committing a new tracked file. stdout={}",
-        stdout2,
+        "Second build should NOT have skipped after committing a new tracked file. stdout={stdout2}",
     );
     assert_eq!(
         fs::read_to_string(p.join("report.txt")).unwrap().trim(),
@@ -730,8 +719,7 @@ fn tera_git_count_files_skips_when_only_untracked_added() {
     let stdout2 = String::from_utf8_lossy(&out2.stdout);
     assert!(
         stdout2.contains("[processor.generator.tera] Skipping (unchanged):"),
-        "Second build SHOULD have skipped — untracked files don't affect git_count_files. stdout={}",
-        stdout2,
+        "Second build SHOULD have skipped — untracked files don't affect git_count_files. stdout={stdout2}",
     );
 }
 
@@ -757,8 +745,7 @@ fn tera_glob_skips_when_matched_file_content_changes() {
     let stdout2 = String::from_utf8_lossy(&out2.stdout);
     assert!(
         stdout2.contains("[processor.generator.tera] Skipping (unchanged):"),
-        "Second build SHOULD skip — glob tracks names, not content. stdout={}",
-        stdout2,
+        "Second build SHOULD skip — glob tracks names, not content. stdout={stdout2}",
     );
 }
 
@@ -789,8 +776,7 @@ fn tera_git_count_files_skips_when_tracked_file_content_changes() {
     let stdout2 = String::from_utf8_lossy(&out2.stdout);
     assert!(
         stdout2.contains("[processor.generator.tera] Skipping (unchanged):"),
-        "Second build SHOULD skip — git_count_files tracks count, not content. stdout={}",
-        stdout2,
+        "Second build SHOULD skip — git_count_files tracks count, not content. stdout={stdout2}",
     );
 }
 
@@ -817,7 +803,7 @@ fn tera_grep_count_counts_matching_lines() {
         String::from_utf8_lossy(&output.stderr)
     );
     let report = fs::read_to_string(p.join("report.txt")).unwrap();
-    assert_eq!(report.trim(), "TODOs: 3", "Got: {}", report);
+    assert_eq!(report.trim(), "TODOs: 3", "Got: {report}");
 }
 
 #[test]
@@ -853,8 +839,7 @@ fn tera_grep_count_invalidates_when_matched_file_content_changes() {
     let stdout2 = String::from_utf8_lossy(&out2.stdout);
     assert!(
         !stdout2.contains("[processor.generator.tera] Skipping (unchanged):"),
-        "Second build should NOT skip — grep_count tracks content. stdout={}",
-        stdout2,
+        "Second build should NOT skip — grep_count tracks content. stdout={stdout2}",
     );
     assert_eq!(
         fs::read_to_string(p.join("report.txt")).unwrap().trim(),
@@ -972,8 +957,7 @@ fn tera_glob_in_included_snippet_is_tracked() {
     let report = fs::read_to_string(p.join("report.txt")).unwrap();
     assert!(
         report.contains("Total: 2"),
-        "report should reflect 2 files: {}",
-        report
+        "report should reflect 2 files: {report}"
     );
 
     // Add a third matching file. The parent template body did not change,
@@ -990,14 +974,12 @@ fn tera_glob_in_included_snippet_is_tracked() {
     let stdout2 = String::from_utf8_lossy(&out2.stdout);
     assert!(
         !stdout2.contains("[processor.generator.tera] Skipping (unchanged):"),
-        "Second build should NOT skip — glob in included snippet matched a new file. stdout={}",
-        stdout2,
+        "Second build should NOT skip — glob in included snippet matched a new file. stdout={stdout2}",
     );
     let report2 = fs::read_to_string(p.join("report.txt")).unwrap();
     assert!(
         report2.contains("Total: 3"),
-        "report should reflect 3 files after add: {}",
-        report2
+        "report should reflect 3 files after add: {report2}"
     );
 }
 
@@ -1061,18 +1043,15 @@ fn tera_show_files_hash_pieces_surfaces_glob_state() {
 
     assert!(
         stdout.contains("hash pieces:"),
-        "expected 'hash pieces:' header in output: {}",
-        stdout
+        "expected 'hash pieces:' header in output: {stdout}"
     );
     assert!(
         stdout.contains("glob") && stdout.contains("data/*.md"),
-        "expected glob pattern in hash pieces: {}",
-        stdout
+        "expected glob pattern in hash pieces: {stdout}"
     );
     assert!(
         stdout.contains("data/a.md") && stdout.contains("data/b.md"),
-        "expected resolved file list in hash pieces: {}",
-        stdout
+        "expected resolved file list in hash pieces: {stdout}"
     );
 }
 
@@ -1109,14 +1088,14 @@ fn tera_show_files_hash_pieces_json_shape() {
     let stdout = String::from_utf8_lossy(&out.stdout);
 
     let parsed: serde_json::Value = serde_json::from_str(&stdout)
-        .unwrap_or_else(|e| panic!("invalid JSON: {}\n---\n{}", e, stdout));
+        .unwrap_or_else(|e| panic!("invalid JSON: {e}\n---\n{stdout}"));
     let arr = parsed.as_array().expect("top-level JSON must be an array");
-    assert_eq!(arr.len(), 1, "expected one entry, got: {}", stdout);
+    assert_eq!(arr.len(), 1, "expected one entry, got: {stdout}");
     let entry = &arr[0];
     let pieces = entry
         .get("hash_pieces")
         .and_then(|v| v.as_array())
-        .unwrap_or_else(|| panic!("hash_pieces field missing or not array: {}", stdout));
+        .unwrap_or_else(|| panic!("hash_pieces field missing or not array: {stdout}"));
     let joined = pieces
         .iter()
         .filter_map(|v| v.as_str())
@@ -1124,13 +1103,11 @@ fn tera_show_files_hash_pieces_json_shape() {
         .join("\n");
     assert!(
         joined.contains("glob:data/*.md"),
-        "expected 'glob:data/*.md' piece, got: {}",
-        joined
+        "expected 'glob:data/*.md' piece, got: {joined}"
     );
     assert!(
         joined.contains("data/a.md"),
-        "expected resolved file list to mention data/a.md, got: {}",
-        joined
+        "expected resolved file list to mention data/a.md, got: {joined}"
     );
 }
 
@@ -1161,12 +1138,11 @@ fn tera_show_files_without_hash_pieces_omits_field() {
     assert!(out.status.success());
     let stdout = String::from_utf8_lossy(&out.stdout);
     let parsed: serde_json::Value = serde_json::from_str(&stdout)
-        .unwrap_or_else(|e| panic!("invalid JSON: {}\n---\n{}", e, stdout));
+        .unwrap_or_else(|e| panic!("invalid JSON: {e}\n---\n{stdout}"));
     let entry = &parsed.as_array().expect("array")[0];
     assert!(
         entry.get("hash_pieces").is_none(),
-        "hash_pieces field must be absent when flag is omitted: {}",
-        stdout
+        "hash_pieces field must be absent when flag is omitted: {stdout}"
     );
 }
 
@@ -1189,7 +1165,7 @@ fn tera_copyright_years_falls_back_when_no_commits() {
     let current_year = chrono::Local::now().format("%Y").to_string();
     assert_eq!(
         report.trim(),
-        format!("© {}", current_year),
+        format!("© {current_year}"),
         "Got: {}",
         report
     );
@@ -1221,8 +1197,7 @@ fn tera_copyright_years_uses_first_commit_year() {
     // and contain it.
     assert!(
         report.trim().ends_with(&current_year.to_string()),
-        "Got: {}",
-        report
+        "Got: {report}"
     );
 }
 
@@ -1267,8 +1242,7 @@ fn tera_analyzer_tracks_load_python_without_dep_inputs() {
     let content = fs::read_to_string(project_path.join("tracked.txt")).unwrap();
     assert!(
         content.contains("Modified"),
-        "Editing a load_python config must rebuild the product: {}",
-        content
+        "Editing a load_python config must rebuild the product: {content}"
     );
 }
 
@@ -1303,7 +1277,7 @@ fn tera_analyzer_tracks_version_str_default_path() {
         String::from_utf8_lossy(&output1.stderr)
     );
     let content = fs::read_to_string(project_path.join("version.txt")).unwrap();
-    assert!(content.contains("1.2.3"), "Got: {}", content);
+    assert!(content.contains("1.2.3"), "Got: {content}");
 
     // Wait so mtime differs
     std::thread::sleep(std::time::Duration::from_millis(100));
@@ -1315,8 +1289,7 @@ fn tera_analyzer_tracks_version_str_default_path() {
     let content = fs::read_to_string(project_path.join("version.txt")).unwrap();
     assert!(
         content.contains("1.2.4"),
-        "Bumping config/version.py must rebuild a version_str() product: {}",
-        content
+        "Bumping config/version.py must rebuild a version_str() product: {content}"
     );
 }
 
@@ -1349,7 +1322,7 @@ fn tera_analyzer_tracks_version_str_explicit_lua_path() {
         String::from_utf8_lossy(&output1.stderr)
     );
     let content = fs::read_to_string(project_path.join("vlua.txt")).unwrap();
-    assert!(content.contains("2.0.0"), "Got: {}", content);
+    assert!(content.contains("2.0.0"), "Got: {content}");
 
     // Wait so mtime differs
     std::thread::sleep(std::time::Duration::from_millis(100));
@@ -1361,8 +1334,7 @@ fn tera_analyzer_tracks_version_str_explicit_lua_path() {
     let content = fs::read_to_string(project_path.join("vlua.txt")).unwrap();
     assert!(
         content.contains("2.0.1"),
-        "Bumping the version_str(path=...) file must rebuild the product: {}",
-        content
+        "Bumping the version_str(path=...) file must rebuild the product: {content}"
     );
 }
 
@@ -1395,10 +1367,10 @@ fn tera_load_toml_and_toml_get_read_values() {
     );
 
     let content = fs::read_to_string(project_path.join("toml_out.txt")).unwrap();
-    assert!(content.contains("get: 0.0.24"), "Got: {}", content);
+    assert!(content.contains("get: 0.0.24"), "Got: {content}");
     // Integers must survive as integers, not render as "130.0" or a quoted string.
-    assert!(content.contains("nested: 130"), "Got: {}", content);
-    assert!(content.contains("load: demo"), "Got: {}", content);
+    assert!(content.contains("nested: 130"), "Got: {content}");
+    assert!(content.contains("load: demo"), "Got: {content}");
 }
 
 #[test]
@@ -1433,7 +1405,7 @@ fn tera_analyzer_tracks_toml_get_path() {
         String::from_utf8_lossy(&output1.stderr)
     );
     let content = fs::read_to_string(project_path.join("vtoml.txt")).unwrap();
-    assert!(content.contains("2.0.0"), "Got: {}", content);
+    assert!(content.contains("2.0.0"), "Got: {content}");
 
     // Wait so mtime differs
     std::thread::sleep(std::time::Duration::from_millis(100));
@@ -1449,8 +1421,7 @@ fn tera_analyzer_tracks_toml_get_path() {
     let content = fs::read_to_string(project_path.join("vtoml.txt")).unwrap();
     assert!(
         content.contains("2.0.1"),
-        "Bumping the toml_get(path=...) file must rebuild the product: {}",
-        content
+        "Bumping the toml_get(path=...) file must rebuild the product: {content}"
     );
 }
 
@@ -1482,8 +1453,7 @@ fn tera_toml_get_missing_key_is_an_error() {
     );
     assert!(
         combined.contains("no key 'project.nope'"),
-        "Got: {}",
-        combined
+        "Got: {combined}"
     );
 }
 
@@ -1513,7 +1483,7 @@ fn tera_toml_get_on_a_table_is_an_error() {
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr)
     );
-    assert!(combined.contains("not a scalar"), "Got: {}", combined);
+    assert!(combined.contains("not a scalar"), "Got: {combined}");
 }
 
 /// A `dep_auto` file is an input of every tera product (the generator has

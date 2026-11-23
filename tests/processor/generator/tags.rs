@@ -146,14 +146,12 @@ fn tags_validation_rejects_unknown_tags() {
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
         stderr.contains("dockker"),
-        "error should mention the unknown tag: {}",
-        stderr
+        "error should mention the unknown tag: {stderr}"
     );
     // Should suggest "tools:docker" as a typo correction
     assert!(
         stderr.contains("docker"),
-        "error should suggest 'docker': {}",
-        stderr
+        "error should suggest 'docker': {stderr}"
     );
 }
 
@@ -180,13 +178,11 @@ fn tags_for_file_path_matching() {
     let stdout = String::from_utf8_lossy(&for_file.stdout);
     assert!(
         stdout.contains("alpha"),
-        "should find tag 'alpha' for sub/foo.md: {}",
-        stdout
+        "should find tag 'alpha' for sub/foo.md: {stdout}"
     );
     assert!(
         !stdout.contains("beta"),
-        "should NOT match barfoo.md's tag 'beta': {}",
-        stdout
+        "should NOT match barfoo.md's tag 'beta': {stdout}"
     );
 }
 
@@ -217,8 +213,7 @@ fn tags_count_and_tree() {
     let stdout = String::from_utf8_lossy(&count.stdout);
     assert!(
         stdout.contains("docker"),
-        "count should list docker: {}",
-        stdout
+        "count should list docker: {stdout}"
     );
 
     // Tree should group level= tags
@@ -227,18 +222,15 @@ fn tags_count_and_tree() {
     let tree_stdout = String::from_utf8_lossy(&tree.stdout);
     assert!(
         tree_stdout.contains("level="),
-        "tree should show level= group: {}",
-        tree_stdout
+        "tree should show level= group: {tree_stdout}"
     );
     assert!(
         tree_stdout.contains("beginner"),
-        "tree should show beginner value: {}",
-        tree_stdout
+        "tree should show beginner value: {tree_stdout}"
     );
     assert!(
         tree_stdout.contains("advanced"),
-        "tree should show advanced value: {}",
-        tree_stdout
+        "tree should show advanced value: {tree_stdout}"
     );
 }
 
@@ -265,14 +257,12 @@ fn tags_stats() {
     let stdout = String::from_utf8_lossy(&stats.stdout);
     assert!(
         stdout.contains("Files indexed:"),
-        "stats should show file count: {}",
-        stdout
+        "stats should show file count: {stdout}"
     );
-    assert!(stdout.contains("2"), "should index 2 files: {}", stdout);
+    assert!(stdout.contains('2'), "should index 2 files: {stdout}");
     assert!(
         stdout.contains("Unique tags:"),
-        "stats should show unique tags: {}",
-        stdout
+        "stats should show unique tags: {stdout}"
     );
 }
 
@@ -294,18 +284,15 @@ fn tags_grep() {
     let stdout = String::from_utf8_lossy(&grep.stdout);
     assert!(
         stdout.contains("python"),
-        "grep should find 'python': {}",
-        stdout
+        "grep should find 'python': {stdout}"
     );
     assert!(
         stdout.contains("python-advanced"),
-        "grep should find 'python-advanced': {}",
-        stdout
+        "grep should find 'python-advanced': {stdout}"
     );
     assert!(
         !stdout.contains("docker"),
-        "grep should NOT find 'docker': {}",
-        stdout
+        "grep should NOT find 'docker': {stdout}"
     );
 
     // Case-insensitive grep
@@ -315,8 +302,7 @@ fn tags_grep() {
     let stdout_i = String::from_utf8_lossy(&grep_i.stdout);
     assert!(
         stdout_i.contains("python"),
-        "case-insensitive grep should find 'python': {}",
-        stdout_i
+        "case-insensitive grep should find 'python': {stdout_i}"
     );
 }
 
@@ -345,18 +331,15 @@ fn tags_frontmatter() {
     let stdout = String::from_utf8_lossy(&fm.stdout);
     assert!(
         stdout.contains("title"),
-        "frontmatter should show title: {}",
-        stdout
+        "frontmatter should show title: {stdout}"
     );
     assert!(
         stdout.contains("My Course"),
-        "frontmatter should show title value: {}",
-        stdout
+        "frontmatter should show title value: {stdout}"
     );
     assert!(
         stdout.contains("level"),
-        "frontmatter should show level: {}",
-        stdout
+        "frontmatter should show level: {stdout}"
     );
 }
 
@@ -378,8 +361,7 @@ fn tags_unused_strict_fails() {
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
         stderr.contains("obsolete"),
-        "should report 'obsolete' as unused: {}",
-        stderr
+        "should report 'obsolete' as unused: {stderr}"
     );
 }
 
@@ -408,13 +390,11 @@ fn tags_validate_standalone() {
     let stderr = String::from_utf8_lossy(&validate.stderr);
     assert!(
         stderr.contains("dockker"),
-        "should mention unknown tag: {}",
-        stderr
+        "should mention unknown tag: {stderr}"
     );
     assert!(
         stderr.contains("docker"),
-        "should suggest correction: {}",
-        stderr
+        "should suggest correction: {stderr}"
     );
 }
 
@@ -438,18 +418,15 @@ fn tags_inline_yaml_list() {
     let stdout = String::from_utf8_lossy(&list.stdout);
     assert!(
         stdout.contains("alpha"),
-        "should parse inline list item 'alpha': {}",
-        stdout
+        "should parse inline list item 'alpha': {stdout}"
     );
     assert!(
         stdout.contains("beta"),
-        "should parse inline list item 'beta': {}",
-        stdout
+        "should parse inline list item 'beta': {stdout}"
     );
     assert!(
         stdout.contains("gamma"),
-        "should parse inline list item 'gamma': {}",
-        stdout
+        "should parse inline list item 'gamma': {stdout}"
     );
 }
 
@@ -474,13 +451,11 @@ fn tags_colon_in_yaml_value() {
     let stdout = String::from_utf8_lossy(&fm.stdout);
     assert!(
         stdout.contains("https://example.com/path"),
-        "URL value should be preserved: {}",
-        stdout
+        "URL value should be preserved: {stdout}"
     );
     assert!(
         stdout.contains("10:30"),
-        "time value should be preserved: {}",
-        stdout
+        "time value should be preserved: {stdout}"
     );
 
     // Also check tags list for key=value indexing
@@ -489,13 +464,11 @@ fn tags_colon_in_yaml_value() {
     let list_stdout = String::from_utf8_lossy(&list.stdout);
     assert!(
         list_stdout.contains("url:https://example.com/path"),
-        "URL should be indexed correctly: {}",
-        list_stdout
+        "URL should be indexed correctly: {list_stdout}"
     );
     assert!(
         list_stdout.contains("time:10:30"),
-        "time should be indexed correctly: {}",
-        list_stdout
+        "time should be indexed correctly: {list_stdout}"
     );
 }
 
@@ -520,13 +493,11 @@ fn tags_numeric_and_boolean_values() {
     let stdout = String::from_utf8_lossy(&list.stdout);
     assert!(
         stdout.contains("difficulty:3"),
-        "numeric value should be indexed: {}",
-        stdout
+        "numeric value should be indexed: {stdout}"
     );
     assert!(
         stdout.contains("published:true"),
-        "boolean value should be indexed: {}",
-        stdout
+        "boolean value should be indexed: {stdout}"
     );
 }
 
@@ -560,13 +531,11 @@ fn tags_stale_entries_cleared_on_rebuild() {
     let stdout2 = String::from_utf8_lossy(&list2.stdout);
     assert!(
         stdout2.contains("alpha"),
-        "alpha should still exist: {}",
-        stdout2
+        "alpha should still exist: {stdout2}"
     );
     assert!(
         !stdout2.contains("beta"),
-        "beta should be gone after rebuild: {}",
-        stdout2
+        "beta should be gone after rebuild: {stdout2}"
     );
 }
 
@@ -586,15 +555,13 @@ fn tags_empty_inline_list() {
     // Should only have level:beginner, no empty tags
     assert!(
         stdout.contains("level:beginner"),
-        "should have level:beginner: {}",
-        stdout
+        "should have level:beginner: {stdout}"
     );
     let tags: Vec<&str> = stdout.lines().collect();
     assert_eq!(
         tags.len(),
         1,
-        "should have exactly 1 tag (level:beginner), got: {:?}",
-        tags
+        "should have exactly 1 tag (level:beginner), got: {tags:?}"
     );
 }
 
@@ -617,13 +584,11 @@ fn tags_duplicate_within_file_fails() {
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
         stderr.contains("Duplicate"),
-        "should mention duplicate: {}",
-        stderr
+        "should mention duplicate: {stderr}"
     );
     assert!(
         stderr.contains("docker"),
-        "should mention the duplicate tag: {}",
-        stderr
+        "should mention the duplicate tag: {stderr}"
     );
 }
 
@@ -683,14 +648,9 @@ src_dirs = ["."]
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
         stderr.contains("category"),
-        "should mention missing field 'category': {}",
-        stderr
+        "should mention missing field 'category': {stderr}"
     );
-    assert!(
-        stderr.contains("a.md"),
-        "should mention the file: {}",
-        stderr
-    );
+    assert!(stderr.contains("a.md"), "should mention the file: {stderr}");
 }
 
 #[test]
@@ -714,8 +674,7 @@ src_dirs = ["."]
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
         stderr.contains("tags"),
-        "should mention missing field 'tags': {}",
-        stderr
+        "should mention missing field 'tags': {stderr}"
     );
 }
 
@@ -740,8 +699,7 @@ src_dirs = ["."]
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
         stderr.contains("level"),
-        "should mention missing field 'level': {}",
-        stderr
+        "should mention missing field 'level': {stderr}"
     );
 }
 
@@ -807,8 +765,7 @@ src_dirs = ["."]
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
         stderr.contains("duration_hours"),
-        "should mention the groups: {}",
-        stderr
+        "should mention the groups: {stderr}"
     );
 }
 
@@ -876,8 +833,7 @@ fn tags_required_values_invalid_fails() {
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
         stderr.contains("begginer"),
-        "should mention invalid value: {}",
-        stderr
+        "should mention invalid value: {stderr}"
     );
 }
 
@@ -931,8 +887,7 @@ fn tags_unique_fields_duplicate_fails() {
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
         stderr.contains("Same Title"),
-        "should mention the duplicate value: {}",
-        stderr
+        "should mention the duplicate value: {stderr}"
     );
 }
 
@@ -975,13 +930,11 @@ fn tags_field_types_wrong_type_fails() {
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
         stderr.contains("level"),
-        "should mention the field: {}",
-        stderr
+        "should mention the field: {stderr}"
     );
     assert!(
         stderr.contains("list"),
-        "should mention expected type: {}",
-        stderr
+        "should mention expected type: {stderr}"
     );
 }
 
@@ -1014,8 +967,7 @@ fn tags_sorted_tags_unsorted_fails() {
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
         stderr.contains("sorted"),
-        "should mention sorting: {}",
-        stderr
+        "should mention sorting: {stderr}"
     );
 }
 
@@ -1041,13 +993,11 @@ fn tags_matrix_shows_categories() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
         stdout.contains("level"),
-        "matrix should show level category: {}",
-        stdout
+        "matrix should show level category: {stdout}"
     );
     assert!(
         stdout.contains("tools"),
-        "matrix should show tools category: {}",
-        stdout
+        "matrix should show tools category: {stdout}"
     );
 }
 
@@ -1071,11 +1021,10 @@ fn tags_coverage_shows_percentages() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
         stdout.contains("tools"),
-        "coverage should show tools: {}",
-        stdout
+        "coverage should show tools: {stdout}"
     );
-    assert!(stdout.contains("100%"), "tools should be 100%: {}", stdout);
-    assert!(stdout.contains("50%"), "level should be 50%: {}", stdout);
+    assert!(stdout.contains("100%"), "tools should be 100%: {stdout}");
+    assert!(stdout.contains("50%"), "level should be 50%: {stdout}");
 }
 
 #[test]
@@ -1095,8 +1044,7 @@ fn tags_orphans_no_orphans() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
         stdout.contains("All files have tags"),
-        "should report no orphans: {}",
-        stdout
+        "should report no orphans: {stdout}"
     );
 }
 
@@ -1133,8 +1081,7 @@ fn tags_suggest_shows_suggestions() {
     // c.md only has docker, so it should suggest tags from similar files (a.md, b.md)
     assert!(
         stdout.contains("Suggested"),
-        "should show suggestions: {}",
-        stdout
+        "should show suggestions: {stdout}"
     );
 }
 
@@ -1175,8 +1122,7 @@ fn tags_check_reports_issues() {
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
         stderr.contains("level"),
-        "should report missing level: {}",
-        stderr
+        "should report missing level: {stderr}"
     );
 }
 

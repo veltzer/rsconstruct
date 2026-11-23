@@ -29,11 +29,10 @@ fn requirements_derives_from_imports() {
     );
 
     let req = fs::read_to_string(project_path.join("requirements.txt")).unwrap();
-    assert!(req.contains("flask"), "expected flask in output: {}", req);
+    assert!(req.contains("flask"), "expected flask in output: {req}");
     assert!(
         req.contains("requests"),
-        "expected requests in output: {}",
-        req
+        "expected requests in output: {req}"
     );
 }
 
@@ -68,13 +67,11 @@ fn requirements_extra_adds_undeclared_dep() {
     let req = fs::read_to_string(project_path.join("requirements.txt")).unwrap();
     assert!(
         req.contains("setuptools"),
-        "extra=[setuptools] should appear in requirements.txt even though no import references it: {}",
-        req
+        "extra=[setuptools] should appear in requirements.txt even though no import references it: {req}"
     );
     assert!(
         req.contains("flask"),
-        "import-derived flask should still appear: {}",
-        req
+        "import-derived flask should still appear: {req}"
     );
 }
 
@@ -103,13 +100,12 @@ fn requirements_extra_bypasses_exclude() {
     let req = fs::read_to_string(project_path.join("requirements.txt")).unwrap();
     assert!(
         req.contains("setuptools"),
-        "extra should bypass exclude: {}",
-        req
+        "extra should bypass exclude: {req}"
     );
 }
 
 /// Adding something to `extra` is a config change that should invalidate
-/// the cache and trigger a rebuild — `extra` must be in checksum_fields.
+/// the cache and trigger a rebuild — `extra` must be in `checksum_fields`.
 #[test]
 fn requirements_extra_change_triggers_rebuild() {
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
@@ -127,8 +123,7 @@ fn requirements_extra_change_triggers_rebuild() {
     let req1 = fs::read_to_string(project_path.join("requirements.txt")).unwrap();
     assert!(
         !req1.contains("setuptools"),
-        "round 1 should not have setuptools: {}",
-        req1
+        "round 1 should not have setuptools: {req1}"
     );
 
     // Now add extra — the config hash should change, forcing a rebuild.
@@ -145,7 +140,6 @@ fn requirements_extra_change_triggers_rebuild() {
     let req2 = fs::read_to_string(project_path.join("requirements.txt")).unwrap();
     assert!(
         req2.contains("setuptools"),
-        "round 2 should pick up the new extra: {}",
-        req2
+        "round 2 should pick up the new extra: {req2}"
     );
 }

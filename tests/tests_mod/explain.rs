@@ -22,13 +22,11 @@ fn explain_first_build() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
         stdout.contains("BUILD"),
-        "Expected BUILD in explain output, got: {}",
-        stdout
+        "Expected BUILD in explain output, got: {stdout}"
     );
     assert!(
         stdout.contains("no cache entry"),
-        "Expected 'no cache entry' reason, got: {}",
-        stdout
+        "Expected 'no cache entry' reason, got: {stdout}"
     );
 }
 
@@ -54,13 +52,11 @@ fn explain_incremental_skip() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
         stdout.contains("SKIP"),
-        "Expected SKIP in explain output, got: {}",
-        stdout
+        "Expected SKIP in explain output, got: {stdout}"
     );
     assert!(
         stdout.contains("inputs unchanged"),
-        "Expected 'inputs unchanged' reason, got: {}",
-        stdout
+        "Expected 'inputs unchanged' reason, got: {stdout}"
     );
 }
 
@@ -94,13 +90,11 @@ fn explain_input_change() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
         stdout.contains("BUILD"),
-        "Expected BUILD in explain output, got: {}",
-        stdout
+        "Expected BUILD in explain output, got: {stdout}"
     );
     assert!(
         stdout.contains("no cache entry"),
-        "Expected 'no cache entry' reason (inputs changed = new key), got: {}",
-        stdout
+        "Expected 'no cache entry' reason (inputs changed = new key), got: {stdout}"
     );
 }
 
@@ -129,13 +123,11 @@ fn explain_force() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
         stdout.contains("BUILD"),
-        "Expected BUILD in explain output, got: {}",
-        stdout
+        "Expected BUILD in explain output, got: {stdout}"
     );
     assert!(
         stdout.contains("forced"),
-        "Expected 'forced' reason, got: {}",
-        stdout
+        "Expected 'forced' reason, got: {stdout}"
     );
 }
 
@@ -166,13 +158,11 @@ fn explain_after_clean() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
         stdout.contains("RESTORE"),
-        "Expected RESTORE in explain output, got: {}",
-        stdout
+        "Expected RESTORE in explain output, got: {stdout}"
     );
     assert!(
         stdout.contains("output missing"),
-        "Expected 'output missing' reason, got: {}",
-        stdout
+        "Expected 'output missing' reason, got: {stdout}"
     );
 }
 
@@ -197,12 +187,10 @@ fn explain_dry_run() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
         stdout.contains("BUILD"),
-        "Expected BUILD in explain dry-run output, got: {}",
-        stdout
+        "Expected BUILD in explain dry-run output, got: {stdout}"
     );
     assert!(
         stdout.contains("no cache entry"),
-        "Expected 'no cache entry' reason in dry-run, got: {}",
-        stdout
+        "Expected 'no cache entry' reason in dry-run, got: {stdout}"
     );
 }

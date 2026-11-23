@@ -216,14 +216,11 @@ fn every_test_file_is_registered() {
         }
         let ty = path.file_name().unwrap().to_str().unwrap().to_string();
         let block_start = format!("    pub mod {ty} {{\n");
-        let block = this
-            .find(&block_start)
-            .map(|start| {
-                let rest = &this[start + block_start.len()..];
-                let end = rest.find("\n    }").unwrap_or(rest.len());
-                &rest[..end]
-            })
-            .unwrap_or("");
+        let block = this.find(&block_start).map_or("", |start| {
+            let rest = &this[start + block_start.len()..];
+            let end = rest.find("\n    }").unwrap_or(rest.len());
+            &rest[..end]
+        });
         for stem in rs_stems(&format!("tests/processor/{ty}")) {
             if !block.contains(&format!("pub mod {stem};")) {
                 missing.push(format!("tests/processor/{ty}/{stem}.rs"));

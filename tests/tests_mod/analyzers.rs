@@ -28,8 +28,7 @@ enabled = false
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
         !stdout.contains("markdown"),
-        "Disabled analyzer should not appear in `analyzer used`: {}",
-        stdout
+        "Disabled analyzer should not appear in `analyzer used`: {stdout}"
     );
 }
 
@@ -59,8 +58,7 @@ enabled = true
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
         stdout.contains("markdown"),
-        "Enabled analyzer should appear in `analyzer used`: {}",
-        stdout
+        "Enabled analyzer should appear in `analyzer used`: {stdout}"
     );
 }
 
@@ -93,8 +91,7 @@ src_dirs = ["."]
     );
     assert!(
         combined.contains("not_a_real_analyzer") && combined.contains("unknown analyzer"),
-        "Error should name the unknown analyzer: {}",
-        combined
+        "Error should name the unknown analyzer: {combined}"
     );
 }
 
@@ -128,13 +125,11 @@ enabeld = false
     );
     assert!(
         combined.contains("enabeld") && combined.contains("unknown field"),
-        "Error should name the typo field: {}",
-        combined
+        "Error should name the typo field: {combined}"
     );
     assert!(
         combined.contains("enabled"),
-        "Error should list valid fields to help fix the typo: {}",
-        combined
+        "Error should list valid fields to help fix the typo: {combined}"
     );
 }
 
@@ -163,8 +158,7 @@ src_dirs = ["."]
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
         stdout.contains("markdown"),
-        "Analyzer with no `enabled` field should default to active: {}",
-        stdout
+        "Analyzer with no `enabled` field should default to active: {stdout}"
     );
 }
 
@@ -224,8 +218,7 @@ src_dirs = ["."]
     assert!(
         combined.contains("[deps] 3 files to check")
             && combined.contains("[deps] summary: 0 rescanned (3 cache hits:"),
-        "unchanged files should all hit the cache: {}",
-        combined
+        "unchanged files should all hit the cache: {combined}"
     );
 }
 
@@ -278,8 +271,7 @@ src_dirs = ["."]
     assert!(
         combined.contains("[deps] 3 files to check")
             && combined.contains("[deps] summary: 1 rescanned (2 cache hits:"),
-        "modified file should trigger exactly one rescan: {}",
-        combined
+        "modified file should trigger exactly one rescan: {combined}"
     );
 }
 
@@ -335,14 +327,12 @@ src_dirs = ["."]
     );
     assert!(
         combined.contains("[deps] 1 files to check (consumed by 3 products)"),
-        "display should show unique-source count with per-product fan-out: {}",
-        combined
+        "display should show unique-source count with per-product fan-out: {combined}"
     );
     assert!(
         combined.contains("[deps] summary: 0 rescanned (1 cache hits:"),
         "shared source must be looked up in the cache exactly once, \
-         not once per consuming product: {}",
-        combined
+         not once per consuming product: {combined}"
     );
 }
 

@@ -1,4 +1,4 @@
-//! Integration tests for the duplicate_files checker.
+//! Integration tests for the `duplicate_files` checker.
 
 use crate::common::run_rsconstruct_with_env;
 use std::fs;
@@ -33,13 +33,11 @@ fn duplicate_files_detects_duplicates() {
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
         stderr.contains("duplicate"),
-        "should mention duplicates: {}",
-        stderr
+        "should mention duplicates: {stderr}"
     );
     assert!(
         stderr.contains("a.md") && stderr.contains("b.md"),
-        "should name both duplicates: {}",
-        stderr
+        "should name both duplicates: {stderr}"
     );
 }
 
@@ -79,8 +77,7 @@ fn duplicate_files_detects_duplicate_added_incrementally() {
     let stderr = String::from_utf8_lossy(&second.stderr);
     assert!(
         stderr.contains("a.md") && stderr.contains("copy.md"),
-        "should name the duplicate pair: {}",
-        stderr
+        "should name the duplicate pair: {stderr}"
     );
 }
 

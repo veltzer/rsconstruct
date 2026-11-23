@@ -33,14 +33,13 @@ fn mermaid_discovery() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
         stdout.contains("BUILD") || stdout.contains("build"),
-        "Should discover mermaid product: {}",
-        stdout
+        "Should discover mermaid product: {stdout}"
     );
 }
 
 /// A real render: mmdc drives a headless Chromium through Puppeteer.
 /// Chromium's sandbox needs unprivileged user namespaces, which Ubuntu
-/// 23.10+ restricts through AppArmor, so the project hands mmdc a Puppeteer
+/// 23.10+ restricts through `AppArmor`, so the project hands mmdc a Puppeteer
 /// config that launches it with `--no-sandbox` (the rendered input is the
 /// test's own diagram).
 #[test]
@@ -107,7 +106,6 @@ fn mermaid_no_project_discovered() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
         stdout.contains("0 products"),
-        "Should discover 0 products: {}",
-        stdout
+        "Should discover 0 products: {stdout}"
     );
 }

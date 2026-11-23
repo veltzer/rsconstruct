@@ -3,7 +3,7 @@ use std::fs;
 use crate::common::{run_rsconstruct, setup_project_with_config};
 
 /// Tera requires `tera.templates/` to exist; create it so the build doesn't
-/// fail on the src_dirs check.
+/// fail on the `src_dirs` check.
 fn create_tera_templates(temp_path: &std::path::Path) {
     fs::create_dir_all(temp_path.join("tera.templates")).unwrap();
 }
@@ -139,7 +139,7 @@ fn pset_valid_max_jobs_accepted() {
 }
 
 /// Overrides must go through the same semantic validation as the config
-/// file: max_jobs = 0 would deadlock the build on a zero-permit semaphore,
+/// file: `max_jobs` = 0 would deadlock the build on a zero-permit semaphore,
 /// so it must be rejected, not applied.
 #[test]
 fn iset_max_jobs_zero_rejected() {

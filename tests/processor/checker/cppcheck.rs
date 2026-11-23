@@ -34,8 +34,7 @@ fn cppcheck_valid_c_file() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
         stdout.contains("Processing:") || stdout.contains("Processing batch:"),
-        "Should process cppcheck: {}",
-        stdout
+        "Should process cppcheck: {stdout}"
     );
 }
 
@@ -71,7 +70,6 @@ fn cppcheck_incremental_skip() {
     let stdout2 = String::from_utf8_lossy(&output2.stdout);
     assert!(
         stdout2.contains("[processor.checker.cppcheck] Skipping (unchanged):"),
-        "Second build should skip: {}",
-        stdout2
+        "Second build should skip: {stdout2}"
     );
 }

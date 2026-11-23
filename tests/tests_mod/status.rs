@@ -19,8 +19,7 @@ fn status_command() {
     let stdout1 = String::from_utf8_lossy(&status1.stdout);
     assert!(
         stdout1.contains("NEW"),
-        "Before build, product should be NEW: {}",
-        stdout1
+        "Before build, product should be NEW: {stdout1}"
     );
 
     // Build it
@@ -33,8 +32,7 @@ fn status_command() {
     let stdout2 = String::from_utf8_lossy(&status2.stdout);
     assert!(
         stdout2.contains("UP-TO-DATE"),
-        "After build, product should be UP-TO-DATE: {}",
-        stdout2
+        "After build, product should be UP-TO-DATE: {stdout2}"
     );
 
     // Check summary line
@@ -57,8 +55,7 @@ fn status_empty_project() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
         stdout.contains("No products discovered"),
-        "Empty project should show 'No products discovered': {}",
-        stdout
+        "Empty project should show 'No products discovered': {stdout}"
     );
 }
 

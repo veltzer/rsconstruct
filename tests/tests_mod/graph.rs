@@ -54,8 +54,7 @@ fn graph_mermaid_format() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
         stdout.contains("graph") || stdout.contains("flowchart"),
-        "Expected mermaid graph syntax in output, got: {}",
-        stdout
+        "Expected mermaid graph syntax in output, got: {stdout}"
     );
 }
 
@@ -79,8 +78,7 @@ fn graph_json_format() {
     // JSON output should be valid JSON with array or object structure
     assert!(
         stdout.starts_with('{') || stdout.starts_with('['),
-        "Expected JSON output, got: {}",
-        stdout
+        "Expected JSON output, got: {stdout}"
     );
 }
 
@@ -137,8 +135,7 @@ fn graph_stats() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
         stdout.contains("products"),
-        "Expected 'products' in stats output, got: {}",
-        stdout
+        "Expected 'products' in stats output, got: {stdout}"
     );
 }
 
@@ -161,8 +158,7 @@ fn graph_stats_json() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
         stdout.starts_with('{'),
-        "Expected JSON output, got: {}",
-        stdout
+        "Expected JSON output, got: {stdout}"
     );
 }
 
@@ -205,13 +201,11 @@ fn graph_unreferenced_finds_untracked_files() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
         stdout.contains("unused.txt"),
-        "Should report unused.txt: {}",
-        stdout
+        "Should report unused.txt: {stdout}"
     );
     assert!(
         !stdout.contains("src/used.txt"),
-        "Should not report src/used.txt: {}",
-        stdout
+        "Should not report src/used.txt: {stdout}"
     );
 }
 
@@ -252,18 +246,15 @@ fn graph_unreferenced_dep_inputs_not_reported() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
         !stdout.contains("dep.txt"),
-        "dep.txt is referenced via dep_inputs, should not appear: {}",
-        stdout
+        "dep.txt is referenced via dep_inputs, should not appear: {stdout}"
     );
     assert!(
         !stdout.contains("source.txt"),
-        "source.txt is a primary input, should not appear: {}",
-        stdout
+        "source.txt is a primary input, should not appear: {stdout}"
     );
     assert!(
         stdout.contains("unused.txt"),
-        "unused.txt should appear: {}",
-        stdout
+        "unused.txt should appear: {stdout}"
     );
 }
 

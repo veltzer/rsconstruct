@@ -24,16 +24,15 @@ fn marp_ci_cap_sets_max_jobs_when_ci_true() {
     );
     let stdout = String::from_utf8_lossy(&output.stdout);
     let parsed: serde_json::Value = serde_json::from_str(&stdout)
-        .unwrap_or_else(|e| panic!("invalid JSON: {}\nstdout: {}", e, stdout));
+        .unwrap_or_else(|e| panic!("invalid JSON: {e}\nstdout: {stdout}"));
     let max_jobs = parsed
         .get("processor.generator.marp")
         .and_then(|m| m.get("max_jobs"))
-        .unwrap_or_else(|| panic!("marp.max_jobs missing under CI=true; full dump: {}", stdout));
+        .unwrap_or_else(|| panic!("marp.max_jobs missing under CI=true; full dump: {stdout}"));
     assert_eq!(
         max_jobs.as_i64(),
         Some(2),
-        "expected max_jobs=2 under CI=true, got {:?}",
-        max_jobs
+        "expected max_jobs=2 under CI=true, got {max_jobs:?}"
     );
 }
 
@@ -61,8 +60,7 @@ fn marp_ci_cap_absent_when_ci_unset() {
         .and_then(|m| m.get("max_jobs"));
     assert!(
         max_jobs.is_none() || max_jobs == Some(&serde_json::Value::Null),
-        "expected max_jobs absent without CI=true, got {:?}",
-        max_jobs
+        "expected max_jobs absent without CI=true, got {max_jobs:?}"
     );
 }
 
@@ -88,8 +86,7 @@ fn marp_ci_cap_respects_user_set_max_jobs() {
     assert_eq!(
         max_jobs,
         Some(5),
-        "user-set max_jobs must win over CI cap; got {:?}",
-        max_jobs
+        "user-set max_jobs must win over CI cap; got {max_jobs:?}"
     );
 }
 
@@ -124,12 +121,11 @@ fn marp_valid_file() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
         stdout.contains("Processing:"),
-        "Should process marp: {}",
-        stdout
+        "Should process marp: {stdout}"
     );
 }
 
-/// A src_dirs entry that does not exist is a config error naming the
+/// A `src_dirs` entry that does not exist is a config error naming the
 /// processor and the entry, not a silent skip.
 #[test]
 fn marp_nonexistent_src_dir_is_config_error() {

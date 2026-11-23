@@ -14,15 +14,13 @@ fn missing_config_returns_config_error() {
     let exit_code = output.status.code().unwrap();
     assert_eq!(
         exit_code, 2,
-        "Expected exit code 2 (CONFIG_ERROR), got {}",
-        exit_code
+        "Expected exit code 2 (CONFIG_ERROR), got {exit_code}"
     );
 
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
         stderr.contains("CONFIG_ERROR"),
-        "Expected CONFIG_ERROR in stderr, got: {}",
-        stderr
+        "Expected CONFIG_ERROR in stderr, got: {stderr}"
     );
 }
 
@@ -40,15 +38,13 @@ fn init_already_exists_returns_config_error() {
     let exit_code = output.status.code().unwrap();
     assert_eq!(
         exit_code, 2,
-        "Expected exit code 2 (CONFIG_ERROR), got {}",
-        exit_code
+        "Expected exit code 2 (CONFIG_ERROR), got {exit_code}"
     );
 
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
         stderr.contains("CONFIG_ERROR"),
-        "Expected CONFIG_ERROR in stderr, got: {}",
-        stderr
+        "Expected CONFIG_ERROR in stderr, got: {stderr}"
     );
 }
 
@@ -63,8 +59,7 @@ fn success_returns_zero() {
     let exit_code = output.status.code().unwrap();
     assert_eq!(
         exit_code, 0,
-        "Expected exit code 0 (SUCCESS), got {}",
-        exit_code
+        "Expected exit code 0 (SUCCESS), got {exit_code}"
     );
 }
 
@@ -83,15 +78,13 @@ fn unknown_processor_returns_config_error() {
     let exit_code = output.status.code().unwrap();
     assert_eq!(
         exit_code, 2,
-        "Expected exit code 2 (CONFIG_ERROR), got {}",
-        exit_code
+        "Expected exit code 2 (CONFIG_ERROR), got {exit_code}"
     );
 
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
         stderr.contains("CONFIG_ERROR"),
-        "Expected CONFIG_ERROR in stderr, got: {}",
-        stderr
+        "Expected CONFIG_ERROR in stderr, got: {stderr}"
     );
 }
 

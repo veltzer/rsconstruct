@@ -37,8 +37,7 @@ fn make_valid_makefile() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
         stdout.contains("Processing:"),
-        "Should process make: {}",
-        stdout
+        "Should process make: {stdout}"
     );
 }
 
@@ -74,8 +73,7 @@ fn make_incremental_skip() {
     let stdout2 = String::from_utf8_lossy(&output2.stdout);
     assert!(
         stdout2.contains("[processor.checker.make] Skipping (unchanged):"),
-        "Second build should skip: {}",
-        stdout2
+        "Second build should skip: {stdout2}"
     );
 }
 

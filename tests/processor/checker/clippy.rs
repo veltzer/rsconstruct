@@ -41,8 +41,7 @@ fn clippy_valid_project() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
         stdout.contains("Processing:"),
-        "Should process clippy: {}",
-        stdout
+        "Should process clippy: {stdout}"
     );
 }
 
@@ -85,8 +84,7 @@ fn clippy_incremental_skip() {
     let stdout2 = String::from_utf8_lossy(&output2.stdout);
     assert!(
         stdout2.contains("[processor.checker.clippy] Skipping (unchanged):"),
-        "Second build should skip: {}",
-        stdout2
+        "Second build should skip: {stdout2}"
     );
 }
 
@@ -135,8 +133,7 @@ fn clippy_rebuild_on_lockfile_change() {
     let stdout2 = String::from_utf8_lossy(&output2.stdout);
     assert!(
         stdout2.contains("Processing:"),
-        "Should rebuild after Cargo.lock change: {}",
-        stdout2
+        "Should rebuild after Cargo.lock change: {stdout2}"
     );
 }
 
@@ -163,8 +160,7 @@ fn clippy_no_project_discovered() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
         stdout.contains("0 products"),
-        "Should discover 0 products: {}",
-        stdout
+        "Should discover 0 products: {stdout}"
     );
 }
 

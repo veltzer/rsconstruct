@@ -35,8 +35,7 @@ fn aspell_valid_file() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
         stdout.contains("Processing:"),
-        "Should process aspell: {}",
-        stdout
+        "Should process aspell: {stdout}"
     );
 }
 
@@ -68,12 +67,11 @@ fn aspell_incremental_skip() {
     let stdout2 = String::from_utf8_lossy(&output2.stdout);
     assert!(
         stdout2.contains("[processor.checker.aspell] Skipping (unchanged):"),
-        "Second build should skip: {}",
-        stdout2
+        "Second build should skip: {stdout2}"
     );
 }
 
-/// A src_dirs entry that does not exist is a config error naming the
+/// A `src_dirs` entry that does not exist is a config error naming the
 /// processor and the entry, not a silent skip.
 #[test]
 fn aspell_nonexistent_src_dir_is_config_error() {

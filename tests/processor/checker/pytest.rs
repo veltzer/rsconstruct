@@ -37,8 +37,7 @@ fn pytest_passing_test() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
         stdout.contains("Processing:"),
-        "Should process pytest: {}",
-        stdout
+        "Should process pytest: {stdout}"
     );
 }
 
@@ -64,8 +63,7 @@ fn pytest_incremental_skip() {
     let stdout2 = String::from_utf8_lossy(&output2.stdout);
     assert!(
         stdout2.contains("[processor.checker.pytest] Skipping (unchanged):"),
-        "Second build should skip: {}",
-        stdout2
+        "Second build should skip: {stdout2}"
     );
 }
 

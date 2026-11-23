@@ -145,8 +145,7 @@ fn dry_run_shows_build_actions() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
         stdout.contains("BUILD"),
-        "Dry run should show BUILD for unbuilt product: {}",
-        stdout
+        "Dry run should show BUILD for unbuilt product: {stdout}"
     );
     assert!(stdout.contains("Total"), "Dry run should show Total");
 
@@ -167,8 +166,7 @@ fn dry_run_shows_build_actions() {
     let stdout2 = String::from_utf8_lossy(&output2.stdout);
     assert!(
         stdout2.contains("SKIP"),
-        "Dry run after build should show SKIP: {}",
-        stdout2
+        "Dry run after build should show SKIP: {stdout2}"
     );
 }
 
@@ -188,8 +186,7 @@ fn dry_run_short_flag() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
         stdout.contains("BUILD"),
-        "-n flag should show BUILD: {}",
-        stdout
+        "-n flag should show BUILD: {stdout}"
     );
     // Verify no output file was created (dry-run should not execute anything)
     assert!(
@@ -223,13 +220,11 @@ fn dry_run_with_force() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
         stdout.contains("BUILD"),
-        "Dry run with --force should show BUILD: {}",
-        stdout
+        "Dry run with --force should show BUILD: {stdout}"
     );
     assert!(
         !stdout.contains("SKIP"),
-        "Dry run with --force should not show SKIP: {}",
-        stdout
+        "Dry run with --force should not show SKIP: {stdout}"
     );
 }
 

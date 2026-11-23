@@ -70,8 +70,7 @@ fn processors_files_no_files_message() {
     let stdout = String::from_utf8_lossy(&output.stdout);
     assert!(
         stdout.contains("No files discovered") || stdout.contains("(no files)"),
-        "Expected empty message, got: {}",
-        stdout
+        "Expected empty message, got: {stdout}"
     );
 }
 
@@ -93,8 +92,7 @@ fn processors_files_unknown_processor_fails() {
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
         stderr.contains("Unknown processor"),
-        "Expected 'Unknown processor' error, got: {}",
-        stderr
+        "Expected 'Unknown processor' error, got: {stderr}"
     );
 }
 
@@ -348,8 +346,7 @@ fn processors_files_json_empty() {
         serde_json::from_str(&stdout).expect("Expected valid JSON array");
     assert!(
         entries.is_empty(),
-        "Expected empty JSON array, got: {}",
-        stdout
+        "Expected empty JSON array, got: {stdout}"
     );
 }
 

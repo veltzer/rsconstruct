@@ -69,7 +69,7 @@ fn tools_list_json_names_each_tools_processors() {
             .collect()
     };
     assert_eq!(processors("ruff"), ["processor.checker.ruff"]);
-    assert!(processors("clojure").is_empty());
+    assert_eq!(processors("clojure"), [] as [std::string::String; 0]);
 }
 
 /// `--json tool list` says where each install goes: per tool its preferred
@@ -141,7 +141,7 @@ fn tools_list_shows_configured_tools() {
         "tool list-configured should show at least one tool"
     );
     assert!(
-        stdout.contains("("),
+        stdout.contains('('),
         "Expected processor name in parentheses for each tool"
     );
 }
@@ -204,7 +204,7 @@ fn tools_list_configured_hides_disabled_processors_unless_all() {
 /// `tool lock` and `tool check` consider the enabled processors only: the
 /// lock never gains an entry for a disabled stanza's tool, and the exact
 /// check in CI does not ask for one. (With the filter broken, `tool lock`
-/// would resolve ruff on PyPI and write a `[pip] ruff` entry.)
+/// would resolve ruff on `PyPI` and write a `[pip] ruff` entry.)
 #[test]
 fn tool_lock_and_check_skip_disabled_processors() {
     let temp_dir = setup_project_with_config(TERA_AND_DISABLED_RUFF);
