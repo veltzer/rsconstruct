@@ -104,7 +104,7 @@ impl ProcessorConfig {
         let mut fields: Vec<&'static str> = StandardConfig::known_fields()
             .iter()
             .copied()
-            .filter(|f| !e.omit_standard_fields.contains(f))
+            .filter(|f| !e.omits(f))
             .collect();
         for spec in e.fields {
             if !fields.contains(&spec.name) {
@@ -156,7 +156,7 @@ impl ProcessorConfig {
         let mut descs: Vec<(&'static str, &'static str)> = StandardConfig::field_descriptions()
             .iter()
             .copied()
-            .filter(|(f, _)| !e.omit_standard_fields.contains(f) && !shadowed(f))
+            .filter(|(f, _)| !e.omits(f) && !shadowed(f))
             .collect();
         for spec in e.fields {
             descs.push((spec.name, spec.doc));

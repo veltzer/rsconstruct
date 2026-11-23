@@ -485,7 +485,7 @@ pub fn processor_fields(name: &str) -> Vec<FieldInfo> {
     let proc_descs =
         crate::config::ProcessorConfig::field_descriptions_for(name).unwrap_or_default();
     let plugin = crate::registries::processor::find_plugin(name);
-    let omitted: &[&str] = plugin.map_or(&[], |p| p.omit_standard_fields);
+    let omitted = |field: &str| plugin.is_some_and(|p| p.omits(field));
 
     let must_fields: std::collections::HashSet<&str> =
         crate::config::ProcessorConfig::must_fields_for(name)
@@ -507,7 +507,7 @@ pub fn processor_fields(name: &str) -> Vec<FieldInfo> {
         .into_iter()
         .chain(SHARED_FIELD_DESCRIPTIONS.iter().copied())
         .chain(SCAN_FIELD_DESCRIPTIONS.iter().copied())
-        .filter(|(field, _)| !omitted.contains(field))
+        .filter(|(field, _)| !omitted(field))
         .map(|(field, desc)| {
             let val = defaults.get(field);
             let ty = match val {
@@ -566,6 +566,9 @@ pub fn defconfig_value(name: &str) -> Result<serde_json::Value> {
     ) {
         for omitted in plugin.omit_standard_fields {
             obj.remove(*omitted);
+        }
+        if plugin.omits(crate::config::BATCH_BY_DIR) {
+            obj.remove(crate::config::BATCH_BY_DIR);
         }
     }
     Ok(value)

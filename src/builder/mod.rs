@@ -972,6 +972,24 @@ impl Builder {
             .collect()
     }
 
+    /// Instance names whose config sets `batch_by_dir`. Their products
+    /// share the files of their directory as inputs
+    /// (`BuildGraph::share_dir_inputs`).
+    fn processors_batched_by_dir(&self) -> std::collections::HashSet<String> {
+        self.config
+            .processor
+            .instances
+            .iter()
+            .filter(|inst| {
+                inst.config_toml
+                    .get(crate::config::BATCH_BY_DIR)
+                    .and_then(toml::Value::as_bool)
+                    == Some(true)
+            })
+            .map(|inst| inst.instance_name.clone())
+            .collect()
+    }
+
     /// Key the products of every processor that depends on the project's
     /// Python environment by its fingerprint (see `python_env`). Nothing
     /// to do without a `./.venv`.
@@ -1036,6 +1054,7 @@ impl Builder {
         let file_index =
             self.discover_products(&mut graph, processors, &active_processors, mode)?;
         graph.key_by_input_paths(&self.processors_keyed_by_input_paths());
+        graph.share_dir_inputs(&self.processors_batched_by_dir());
         phase_timings.push(("discover".to_string(), t.elapsed()));
         print_graph_stats(GraphSnapshot::AfterDiscover, &graph);
 

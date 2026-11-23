@@ -1,9 +1,9 @@
 use anyhow::{Context, Result};
 use indicatif::ProgressBar;
 use parking_lot::{Condvar, Mutex, RwLock};
-use std::collections::{BTreeSet, HashMap, HashSet, VecDeque};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet, VecDeque};
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, mpsc};
 use std::thread;
@@ -80,7 +80,28 @@ fn effective_max_jobs(name: &str, proc: &dyn crate::processor::Processor) -> Opt
 fn effective_supports_batch(name: &str, proc: &dyn crate::processor::Processor) -> bool {
     let plugin_ok =
         crate::registries::processor::find_plugin(name).is_some_and(|p| p.supports_batch);
-    plugin_ok && proc.scan_config().batch
+    plugin_ok && (proc.scan_config().batch || proc.scan_config().batch_by_dir)
+}
+
+/// Whether a processor instance batches per directory (`batch_by_dir`): the
+/// plugin can batch and the user config asks for it.
+fn effective_batch_by_dir(name: &str, proc: &dyn crate::processor::Processor) -> bool {
+    effective_supports_batch(name, proc) && proc.scan_config().batch_by_dir
+}
+
+/// Split `items` into one group per directory that directly contains the
+/// item's file (`path_of`), in directory order, each group keeping the input
+/// order. Never mixes directories and never splits one.
+fn group_by_dir<T>(items: Vec<T>, path_of: impl Fn(&T) -> &Path) -> Vec<Vec<T>> {
+    let mut groups: BTreeMap<PathBuf, Vec<T>> = BTreeMap::new();
+    for item in items {
+        let dir = path_of(&item)
+            .parent()
+            .map(Path::to_path_buf)
+            .unwrap_or_default();
+        groups.entry(dir).or_default().push(item);
+    }
+    groups.into_values().collect()
 }
 
 /// Chunk size for one batch group. `0` means no limit — the whole group in
@@ -822,6 +843,20 @@ impl Executor<'_> {
                 .into_iter()
                 .partition(|item| item.action == ProductAction::Build);
             units.extend(settled.into_iter().map(Unit::Single));
+            if self
+                .processors
+                .get(&processor)
+                .is_some_and(|p| effective_batch_by_dir(&processor, p.as_ref()))
+            {
+                // One invocation per directory, whatever `batch_size` says.
+                for items in group_by_dir(to_run, |item| item.product.primary_input()) {
+                    units.push(Unit::Batch {
+                        processor: processor.clone(),
+                        items,
+                    });
+                }
+                continue;
+            }
             let chunk_size = if self.groups_children(&processor) {
                 child_chunk_size(self.sandbox_builtin_children, self.parallel, to_run.len())
             } else {
@@ -1698,6 +1733,44 @@ mod tests {
             3,
             "size larger than group is harmless"
         );
+    }
+
+    /// Files are grouped by the directory directly containing them: two
+    /// directories give two groups, a nested directory is its own group, and
+    /// the order inside a group is the input order.
+    #[test]
+    fn group_by_dir_groups_by_direct_parent() {
+        let files: Vec<PathBuf> = [
+            "b/x.c",
+            "a/main.c",
+            "a/sub/s.c",
+            "b/y.c",
+            "a/util.c",
+            "top.c",
+        ]
+        .iter()
+        .map(PathBuf::from)
+        .collect();
+        let groups = group_by_dir(files, |p| p.as_path());
+        let shown: Vec<Vec<&str>> = groups
+            .iter()
+            .map(|g| g.iter().map(|p| p.to_str().unwrap()).collect())
+            .collect();
+        assert_eq!(
+            shown,
+            vec![
+                vec!["top.c"],
+                vec!["a/main.c", "a/util.c"],
+                vec!["a/sub/s.c"],
+                vec!["b/x.c", "b/y.c"],
+            ]
+        );
+    }
+
+    #[test]
+    fn group_by_dir_of_nothing_is_nothing() {
+        let none: Vec<PathBuf> = Vec::new();
+        assert_eq!(group_by_dir(none, |p| p.as_path()).len(), 0);
     }
 
     /// `chunks(0)` panics; the sizing function must never return 0 even for

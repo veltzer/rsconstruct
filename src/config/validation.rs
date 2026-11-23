@@ -159,6 +159,7 @@ pub(super) fn expected_field_type(processor: &str, field: &str) -> Option<FieldT
         super::SANDBOX_NETWORK => return Some(FieldType::Bool),
         super::SANDBOX_WRITABLE => return Some(FieldType::StringArray),
         "batch" => return Some(FieldType::Bool),
+        super::BATCH_BY_DIR => return Some(FieldType::Bool),
         // Near-universal fields from StandardConfig — declared by almost
         // every processor, so they are validated generically rather than
         // repeated in every processor-specific arm below.
@@ -201,6 +202,28 @@ pub(super) fn validate_single_processor(
             "max_jobs",
             format!(
                 "[{section_label}]: 'max_jobs' must be greater than 0 (use 'enabled = false' to turn the processor off)",
+            ),
+        );
+    }
+
+    // `batch_by_dir` implies batching, so an explicit `batch = false` next to
+    // it contradicts it. A plugin whose own default is `batch = false`
+    // (cppcheck) has that default injected into the table too, where it
+    // cannot be told from the user's, so it is exempt from the check.
+    let default_batch = find_registry_entry(type_name)
+        .and_then(|p| p.defaults)
+        .and_then(|d| d.batch);
+    if table
+        .get(super::BATCH_BY_DIR)
+        .and_then(toml::Value::as_bool)
+        == Some(true)
+        && table.get("batch").and_then(toml::Value::as_bool) == Some(false)
+        && default_batch != Some(false)
+    {
+        report(
+            super::BATCH_BY_DIR,
+            format!(
+                "[{section_label}]: 'batch_by_dir = true' batches the processor, which contradicts 'batch = false'"
             ),
         );
     }

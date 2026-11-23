@@ -362,6 +362,10 @@ pub const SANDBOX_NETWORK: &str = "sandbox_network";
 /// well as content (see `StandardConfig::output_depends_on_input_name`).
 pub const OUTPUT_DEPENDS_ON_INPUT_NAME: &str = "output_depends_on_input_name";
 
+/// The standard field that makes a batching processor run one tool
+/// invocation per directory (see `StandardConfig::batch_by_dir`).
+pub const BATCH_BY_DIR: &str = "batch_by_dir";
+
 /// The universal field that keys a processor's products by the project's
 /// installed Python packages (see `StandardConfig::hash_python_env`).
 pub const HASH_PYTHON_ENV: &str = "hash_python_env";
@@ -573,6 +577,10 @@ pub const SHARED_FIELD_DESCRIPTIONS: &[(&str, &str)] = &[
     (
         "batch",
         "Pass all matched files to the tool in a single invocation",
+    ),
+    (
+        BATCH_BY_DIR,
+        "Batch per directory: one tool invocation per directory holding exactly that directory's files (implies batching; never split by batch_size)",
     ),
     (
         "max_jobs",

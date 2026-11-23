@@ -620,6 +620,40 @@ impl BuildGraph {
         }
     }
 
+    /// Make every product of each processor in `processors` (instance names)
+    /// an input-sharer with its directory: the primary input of every other
+    /// product of the same processor in the same directory becomes one of its
+    /// inputs, as a declared input. The directory's tool invocation sees all
+    /// of the directory's files, so the product's cache key must cover them
+    /// all: a change to any file rechecks the whole directory, and a file
+    /// added or removed changes every sibling's input set.
+    pub fn share_dir_inputs(&mut self, processors: &HashSet<String>) {
+        let mut dirs: HashMap<(String, PathBuf), Vec<usize>> = HashMap::new();
+        for product in &self.products {
+            if processors.contains(&product.processor) && !product.inputs.is_empty() {
+                let dir = product
+                    .primary_input()
+                    .parent()
+                    .map(Path::to_path_buf)
+                    .unwrap_or_default();
+                dirs.entry((product.processor.clone(), dir))
+                    .or_default()
+                    .push(product.id);
+            }
+        }
+        for ids in dirs.values().filter(|ids| ids.len() > 1) {
+            let primaries: Vec<PathBuf> = ids
+                .iter()
+                .map(|&id| self.products[id].primary_input().to_path_buf())
+                .collect();
+            for &id in ids {
+                self.add_inputs(id, &primaries);
+                let product = &mut self.products[id];
+                product.declared_inputs = product.inputs.len();
+            }
+        }
+    }
+
     /// Incorporate tool version hashes into product cache keys.
     /// For each product whose processor has an entry in the map, the tool
     /// version hash becomes a `ToolVersion` component of its cache key, so

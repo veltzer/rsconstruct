@@ -30,6 +30,19 @@ pub struct StandardConfig {
     pub required_tools: Vec<String>,
     #[serde(default = "default_true")]
     pub batch: bool,
+    /// Group the processor's files by the directory that directly contains
+    /// each one and run the tool once per directory, on exactly that
+    /// directory's files: never split by `batch_size`, never mixing
+    /// directories. For a tool that must see every file of one program in
+    /// a single run (cppcheck's `unusedFunction` and cross-file checks)
+    /// where the repo is a collection of independent programs, one per
+    /// directory. Implies batching, whatever `batch` says (cppcheck's
+    /// default is `batch = false`). Every product of a directory also takes
+    /// its siblings as inputs, so the directory is rechecked as a whole
+    /// when any of its files changes. Accepted only by processors that can
+    /// batch. Read by the executor and the builder, not by the processor.
+    #[serde(default)]
+    pub batch_by_dir: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub max_jobs: Option<usize>,
     /// Whether this processor is active. Set to false to disable without
@@ -109,6 +122,7 @@ impl Default for StandardConfig {
             output_dir: String::new(),
             required_tools: Vec::new(),
             batch: true,
+            batch_by_dir: false,
             max_jobs: None,
             enabled: true,
             enabled_if_dir_exists: None,
@@ -190,6 +204,7 @@ impl KnownFields for StandardConfig {
             "output_dir",
             "required_tools",
             "batch",
+            "batch_by_dir",
             "max_jobs",
         ]
     }

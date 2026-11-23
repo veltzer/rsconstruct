@@ -197,6 +197,18 @@ impl ProcessorPlugin {
     pub fn pname(&self) -> String {
         pname_from_parts(self.processor_type.as_str(), self.name)
     }
+
+    /// Whether the processor does not accept the standard field `field`:
+    /// it lists it in `omit_standard_fields`, or it is `batch_by_dir` and
+    /// the processor cannot batch at all (it omits `batch`). A processor
+    /// that cannot batch has no batches to group by directory, so the field
+    /// is rejected exactly as `batch` is, with no per-plugin entry to keep
+    /// in step.
+    pub fn omits(&self, field: &str) -> bool {
+        self.omit_standard_fields.contains(&field)
+            || (field == crate::config::BATCH_BY_DIR
+                && self.omit_standard_fields.contains(&"batch"))
+    }
 }
 
 /// Look up a processor plugin by its full name (`processor.checker.ruff`).
