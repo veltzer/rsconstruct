@@ -109,9 +109,20 @@ impl Class {
     /// The class this one inherits from (`@ISA`, the branch PPI's methods
     /// and `isa` follow).
     // The class tables name every class: the glob keeps them readable.
-    #[allow(clippy::enum_glob_use)]
     pub const fn superclass(self) -> Option<Self> {
-        use Class::*;
+        use Class::{
+            Document, Element, Magic, Node, Number, NumberBinary, NumberExp, NumberFloat,
+            NumberHex, NumberOctal, NumberVersion, Prototype, Quote, QuoteDouble, QuoteInterpolate,
+            QuoteLike, QuoteLikeBacktick, QuoteLikeCommand, QuoteLikeReadline, QuoteLikeRegexp,
+            QuoteLikeWords, QuoteLiteral, QuoteSingle, Regexp, RegexpMatch, RegexpSubstitute,
+            RegexpTransliterate, Separator, Statement, StatementBreak, StatementCompound,
+            StatementData, StatementEnd, StatementExpression, StatementGiven, StatementInclude,
+            StatementIncludePerl6, StatementNull, StatementPackage, StatementScheduled,
+            StatementSub, StatementUnmatchedBrace, StatementVariable, StatementWhen, Structure,
+            StructureBlock, StructureCondition, StructureConstructor, StructureFor, StructureGiven,
+            StructureList, StructureSignature, StructureSubscript, StructureWhen, Symbol, Token,
+            Word,
+        };
         Some(match self {
             Element => return None,
             Node | Token => Element,
@@ -159,9 +170,21 @@ impl Class {
     }
 
     /// The Perl package name.
-    #[allow(clippy::enum_glob_use)]
     pub const fn name(self) -> &'static str {
-        use Class::*;
+        use Class::{
+            ArrayIndex, Attribute, Bom, Cast, Comment, DashedWord, Data, Document, Element, End,
+            HereDoc, Label, Magic, Node, Number, NumberBinary, NumberExp, NumberFloat, NumberHex,
+            NumberOctal, NumberVersion, Operator, Pod, Prototype, Quote, QuoteDouble,
+            QuoteInterpolate, QuoteLike, QuoteLikeBacktick, QuoteLikeCommand, QuoteLikeReadline,
+            QuoteLikeRegexp, QuoteLikeWords, QuoteLiteral, QuoteSingle, Regexp, RegexpMatch,
+            RegexpSubstitute, RegexpTransliterate, Separator, Statement, StatementBreak,
+            StatementCompound, StatementData, StatementEnd, StatementExpression, StatementGiven,
+            StatementInclude, StatementIncludePerl6, StatementNull, StatementPackage,
+            StatementScheduled, StatementSub, StatementUnmatchedBrace, StatementVariable,
+            StatementWhen, Structure, StructureBlock, StructureCondition, StructureConstructor,
+            StructureFor, StructureGiven, StructureList, StructureSignature, StructureSubscript,
+            StructureToken, StructureWhen, Symbol, Token, Unknown, Whitespace, Word,
+        };
         match self {
             Element => "PPI::Element",
             Node => "PPI::Node",
@@ -1261,11 +1284,9 @@ pub fn single_quote_literal(s: &[u8]) -> Vec<u8> {
     out
 }
 
-/// How many times `byte` occurs in `s`. Clippy suggests the `bytecount`
-/// crate; these are short tokens and versions, not worth a dependency.
-#[allow(clippy::naive_bytecount)]
+/// How many times `byte` occurs in `s`.
 pub fn count_byte(s: &[u8], byte: u8) -> usize {
-    s.iter().filter(|&&c| c == byte).count()
+    bytecount::count(s, byte)
 }
 
 pub fn contains(haystack: &[u8], needle: &[u8]) -> bool {

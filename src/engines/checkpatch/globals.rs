@@ -3,9 +3,6 @@
 //! compare each with the value checkpatch.pl builds), each a `qr//` value
 //! as Perl stringifies it.
 
-// `${name}` in these templates is Perl interpolation, not a format argument.
-#![allow(clippy::literal_string_with_formatting_args)]
-
 use std::collections::HashMap;
 
 use super::re::{interp, qr};
@@ -549,7 +546,7 @@ impl Vars {
             "BasicType",
             r"
 				(?:$typeTypedefs\b)|
-				(?:${all}\b)
+				(?:$all\b)
 		",
             "x",
         );
@@ -560,7 +557,7 @@ impl Vars {
 			(?:
 				(?:typeof|__typeof__)\s*\([^\)]*\)|
 				(?:$typeTypedefs\b)|
-				(?:${all}\b)
+				(?:$all\b)
 			)
 			(?:\s+$Modifier|\s+const)*
 		  ",

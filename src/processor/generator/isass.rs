@@ -98,7 +98,7 @@ inventory::submit! { crate::registries::ProcessorPlugin {
             doc: "Leave files whose name starts with _ (Sass partials) out of discovery, as the sass CLI does. false compiles every matching file." },
     ],
     omit_standard_fields: &["command", "formats", "args", "batch"],
-    scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &[".scss", ".sass"], src_exclude_dirs: &[] }),
+    scan_defaults: Some(crate::config::ScanDefaultsData { src_extensions: &[".scss", ".sass"], src_exclude_dirs: &[] }),
     defaults: Some(crate::config::ProcessorDefaults { output_dir: "out/processor.generator.isass", ..crate::config::ProcessorDefaults::EMPTY }),
     defconfig_json: crate::registries::default_config_json::<IsassConfig>,
     keywords: &["sass", "scss", "css", "converter", "web", "frontend"],

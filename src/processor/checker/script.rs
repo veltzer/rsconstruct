@@ -129,7 +129,7 @@ inventory::submit! {
                 doc: "Path to the checker tool executable" },
         ],
         omit_standard_fields: &["formats", "output_dir"],
-        scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &[], src_exclude_dirs: &[] }),
+        scan_defaults: Some(crate::config::ScanDefaultsData { src_extensions: &[], src_exclude_dirs: &[] }),
         defaults: None,
         defconfig_json: crate::registries::default_config_json::<ScriptConfig>,
         keywords: &["shell", "script", "checker", "sh", "bash"],

@@ -25,12 +25,11 @@ use super::interface::{Comment, Fix, Position, Severity, Shell, TokenComment};
 use super::regex::{Regex, mk_regex};
 
 use Inner::{
-    T_Annotation, T_Arithmetic, T_Array, T_Assignment, T_Backgrounded, T_Backticked, T_BatsTest,
-    T_CaseExpression, T_CoProc, T_CoProcBody, T_Condition, T_DollarBraced, T_DollarDoubleQuoted,
-    T_DollarExpansion, T_DoubleQuoted, T_FdRedirect, T_ForIn, T_Glob, T_HereDoc, T_Include,
-    T_Literal, T_NormalWord, T_Pipeline, T_Redirecting, T_Script, T_SelectIn, T_SimpleCommand,
-    T_SingleQuoted, T_Subshell, TA_Assignment, TA_Sequence, TA_Unary, TA_Variable, TC_Binary,
-    TC_Nullary, TC_Unary,
+    TAnnotation, TArithmetic, TArray, TAssignment, TBackgrounded, TBackticked, TBatsTest,
+    TCaseExpression, TCoProc, TCoProcBody, TCondition, TDollarBraced, TDollarDoubleQuoted,
+    TDollarExpansion, TDoubleQuoted, TFdRedirect, TForIn, TGlob, THereDoc, TInclude, TLiteral,
+    TNormalWord, TPipeline, TRedirecting, TScript, TSelectIn, TSimpleCommand, TSingleQuoted,
+    TSubshell, TaAssignment, TaSequence, TaUnary, TaVariable, TcBinary, TcNullary, TcUnary,
 };
 
 pub type Tree<'a> = IntMap<Id, &'a Token>;
@@ -42,16 +41,12 @@ pub enum Scope {
 }
 
 #[derive(Clone, Debug)]
-#[allow(
-    clippy::enum_variant_names,
-    reason = "the constructors of ShellCheck's DataSource"
-)]
 pub enum DataSource<'a> {
-    SourceFrom(Vec<Cow<'a, Token>>),
-    SourceExternal,
-    SourceDeclaration,
-    SourceInteger,
-    SourceChecked,
+    From(Vec<Cow<'a, Token>>),
+    External,
+    Declaration,
+    Integer,
+    Checked,
 }
 
 #[derive(Clone, Debug)]
@@ -224,11 +219,11 @@ fn any_token(root: &Token, p: &dyn Fn(&Token) -> bool) -> bool {
 /// `containsSetE`.
 pub fn contains_set_e(root: &Token) -> bool {
     any_token(root, &|t| match &t.inner {
-        T_Script(sb, _) => match &sb.inner {
-            T_Literal(s) => SET_E_RE.with(|re| re.is_match(s)),
+        TScript(sb, _) => match &sb.inner {
+            TLiteral(s) => SET_E_RE.with(|re| re.is_match(s)),
             _ => false,
         },
-        T_SimpleCommand(..) => {
+        TSimpleCommand(..) => {
             is_unqualified_command(t, "set")
                 && (oversimplify(t).iter().any(|s| s == "errexit")
                     || get_all_flags(t).iter().any(|(_, f)| f == "e"))
@@ -239,7 +234,7 @@ pub fn contains_set_e(root: &Token) -> bool {
 
 fn contains_set_option(opt: &str, root: &Token) -> bool {
     any_token(root, &|t| {
-        matches!(t.inner, T_SimpleCommand(..))
+        matches!(t.inner, TSimpleCommand(..))
             && is_unqualified_command(t, "set")
             && (oversimplify(t).iter().any(|s| s == opt)
                 || get_all_flags(t).iter().any(|(_, f)| f == "o"))
@@ -248,7 +243,7 @@ fn contains_set_option(opt: &str, root: &Token) -> bool {
 
 fn contains_shopt(shopt: &str, root: &Token) -> bool {
     any_token(root, &|t| {
-        matches!(t.inner, T_SimpleCommand(..))
+        matches!(t.inner, TSimpleCommand(..))
             && is_unqualified_command(t, "shopt")
             && oversimplify(t).iter().any(|s| s == shopt)
     })
@@ -263,16 +258,16 @@ pub fn is_option_set(opt: &str, root: &Token) -> bool {
 pub fn determine_shell(fallback_shell: Option<Shell>, t: &Token) -> Shell {
     let from_shebang = |s: &Token| -> String {
         match &s.inner {
-            T_Script(sb, _) => match &sb.inner {
-                T_Literal(s) => executable_from_shebang(s),
+            TScript(sb, _) => match &sb.inner {
+                TLiteral(s) => executable_from_shebang(s),
                 _ => String::new(),
             },
             _ => panic!("determineShell: not a script"),
         }
     };
     let shell_string = match &t.inner {
-        T_Script(..) => from_shebang(t),
-        T_Annotation(annotations, s) => annotations
+        TScript(..) => from_shebang(t),
+        TAnnotation(annotations, s) => annotations
             .iter()
             .find_map(|a| match a {
                 Annotation::ShellOverride(x) => Some(x.clone()),
@@ -341,15 +336,15 @@ pub fn is_quote_free(shell: Shell, tree: &Tree<'_>, t: &Token) -> bool {
 /// `isQuoteFreeNode`.
 pub fn is_quote_free_node(strict: bool, shell: Shell, tree: &Tree<'_>, t: &Token) -> bool {
     let is_assignment_param_to_command = |id: Id| match tree.get(&id).map(|p| &p.inner) {
-        Some(T_SimpleCommand(_, words)) if !words.is_empty() => {
+        Some(TSimpleCommand(_, words)) if !words.is_empty() => {
             words[1..].iter().any(|a| a.id == id)
         }
         _ => false,
     };
     let assignment_is_quoting = |id: Id| shell != Shell::Sh || !is_assignment_param_to_command(id);
     let element = match &t.inner {
-        T_Assignment(..) => assignment_is_quoting(t.id),
-        T_FdRedirect(..) => true,
+        TAssignment(..) => assignment_is_quoting(t.id),
+        TFdRedirect(..) => true,
         _ => false,
     };
     if element {
@@ -357,19 +352,19 @@ pub fn is_quote_free_node(strict: bool, shell: Shell, tree: &Tree<'_>, t: &Token
     }
     for p in get_parents_of_id(tree, t.id) {
         let ctx = match &p.inner {
-            TC_Nullary(ConditionType::DoubleBracket, _)
-            | TC_Unary(ConditionType::DoubleBracket, ..)
-            | TC_Binary(ConditionType::DoubleBracket, ..)
-            | TA_Sequence(_)
-            | T_Arithmetic(_)
-            | T_DoubleQuoted(_)
-            | T_DollarDoubleQuoted(_)
-            | T_CaseExpression(..)
-            | T_HereDoc(..)
-            | T_DollarBraced(..) => Some(true),
-            T_Assignment(..) => Some(assignment_is_quoting(p.id)),
-            T_Redirecting(..) => Some(false),
-            T_ForIn(..) | T_SelectIn(..) => Some(!strict),
+            TcNullary(ConditionType::DoubleBracket, _)
+            | TcUnary(ConditionType::DoubleBracket, ..)
+            | TcBinary(ConditionType::DoubleBracket, ..)
+            | TaSequence(_)
+            | TArithmetic(_)
+            | TDoubleQuoted(_)
+            | TDollarDoubleQuoted(_)
+            | TCaseExpression(..)
+            | THereDoc(..)
+            | TDollarBraced(..) => Some(true),
+            TAssignment(..) => Some(assignment_is_quoting(p.id)),
+            TRedirecting(..) => Some(false),
+            TForIn(..) | TSelectIn(..) => Some(!strict),
             _ => None,
         };
         if let Some(b) = ctx {
@@ -387,8 +382,8 @@ pub fn is_param_to(tree: &Tree<'_>, cmd: &str, t: &Token) -> bool {
             return false;
         };
         match &parent.inner {
-            T_SingleQuoted(_) | T_DoubleQuoted(_) | T_NormalWord(_) => cur = parent.id,
-            T_SimpleCommand(..) | T_Redirecting(..) => return is_command(parent, cmd),
+            TSingleQuoted(_) | TDoubleQuoted(_) | TNormalWord(_) => cur = parent.id,
+            TSimpleCommand(..) | TRedirecting(..) => return is_command(parent, cmd),
             _ => return false,
         }
     }
@@ -412,8 +407,8 @@ pub fn get_closest_command<'a>(tree: &Tree<'a>, t: &'a Token) -> Option<&'a Toke
     let path = get_path(tree, t);
     find_first(
         |t: &&Token| match t.inner {
-            T_Redirecting(..) => Some(true),
-            T_Script(..) => Some(false),
+            TRedirecting(..) => Some(true),
+            TScript(..) => Some(false),
             _ => None,
         },
         &path,
@@ -426,12 +421,12 @@ pub fn used_as_command_name(tree: &Tree<'_>, token: &Token) -> bool {
     let mut current_id = token.id;
     for p in get_parents_of_id(tree, token.id) {
         match &p.inner {
-            T_NormalWord(parts) | T_DoubleQuoted(parts)
+            TNormalWord(parts) | TDoubleQuoted(parts)
                 if parts.len() == 1 && parts[0].id == current_id =>
             {
                 current_id = p.id;
             }
-            T_SimpleCommand(_, words) if !words.is_empty() => {
+            TSimpleCommand(_, words) if !words.is_empty() => {
                 return words[0].id == current_id
                     || super::astlib::get_command_token_or_this(p).id == current_id;
             }
@@ -450,10 +445,10 @@ pub fn is_parent_of<'a>(tree: &Tree<'a>, parent: &Token, child: &'a Token) -> bo
 pub fn token_is_just_command_output(t: &Token) -> bool {
     let check = |cmds: &[Token]| cmds.len() == 1 && !is_only_redirection(&cmds[0]);
     match &t.inner {
-        T_NormalWord(parts) if parts.len() == 1 => match &parts[0].inner {
-            T_DollarExpansion(cmds) | T_Backticked(cmds) => check(cmds),
-            T_DoubleQuoted(inner) if inner.len() == 1 => match &inner[0].inner {
-                T_DollarExpansion(cmds) | T_Backticked(cmds) => check(cmds),
+        TNormalWord(parts) if parts.len() == 1 => match &parts[0].inner {
+            TDollarExpansion(cmds) | TBackticked(cmds) => check(cmds),
+            TDoubleQuoted(inner) if inner.len() == 1 => match &inner[0].inner {
+                TDollarExpansion(cmds) | TBackticked(cmds) => check(cmds),
                 _ => false,
             },
             _ => false,
@@ -465,7 +460,7 @@ pub fn token_is_just_command_output(t: &Token) -> bool {
 /// `getVariableFlow`: assignments and references in tree order, with
 /// subshell scopes.
 pub fn get_variable_flow<'a>(params: &Parameters<'a>, t: &'a Token) -> Vec<StackData<'a>> {
-    let assign_first = |t: &Token| matches!(t.inner, T_ForIn(..) | T_SelectIn(..) | T_BatsTest(..));
+    let assign_first = |t: &Token| matches!(t.inner, TForIn(..) | TSelectIn(..) | TBatsTest(..));
     let out = std::cell::RefCell::new(Vec::new());
     do_stack_analysis(
         t,
@@ -501,15 +496,15 @@ pub fn get_variable_flow<'a>(params: &Parameters<'a>, t: &'a Token) -> Vec<Stack
 /// `leadType`.
 pub fn lead_type(params: &Parameters<'_>, t: &Token) -> Scope {
     match &t.inner {
-        T_DollarExpansion(_) => Scope::SubshellScope("$(..) expansion"),
-        T_Backticked(_) => Scope::SubshellScope("`..` expansion"),
-        T_Backgrounded(_) => Scope::SubshellScope("backgrounding &"),
-        T_Subshell(_) => Scope::SubshellScope("(..) group"),
-        T_BatsTest(..) => Scope::SubshellScope("@bats test"),
-        T_CoProcBody(_) => Scope::SubshellScope("coproc"),
-        T_Redirecting(..) => {
+        TDollarExpansion(_) => Scope::SubshellScope("$(..) expansion"),
+        TBackticked(_) => Scope::SubshellScope("`..` expansion"),
+        TBackgrounded(_) => Scope::SubshellScope("backgrounding &"),
+        TSubshell(_) => Scope::SubshellScope("(..) group"),
+        TBatsTest(..) => Scope::SubshellScope("@bats test"),
+        TCoProcBody(_) => Scope::SubshellScope("coproc"),
+        TRedirecting(..) => {
             let causes_subshell = match params.parent_map.get(&t.id).map(|p| &p.inner) {
-                Some(T_Pipeline(_, list)) => {
+                Some(TPipeline(_, list)) => {
                     list.len() >= 2
                         && (!params.has_lastpipe || list.last().map(|l| l.id) != Some(t.id))
                 }
@@ -532,27 +527,27 @@ const fn b(t: &Token) -> Cow<'_, Token> {
 /// `getModifiedVariables`.
 pub fn get_modified_variables(t: &Token) -> Vec<AssignmentData<'_>> {
     match &t.inner {
-        T_SimpleCommand(vars, words) if words.is_empty() => vars
+        TSimpleCommand(vars, words) if words.is_empty() => vars
             .iter()
             .filter_map(|x| match &x.inner {
-                T_Assignment(_, name, _, w) => {
+                TAssignment(_, name, _, w) => {
                     Some((b(x), b(x), name.clone(), data_type_from(false, w)))
                 }
                 _ => None,
             })
             .collect(),
-        T_SimpleCommand(..) => get_modified_variable_command(t),
-        TA_Unary(op, v) if op.contains("--") || op.contains("++") => match &v.inner {
-            TA_Variable(name, _) => vec![(
+        TSimpleCommand(..) => get_modified_variable_command(t),
+        TaUnary(op, v) if op.contains("--") || op.contains("++") => match &v.inner {
+            TaVariable(name, _) => vec![(
                 b(t),
                 b(v),
                 name.clone(),
-                DataType::DataString(DataSource::SourceInteger),
+                DataType::DataString(DataSource::Integer),
             )],
             _ => Vec::new(),
         },
-        TA_Assignment(op, lhs, _) => match &lhs.inner {
-            TA_Variable(name, _)
+        TaAssignment(op, lhs, _) => match &lhs.inner {
+            TaVariable(name, _)
                 if [
                     "=", "*=", "/=", "%=", "+=", "-=", "<<=", ">>=", "&=", "^=", "|=",
                 ]
@@ -562,55 +557,50 @@ pub fn get_modified_variables(t: &Token) -> Vec<AssignmentData<'_>> {
                     b(t),
                     b(t),
                     name.clone(),
-                    DataType::DataString(DataSource::SourceInteger),
+                    DataType::DataString(DataSource::Integer),
                 )]
             }
             _ => Vec::new(),
         },
-        T_BatsTest(..) => vec![
+        TBatsTest(..) => vec![
             (
                 b(t),
                 b(t),
                 "lines".to_string(),
-                DataType::DataArray(DataSource::SourceExternal),
+                DataType::DataArray(DataSource::External),
             ),
             (
                 b(t),
                 b(t),
                 "status".to_string(),
-                DataType::DataString(DataSource::SourceInteger),
+                DataType::DataString(DataSource::Integer),
             ),
             (
                 b(t),
                 b(t),
                 "output".to_string(),
-                DataType::DataString(DataSource::SourceExternal),
+                DataType::DataString(DataSource::External),
             ),
             (
                 b(t),
                 b(t),
                 "stderr".to_string(),
-                DataType::DataString(DataSource::SourceExternal),
+                DataType::DataString(DataSource::External),
             ),
             (
                 b(t),
                 b(t),
                 "stderr_lines".to_string(),
-                DataType::DataArray(DataSource::SourceExternal),
+                DataType::DataArray(DataSource::External),
             ),
         ],
-        TC_Unary(_, op, token) if op == "-v" => match get_variable_for_test_dash_v(token) {
-            Some(s) => vec![(
-                b(t),
-                b(token),
-                s,
-                DataType::DataString(DataSource::SourceChecked),
-            )],
+        TcUnary(_, op, token) if op == "-v" => match get_variable_for_test_dash_v(token) {
+            Some(s) => vec![(b(t), b(token), s, DataType::DataString(DataSource::Checked))],
             None => Vec::new(),
         },
-        TC_Unary(_, op, token) if op == "-n" || op == "-z" => mark_checked(t, token),
-        TC_Nullary(_, token) => mark_checked(t, token),
-        T_DollarBraced(_, l) => {
+        TcUnary(_, op, token) if op == "-n" || op == "-z" => mark_checked(t, token),
+        TcNullary(_, token) => mark_checked(t, token),
+        TDollarBraced(_, l) => {
             let string = concat_oversimplify(l);
             let modifier = get_braced_modifier(&string);
             if modifier.starts_with('=') || modifier.starts_with(":=") {
@@ -618,13 +608,13 @@ pub fn get_modified_variables(t: &Token) -> Vec<AssignmentData<'_>> {
                     b(t),
                     b(t),
                     get_braced_reference(&string),
-                    DataType::DataString(DataSource::SourceFrom(vec![b(l)])),
+                    DataType::DataString(DataSource::From(vec![b(l)])),
                 )]
             } else {
                 Vec::new()
             }
         }
-        T_FdRedirect(var, op) if var.starts_with('{') => {
+        TFdRedirect(var, op) if var.starts_with('{') => {
             if is_closing_file_op(op) {
                 Vec::new()
             } else {
@@ -632,38 +622,33 @@ pub fn get_modified_variables(t: &Token) -> Vec<AssignmentData<'_>> {
                     b(t),
                     b(t),
                     var[1..].chars().take_while(|&c| c != '}').collect(),
-                    DataType::DataString(DataSource::SourceInteger),
+                    DataType::DataString(DataSource::Integer),
                 )]
             }
         }
-        T_CoProc(None, _) => vec![(
+        TCoProc(None, _) => vec![(
             b(t),
             b(t),
             "COPROC".to_string(),
-            DataType::DataArray(DataSource::SourceInteger),
+            DataType::DataArray(DataSource::Integer),
         )],
-        T_CoProc(Some(token), _) => match get_literal_string(token) {
-            Some(name) => vec![(
-                b(t),
-                b(t),
-                name,
-                DataType::DataArray(DataSource::SourceInteger),
-            )],
+        TCoProc(Some(token), _) => match get_literal_string(token) {
+            Some(name) => vec![(b(t), b(t), name, DataType::DataArray(DataSource::Integer))],
             None => Vec::new(),
         },
-        T_ForIn(s, words, _) if words.is_empty() => {
+        TForIn(s, words, _) if words.is_empty() => {
             vec![(
                 b(t),
                 b(t),
                 s.clone(),
-                DataType::DataString(DataSource::SourceExternal),
+                DataType::DataString(DataSource::External),
             )]
         }
-        T_ForIn(s, words, _) | T_SelectIn(s, words, _) => vec![(
+        TForIn(s, words, _) | TSelectIn(s, words, _) => vec![(
             b(t),
             b(t),
             s.clone(),
-            DataType::DataString(DataSource::SourceFrom(words.iter().map(b).collect())),
+            DataType::DataString(DataSource::From(words.iter().map(b).collect())),
         )],
         _ => Vec::new(),
     }
@@ -673,15 +658,10 @@ fn mark_checked<'a>(place: &'a Token, token: &'a Token) -> Vec<AssignmentData<'a
     get_word_parts(token)
         .into_iter()
         .filter_map(|t| match &t.inner {
-            T_DollarBraced(_, l) => {
+            TDollarBraced(_, l) => {
                 let s = get_braced_reference(&concat_oversimplify(l));
                 if is_variable_name(&s) {
-                    Some((
-                        b(place),
-                        b(t),
-                        s,
-                        DataType::DataString(DataSource::SourceChecked),
-                    ))
+                    Some((b(place), b(t), s, DataType::DataString(DataSource::Checked)))
                 } else {
                     None
                 }
@@ -693,18 +673,17 @@ fn mark_checked<'a>(place: &'a Token, token: &'a Token) -> Vec<AssignmentData<'a
 
 /// `getReferencedVariableCommand`.
 pub fn get_referenced_variable_command(base: &Token) -> Vec<ReferenceData<'_>> {
-    let T_SimpleCommand(_, words) = &base.inner else {
+    let TSimpleCommand(_, words) = &base.inner else {
         return Vec::new();
     };
     let Some((first, rest)) = words.split_first() else {
         return Vec::new();
     };
-    let T_NormalWord(parts) = &first.inner else {
+    let TNormalWord(parts) = &first.inner else {
         return Vec::new();
     };
     let Some(Token {
-        inner: T_Literal(x),
-        ..
+        inner: TLiteral(x), ..
     }) = parts.first()
     else {
         return Vec::new();
@@ -713,11 +692,11 @@ pub fn get_referenced_variable_command(base: &Token) -> Vec<ReferenceData<'_>> {
     let has = |f: &str| flags.iter().any(|x| x == f);
     fn get_reference(t: &Token) -> Vec<ReferenceData<'_>> {
         match &t.inner {
-            T_Assignment(_, name, _, _) => vec![(b(t), b(t), name.clone())],
-            T_NormalWord(p) => match p.as_slice() {
+            TAssignment(_, name, _, _) => vec![(b(t), b(t), name.clone())],
+            TNormalWord(p) => match p.as_slice() {
                 [
                     Token {
-                        inner: T_Literal(name),
+                        inner: TLiteral(name),
                         ..
                     },
                 ] if !name.starts_with('-') => vec![(b(t), b(t), name.clone())],
@@ -770,17 +749,16 @@ pub fn get_referenced_variable_command(base: &Token) -> Vec<ReferenceData<'_>> {
 
 /// `getModifiedVariableCommand`.
 pub fn get_modified_variable_command(base: &Token) -> Vec<AssignmentData<'_>> {
-    let T_SimpleCommand(_, words) = &base.inner else {
+    let TSimpleCommand(_, words) = &base.inner else {
         return Vec::new();
     };
     let Some(first) = words.first() else {
         return Vec::new();
     };
     let x = match &first.inner {
-        T_NormalWord(parts) => match parts.first() {
+        TNormalWord(parts) => match parts.first() {
             Some(Token {
-                inner: T_Literal(x),
-                ..
+                inner: TLiteral(x), ..
             }) => x.clone(),
             _ => return Vec::new(),
         },
@@ -803,7 +781,7 @@ fn own_assignment<'a>(a: AssignmentData<'_>) -> AssignmentData<'a> {
 
 /// The cases of `getModifiedVariableCommand` for a command named `x`.
 fn modified_variable_command_for<'a>(base: &'a Token, x: &str) -> Vec<AssignmentData<'a>> {
-    let T_SimpleCommand(cmd_prefix, words) = &base.inner else {
+    let TSimpleCommand(cmd_prefix, words) = &base.inner else {
         return Vec::new();
     };
     let rest: &'a [Token] = &words[1..];
@@ -816,20 +794,19 @@ fn modified_variable_command_for<'a>(base: &'a Token, x: &str) -> Vec<Assignment
         }
         Some((b(base), b(t), s, d))
     };
-    let get_literal = |t: &'a Token| {
-        get_literal_of_data_type(t, DataType::DataString(DataSource::SourceExternal))
-    };
+    let get_literal =
+        |t: &'a Token| get_literal_of_data_type(t, DataType::DataString(DataSource::External));
     let get_modifier_param = |array: bool, t: &'a Token| -> Vec<AssignmentData<'a>> {
         match &t.inner {
-            T_Assignment(_, name, _, value) => {
+            TAssignment(_, name, _, value) => {
                 vec![(b(base), b(t), name.clone(), data_type_from(array, value))]
             }
-            T_NormalWord(_) => match get_literal_string(t) {
+            TNormalWord(_) => match get_literal_string(t) {
                 Some(name) if is_variable_name(&name) => {
                     let d = if array {
-                        DataType::DataArray(DataSource::SourceDeclaration)
+                        DataType::DataArray(DataSource::Declaration)
                     } else {
-                        DataType::DataString(DataSource::SourceDeclaration)
+                        DataType::DataString(DataSource::Declaration)
                     };
                     vec![(b(base), b(t), name, d)]
                 }
@@ -840,7 +817,7 @@ fn modified_variable_command_for<'a>(base: &'a Token, x: &str) -> Vec<Assignment
     };
     match x {
         "builtin" => {
-            let new_base = Token::new(base.id, T_SimpleCommand(cmd_prefix.clone(), rest.to_vec()));
+            let new_base = Token::new(base.id, TSimpleCommand(cmd_prefix.clone(), rest.to_vec()));
             get_modified_variable_command(&new_base)
                 .into_iter()
                 .map(own_assignment)
@@ -860,7 +837,7 @@ fn modified_variable_command_for<'a>(base: &'a Token, x: &str) -> Vec<Assignment
                     Some((_, (_, var))) => {
                         match get_literal_of_data_type(
                             var,
-                            DataType::DataArray(DataSource::SourceExternal),
+                            DataType::DataArray(DataSource::External),
                         ) {
                             Some(x) => vec![x],
                             None => fallback,
@@ -893,7 +870,7 @@ fn modified_variable_command_for<'a>(base: &'a Token, x: &str) -> Vec<Assignment
                         b(base),
                         b(token),
                         var,
-                        DataType::DataString(DataSource::SourceFrom(vec![Cow::Owned(
+                        DataType::DataString(DataSource::From(vec![Cow::Owned(
                             strip_equals_from(token),
                         )])),
                     )]
@@ -937,26 +914,23 @@ fn modified_variable_command_for<'a>(base: &'a Token, x: &str) -> Vec<Assignment
                 b(base),
                 b(base),
                 "@".to_string(),
-                DataType::DataString(DataSource::SourceFrom(params.into_iter().map(b).collect())),
+                DataType::DataString(DataSource::From(params.into_iter().map(b).collect())),
             )],
             None => Vec::new(),
         },
         "printf" => get_flag_assigned_variable(
             base,
             "v",
-            DataSource::SourceFrom(rest.iter().map(b).collect()),
+            DataSource::From(rest.iter().map(b).collect()),
             get_bsd_opts("v:", rest),
         )
         .into_iter()
         .collect(),
-        "wait" => get_flag_assigned_variable(
-            base,
-            "p",
-            DataSource::SourceInteger,
-            Some(get_generic_opts(rest)),
-        )
-        .into_iter()
-        .collect(),
+        "wait" => {
+            get_flag_assigned_variable(base, "p", DataSource::Integer, Some(get_generic_opts(rest)))
+                .into_iter()
+                .collect()
+        }
         "mapfile" | "readarray" => get_mapfile_array(base, rest).into_iter().collect(),
         "DEFINE_boolean" | "DEFINE_float" | "DEFINE_integer" | "DEFINE_string" => match rest {
             [n, _, ..] => match get_literal_string(n) {
@@ -964,7 +938,7 @@ fn modified_variable_command_for<'a>(base: &'a Token, x: &str) -> Vec<Assignment
                     b(base),
                     b(n),
                     format!("FLAGS_{name}"),
-                    DataType::DataString(DataSource::SourceExternal),
+                    DataType::DataString(DataSource::External),
                 )],
                 None => Vec::new(),
             },
@@ -977,13 +951,13 @@ fn modified_variable_command_for<'a>(base: &'a Token, x: &str) -> Vec<Assignment
 fn own_data_type<'a>(d: DataType<'_>) -> DataType<'a> {
     let own_source = |s: DataSource<'_>| -> DataSource<'a> {
         match s {
-            DataSource::SourceFrom(l) => {
-                DataSource::SourceFrom(l.into_iter().map(|t| Cow::Owned(t.into_owned())).collect())
+            DataSource::From(l) => {
+                DataSource::From(l.into_iter().map(|t| Cow::Owned(t.into_owned())).collect())
             }
-            DataSource::SourceExternal => DataSource::SourceExternal,
-            DataSource::SourceDeclaration => DataSource::SourceDeclaration,
-            DataSource::SourceInteger => DataSource::SourceInteger,
-            DataSource::SourceChecked => DataSource::SourceChecked,
+            DataSource::External => DataSource::External,
+            DataSource::Declaration => DataSource::Declaration,
+            DataSource::Integer => DataSource::Integer,
+            DataSource::Checked => DataSource::Checked,
         }
     };
     match d {
@@ -1002,34 +976,34 @@ fn strip_equals(s: &str) -> String {
 /// `stripEqualsFrom`.
 fn strip_equals_from(t: &Token) -> Token {
     match &t.inner {
-        T_NormalWord(parts) => match parts.as_slice() {
+        TNormalWord(parts) => match parts.as_slice() {
             [
                 Token {
                     id: id2,
-                    inner: T_Literal(s),
+                    inner: TLiteral(s),
                 },
                 rest @ ..,
             ] => {
-                let mut new_parts = vec![Token::new(*id2, T_Literal(strip_equals(s)))];
+                let mut new_parts = vec![Token::new(*id2, TLiteral(strip_equals(s)))];
                 new_parts.extend(rest.iter().cloned());
-                Token::new(t.id, T_NormalWord(new_parts))
+                Token::new(t.id, TNormalWord(new_parts))
             }
             [
                 Token {
                     id: id2,
-                    inner: T_DoubleQuoted(inner),
+                    inner: TDoubleQuoted(inner),
                 },
             ] => match inner.as_slice() {
                 [
                     Token {
                         id: id3,
-                        inner: T_Literal(s),
+                        inner: TLiteral(s),
                     },
                 ] => Token::new(
                     t.id,
-                    T_NormalWord(vec![Token::new(
+                    TNormalWord(vec![Token::new(
                         *id2,
-                        T_DoubleQuoted(vec![Token::new(*id3, T_Literal(strip_equals(s)))]),
+                        TDoubleQuoted(vec![Token::new(*id3, TLiteral(strip_equals(s)))]),
                     )]),
                 ),
                 _ => t.clone(),
@@ -1091,7 +1065,7 @@ fn get_mapfile_array<'a>(base: &'a Token, rest: &'a [Token]) -> Option<Assignmen
                 b(base),
                 b(base),
                 "MAPFILE".to_string(),
-                DataType::DataArray(DataSource::SourceExternal),
+                DataType::DataArray(DataSource::External),
             )),
             Some(first) => {
                 let name = get_literal_string(first)?;
@@ -1102,7 +1076,7 @@ fn get_mapfile_array<'a>(base: &'a Token, rest: &'a [Token]) -> Option<Assignmen
                     b(base),
                     b(first),
                     name,
-                    DataType::DataArray(DataSource::SourceExternal),
+                    DataType::DataArray(DataSource::External),
                 ))
             }
         }
@@ -1117,7 +1091,7 @@ fn get_mapfile_array<'a>(base: &'a Token, rest: &'a [Token]) -> Option<Assignmen
                 b(base),
                 b(arg),
                 name,
-                DataType::DataArray(DataSource::SourceExternal),
+                DataType::DataArray(DataSource::External),
             ))
         })
     };
@@ -1127,7 +1101,7 @@ fn get_mapfile_array<'a>(base: &'a Token, rest: &'a [Token]) -> Option<Assignmen
 /// `getVariableForTestDashV`.
 pub fn get_variable_for_test_dash_v(t: &Token) -> Option<String> {
     let s = get_literal_string_ext(t, &|x| match &x.inner {
-        T_Glob(s) => Some(s.clone()),
+        TGlob(s) => Some(s.clone()),
         _ => Some("\0".to_string()),
     })?;
     let s: String = s.chars().take_while(|&c| c != '[').collect();
@@ -1137,7 +1111,7 @@ pub fn get_variable_for_test_dash_v(t: &Token) -> Option<String> {
 /// `getReferencedVariables`.
 pub fn get_referenced_variables<'a>(parents: &Tree<'a>, t: &'a Token) -> Vec<ReferenceData<'a>> {
     match &t.inner {
-        T_DollarBraced(_, l) => {
+        TDollarBraced(_, l) => {
             let s = concat_oversimplify(l);
             let mut out = vec![(b(t), b(t), get_braced_reference(&s))];
             for x in get_index_references(&s)
@@ -1148,9 +1122,9 @@ pub fn get_referenced_variables<'a>(parents: &Tree<'a>, t: &'a Token) -> Vec<Ref
             }
             out
         }
-        TA_Variable(name, _) => {
+        TaVariable(name, _) => {
             let is_arithmetic_assignment = match parents.get(&t.id).map(|p| &p.inner) {
-                Some(TA_Assignment(op, lhs, _)) if op == "=" => **lhs == *t,
+                Some(TaAssignment(op, lhs, _)) if op == "=" => **lhs == *t,
                 _ => false,
             };
             if is_arithmetic_assignment {
@@ -1159,7 +1133,7 @@ pub fn get_referenced_variables<'a>(parents: &Tree<'a>, t: &'a Token) -> Vec<Ref
                 vec![(b(t), b(t), name.clone())]
             }
         }
-        T_Assignment(mode, s, _, word) => {
+        TAssignment(mode, s, _, word) => {
             let mut out = Vec::new();
             if *mode == AssignmentMode::Append {
                 out.push((b(t), b(t), s.clone()));
@@ -1171,8 +1145,8 @@ pub fn get_referenced_variables<'a>(parents: &Tree<'a>, t: &'a Token) -> Vec<Ref
             }
             out
         }
-        TC_Unary(_, op, token) if op == "-v" || op == "-R" => get_if_reference(t, token),
-        TC_Binary(ConditionType::DoubleBracket, op, lhs, rhs) => {
+        TcUnary(_, op, token) if op == "-v" || op == "-R" => get_if_reference(t, token),
+        TcBinary(ConditionType::DoubleBracket, op, lhs, rhs) => {
             if is_dereferencing_binary_op(op) {
                 let mut out = get_if_reference(t, lhs);
                 out.extend(get_if_reference(t, rhs));
@@ -1181,12 +1155,12 @@ pub fn get_referenced_variables<'a>(parents: &Tree<'a>, t: &'a Token) -> Vec<Ref
                 Vec::new()
             }
         }
-        T_BatsTest(..) => vec![
+        TBatsTest(..) => vec![
             (b(t), b(t), "lines".to_string()),
             (b(t), b(t), "status".to_string()),
             (b(t), b(t), "output".to_string()),
         ],
-        T_FdRedirect(var, op) if var.starts_with('{') => {
+        TFdRedirect(var, op) if var.starts_with('{') => {
             if is_closing_file_op(op) {
                 vec![(
                     b(t),
@@ -1214,8 +1188,8 @@ pub fn is_dereferencing_binary_op(op: &str) -> bool {
 
 /// `dataTypeFrom defaultType v`.
 pub fn data_type_from(array_default: bool, v: &Token) -> DataType<'_> {
-    let is_array = matches!(v.inner, T_Array(_));
-    let src = DataSource::SourceFrom(vec![b(v)]);
+    let is_array = matches!(v.inner, TArray(_));
+    let src = DataSource::From(vec![b(v)]);
     if is_array || array_default {
         DataType::DataArray(src)
     } else {
@@ -1275,7 +1249,7 @@ pub fn filter_by_annotation(
             !get_parents_of_id(&params.parent_map, note.id)
                 .iter()
                 .any(|t| match t.inner {
-                    T_Include(_) => !spec.check_sourced,
+                    TInclude(_) => !spec.check_sourced,
                     _ => is_annotation_ignoring_code(code, t),
                 })
         })
@@ -1293,7 +1267,7 @@ pub fn should_ignore_code(params: &Parameters<'_>, code: i64, t: &Token) -> bool
 /// `isCountingReference`.
 pub fn is_counting_reference(t: &Token) -> bool {
     match &t.inner {
-        T_DollarBraced(_, token) => concat_oversimplify(token).starts_with('#'),
+        TDollarBraced(_, token) => concat_oversimplify(token).starts_with('#'),
         _ => false,
     }
 }
@@ -1301,7 +1275,7 @@ pub fn is_counting_reference(t: &Token) -> bool {
 /// `isQuotedAlternativeReference`.
 pub fn is_quoted_alternative_reference(t: &Token) -> bool {
     match &t.inner {
-        T_DollarBraced(_, l) => {
+        TDollarBraced(_, l) => {
             let m = get_braced_modifier(&concat_oversimplify(l));
             QUOTED_ALTERNATIVE_RE.with(|re| re.is_match(&m))
         }
@@ -1317,8 +1291,8 @@ pub const fn supports_arrays(shell: Shell) -> bool {
 pub const fn is_true_assignment_source(c: &DataType<'_>) -> bool {
     !matches!(
         c,
-        DataType::DataString(DataSource::SourceChecked | DataSource::SourceDeclaration)
-            | DataType::DataArray(DataSource::SourceChecked | DataSource::SourceDeclaration)
+        DataType::DataString(DataSource::Checked | DataSource::Declaration)
+            | DataType::DataArray(DataSource::Checked | DataSource::Declaration)
     )
 }
 
@@ -1333,10 +1307,10 @@ pub fn modifies_variable<'a>(params: &Parameters<'a>, token: &'a Token, name: &s
 /// `isTestCommand`.
 pub fn is_test_command(t: &Token) -> bool {
     match &t.inner {
-        T_Condition(..) => true,
-        T_SimpleCommand(..) => is_command(t, "test"),
-        T_Redirecting(_, t) | T_Annotation(_, t) => is_test_command(t),
-        T_Pipeline(_, cmds) if cmds.len() == 1 => is_test_command(&cmds[0]),
+        TCondition(..) => true,
+        TSimpleCommand(..) => is_command(t, "test"),
+        TRedirecting(_, t) | TAnnotation(_, t) => is_test_command(t),
+        TPipeline(_, cmds) if cmds.len() == 1 => is_test_command(&cmds[0]),
         _ => false,
     }
 }

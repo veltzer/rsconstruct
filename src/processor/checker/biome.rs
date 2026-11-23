@@ -34,7 +34,7 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     name: "biome", processor_type: crate::processor::ProcessorType::Checker, create: create_biome,
     fields: &[],
     omit_standard_fields: &["formats", "output_dir"],
-    scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &[".css", ".js", ".jsx", ".ts", ".tsx", ".mjs", ".cjs", ".json", ".jsonc"], src_exclude_dirs: &[] }),
+    scan_defaults: Some(crate::config::ScanDefaultsData { src_extensions: &[".css", ".js", ".jsx", ".ts", ".tsx", ".mjs", ".cjs", ".json", ".jsonc"], src_exclude_dirs: &[] }),
     defaults: Some(crate::config::ProcessorDefaults { command: "biome", dep_auto: &["biome.json", "biome.jsonc", ".biome.json", ".biome.jsonc"], ..crate::config::ProcessorDefaults::EMPTY }),
     defconfig_json: crate::registries::default_config_json::<crate::config::StandardConfig>,
     keywords: &["css", "javascript", "typescript", "json", "linter", "stylelint", "eslint", "web", "frontend", "rust"],

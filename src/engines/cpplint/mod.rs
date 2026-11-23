@@ -16,12 +16,6 @@
 //! afterwards in the same run (every file here starts from the configured
 //! options).
 
-// Every check takes the error sink (`lint`) and works on a `line`; the two
-// names are cpplint's own and read right next to each other. Renaming
-// either across forty functions would make the port harder to compare with
-// the original, so the one-letter-apart lint is off for this module.
-#![allow(clippy::similar_names)]
-
 pub mod checks;
 pub mod language;
 pub mod lines;
@@ -808,25 +802,25 @@ pub fn lint_file(filename: &str, options: &Options) -> Result<Outcome> {
         }
         bail!("Ignoring {filename}; not a valid file name ({listed})");
     }
-    let mut lint = Lint {
+    let mut sink = Lint {
         settings: &settings,
         filters,
         filename: filename.to_string(),
         suppressions: ErrorSuppressions::default(),
         findings: Vec::new(),
     };
-    process_file_data(&mut lint, file_extension, lines);
+    process_file_data(&mut sink, file_extension, lines);
     // A match that fancy-regex gave up on (its backtrack limit; Python's
     // `re` has none) reported no match where cpplint would have gone on:
     // the findings are not cpplint's, so the file fails instead.
     if let Some(failure) = regex::take_failure() {
         bail!("checking {filename}: {failure}");
     }
-    Ok(Outcome::Linted(lint.findings))
+    Ok(Outcome::Linted(sink.findings))
 }
 
 /// `ProcessFileData`.
-fn process_file_data(lint: &mut Lint<'_>, file_extension: &str, lines: Vec<String>) {
+fn process_file_data(sink: &mut Lint<'_>, file_extension: &str, lines: Vec<String>) {
     let mut lines = lines;
     lines.insert(
         0,
@@ -836,83 +830,95 @@ fn process_file_data(lint: &mut Lint<'_>, file_extension: &str, lines: Vec<Strin
     let mut include_state = IncludeState::new();
     let mut function_state = FunctionState::new();
     let mut nesting_state = NestingState::new();
-    checks::check_for_copyright(lint, &lines);
-    lint.process_global_suppressions(&lines);
-    lines::remove_multi_line_comments(lint, &mut lines);
-    let replace_alt_tokens = lint.filters.iter().any(|f| {
+    checks::check_for_copyright(sink, &lines);
+    sink.process_global_suppressions(&lines);
+    lines::remove_multi_line_comments(sink, &mut lines);
+    let replace_alt_tokens = sink.filters.iter().any(|f| {
         f.negative
             && f.category == "readability/alt_tokens"
             && f.file.is_empty()
             && f.line.is_none()
     });
     let cl = CleansedLines::new(lines, replace_alt_tokens);
-    let cppvar = if lint.is_header_extension(file_extension) {
-        let cppvar = get_header_guard_cpp_variable(lint.settings, &lint.filename);
-        checks::check_for_header_guard(lint, &cl, &cppvar);
+    let cppvar = if sink.is_header_extension(file_extension) {
+        let cppvar = get_header_guard_cpp_variable(sink.settings, &sink.filename);
+        checks::check_for_header_guard(sink, &cl, &cppvar);
         Some(cppvar)
     } else {
         None
     };
+    let file = FileKind {
+        extension: file_extension,
+        cppvar: cppvar.as_deref(),
+    };
     for line in 0..cl.num_lines {
         process_line(
-            lint,
-            file_extension,
+            sink,
+            &file,
             &cl,
             line,
             &mut include_state,
             &mut function_state,
             &mut nesting_state,
-            cppvar.as_deref(),
         );
-        checks::flag_cxx_headers(lint, &cl, line);
+        checks::flag_cxx_headers(sink, &cl, line);
     }
-    if lint.suppressions.has_open_block() {
-        let start = lint.suppressions.open_block_start().unwrap_or(0);
-        lint.error(
+    if sink.suppressions.has_open_block() {
+        let start = sink.suppressions.open_block_start().unwrap_or(0);
+        sink.error(
             start,
             "readability/nolint",
             5,
             "NONLINT block never ended".to_string(),
         );
     }
-    language::check_for_include_what_you_use(lint, &cl, &include_state);
-    if lint.non_header_extensions().contains(file_extension) {
-        language::check_header_file_included(lint, &include_state);
+    language::check_for_include_what_you_use(sink, &cl, &include_state);
+    if sink.non_header_extensions().contains(file_extension) {
+        language::check_header_file_included(sink, &include_state);
     }
-    checks::check_for_bad_characters(lint, &cl.raw_lines);
-    checks::check_for_newline_at_eof(lint, &cl.raw_lines);
+    checks::check_for_bad_characters(sink, &cl.raw_lines);
+    checks::check_for_newline_at_eof(sink, &cl.raw_lines);
+}
+
+/// What `process_line` needs to know about the file as a whole: its
+/// extension and, for a header, its guard variable.
+struct FileKind<'a> {
+    extension: &'a str,
+    cppvar: Option<&'a str>,
 }
 
 /// `ProcessLine`.
-#[allow(clippy::too_many_arguments)]
 fn process_line(
-    lint: &mut Lint<'_>,
-    file_extension: &str,
+    sink: &mut Lint<'_>,
+    file: &FileKind<'_>,
     cl: &CleansedLines,
     line: usize,
     include_state: &mut IncludeState,
     function_state: &mut FunctionState,
     nesting_state: &mut NestingState,
-    cppvar: Option<&str>,
 ) {
-    lint.parse_nolint_suppressions(&cl.raw_lines[line], line);
-    nesting_state.update(lint, cl, line);
-    checks::check_for_namespace_indentation(lint, nesting_state, cl, line);
+    let FileKind {
+        extension: file_extension,
+        cppvar,
+    } = *file;
+    sink.parse_nolint_suppressions(&cl.raw_lines[line], line);
+    nesting_state.update(sink, cl, line);
+    checks::check_for_namespace_indentation(sink, nesting_state, cl, line);
     if nesting_state.in_asm_block() {
         return;
     }
-    checks::check_for_function_lengths(lint, cl, line, function_state);
-    checks::check_for_multiline_comments_and_strings(lint, cl, line);
-    checks::check_style(lint, cl, line, file_extension, nesting_state, cppvar);
-    language::check_language(lint, cl, line, file_extension, include_state);
-    language::check_for_non_const_reference(lint, cl, line, nesting_state);
-    checks::check_for_non_standard_constructs(lint, cl, line, nesting_state);
-    checks::check_vlog_arguments(lint, cl, line);
-    checks::check_posix_threading(lint, cl, line);
-    checks::check_invalid_increment(lint, cl, line);
-    checks::check_make_pair_uses_deduction(lint, cl, line);
-    checks::check_redundant_virtual(lint, cl, line);
-    checks::check_redundant_override_or_final(lint, cl, line);
+    checks::check_for_function_lengths(sink, cl, line, function_state);
+    checks::check_for_multiline_comments_and_strings(sink, cl, line);
+    checks::check_style(sink, cl, line, file_extension, nesting_state, cppvar);
+    language::check_language(sink, cl, line, file_extension, include_state);
+    language::check_for_non_const_reference(sink, cl, line, nesting_state);
+    checks::check_for_non_standard_constructs(sink, cl, line, nesting_state);
+    checks::check_vlog_arguments(sink, cl, line);
+    checks::check_posix_threading(sink, cl, line);
+    checks::check_invalid_increment(sink, cl, line);
+    checks::check_make_pair_uses_deduction(sink, cl, line);
+    checks::check_redundant_virtual(sink, cl, line);
+    checks::check_redundant_override_or_final(sink, cl, line);
 }
 
 #[cfg(test)]

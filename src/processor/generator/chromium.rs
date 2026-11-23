@@ -55,7 +55,7 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     name: "chromium", processor_type: crate::processor::ProcessorType::Generator, create: create_chromium,
     fields: &[],
     omit_standard_fields: &["formats", "batch"],
-    scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &[".html"], src_exclude_dirs: &[] }),
+    scan_defaults: Some(crate::config::ScanDefaultsData { src_extensions: &[".html"], src_exclude_dirs: &[] }),
     defaults: Some(crate::config::ProcessorDefaults { output_dir: "out/processor.generator.chromium", command: "google-chrome", ..crate::config::ProcessorDefaults::EMPTY }),
     defconfig_json: crate::registries::default_config_json::<crate::config::StandardConfig>,
     keywords: &["html", "pdf", "converter", "browser", "web"],

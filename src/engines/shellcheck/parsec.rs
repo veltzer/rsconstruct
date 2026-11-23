@@ -297,16 +297,7 @@ impl P {
     }
 
     pub fn guard(&self, cond: bool) -> R<()> {
-        if cond { self.ok(()) } else { self.zero() }
-    }
-
-    /// `return x`: a non-consuming success.
-    #[allow(
-        clippy::unnecessary_wraps,
-        reason = "Parsec's `return`, a parser that always succeeds: callers use it where an `R` is expected"
-    )]
-    pub const fn ok<T>(&self, x: T) -> R<T> {
-        Ok(x)
+        if cond { Ok(()) } else { self.zero() }
     }
 
     // ----- primitives
@@ -509,17 +500,17 @@ impl P {
 
     /// `option x p`.
     pub fn option<T>(&mut self, x: T, p: impl FnOnce(&mut Self) -> R<T>) -> R<T> {
-        self.alt(p, |s| s.ok(x))
+        self.alt(p, |_| Ok(x))
     }
 
     /// `optionMaybe p`.
     pub fn option_maybe<T>(&mut self, p: impl FnOnce(&mut Self) -> R<T>) -> R<Option<T>> {
-        self.alt(|s| p(s).map(Some), |s| s.ok(None))
+        self.alt(|s| p(s).map(Some), |_| Ok(None))
     }
 
     /// `optional p`.
     pub fn optional<T>(&mut self, p: impl FnOnce(&mut Self) -> R<T>) -> R<()> {
-        self.alt(|s| p(s).map(|_| ()), |s| s.ok(()))
+        self.alt(|s| p(s).map(|_| ()), |_| Ok(()))
     }
 
     /// `sepBy1 p sep`.
@@ -543,7 +534,7 @@ impl P {
         p: impl FnMut(&mut Self) -> R<T>,
         sep: impl FnMut(&mut Self) -> R<S>,
     ) -> R<Vec<T>> {
-        self.alt(|s| s.sep_by1(p, sep), |s| s.ok(Vec::new()))
+        self.alt(|s| s.sep_by1(p, sep), |_| Ok(Vec::new()))
     }
 
     /// `chainl1 p op`.

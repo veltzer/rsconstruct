@@ -293,8 +293,10 @@ impl Processor for ZspellProcessor {
             file_index,
             &self.config.standard.dep_inputs,
             &dep_auto,
-            &self.config,
-            &crate::config::checksum_fields_of(instance_name),
+            crate::config::output_config_hash(
+                &self.config,
+                &crate::config::checksum_fields_of(instance_name),
+            ),
             instance_name,
         )
     }
@@ -348,7 +350,7 @@ inventory::submit! {
                 doc: "Directory containing hunspell .aff/.dic files" },
         ],
         omit_standard_fields: &["command", "formats", "args", "output_dir", "required_tools"],
-        scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &[".md"], src_exclude_dirs: &[] }),
+        scan_defaults: Some(crate::config::ScanDefaultsData { src_extensions: &[".md"], src_exclude_dirs: &[] }),
         defaults: None,
         defconfig_json: crate::registries::default_config_json::<ZspellConfig>,
         keywords: &["spellcheck", "spelling", "markdown", "md", "english"],

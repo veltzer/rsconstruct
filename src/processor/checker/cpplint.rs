@@ -21,7 +21,7 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     name: "cpplint", processor_type: crate::processor::ProcessorType::Checker, create: create_cpplint,
     fields: &[],
     omit_standard_fields: &["formats", "output_dir"],
-    scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &[".c", ".cc", ".h", ".hh"], src_exclude_dirs: &[] }),
+    scan_defaults: Some(crate::config::ScanDefaultsData { src_extensions: &[".c", ".cc", ".h", ".hh"], src_exclude_dirs: &[] }),
     // cpplint reads CPPLINT.cfg from the file's directory and every parent,
     // so the project root's copy is an input of every product when it exists.
     defaults: Some(crate::config::ProcessorDefaults { command: "cpplint", dep_auto: &["CPPLINT.cfg"], ..crate::config::ProcessorDefaults::EMPTY }),

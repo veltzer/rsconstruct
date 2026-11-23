@@ -175,8 +175,10 @@ impl crate::processor::Processor for LicenseHeaderProcessor {
             file_index,
             &self.config.standard.dep_inputs,
             &self.config.standard.dep_auto,
-            &self.config,
-            &crate::config::checksum_fields_of(instance_name),
+            crate::config::output_config_hash(
+                &self.config,
+                &crate::config::checksum_fields_of(instance_name),
+            ),
             instance_name,
         )
     }
@@ -217,7 +219,7 @@ inventory::submit! {
                 doc: "Skip a leading #! line before looking for the header" },
         ],
         omit_standard_fields: &["command", "formats", "args", "output_dir", "required_tools"],
-        scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &[".py", ".rs", ".js", ".ts", ".c", ".cc", ".h", ".hh", ".java", ".rb", ".go", ".sh", ".bash"], src_exclude_dirs: &[] }),
+        scan_defaults: Some(crate::config::ScanDefaultsData { src_extensions: &[".py", ".rs", ".js", ".ts", ".c", ".cc", ".h", ".hh", ".java", ".rb", ".go", ".sh", ".bash"], src_exclude_dirs: &[] }),
         defaults: None,
         defconfig_json: crate::registries::default_config_json::<LicenseHeaderConfig>,
         keywords: &["checker", "license", "header", "copyright"],

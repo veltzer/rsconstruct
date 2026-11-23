@@ -346,12 +346,12 @@ impl Doc {
         matches!(
             self.tag_id(node),
             TagId::A
-                | TagId::APPLET
-                | TagId::FORM
-                | TagId::FRAME
-                | TagId::IFRAME
-                | TagId::IMG
-                | TagId::MAP
+                | TagId::Applet
+                | TagId::Form
+                | TagId::Frame
+                | TagId::Iframe
+                | TagId::Img
+                | TagId::Map
         )
     }
 
@@ -756,7 +756,7 @@ impl Doc {
             return;
         }
         self.check_lower_case_attr_value(node, index);
-        if self.node_is(node, TagId::CAPTION) {
+        if self.node_is(node, TagId::Caption) {
             return;
         }
         let av = self.attr(node, index);
@@ -806,7 +806,7 @@ impl Doc {
         };
         let known = tables::tables().known;
         if av.dict == Some(known.width)
-            && (self.node_is(node, TagId::COL) || self.node_is(node, TagId::COLGROUP))
+            && (self.node_is(node, TagId::Col) || self.node_is(node, TagId::Colgroup))
         {
             return;
         }
@@ -873,13 +873,13 @@ impl Doc {
             return;
         };
         let known = tables::tables().known;
-        if self.node_is(node, TagId::FRAMESET)
+        if self.node_is(node, TagId::Frameset)
             && (av.dict == Some(known.cols) || av.dict == Some(known.rows))
         {
             return;
         }
         let mut p = value.as_bytes();
-        if self.node_is(node, TagId::FONT) && p.first().is_some_and(|&b| b == b'+' || b == b'-') {
+        if self.node_is(node, TagId::Font) && p.first().is_some_and(|&b| b == b'+' || b == b'-') {
             p = &p[1..];
         }
         if av.attribute.as_deref() == Some("tabindex") && p.first() == Some(&b'-') {
@@ -969,9 +969,9 @@ impl Doc {
         ];
         const UL: &[&str] = &["disc", "square", "circle"];
         const OL: &[&str] = &["1", "a", "i"];
-        if self.node_is(node, TagId::INPUT) {
+        if self.node_is(node, TagId::Input) {
             self.check_attr_validity(node, index, INPUT);
-        } else if self.node_is(node, TagId::BUTTON) {
+        } else if self.node_is(node, TagId::Button) {
             self.check_attr_validity(node, index, &["button", "submit", "reset"]);
         } else if self.node_is(node, TagId::UL) {
             self.check_attr_validity(node, index, UL);
@@ -1044,7 +1044,7 @@ impl Doc {
     /// `CheckSvgAttr`.
     fn check_svg_attr(&mut self, node: NodeId, index: usize) {
         let av = self.attr(node, index);
-        if !self.node_is(node, TagId::SVG) {
+        if !self.node_is(node, TagId::Svg) {
             self.report_attr(Some(node), Some(&av), Code::AttributeIsNotAllowed);
             return;
         }

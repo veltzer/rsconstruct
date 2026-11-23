@@ -78,10 +78,9 @@ fn should_ignore(path: &Path, ignored: &IgnoredDirs) -> bool {
     // Case-sensitive comparisons are correct here: vim swap files and the
     // `.tmp` convention are lowercase by definition, and matching `.SWP`
     // would start ignoring real source files on case-insensitive filesystems.
-    #[allow(clippy::case_sensitive_file_extension_comparisons)]
     if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
         // Editor temp/swap files
-        if name.starts_with('.') && name.ends_with(".swp") {
+        if name.starts_with('.') && name.strip_suffix(".swp").is_some() {
             return true;
         }
         if name.ends_with('~') {
@@ -91,7 +90,7 @@ fn should_ignore(path: &Path, ignored: &IgnoredDirs) -> bool {
             return true;
         }
         // Common editor temp patterns
-        if name.ends_with(".tmp") {
+        if name.strip_suffix(".tmp").is_some() {
             return true;
         }
     }

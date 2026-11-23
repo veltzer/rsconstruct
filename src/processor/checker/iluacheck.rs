@@ -396,7 +396,7 @@ inventory::submit! {
         "required_tools",
         "batch",
     ],
-        scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &[".lua"], src_exclude_dirs: &[] }),
+        scan_defaults: Some(crate::config::ScanDefaultsData { src_extensions: &[".lua"], src_exclude_dirs: &[] }),
         defaults: Some(crate::config::ProcessorDefaults { dep_auto: &[".luacheckrc"], output_depends_on_input_name: true, ..crate::config::ProcessorDefaults::EMPTY }),
         keywords: &["lua", "linter", "checker", "luacheck", "rust"],
         description: "Lint Lua files with luacheck's analysis (in-process)",

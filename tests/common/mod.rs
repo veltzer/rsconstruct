@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 use serde::Deserialize;
 use std::fs;
 use std::path::Path;
@@ -267,13 +265,8 @@ pub enum BuildEvent {
         product: String,
         processor: String,
         status: String,
-        #[serde(default)]
-        duration_ms: Option<u64>,
-        #[serde(default)]
-        error: Option<String>,
     },
     BuildSummary {
-        total: usize,
         success: usize,
         failed: usize,
         skipped: usize,
@@ -304,8 +297,6 @@ pub struct ProductResult {
     pub product: String,
     pub processor: String,
     pub status: String,
-    pub duration_ms: Option<u64>,
-    pub error: Option<String>,
 }
 
 impl BuildResult {
@@ -330,19 +321,14 @@ impl BuildResult {
                         product,
                         processor,
                         status,
-                        duration_ms,
-                        error,
                     } => {
                         result.products.push(ProductResult {
                             product,
                             processor,
                             status,
-                            duration_ms,
-                            error,
                         });
                     }
                     BuildEvent::BuildSummary {
-                        total: _,
                         success,
                         failed,
                         skipped,
@@ -373,14 +359,6 @@ impl BuildResult {
         self.products
             .iter()
             .any(|p| p.product.contains(name) && p.status == status)
-    }
-
-    /// Get all products with a specific status
-    pub fn products_with_status(&self, status: &str) -> Vec<&ProductResult> {
-        self.products
-            .iter()
-            .filter(|p| p.status == status)
-            .collect()
     }
 }
 

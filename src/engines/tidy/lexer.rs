@@ -1070,8 +1070,8 @@ impl Doc {
         }
         let known = tables::tables().known;
         let has_src = self.tree.attr_by_id(container, known.src).is_some();
-        let nonested = (self.node_is(container, TagId::SCRIPT)
-            || self.node_is(container, TagId::STYLE))
+        let nonested = (self.node_is(container, TagId::Script)
+            || self.node_is(container, TagId::Style))
             && self.opts.skip_nested;
         let container_name = self
             .tree
@@ -1106,7 +1106,7 @@ impl Doc {
                     }
                     let c2 = self.read_char();
                     if is_letter(c2) {
-                        if has_src && is_empty && self.node_is(container, TagId::SCRIPT) {
+                        if has_src && is_empty && self.node_is(container, TagId::Script) {
                             self.lexer.truncate(self.lexer.txtstart);
                             self.unget_char(c2);
                             self.unget_char(u32::from(b'<'));
@@ -1287,10 +1287,6 @@ impl Doc {
     }
 
     /// `GetTokenFromStream`.
-    #[allow(
-        clippy::too_many_lines,
-        reason = "a one-to-one port of tidy's tokenizer state machine"
-    )]
     fn get_token_from_stream(&mut self, mut mode: TokenMode) -> Option<NodeId> {
         let fix_comments = self.fix_comments();
         let mut badcomment = 0u32;
@@ -1569,7 +1565,7 @@ impl Doc {
                     self.lexer.truncate(s);
                     self.lexer.txtend = s;
 
-                    if self.node_is(token, TagId::PRE) {
+                    if self.node_is(token, TagId::Pre) {
                         mode = TokenMode::Preformatted;
                     }
                     if (mode != TokenMode::Preformatted && self.expects_content(token))

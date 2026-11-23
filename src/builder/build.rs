@@ -523,9 +523,11 @@ impl Builder {
             println!("[rsconstruct] using {effective_parallel} threads");
         }
         // CLI overrides config for batch_size (CLI -1 maps to None = disable)
-        let batch_size = opts
-            .batch_size
-            .unwrap_or(Some(self.config.build.batch_size));
+        let batch_size = match opts.batch_size {
+            Some(crate::cli::BatchSizeOverride::Disabled) => None,
+            Some(crate::cli::BatchSizeOverride::Size(n)) => Some(n),
+            None => Some(self.config.build.batch_size),
+        };
         let executor = Executor::new(
             &processors,
             ctx,

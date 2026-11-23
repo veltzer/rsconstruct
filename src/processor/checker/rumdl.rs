@@ -27,7 +27,7 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     name: "rumdl", processor_type: crate::processor::ProcessorType::Checker, create: create_rumdl,
     fields: &[],
     omit_standard_fields: &["formats", "output_dir"],
-    scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &[".md"], src_exclude_dirs: &[] }),
+    scan_defaults: Some(crate::config::ScanDefaultsData { src_extensions: &[".md"], src_exclude_dirs: &[] }),
     // rumdl's config discovery from the working directory: its own files and
     // `pyproject.toml` (`[tool.rumdl]`) first, and when none of those is
     // present, a markdownlint / markdownlint-cli2 configuration.

@@ -504,7 +504,7 @@ inventory::submit! {
                 doc: "Report plan-vs-build mismatches as warnings instead of failing the build" },
         ],
         omit_standard_fields: &["formats", "dep_auto", "batch"],
-        scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &[], src_exclude_dirs: &[] }),
+        scan_defaults: Some(crate::config::ScanDefaultsData { src_extensions: &[], src_exclude_dirs: &[] }),
         defaults: Some(crate::config::ProcessorDefaults { command: "sphinx-build", output_dir: "docs", hash_python_env: true, ..crate::config::ProcessorDefaults::EMPTY }),
         defconfig_json: crate::registries::default_config_json::<SphinxConfig>,
         keywords: &["python", "sphinx", "documentation", "rst", "html", "mass", "pip"],

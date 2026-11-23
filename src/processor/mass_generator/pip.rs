@@ -143,7 +143,7 @@ inventory::submit! {
         create: plugin_create,
         fields: &[],
         omit_standard_fields: &["formats", "dep_auto", "output_dir", "batch"],
-        scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &["requirements.txt"], src_exclude_dirs: &[] }),
+        scan_defaults: Some(crate::config::ScanDefaultsData { src_extensions: &["requirements.txt"], src_exclude_dirs: &[] }),
         defaults: Some(crate::config::ProcessorDefaults { command: "pip", ..crate::config::ProcessorDefaults::EMPTY }),
         defconfig_json: crate::registries::default_config_json::<PipConfig>,
         keywords: &["python", "pip", "package-manager", "py"],

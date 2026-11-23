@@ -21,7 +21,7 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     name: "pylint", processor_type: crate::processor::ProcessorType::Checker, create: create_pylint,
     fields: &[],
     omit_standard_fields: &["formats", "output_dir"],
-    scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &[".py"], src_exclude_dirs: &[] }),
+    scan_defaults: Some(crate::config::ScanDefaultsData { src_extensions: &[".py"], src_exclude_dirs: &[] }),
     // pylint's `find_default_config_files`: the rc names in its lookup order,
     // then `pyproject.toml` (`[tool.pylint]`), `setup.cfg` and `tox.ini`
     // (`[pylint.*]` sections), all looked up from the working directory.

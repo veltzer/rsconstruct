@@ -28,10 +28,6 @@ pub mod contents;
 pub mod lexer;
 pub mod message;
 pub mod parser;
-// Generated: the grammar's token type names are lower case after
-// `LITERAL_` (`LITERAL_void`), as in checkstyle, and the table lists every
-// type of the grammar whether a rule names it or not.
-#[allow(non_upper_case_globals, dead_code)]
 pub mod tables;
 
 #[cfg(test)]

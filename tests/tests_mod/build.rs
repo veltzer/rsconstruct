@@ -3,7 +3,6 @@ use crate::common::{
     run_rsconstruct_json_with_env, run_rsconstruct_with_env, setup_test_project, write_file,
 };
 use std::fs;
-#[allow(unused_imports)]
 use std::path::Path;
 use tempfile::TempDir;
 

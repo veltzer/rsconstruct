@@ -35,16 +35,15 @@ use super::interface::{Fix, Shell};
 use super::regex::{Regex, mk_regex};
 
 use Inner::{
-    T_AndIf, T_Annotation, T_Arithmetic, T_Array, T_Assignment, T_Backgrounded, T_Backticked,
-    T_Banged, T_BatsTest, T_BraceGroup, T_CLOBBER, T_CaseExpression, T_Condition, T_DGREAT,
-    T_DollarArithmetic, T_DollarBraceCommandExpansion, T_DollarBraced, T_DollarDoubleQuoted,
-    T_DollarExpansion, T_DoubleQuoted, T_FdRedirect, T_ForArithmetic, T_ForIn, T_Function,
-    T_GREATAND, T_Glob, T_Greater, T_HereDoc, T_HereString, T_IfExpression, T_IoDuplicate,
-    T_IoFile, T_LESSAND, T_Less, T_Literal, T_NormalWord, T_OrIf, T_Pipe, T_Pipeline, T_ProcSub,
-    T_Redirecting, T_Script, T_SimpleCommand, T_SingleQuoted, T_SourceCommand, T_Subshell,
-    T_UntilExpression, T_WhileExpression, TA_Assignment, TA_Binary, TA_Expansion, TA_Parenthesis,
-    TA_Sequence, TA_Trinary, TA_Unary, TA_Variable, TC_Binary, TC_Empty, TC_Group, TC_Nullary,
-    TC_Unary,
+    TAndIf, TAnnotation, TArithmetic, TArray, TAssignment, TBackgrounded, TBackticked, TBanged,
+    TBatsTest, TBraceGroup, TCaseExpression, TCondition, TDollarArithmetic,
+    TDollarBraceCommandExpansion, TDollarBraced, TDollarDoubleQuoted, TDollarExpansion,
+    TDoubleQuoted, TFdRedirect, TForArithmetic, TForIn, TFunction, TGlob, TGreater, THereDoc,
+    THereString, TIfExpression, TIoDuplicate, TIoFile, TLess, TLexClobber, TLexDgreat,
+    TLexGreatand, TLexLessand, TLiteral, TNormalWord, TOrIf, TPipe, TPipeline, TProcSub,
+    TRedirecting, TScript, TSimpleCommand, TSingleQuoted, TSourceCommand, TSubshell,
+    TUntilExpression, TWhileExpression, TaAssignment, TaBinary, TaExpansion, TaParenthesis,
+    TaSequence, TaTrinary, TaUnary, TaVariable, TcBinary, TcEmpty, TcGroup, TcNullary, TcUnary,
 };
 
 thread_local! {
@@ -60,7 +59,7 @@ fn path_of<'a>(params: &Parameters<'a>, t: &Token) -> Vec<&'a Token> {
 }
 
 pub fn check_globs_as_options(_: &Parameters<'_>, cmd: &Token, out: &mut Out) {
-    let T_SimpleCommand(_, args) = &cmd.inner else {
+    let TSimpleCommand(_, args) = &cmd.inner else {
         return;
     };
     if get_command_basename(cmd).is_some_and(|b| b == "echo" || b == "printf") {
@@ -69,10 +68,10 @@ pub fn check_globs_as_options(_: &Parameters<'_>, cmd: &Token, out: &mut Out) {
     let is_end_of_args =
         |t: &Token| matches!(concat_oversimplify(t).as_str(), "--" | ":::" | "::::");
     for v in args.iter().skip(1).take_while(|t| !is_end_of_args(t)) {
-        if let T_NormalWord(parts) = &v.inner
+        if let TNormalWord(parts) = &v.inner
             && let Some(Token {
                 id,
-                inner: T_Glob(s),
+                inner: TGlob(s),
             }) = parts.first()
             && (s == "*" || s == "?")
         {
@@ -88,14 +87,14 @@ pub fn check_globs_as_options(_: &Parameters<'_>, cmd: &Token, out: &mut Out) {
 
 fn stdin_redirect(t: &Token) -> bool {
     match &t.inner {
-        T_FdRedirect(fd, op) => {
+        TFdRedirect(fd, op) => {
             if fd == "0" {
                 true
             } else if fd.is_empty() {
                 match &op.inner {
-                    T_IoFile(o, _) => matches!(o.inner, T_Less),
-                    T_IoDuplicate(o, _) => matches!(o.inner, T_LESSAND),
-                    T_HereString(_) | T_HereDoc(..) => true,
+                    TIoFile(o, _) => matches!(o.inner, TLess),
+                    TIoDuplicate(o, _) => matches!(o.inner, TLexLessand),
+                    THereString(_) | THereDoc(..) => true,
                     _ => false,
                 }
             } else {
@@ -107,17 +106,17 @@ fn stdin_redirect(t: &Token) -> bool {
 }
 
 pub fn check_while_read_pitfalls(params: &Parameters<'_>, t: &Token, out: &mut Out) {
-    let T_WhileExpression(conds, contents) = &t.inner else {
+    let TWhileExpression(conds, contents) = &t.inner else {
         return;
     };
     let [command] = conds.as_slice() else {
         return;
     };
     let is_stdin_read_command = match &command.inner {
-        T_Pipeline(_, cmds) => match cmds.as_slice() {
+        TPipeline(_, cmds) => match cmds.as_slice() {
             [
                 Token {
-                    inner: T_Redirecting(redirs, cmd),
+                    inner: TRedirecting(redirs, cmd),
                     ..
                 },
             ] => {
@@ -140,19 +139,19 @@ pub fn check_while_read_pitfalls(params: &Parameters<'_>, t: &Token, out: &mut O
 
 fn check_muncher(params: &Parameters<'_>, while_id: Id, t: &Token, out: &mut Out) {
     match &t.inner {
-        T_Backgrounded(inner) => check_muncher(params, while_id, inner, out),
-        T_Pipeline(_, cmds) => {
+        TBackgrounded(inner) => check_muncher(params, while_id, inner, out),
+        TPipeline(_, cmds) => {
             let Some(Token {
-                inner: T_Redirecting(redirs, cmd),
+                inner: TRedirecting(redirs, cmd),
                 ..
             }) = cmds.first()
             else {
                 return;
             };
-            if let T_SimpleCommand(vars, args) = &cmd.inner {
+            if let TSimpleCommand(vars, args) = &cmd.inner {
                 for w in vars.iter().chain(args.iter()) {
                     let words = match &w.inner {
-                        T_Assignment(_, _, _, x) => get_word_parts(x),
+                        TAssignment(_, _, _, x) => get_word_parts(x),
                         _ => get_word_parts(w),
                     };
                     for part in words {
@@ -230,18 +229,18 @@ fn check_muncher(params: &Parameters<'_>, while_id: Id, t: &Token, out: &mut Out
 }
 
 pub fn check_prefix_assignment_reference(params: &Parameters<'_>, t: &Token, out: &mut Out) {
-    let T_DollarBraced(_, value) = &t.inner else {
+    let TDollarBraced(_, value) = &t.inner else {
         return;
     };
     let name = get_braced_reference(&concat_oversimplify(value));
     let path = path_of(params, t);
     let id_path: Vec<Id> = path.iter().map(|x| x.id).collect();
     for p in &path {
-        if let T_SimpleCommand(vars, words) = &p.inner
+        if let TSimpleCommand(vars, words) = &p.inner
             && !words.is_empty()
         {
             for v in vars {
-                if let T_Assignment(_, a_name, indices, _) = &v.inner
+                if let TAssignment(_, a_name, indices, _) = &v.inner
                     && indices.is_empty()
                     && *a_name == name
                     && !id_path.contains(&v.id)
@@ -266,7 +265,7 @@ pub fn check_prefix_assignment_reference(params: &Parameters<'_>, t: &Token, out
 }
 
 pub fn check_char_range_glob(p: &Parameters<'_>, t: &Token, out: &mut Out) {
-    let T_Glob(s) = &t.inner else {
+    let TGlob(s) = &t.inner else {
         return;
     };
     let is_char_class = s.starts_with('[') && s.ends_with(']');
@@ -292,11 +291,11 @@ pub fn check_char_range_glob(p: &Parameters<'_>, t: &Token, out: &mut Out) {
     let is_dereferenced = path
         .iter()
         .find_map(|x| match &x.inner {
-            TC_Binary(ConditionType::DoubleBracket, op, _, _) => {
+            TcBinary(ConditionType::DoubleBracket, op, _, _) => {
                 Some(is_dereferencing_binary_op(op))
             }
-            TC_Unary(_, op, _) => Some(op == "-v"),
-            T_SimpleCommand(..) => Some(false),
+            TcUnary(_, op, _) => Some(op == "-v"),
+            TSimpleCommand(..) => Some(false),
             _ => None,
         })
         .unwrap_or(false);
@@ -331,8 +330,8 @@ pub fn check_cd_and_back(params: &Parameters<'_>, t: &Token, out: &mut Out) {
     }
     fn get_candidate(t: &Token) -> Option<&Token> {
         match &t.inner {
-            T_Annotation(_, x) => get_candidate(x),
-            T_Pipeline(_, cmds) if cmds.len() == 1 && is_command(&cmds[0], "cd") => Some(&cmds[0]),
+            TAnnotation(_, x) => get_candidate(x),
+            TPipeline(_, cmds) if cmds.len() == 1 && is_command(&cmds[0], "cd") => Some(&cmds[0]),
             _ => None,
         }
     }
@@ -400,7 +399,7 @@ pub fn check_loop_keyword_scope(params: &Parameters<'_>, t: &Token, out: &mut Ou
 }
 
 pub fn check_function_declarations(params: &Parameters<'_>, t: &Token, out: &mut Out) {
-    let T_Function(has_keyword, has_parens, _, _) = &t.inner else {
+    let TFunction(has_keyword, has_parens, _, _) = &t.inner else {
         return;
     };
     let (k, p) = (*has_keyword, *has_parens);
@@ -439,7 +438,7 @@ pub fn check_function_declarations(params: &Parameters<'_>, t: &Token, out: &mut
 
 pub fn check_stderr_pipe(params: &Parameters<'_>, t: &Token, out: &mut Out) {
     if params.shell_type == Shell::Ksh
-        && let T_Pipe(s) = &t.inner
+        && let TPipe(s) = &t.inner
         && s == "|&"
     {
         err(out, t.id, 2118, "Ksh does not support |&. Use 2>&1 |.");
@@ -447,14 +446,14 @@ pub fn check_stderr_pipe(params: &Parameters<'_>, t: &Token, out: &mut Out) {
 }
 
 pub fn check_overriding_path(_: &Parameters<'_>, t: &Token, out: &mut Out) {
-    let T_SimpleCommand(vars, words) = &t.inner else {
+    let TSimpleCommand(vars, words) = &t.inner else {
         return;
     };
     if !words.is_empty() {
         return;
     }
     for v in vars {
-        if let T_Assignment(AssignmentMode::Assign, name, indices, word) = &v.inner
+        if let TAssignment(AssignmentMode::Assign, name, indices, word) = &v.inner
             && name == "PATH"
             && indices.is_empty()
         {
@@ -483,14 +482,14 @@ pub fn check_overriding_path(_: &Parameters<'_>, t: &Token, out: &mut Out) {
 }
 
 pub fn check_tilde_in_path(_: &Parameters<'_>, t: &Token, out: &mut Out) {
-    let T_SimpleCommand(vars, _) = &t.inner else {
+    let TSimpleCommand(vars, _) = &t.inner else {
         return;
     };
     for v in vars {
-        if let T_Assignment(AssignmentMode::Assign, name, indices, word) = &v.inner
+        if let TAssignment(AssignmentMode::Assign, name, indices, word) = &v.inner
             && name == "PATH"
             && indices.is_empty()
-            && let T_NormalWord(parts) = &word.inner
+            && let TNormalWord(parts) = &word.inner
             && parts
                 .iter()
                 .any(|x| is_quotes(x) && super::astlib::only_literal_string(x).contains('~'))
@@ -517,17 +516,17 @@ const fn shell_name(s: Shell) -> &'static str {
 
 pub fn check_unsupported(params: &Parameters<'_>, t: &Token, out: &mut Out) {
     let (name, support): (&str, Vec<Shell>) = match &t.inner {
-        T_CaseExpression(_, list) => {
+        TCaseExpression(_, list) => {
             let seps: Vec<CaseType> = list.iter().map(|(a, _, _)| *a).collect();
-            if seps.contains(&CaseType::CaseContinue) {
+            if seps.contains(&CaseType::Continue) {
                 ("cases with ;;&", vec![Shell::Bash])
-            } else if seps.contains(&CaseType::CaseFallThrough) {
+            } else if seps.contains(&CaseType::FallThrough) {
                 ("cases with ;&", vec![Shell::Bash, Shell::Ksh])
             } else {
                 ("", Vec::new())
             }
         }
-        T_DollarBraceCommandExpansion(..) => {
+        TDollarBraceCommandExpansion(..) => {
             ("${ ..; } command expansion", vec![Shell::Bash, Shell::Ksh])
         }
         _ => ("", Vec::new()),
@@ -549,12 +548,12 @@ pub fn check_unsupported(params: &Parameters<'_>, t: &Token, out: &mut Out) {
 pub fn check_multiple_appends(_: &Parameters<'_>, t: &Token, out: &mut Out) {
     fn get_target(t: &Token) -> Option<(&Token, Id)> {
         match &t.inner {
-            T_Annotation(_, t) => get_target(t),
-            T_Pipeline(_, args) if !args.is_empty() => get_target(args.last().expect("non-empty")),
-            T_Redirecting(list, _) => {
+            TAnnotation(_, t) => get_target(t),
+            TPipeline(_, args) if !args.is_empty() => get_target(args.last().expect("non-empty")),
+            TRedirecting(list, _) => {
                 let file = list.iter().find_map(|r| match &r.inner {
-                    T_FdRedirect(_, x) => match &x.inner {
-                        T_IoFile(op, f) if matches!(op.inner, T_DGREAT) => Some(&**f),
+                    TFdRedirect(_, x) => match &x.inner {
+                        TIoFile(op, f) if matches!(op.inner, TLexDgreat) => Some(&**f),
                         _ => None,
                     },
                     _ => None,
@@ -588,7 +587,7 @@ pub fn check_multiple_appends(_: &Parameters<'_>, t: &Token, out: &mut Out) {
 }
 
 pub fn check_suspicious_ifs(params: &Parameters<'_>, t: &Token, out: &mut Out) {
-    let T_Assignment(_, name, indices, value) = &t.inner else {
+    let TAssignment(_, name, indices, value) = &t.inner else {
         return;
     };
     if name != "IFS" || !indices.is_empty() {
@@ -638,17 +637,17 @@ pub fn check_suspicious_ifs(params: &Parameters<'_>, t: &Token, out: &mut Out) {
 
 pub fn check_should_use_grep_q(_: &Parameters<'_>, t: &Token, out: &mut Out) {
     let (bool_, token) = match &t.inner {
-        TC_Nullary(_, token) => (true, token),
-        TC_Unary(_, op, token) if op == "-n" => (true, token),
-        TC_Unary(_, op, token) if op == "-z" => (false, token),
+        TcNullary(_, token) => (true, token),
+        TcUnary(_, op, token) if op == "-n" => (true, token),
+        TcUnary(_, op, token) if op == "-z" => (false, token),
         _ => return,
     };
     fn get_pipeline(t: &Token) -> Option<&[Token]> {
         match &t.inner {
-            T_NormalWord(l) | T_DoubleQuoted(l) | T_DollarExpansion(l) if l.len() == 1 => {
+            TNormalWord(l) | TDoubleQuoted(l) | TDollarExpansion(l) if l.len() == 1 => {
                 get_pipeline(&l[0])
             }
-            T_Pipeline(_, cmds) => Some(cmds),
+            TPipeline(_, cmds) => Some(cmds),
             _ => None,
         }
     }
@@ -742,7 +741,7 @@ pub fn check_test_argument_splitting(params: &Parameters<'_>, t: &Token, out: &m
         check_globs(typ, token, out);
     };
     match &t.inner {
-        TC_Unary(typ, op, token) if is_glob(token) => {
+        TcUnary(typ, op, token) if is_glob(token) => {
             if op == "-v" {
                 if *typ == ConditionType::SingleBracket {
                     err(
@@ -775,15 +774,15 @@ pub fn check_test_argument_splitting(params: &Parameters<'_>, t: &Token, out: &m
                 );
             }
         }
-        TC_Nullary(typ, token) => {
+        TcNullary(typ, token) => {
             check_braces(*typ, token, out);
             check_globs(*typ, token, out);
             if *typ == ConditionType::DoubleBracket {
                 check_arrays(*typ, token, out);
             }
         }
-        TC_Unary(typ, _, token) => check_all(*typ, token, out),
-        TC_Binary(typ, op, lhs, rhs) if ARITHMETIC_BINARY_TEST_OPS.contains(&op.as_str()) => {
+        TcUnary(typ, _, token) => check_all(*typ, token, out),
+        TcBinary(typ, op, lhs, rhs) if ARITHMETIC_BINARY_TEST_OPS.contains(&op.as_str()) => {
             for c in [lhs, rhs] {
                 if *typ != ConditionType::DoubleBracket
                     && params.shell_type != Shell::Ksh
@@ -800,7 +799,7 @@ pub fn check_test_argument_splitting(params: &Parameters<'_>, t: &Token, out: &m
                 check_braces(*typ, c, out);
             }
         }
-        TC_Binary(typ, op, lhs, rhs) => {
+        TcBinary(typ, op, lhs, rhs) => {
             check_all(*typ, lhs, out);
             if ["=", "==", "!=", "=~"].contains(&op.as_str()) {
                 check_arrays(*typ, rhs, out);
@@ -814,7 +813,7 @@ pub fn check_test_argument_splitting(params: &Parameters<'_>, t: &Token, out: &m
 }
 
 pub fn check_read_without_r(_: &Parameters<'_>, t: &Token, out: &mut Out) {
-    if !matches!(t.inner, T_SimpleCommand(..)) || !is_unqualified_command(t, "read") {
+    if !matches!(t.inner, TSimpleCommand(..)) || !is_unqualified_command(t, "read") {
         return;
     }
     let flags = get_all_flags(t);
@@ -840,21 +839,21 @@ pub fn check_read_without_r(_: &Parameters<'_>, t: &Token, out: &mut Out) {
 }
 
 pub fn check_loop_variable_reassignment(params: &Parameters<'_>, token: &Token, out: &mut Out) {
-    if !matches!(token.inner, T_ForIn(..) | T_ForArithmetic(..)) {
+    if !matches!(token.inner, TForIn(..) | TForArithmetic(..)) {
         return;
     }
     fn loop_variable(t: &Token) -> Option<String> {
         match &t.inner {
-            T_ForIn(s, _, _) => Some(s.clone()),
-            T_ForArithmetic(init, _, _, _) => match &init.inner {
-                TA_Sequence(list) => match list.as_slice() {
+            TForIn(s, _, _) => Some(s.clone()),
+            TForArithmetic(init, _, _, _) => match &init.inner {
+                TaSequence(list) => match list.as_slice() {
                     [
                         Token {
-                            inner: TA_Assignment(op, lhs, _),
+                            inner: TaAssignment(op, lhs, _),
                             ..
                         },
                     ] if op == "=" => match &lhs.inner {
-                        TA_Variable(var, _) => Some(var.clone()),
+                        TaVariable(var, _) => Some(var.clone()),
                         _ => None,
                     },
                     _ => None,
@@ -891,17 +890,16 @@ pub fn check_loop_variable_reassignment(params: &Parameters<'_>, token: &Token, 
 }
 
 pub fn check_trailing_bracket(_: &Parameters<'_>, token: &Token, out: &mut Out) {
-    let T_SimpleCommand(_, tokens) = &token.inner else {
+    let TSimpleCommand(_, tokens) = &token.inner else {
         return;
     };
     let Some(last) = tokens.last() else {
         return;
     };
-    if let T_NormalWord(parts) = &last.inner
+    if let TNormalWord(parts) = &last.inner
         && let [
             Token {
-                inner: T_Literal(s),
-                ..
+                inner: TLiteral(s), ..
             },
         ] = parts.as_slice()
         && (s == "]]" || s == "]")
@@ -924,7 +922,7 @@ pub fn check_return_against_zero(params: &Parameters<'_>, token: &Token, out: &m
     let is_exit_code = |t: &Token| match get_word_parts(t).as_slice() {
         [
             Token {
-                inner: T_DollarBraced(_, l),
+                inner: TDollarBraced(_, l),
                 ..
             },
         ] => concat_oversimplify(l) == "?",
@@ -954,14 +952,14 @@ pub fn check_return_against_zero(params: &Parameters<'_>, token: &Token, out: &m
         }
     };
     match &token.inner {
-        TC_Binary(_, op, lhs, rhs) => check(op, lhs, rhs, out),
-        TA_Binary(op, lhs, rhs) if [">", "<", ">=", "<=", "==", "!="].contains(&op.as_str()) => {
+        TcBinary(_, op, lhs, rhs) => check(op, lhs, rhs, out),
+        TaBinary(op, lhs, rhs) if [">", "<", ">=", "<=", "==", "!="].contains(&op.as_str()) => {
             check(op, lhs, rhs, out);
         }
-        TA_Unary(op, exp) if op == "!" && is_exit_code(exp) => {
+        TaUnary(op, exp) if op == "!" && is_exit_code(exp) => {
             message(checks_success_lhs(op), exp.id, out);
         }
-        TA_Sequence(list) if list.len() == 1 && is_exit_code(&list[0]) => {
+        TaSequence(list) if list.len() == 1 && is_exit_code(&list[0]) => {
             message(false, list[0].id, out);
         }
         _ => {}
@@ -973,27 +971,27 @@ fn is_only_test_in_command(params: &Parameters<'_>, t: &Token) -> bool {
     match parents.as_slice() {
         [
             Token {
-                inner: T_Condition(..) | T_Arithmetic(_),
+                inner: TCondition(..) | TArithmetic(_),
                 ..
             },
             ..,
         ] => true,
         [
             Token {
-                inner: TA_Sequence(l),
+                inner: TaSequence(l),
                 ..
             },
             Token {
-                inner: T_Arithmetic(_),
+                inner: TArithmetic(_),
                 ..
             },
             ..,
         ] if l.len() == 1 => true,
         [next, ..] => match &next.inner {
-            TC_Unary(_, op, _) if op == "!" => is_only_test_in_command(params, next),
-            TA_Unary(op, _) if op == "!" => is_only_test_in_command(params, next),
-            TC_Group(..) | TA_Parenthesis(_) => is_only_test_in_command(params, next),
-            TA_Sequence(l) if l.len() == 1 => is_only_test_in_command(params, next),
+            TcUnary(_, op, _) if op == "!" => is_only_test_in_command(params, next),
+            TaUnary(op, _) if op == "!" => is_only_test_in_command(params, next),
+            TcGroup(..) | TaParenthesis(_) => is_only_test_in_command(params, next),
+            TaSequence(l) if l.len() == 1 => is_only_test_in_command(params, next),
             _ => false,
         },
         _ => false,
@@ -1002,13 +1000,13 @@ fn is_only_test_in_command(params: &Parameters<'_>, t: &Token) -> bool {
 
 fn get_first_command_in_function(t: &Token) -> &Token {
     match &t.inner {
-        T_Function(_, _, _, x) | T_Annotation(_, x) | T_AndIf(x, _) | T_OrIf(x, _) => {
+        TFunction(_, _, _, x) | TAnnotation(_, x) | TAndIf(x, _) | TOrIf(x, _) => {
             get_first_command_in_function(x)
         }
-        T_BraceGroup(l) | T_Subshell(l) if !l.is_empty() => get_first_command_in_function(&l[0]),
-        T_Pipeline(_, l) if !l.is_empty() => get_first_command_in_function(&l[0]),
-        T_Redirecting(_, inner) => match &inner.inner {
-            T_IfExpression(branches, _) if !branches.is_empty() && !branches[0].0.is_empty() => {
+        TBraceGroup(l) | TSubshell(l) if !l.is_empty() => get_first_command_in_function(&l[0]),
+        TPipeline(_, l) if !l.is_empty() => get_first_command_in_function(&l[0]),
+        TRedirecting(_, inner) => match &inner.inner {
+            TIfExpression(branches, _) if !branches.is_empty() && !branches[0].0.is_empty() => {
                 get_first_command_in_function(&branches[0].0[0])
             }
             _ => t,
@@ -1034,8 +1032,8 @@ fn is_first_command_in_function(params: &Parameters<'_>, token: &Token) -> bool 
 pub fn check_redirected_nowhere(params: &Parameters<'_>, token: &Token, out: &mut Out) {
     fn get_dangling_redirect(t: &Token) -> Option<&Token> {
         match &t.inner {
-            T_Redirecting(redirs, cmd) if !redirs.is_empty() => match &cmd.inner {
-                T_SimpleCommand(a, w) if a.is_empty() && w.is_empty() => Some(&redirs[0]),
+            TRedirecting(redirs, cmd) if !redirs.is_empty() => match &cmd.inner {
+                TSimpleCommand(a, w) if a.is_empty() && w.is_empty() => Some(&redirs[0]),
                 _ => None,
             },
             _ => None,
@@ -1044,14 +1042,14 @@ pub fn check_redirected_nowhere(params: &Parameters<'_>, token: &Token, out: &mu
     fn is_in_expansion(params: &Parameters<'_>, t: &Token) -> bool {
         match get_parents_of_id(&params.parent_map, t.id).first() {
             Some(p) => match &p.inner {
-                T_DollarExpansion(l) | T_Backticked(l) if l.len() == 1 => true,
-                T_Annotation(..) => is_in_expansion(params, p),
+                TDollarExpansion(l) | TBackticked(l) if l.len() == 1 => true,
+                TAnnotation(..) => is_in_expansion(params, p),
                 _ => false,
             },
             None => false,
         }
     }
-    if let T_Pipeline(_, list) = &token.inner {
+    if let TPipeline(_, list) = &token.inner {
         if let [single] = list.as_slice() {
             if let Some(redir) = get_dangling_redirect(single)
                 && !is_in_expansion(params, token)
@@ -1079,13 +1077,13 @@ pub fn check_redirected_nowhere(params: &Parameters<'_>, token: &Token, out: &mu
 }
 
 pub fn check_unmatchable_cases(params: &Parameters<'_>, t: &Token, out: &mut Out) {
-    let T_CaseExpression(word, list) = &t.inner else {
+    let TCaseExpression(word, list) = &t.inner else {
         return;
     };
     let allpatterns: Vec<&Token> = list.iter().flat_map(|(_, p, _)| p.iter()).collect();
     let breakpatterns: Vec<&Token> = list
         .iter()
-        .filter(|(typ, _, _)| *typ == CaseType::CaseBreak)
+        .filter(|(typ, _, _)| *typ == CaseType::Break)
         .flat_map(|(_, p, _)| p.iter())
         .collect();
     if is_constant(word) {
@@ -1151,7 +1149,7 @@ pub fn check_unmatchable_cases(params: &Parameters<'_>, t: &Token, out: &mut Out
 }
 
 pub fn check_subshell_as_test(_: &Parameters<'_>, t: &Token, out: &mut Out) {
-    let T_Subshell(list) = &t.inner else {
+    let TSubshell(list) = &t.inner else {
         return;
     };
     let [w] = list.as_slice() else {
@@ -1161,15 +1159,15 @@ pub fn check_subshell_as_test(_: &Parameters<'_>, t: &Token, out: &mut Out) {
     let mut cur = w;
     loop {
         match &cur.inner {
-            T_Banged(w) | T_AndIf(w, _) | T_OrIf(w, _) => cur = w,
-            T_Pipeline(_, cmds) => {
+            TBanged(w) | TAndIf(w, _) | TOrIf(w, _) => cur = w,
+            TPipeline(_, cmds) => {
                 if let [
                     Token {
-                        inner: T_Redirecting(_, c),
+                        inner: TRedirecting(_, c),
                         ..
                     },
                 ] = cmds.as_slice()
-                    && let T_SimpleCommand(vars, words) = &c.inner
+                    && let TSimpleCommand(vars, words) = &c.inner
                     && vars.is_empty()
                     && words.len() >= 2
                 {
@@ -1203,17 +1201,17 @@ pub fn check_subshell_as_test(_: &Parameters<'_>, t: &Token, out: &mut Out) {
 }
 
 pub fn check_splitting_in_arrays(params: &Parameters<'_>, t: &Token, out: &mut Out) {
-    let T_Array(elements) = &t.inner else {
+    let TArray(elements) = &t.inner else {
         return;
     };
     let ksh = params.shell_type == Shell::Ksh;
     for word in elements {
-        let T_NormalWord(parts) = &word.inner else {
+        let TNormalWord(parts) = &word.inner else {
             continue;
         };
         for part in parts {
             match &part.inner {
-                T_DollarExpansion(_) | T_DollarBraceCommandExpansion(..) | T_Backticked(_) => warn(
+                TDollarExpansion(_) | TDollarBraceCommandExpansion(..) | TBackticked(_) => warn(
                     out,
                     part.id,
                     2207,
@@ -1223,7 +1221,7 @@ pub fn check_splitting_in_arrays(params: &Parameters<'_>, t: &Token, out: &mut O
                         "Prefer mapfile or read -a to split command output (or quote to avoid splitting)."
                     },
                 ),
-                T_DollarBraced(_, s)
+                TDollarBraced(_, s)
                     if !is_counting_reference(part)
                         && !is_quoted_alternative_reference(part)
                         && !VARIABLES_WITHOUT_SPACES
@@ -1247,7 +1245,7 @@ pub fn check_splitting_in_arrays(params: &Parameters<'_>, t: &Token, out: &mut O
 }
 
 pub fn check_redirection_to_number(_: &Parameters<'_>, t: &Token, out: &mut Out) {
-    if let T_IoFile(_, word) = &t.inner
+    if let TIoFile(_, word) = &t.inner
         && let Some(file) = get_unquoted_literal(word)
         && file.chars().all(|c| c.is_ascii_digit())
     {
@@ -1261,7 +1259,7 @@ pub fn check_redirection_to_number(_: &Parameters<'_>, t: &Token, out: &mut Out)
 }
 
 pub fn check_glob_as_command(_: &Parameters<'_>, t: &Token, out: &mut Out) {
-    if let T_SimpleCommand(_, words) = &t.inner
+    if let TSimpleCommand(_, words) = &t.inner
         && let Some(first) = words.first()
         && is_glob(first)
     {
@@ -1275,7 +1273,7 @@ pub fn check_glob_as_command(_: &Parameters<'_>, t: &Token, out: &mut Out) {
 }
 
 pub fn check_flag_as_command(_: &Parameters<'_>, t: &Token, out: &mut Out) {
-    if let T_SimpleCommand(vars, words) = &t.inner
+    if let TSimpleCommand(vars, words) = &t.inner
         && vars.is_empty()
         && let Some(first) = words.first()
         && is_unquoted_flag(first)
@@ -1290,7 +1288,7 @@ pub fn check_flag_as_command(_: &Parameters<'_>, t: &Token, out: &mut Out) {
 }
 
 pub fn check_empty_condition(_: &Parameters<'_>, t: &Token, out: &mut Out) {
-    if let TC_Empty(_) = &t.inner {
+    if let TcEmpty(_) = &t.inner {
         style(
             out,
             t.id,
@@ -1301,13 +1299,9 @@ pub fn check_empty_condition(_: &Parameters<'_>, t: &Token, out: &mut Out) {
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
-#[allow(
-    clippy::enum_variant_names,
-    reason = "the constructors of ShellCheck's PipeType"
-)]
 enum PipeType {
-    StdoutPipe,
-    StdoutStderrPipe,
+    Stdout,
+    StdoutStderr,
     NoPipe,
 }
 
@@ -1323,12 +1317,12 @@ fn tree_contains(pred: &dyn Fn(&Token) -> bool, t: &Token) -> bool {
 
 fn get_default_fds(redir: &Token) -> Option<Vec<i64>> {
     match &redir.inner {
-        T_HereDoc(..) | T_HereString(_) => Some(vec![0]),
-        T_IoFile(op, _) => match &op.inner {
-            T_Less => Some(vec![0]),
-            T_Greater | T_DGREAT | T_CLOBBER => Some(vec![1]),
-            T_GREATAND => Some(vec![1, 2]),
-            T_IoDuplicate(op2, s) if s == "-" => get_default_fds(op2),
+        THereDoc(..) | THereString(_) => Some(vec![0]),
+        TIoFile(op, _) => match &op.inner {
+            TLess => Some(vec![0]),
+            TGreater | TLexDgreat | TLexClobber => Some(vec![1]),
+            TLexGreatand => Some(vec![1, 2]),
+            TIoDuplicate(op2, s) if s == "-" => get_default_fds(op2),
             _ => None,
         },
         _ => None,
@@ -1337,9 +1331,9 @@ fn get_default_fds(redir: &Token) -> Option<Vec<i64>> {
 
 fn get_redirection_fds(t: &Token) -> Option<Vec<i64>> {
     match &t.inner {
-        T_FdRedirect(fd, x) if fd.is_empty() => get_default_fds(x),
-        T_FdRedirect(fd, _) if fd == "&" => Some(vec![1, 2]),
-        T_FdRedirect(num, x) if num.chars().all(|c| c.is_ascii_digit()) => {
+        TFdRedirect(fd, x) if fd.is_empty() => get_default_fds(x),
+        TFdRedirect(fd, _) if fd == "&" => Some(vec![1, 2]),
+        TFdRedirect(num, x) if num.chars().all(|c| c.is_ascii_digit()) => {
             get_default_fds(x)?;
             Some(vec![num.parse::<i64>().unwrap_or(i64::MAX)])
         }
@@ -1349,19 +1343,19 @@ fn get_redirection_fds(t: &Token) -> Option<Vec<i64>> {
 
 fn get_op_id(t: &Token) -> Id {
     match &t.inner {
-        T_FdRedirect(_, x) => get_op_id(x),
-        T_IoFile(op, _) => op.id,
+        TFdRedirect(_, x) => get_op_id(x),
+        TIoFile(op, _) => op.id,
         _ => t.id,
     }
 }
 
 pub fn check_pipe_to_nowhere(_: &Parameters<'_>, t: &Token, out: &mut Out) {
     let may_consume = |t: &Token| match &t.inner {
-        T_ProcSub(op, _) => op == "<",
-        T_Backticked(_) | T_DollarExpansion(_) => true,
+        TProcSub(op, _) => op == "<",
+        TBackticked(_) | TDollarExpansion(_) => true,
         _ => false,
     };
-    let may_produce = |t: &Token| matches!(&t.inner, T_ProcSub(op, _) if op == ">");
+    let may_produce = |t: &Token| matches!(&t.inner, TProcSub(op, _) if op == ">");
     let has_additional_consumers = |t: &Token| tree_contains(&may_consume, t);
     let has_additional_producers = |t: &Token| tree_contains(&may_produce, t);
     let interactive_flag_cmds = ["cp", "mv", "rm"];
@@ -1386,12 +1380,12 @@ pub fn check_pipe_to_nowhere(_: &Parameters<'_>, t: &Token, out: &mut Out) {
         }
     };
     let pipe_type = |t: &Token| match &t.inner {
-        T_Pipe(s) if s == "|" => PipeType::StdoutPipe,
-        T_Pipe(s) if s == "|&" => PipeType::StdoutStderrPipe,
+        TPipe(s) if s == "|" => PipeType::Stdout,
+        TPipe(s) if s == "|&" => PipeType::StdoutStderr,
         _ => PipeType::NoPipe,
     };
     match &t.inner {
-        T_Pipeline(pipes, cmds) => {
+        TPipeline(pipes, cmds) => {
             let pipe_types: Vec<PipeType> = pipes.iter().map(pipe_type).collect();
             let mut inputs = vec![PipeType::NoPipe];
             inputs.extend(pipe_types.iter().copied());
@@ -1421,7 +1415,7 @@ pub fn check_pipe_to_nowhere(_: &Parameters<'_>, t: &Token, out: &mut Out) {
                         ),
                     );
                 }
-                let T_Redirecting(redirs, _) = &stage.inner else {
+                let TRedirecting(redirs, _) = &stage.inner else {
                     continue;
                 };
                 let Some(fds): Option<Vec<Vec<i64>>> =
@@ -1446,7 +1440,7 @@ pub fn check_pipe_to_nowhere(_: &Parameters<'_>, t: &Token, out: &mut Out) {
                         "This redirection overrides piped input. To use both, merge or pass filenames.",
                     );
                 }
-                if *output == PipeType::StdoutPipe
+                if *output == PipeType::Stdout
                     && !has_producers
                     && let Some(over) = fd_map.get(&1).and_then(|l| l.first())
                 {
@@ -1474,7 +1468,7 @@ pub fn check_pipe_to_nowhere(_: &Parameters<'_>, t: &Token, out: &mut Out) {
                 }
             }
         }
-        T_Redirecting(redirects, cmd)
+        TRedirecting(redirects, cmd)
             if redirects
                 .iter()
                 .any(|r| get_redirection_fds(r).is_some_and(|f| f.contains(&0))) =>
@@ -1504,11 +1498,11 @@ pub fn check_pipe_to_nowhere(_: &Parameters<'_>, t: &Token, out: &mut Out) {
 }
 
 pub fn check_for_loop_glob_variables(_: &Parameters<'_>, t: &Token, out: &mut Out) {
-    let T_ForIn(_, words, _) = &t.inner else {
+    let TForIn(_, words, _) = &t.inner else {
         return;
     };
     for w in words {
-        if let T_NormalWord(parts) = &w.inner
+        if let TNormalWord(parts) = &w.inner
             && parts.iter().any(is_glob)
         {
             for p in parts.iter().filter(|x| is_quoteable_expansion(x)) {
@@ -1524,19 +1518,19 @@ pub fn check_for_loop_glob_variables(_: &Parameters<'_>, t: &Token, out: &mut Ou
 }
 
 pub fn check_subshelled_tests(params: &Parameters<'_>, t: &Token, out: &mut Out) {
-    let T_Subshell(list) = &t.inner else {
+    let TSubshell(list) = &t.inner else {
         return;
     };
     fn local_is_test_command(t: &Token) -> bool {
         match &t.inner {
-            T_Pipeline(pipes, cmds) if pipes.is_empty() => match cmds.as_slice() {
+            TPipeline(pipes, cmds) if pipes.is_empty() => match cmds.as_slice() {
                 [
                     Token {
-                        inner: T_Redirecting(_, cmd),
+                        inner: TRedirecting(_, cmd),
                         ..
                     },
                 ] => match cmd.inner {
-                    T_Condition(..) => true,
+                    TCondition(..) => true,
                     _ => is_command(cmd, "test"),
                 },
                 _ => false,
@@ -1546,16 +1540,16 @@ pub fn check_subshelled_tests(params: &Parameters<'_>, t: &Token, out: &mut Out)
     }
     fn is_test_structure(t: &Token) -> bool {
         match &t.inner {
-            T_Banged(t) => is_test_structure(t),
-            T_AndIf(a, b) | T_OrIf(a, b) => is_test_structure(a) && is_test_structure(b),
-            T_Pipeline(pipes, cmds) if pipes.is_empty() => match cmds.as_slice() {
+            TBanged(t) => is_test_structure(t),
+            TAndIf(a, b) | TOrIf(a, b) => is_test_structure(a) && is_test_structure(b),
+            TPipeline(pipes, cmds) if pipes.is_empty() => match cmds.as_slice() {
                 [
                     Token {
-                        inner: T_Redirecting(_, cmd),
+                        inner: TRedirecting(_, cmd),
                         ..
                     },
                 ] => match &cmd.inner {
-                    T_BraceGroup(ts) | T_Subshell(ts) => ts.iter().all(is_test_structure),
+                    TBraceGroup(ts) | TSubshell(ts) => ts.iter().all(is_test_structure),
                     _ => local_is_test_command(t),
                 },
                 _ => local_is_test_command(t),
@@ -1565,9 +1559,9 @@ pub fn check_subshelled_tests(params: &Parameters<'_>, t: &Token, out: &mut Out)
     }
     let has_assignment = tree_contains(
         &|x: &Token| match &x.inner {
-            TA_Assignment(..) | T_DollarBraceCommandExpansion(..) => true,
-            TA_Unary(s, _) => s.contains("++") || s.contains("--"),
-            T_DollarBraced(_, l) => {
+            TaAssignment(..) | TDollarBraceCommandExpansion(..) => true,
+            TaUnary(s, _) => s.contains("++") || s.contains("--"),
+            TDollarBraced(_, l) => {
                 let m = get_braced_modifier(&concat_oversimplify(l));
                 m.starts_with('=') || m.starts_with(":=")
             }
@@ -1584,15 +1578,15 @@ pub fn check_subshelled_tests(params: &Parameters<'_>, t: &Token, out: &mut Out)
             .iter()
             .skip(1)
             .skip_while(|x| match &x.inner {
-                T_Redirecting(r, _) => r.is_empty(),
-                T_Pipeline(p, _) => p.is_empty(),
-                T_Annotation(..) => true,
+                TRedirecting(r, _) => r.is_empty(),
+                TPipeline(p, _) => p.is_empty(),
+                TAnnotation(..) => true,
                 _ => false,
             })
             .collect();
         matches!(
             rest.first().map(|x| &x.inner),
-            Some(T_IfExpression(..) | T_WhileExpression(..) | T_UntilExpression(..))
+            Some(TIfExpression(..) | TWhileExpression(..) | TUntilExpression(..))
         )
     };
     let is_single_test = matches!(list.as_slice(), [c] if is_test_command(c));
@@ -1669,15 +1663,15 @@ pub fn check_unnecessarily_inverted_test(_: &Parameters<'_>, t: &Token, out: &mu
         }
     };
     fn banged_condition(t: &Token) -> Option<&Token> {
-        let T_Banged(p) = &t.inner else {
+        let TBanged(p) = &t.inner else {
             return None;
         };
-        let T_Pipeline(_, cmds) = &p.inner else {
+        let TPipeline(_, cmds) = &p.inner else {
             return None;
         };
         let [
             Token {
-                inner: T_Redirecting(_, c),
+                inner: TRedirecting(_, c),
                 ..
             },
         ] = cmds.as_slice()
@@ -1685,29 +1679,29 @@ pub fn check_unnecessarily_inverted_test(_: &Parameters<'_>, t: &Token, out: &mu
             return None;
         };
         match &c.inner {
-            T_Condition(_, inner) => Some(inner),
+            TCondition(_, inner) => Some(inner),
             _ => None,
         }
     }
     match &t.inner {
-        TC_Unary(_, bang, inner) if bang == "!" => match &inner.inner {
-            TC_Unary(_, op, _) => match op.as_str() {
+        TcUnary(_, bang, inner) if bang == "!" => match &inner.inner {
+            TcUnary(_, op, _) => match op.as_str() {
                 "-n" => style(out, t.id, 2236, "Use -z instead of ! -n."),
                 "-z" => style(out, t.id, 2236, "Use -n instead of ! -z."),
                 _ => {}
             },
-            TC_Binary(bs, op, _, _) => suggest(true, *bs, op, out),
+            TcBinary(bs, op, _, _) => suggest(true, *bs, op, out),
             _ => {}
         },
-        T_Banged(_) => {
+        TBanged(_) => {
             if let Some(cond) = banged_condition(t) {
                 match &cond.inner {
-                    TC_Unary(_, op, _) => match op.as_str() {
+                    TcUnary(_, op, _) => match op.as_str() {
                         "-n" => style(out, t.id, 2237, "Use [ -z .. ] instead of ! [ -n .. ]."),
                         "-z" => style(out, t.id, 2237, "Use [ -n .. ] instead of ! [ -z .. ]."),
                         _ => {}
                     },
-                    TC_Binary(bs, op, _, _) => suggest(false, *bs, op, out),
+                    TcBinary(bs, op, _, _) => suggest(false, *bs, op, out),
                     _ => {}
                 }
             }
@@ -1717,12 +1711,11 @@ pub fn check_unnecessarily_inverted_test(_: &Parameters<'_>, t: &Token, out: &mu
 }
 
 pub fn check_redirection_to_command(_: &Parameters<'_>, t: &Token, out: &mut Out) {
-    if let T_IoFile(_, w) = &t.inner
-        && let T_NormalWord(parts) = &w.inner
+    if let TIoFile(_, w) = &t.inner
+        && let TNormalWord(parts) = &w.inner
         && let [
             Token {
-                inner: T_Literal(s),
-                ..
+                inner: TLiteral(s), ..
             },
         ] = parts.as_slice()
         && COMMON_COMMANDS.contains(&s.as_str())
@@ -1738,7 +1731,7 @@ pub fn check_redirection_to_command(_: &Parameters<'_>, t: &Token, out: &mut Out
 }
 
 pub fn check_nullary_expansion_test(params: &Parameters<'_>, t: &Token, out: &mut Out) {
-    let TC_Nullary(_, word) = &t.inner else {
+    let TcNullary(_, word) = &t.inner else {
         return;
     };
     let id = word.id;
@@ -1764,10 +1757,9 @@ pub fn check_nullary_expansion_test(params: &Parameters<'_>, t: &Token, out: &mu
 }
 
 pub fn check_dollar_quote_paren(params: &Parameters<'_>, t: &Token, out: &mut Out) {
-    if let T_DollarDoubleQuoted(parts) = &t.inner
+    if let TDollarDoubleQuoted(parts) = &t.inner
         && let Some(Token {
-            inner: T_Literal(s),
-            ..
+            inner: TLiteral(s), ..
         }) = parts.first()
         && s.starts_with(['(', '{'])
     {
@@ -1782,8 +1774,8 @@ pub fn check_dollar_quote_paren(params: &Parameters<'_>, t: &Token, out: &mut Ou
 }
 
 pub fn check_translated_string_variable(params: &Parameters<'_>, t: &Token, out: &mut Out) {
-    if let T_DollarDoubleQuoted(parts) = &t.inner
-        && let [Token { inner: T_Literal(s), .. }] = parts.as_slice()
+    if let TDollarDoubleQuoted(parts) = &t.inner
+        && let [Token { inner: TLiteral(s), .. }] = parts.as_slice()
         && s.chars().all(is_variable_char)
         && params
             .variable_flow
@@ -1801,10 +1793,10 @@ pub fn check_translated_string_variable(params: &Parameters<'_>, t: &Token, out:
 }
 
 pub fn check_default_case(_: &Parameters<'_>, t: &Token, out: &mut Out) {
-    if let T_CaseExpression(_, list) = &t.inner {
+    if let TCaseExpression(_, list) = &t.inner {
         let can_match_any = |pat: &Token| {
             word_to_exact_pseudo_glob(pat)
-                .is_some_and(|pg| pseudo_glob_is_super_set_of(&pg, &[PseudoGlob::PGMany]))
+                .is_some_and(|pg| pseudo_glob_is_super_set_of(&pg, &[PseudoGlob::Many]))
         };
         if !list.iter().any(|(_, l, _)| l.iter().any(can_match_any)) {
             info(
@@ -1827,27 +1819,27 @@ pub fn check_useless_bang(params: &Parameters<'_>, t: &Token, out: &mut Out) {
     let is_function_body = |t: &Token| {
         get_parents_of_id(&params.parent_map, t.id)
             .first()
-            .is_some_and(|p| matches!(p.inner, T_Function(..)))
+            .is_some_and(|p| matches!(p.inner, TFunction(..)))
     };
     fn non_returning<'t>(
         t: &'t Token,
         is_function_body: &dyn Fn(&Token) -> bool,
     ) -> Vec<&'t Token> {
         match &t.inner {
-            T_Script(_, list) | T_Subshell(list) => drop_last(list).iter().collect(),
-            T_BraceGroup(list) => {
+            TScript(_, list) | TSubshell(list) => drop_last(list).iter().collect(),
+            TBraceGroup(list) => {
                 if is_function_body(t) {
                     drop_last(list).iter().collect()
                 } else {
                     list.iter().collect()
                 }
             }
-            T_WhileExpression(conds, cmds) | T_UntilExpression(conds, cmds) => {
+            TWhileExpression(conds, cmds) | TUntilExpression(conds, cmds) => {
                 drop_last(conds).iter().chain(cmds.iter()).collect()
             }
-            T_ForIn(_, _, list) | T_ForArithmetic(_, _, _, list) => list.iter().collect(),
-            T_Annotation(_, t) => non_returning(t, is_function_body),
-            T_IfExpression(conds, elses) => {
+            TForIn(_, _, list) | TForArithmetic(_, _, _, list) => list.iter().collect(),
+            TAnnotation(_, t) => non_returning(t, is_function_body),
+            TIfExpression(conds, elses) => {
                 let mut out: Vec<&Token> = Vec::new();
                 for (c, _) in conds {
                     out.extend(drop_last(c).iter());
@@ -1863,7 +1855,7 @@ pub fn check_useless_bang(params: &Parameters<'_>, t: &Token, out: &mut Out) {
     }
     fn check(params: &Parameters<'_>, t: &Token, out: &mut Out) {
         match &t.inner {
-            T_Banged(cmd) => {
+            TBanged(cmd) => {
                 let path = path_of(params, t);
                 if !is_condition(&path) {
                     out.push(super::analyzerlib::make_comment_with_fix(
@@ -1875,7 +1867,7 @@ pub fn check_useless_bang(params: &Parameters<'_>, t: &Token, out: &mut Out) {
                     ));
                 }
             }
-            T_Annotation(_, t) => check(params, t, out),
+            TAnnotation(_, t) => check(params, t, out),
             _ => {}
         }
     }
@@ -1888,24 +1880,24 @@ pub fn check_modified_arithmetic_in_redirection(params: &Parameters<'_>, t: &Tok
     if matches!(params.shell_type, Shell::Dash | Shell::BusyboxSh) {
         return;
     }
-    let T_Redirecting(redirs, cmd) = &t.inner else {
+    let TRedirecting(redirs, cmd) = &t.inner else {
         return;
     };
-    if !matches!(&cmd.inner, T_SimpleCommand(_, w) if !w.is_empty()) {
+    if !matches!(&cmd.inner, TSimpleCommand(_, w) if !w.is_empty()) {
         return;
     }
     fn check_modifying(t: &Token, out: &mut Out) {
         match &t.inner {
-            TA_Sequence(list) => list.iter().for_each(|x| check_modifying(x, out)),
-            TA_Unary(s, _) if ["|++", "++|", "|--", "--|"].contains(&s.as_str()) => {
+            TaSequence(list) => list.iter().for_each(|x| check_modifying(x, out)),
+            TaUnary(s, _) if ["|++", "++|", "|--", "--|"].contains(&s.as_str()) => {
                 warn_for(t.id, out);
             }
-            TA_Assignment(..) => warn_for(t.id, out),
-            TA_Binary(_, x, y) => {
+            TaAssignment(..) => warn_for(t.id, out),
+            TaBinary(_, x, y) => {
                 check_modifying(x, out);
                 check_modifying(y, out);
             }
-            TA_Trinary(x, y, z) => {
+            TaTrinary(x, y, z) => {
                 check_modifying(x, out);
                 check_modifying(y, out);
                 check_modifying(z, out);
@@ -1922,21 +1914,21 @@ pub fn check_modified_arithmetic_in_redirection(params: &Parameters<'_>, t: &Tok
         );
     }
     let check_arithmetic = |t: &Token, out: &mut Out| {
-        if let T_DollarArithmetic(x) = &t.inner {
+        if let TDollarArithmetic(x) = &t.inner {
             check_modifying(x, out);
         }
     };
     for r in redirs {
-        let T_FdRedirect(_, x) = &r.inner else {
+        let TFdRedirect(_, x) = &r.inner else {
             continue;
         };
         match &x.inner {
-            T_IoFile(_, word) | T_HereString(word) => {
+            TIoFile(_, word) | THereString(word) => {
                 for p in get_word_parts(word) {
                     check_arithmetic(p, out);
                 }
             }
-            T_HereDoc(_, _, _, list) => {
+            THereDoc(_, _, _, list) => {
                 for p in list {
                     check_arithmetic(p, out);
                 }
@@ -1947,7 +1939,7 @@ pub fn check_modified_arithmetic_in_redirection(params: &Parameters<'_>, t: &Tok
 }
 
 pub fn check_blatant_recursion(params: &Parameters<'_>, t: &Token, out: &mut Out) {
-    let T_Function(_, _, name, body) = &t.inner else {
+    let TFunction(_, _, name, body) = &t.inner else {
         return;
     };
     let seqs = get_command_sequences(body);
@@ -1959,8 +1951,8 @@ pub fn check_blatant_recursion(params: &Parameters<'_>, t: &Token, out: &mut Out
     };
     fn check_list(params: &Parameters<'_>, name: &str, t: &Token, out: &mut Out) {
         match &t.inner {
-            T_Backgrounded(t) | T_AndIf(t, _) | T_OrIf(t, _) => check_list(params, name, t, out),
-            T_Pipeline(_, cmds) => {
+            TBackgrounded(t) | TAndIf(t, _) | TOrIf(t, _) => check_list(params, name, t, out),
+            TPipeline(_, cmds) => {
                 for cmd in cmds {
                     let (invoked, tok) = get_command_name_and_token(true, cmd);
                     if invoked.as_deref() == Some(name) {
@@ -1982,10 +1974,10 @@ pub fn check_blatant_recursion(params: &Parameters<'_>, t: &Token, out: &mut Out
 
 pub fn check_bad_test_and_or(params: &Parameters<'_>, t: &Token, out: &mut Out) {
     match &t.inner {
-        T_Pipeline(seps, cmds) if cmds.len() >= 2 => {
+        TPipeline(seps, cmds) if cmds.len() >= 2 => {
             let check_pipe = |p: Option<&Token>, out: &mut Out| {
                 if let Some(pt) = p
-                    && let T_Pipe(s) = &pt.inner
+                    && let TPipe(s) = &pt.inner
                     && s == "|"
                 {
                     warn_with_fix(
@@ -2006,13 +1998,13 @@ pub fn check_bad_test_and_or(params: &Parameters<'_>, t: &Token, out: &mut Out) 
                 }
             }
         }
-        T_Backgrounded(cmd) => {
+        TBackgrounded(cmd) => {
             let id = t.id;
             let mut cur: &Token = cmd;
             loop {
                 match &cur.inner {
-                    T_AndIf(_, rhs) | T_OrIf(_, rhs) => cur = rhs,
-                    T_Pipeline(_, list) if !list.is_empty() => {
+                    TAndIf(_, rhs) | TOrIf(_, rhs) => cur = rhs,
+                    TPipeline(_, list) if !list.is_empty() => {
                         cur = list.last().expect("non-empty");
                     }
                     _ => {
@@ -2038,14 +2030,14 @@ pub fn check_comparison_with_leading_x(params: &Parameters<'_>, t: &Token, out: 
     let fix_leading_x = |token: &Token| -> Option<super::interface::Replacement> {
         let parts = get_word_parts(token);
         match parts.first().map(|p| (p.id, &p.inner)) {
-            Some((id, T_Literal(s)))
+            Some((id, TLiteral(s)))
                 if s.chars().next().is_some_and(|c| hchar::to_lower(c) == 'x') =>
             {
-                if let T_NormalWord(w) = &token.inner
+                if let TNormalWord(w) = &token.inner
                     && let [
                         Token {
                             id: lid,
-                            inner: T_Literal(one),
+                            inner: TLiteral(one),
                         },
                     ] = w.as_slice()
                     && one.chars().count() == 1
@@ -2054,7 +2046,7 @@ pub fn check_comparison_with_leading_x(params: &Parameters<'_>, t: &Token, out: 
                 }
                 Some(replace_start(id, params, 1, ""))
             }
-            Some((id, T_SingleQuoted(s)))
+            Some((id, TSingleQuoted(s)))
                 if s.chars().next().is_some_and(|c| hchar::to_lower(c) == 'x') =>
             {
                 Some(replace_start(id, params, 2, "'"))
@@ -2074,10 +2066,10 @@ pub fn check_comparison_with_leading_x(params: &Parameters<'_>, t: &Token, out: 
         }
     };
     match &t.inner {
-        TC_Binary(_, op, lhs, rhs) if ["=", "==", "!="].contains(&op.as_str()) => {
+        TcBinary(_, op, lhs, rhs) if ["=", "==", "!="].contains(&op.as_str()) => {
             check(lhs, rhs, out);
         }
-        T_SimpleCommand(_, words) => {
+        TSimpleCommand(_, words) => {
             if let [cmd, lhs, op, rhs] = words.as_slice()
                 && get_literal_string(cmd).as_deref() == Some("test")
                 && matches!(get_literal_string(op).as_deref(), Some("=" | "==" | "!="))
@@ -2090,15 +2082,15 @@ pub fn check_comparison_with_leading_x(params: &Parameters<'_>, t: &Token, out: 
 }
 
 pub fn check_assign_to_self(_: &Parameters<'_>, t: &Token, out: &mut Out) {
-    if let T_SimpleCommand(vars, words) = &t.inner
+    if let TSimpleCommand(vars, words) = &t.inner
         && words.is_empty()
     {
         for v in vars {
-            if let T_Assignment(AssignmentMode::Assign, name, indices, value) = &v.inner
+            if let TAssignment(AssignmentMode::Assign, name, indices, value) = &v.inner
                 && indices.is_empty()
                 && let [
                     Token {
-                        inner: T_DollarBraced(_, b),
+                        inner: TDollarBraced(_, b),
                         ..
                     },
                 ] = get_word_parts(value).as_slice()
@@ -2116,30 +2108,29 @@ pub fn check_assign_to_self(_: &Parameters<'_>, t: &Token, out: &mut Out) {
 }
 
 pub fn check_equals_in_command(params: &Parameters<'_>, original: &Token, out: &mut Out) {
-    let T_SimpleCommand(vars, words) = &original.inner else {
+    let TSimpleCommand(vars, words) = &original.inner else {
         return;
     };
     let Some(word) = words.first() else {
         return;
     };
-    let T_NormalWord(list) = &word.inner else {
+    let TNormalWord(list) = &word.inner else {
         return;
     };
-    let has_equals = |t: &Token| matches!(&t.inner, T_Literal(s) if s.contains('='));
+    let has_equals = |t: &Token| matches!(&t.inner, TLiteral(s) if s.contains('='));
     let Some(pos) = list.iter().position(has_equals) else {
         return;
     };
     let mut leading: &[Token] = &list[..pos];
     if let Some(Token {
-        inner: T_Literal(s),
-        ..
+        inner: TLiteral(s), ..
     }) = leading.last()
         && s == "+"
     {
         leading = &leading[..leading.len() - 1];
     }
     let eq = &list[pos];
-    let T_Literal(s) = &eq.inner else {
+    let TLiteral(s) = &eq.inner else {
         return;
     };
     let lit_id = eq.id;
@@ -2211,7 +2202,7 @@ pub fn check_equals_in_command(params: &Parameters<'_>, original: &Token, out: &
         if l.iter().any(is_quotes) || l.iter().any(will_become_multiple_args) {
             return false;
         }
-        let w = Token::new(Id(0), T_NormalWord(l.to_vec()));
+        let w = Token::new(Id(0), TNormalWord(l.to_vec()));
         get_literal_string_ext(&w, &|_| Some("x".to_string())).is_some_and(|s| is_variable_name(&s))
     };
     let is_leading_number_var = |s: &str| {
@@ -2265,7 +2256,7 @@ pub fn check_equals_in_command(params: &Parameters<'_>, original: &Token, out: &
     if let [
         Token {
             id,
-            inner: T_DollarBraced(braced, l),
+            inner: TDollarBraced(braced, l),
         },
     ] = leading
         && s.starts_with('=')
@@ -2344,7 +2335,7 @@ pub fn check_equals_in_command(params: &Parameters<'_>, original: &Token, out: &
 }
 
 pub fn check_second_arg_is_comparison(_: &Parameters<'_>, t: &Token, out: &mut Out) {
-    let T_SimpleCommand(_, words) = &t.inner else {
+    let TSimpleCommand(_, words) = &t.inner else {
         return;
     };
     let [_, arg, ..] = words.as_slice() else {
@@ -2354,7 +2345,7 @@ pub fn check_second_arg_is_comparison(_: &Parameters<'_>, t: &Token, out: &mut O
         return;
     };
     let head_id = |t: &Token| match &t.inner {
-        T_NormalWord(l) if !l.is_empty() => l[0].id,
+        TNormalWord(l) if !l.is_empty() => l[0].id,
         _ => t.id,
     };
     if arg_string.starts_with("====") {
@@ -2385,7 +2376,7 @@ pub fn check_second_arg_is_comparison(_: &Parameters<'_>, t: &Token, out: &mut O
 }
 
 pub fn check_command_with_trailing_symbol(_: &Parameters<'_>, t: &Token, out: &mut Out) {
-    let T_SimpleCommand(_, words) = &t.inner else {
+    let TSimpleCommand(_, words) = &t.inner else {
         return;
     };
     let Some(cmd) = words.first() else {
@@ -2445,16 +2436,15 @@ pub fn check_unquoted_parameter_expansion_pattern(
     x: &Token,
     out: &mut Out,
 ) {
-    let T_DollarBraced(true, word) = &x.inner else {
+    let TDollarBraced(true, word) = &x.inner else {
         return;
     };
-    let T_NormalWord(parts) = &word.inner else {
+    let TNormalWord(parts) = &word.inner else {
         return;
     };
     let [
         Token {
-            inner: T_Literal(_),
-            ..
+            inner: TLiteral(_), ..
         },
         rest @ ..,
     ] = parts.as_slice()
@@ -2471,7 +2461,7 @@ pub fn check_unquoted_parameter_expansion_pattern(
     for t in rest {
         if matches!(
             t.inner,
-            T_DollarBraced(..) | T_DollarExpansion(_) | T_Backticked(_)
+            TDollarBraced(..) | TDollarExpansion(_) | TBackticked(_)
         ) {
             info_with_fix(
                 out,
@@ -2485,21 +2475,21 @@ pub fn check_unquoted_parameter_expansion_pattern(
 }
 
 pub fn check_bats_test_does_not_use_negation(params: &Parameters<'_>, t: &Token, out: &mut Out) {
-    let T_BatsTest(_, body) = &t.inner else {
+    let TBatsTest(_, body) = &t.inner else {
         return;
     };
-    let T_BraceGroup(commands) = &body.inner else {
+    let TBraceGroup(commands) = &body.inner else {
         return;
     };
     let is_last_of = |t: &Token| commands.last().is_some_and(|x| x == t);
     for c in commands {
-        let T_Banged(cmd) = &c.inner else {
+        let TBanged(cmd) = &c.inner else {
             continue;
         };
         let is_condition = match &cmd.inner {
-            T_Pipeline(_, cmds) => matches!(
+            TPipeline(_, cmds) => matches!(
                 cmds.as_slice(),
-                [Token { inner: T_Redirecting(_, inner), .. }] if matches!(inner.inner, T_Condition(..))
+                [Token { inner: TRedirecting(_, inner), .. }] if matches!(inner.inner, TCondition(..))
             ),
             _ => false,
         };
@@ -2540,10 +2530,10 @@ pub fn check_bats_test_does_not_use_negation(params: &Parameters<'_>, t: &Token,
 }
 
 fn is_sourced(params: &Parameters<'_>, t: &Token) -> bool {
-    matches!(t.inner, T_SourceCommand(..))
+    matches!(t.inner, TSourceCommand(..))
         || get_parents_of_id(&params.parent_map, t.id)
             .iter()
-            .any(|p| matches!(p.inner, T_SourceCommand(..)))
+            .any(|p| matches!(p.inner, TSourceCommand(..)))
 }
 
 pub fn check_command_is_unreachable(params: &Parameters<'_>, t: &Token, out: &mut Out) {
@@ -2555,11 +2545,11 @@ pub fn check_command_is_unreachable(params: &Parameters<'_>, t: &Token, out: &mu
             .is_some_and(|s| !s.state_is_reachable())
     };
     let is_unreachable_function = |f: &Token| match &f.inner {
-        T_Function(_, _, _, body) => is_unreachable(body),
+        TFunction(_, _, _, body) => is_unreachable(body),
         _ => false,
     };
     match &t.inner {
-        T_Pipeline(..) => {
+        TPipeline(..) => {
             let Some(cfga) = params.cfg_analysis.as_ref() else {
                 return;
             };
@@ -2582,7 +2572,7 @@ pub fn check_command_is_unreachable(params: &Parameters<'_>, t: &Token, out: &mu
                 "Command appears to be unreachable. Check usage (or ignore if invoked indirectly).",
             );
         }
-        T_Function(..)
+        TFunction(..)
             if is_unreachable_function(t)
                 && !get_parents_of_id(&params.parent_map, t.id)
                     .iter()
@@ -2601,7 +2591,7 @@ pub fn check_command_is_unreachable(params: &Parameters<'_>, t: &Token, out: &mu
 }
 
 pub fn check_overwritten_exit_code(params: &Parameters<'_>, t: &Token, out: &mut Out) {
-    let T_DollarBraced(_, val) = &t.inner else {
+    let TDollarBraced(_, val) = &t.inner else {
         return;
     };
     if get_literal_string(val).as_deref() != Some("?") {
@@ -2626,8 +2616,8 @@ pub fn check_overwritten_exit_code(params: &Parameters<'_>, t: &Token, out: &mut
         return;
     };
     let is_cond = |t: &Token| match &t.inner {
-        T_Condition(..) => true,
-        T_SimpleCommand(..) => get_command_name(t).as_deref() == Some("test"),
+        TCondition(..) => true,
+        TSimpleCommand(..) => get_command_name(t).as_deref() == Some("test"),
         _ => false,
     };
     let used_unconditionally = exit_code_ids
@@ -2658,22 +2648,22 @@ pub fn check_unnecessary_arithmetic_expansion_index(
     t: &Token,
     out: &mut Out,
 ) {
-    if let T_Assignment(_, _, indices, _) = &t.inner
+    if let TAssignment(_, _, indices, _) = &t.inner
         && let [
             Token {
-                inner: TA_Sequence(seq),
+                inner: TaSequence(seq),
                 ..
             },
         ] = indices.as_slice()
         && let [
             Token {
-                inner: TA_Expansion(exp),
+                inner: TaExpansion(exp),
                 ..
             },
         ] = seq.as_slice()
         && let [
             e @ Token {
-                inner: T_DollarArithmetic(_),
+                inner: TDollarArithmetic(_),
                 ..
             },
         ] = exp.as_slice()
@@ -2699,11 +2689,11 @@ pub fn check_unnecessary_parens(params: &Parameters<'_>, t: &Token, out: &mut Ou
         ])
     };
     let check_leading = |s: &str, t: &Token, out: &mut Out| {
-        if let TA_Sequence(l) = &t.inner
+        if let TaSequence(l) = &t.inner
             && let [
                 Token {
                     id,
-                    inner: TA_Parenthesis(_),
+                    inner: TaParenthesis(_),
                 },
             ] = l.as_slice()
         {
@@ -2717,8 +2707,8 @@ pub fn check_unnecessary_parens(params: &Parameters<'_>, t: &Token, out: &mut Ou
         }
     };
     match &t.inner {
-        T_DollarArithmetic(x) => check_leading("$(( (x) )) is the same as $(( x ))", x, out),
-        T_ForArithmetic(x, y, z, _) => {
+        TDollarArithmetic(x) => check_leading("$(( (x) )) is the same as $(( x ))", x, out),
+        TForArithmetic(x, y, z, _) => {
             for v in [x, y, z] {
                 check_leading(
                     "for (((x); (y); (z))) is the same as for ((x; y; z))",
@@ -2727,16 +2717,16 @@ pub fn check_unnecessary_parens(params: &Parameters<'_>, t: &Token, out: &mut Ou
                 );
             }
         }
-        T_Assignment(_, _, indices, _) if indices.len() == 1 => {
+        TAssignment(_, _, indices, _) if indices.len() == 1 => {
             check_leading("a[(x)] is the same as a[x]", &indices[0], out);
         }
-        T_Arithmetic(x) => check_leading("(( (x) )) is the same as (( x ))", x, out),
-        TA_Parenthesis(inner) => {
-            if let TA_Sequence(l) = &inner.inner
+        TArithmetic(x) => check_leading("(( (x) )) is the same as (( x ))", x, out),
+        TaParenthesis(inner) => {
+            if let TaSequence(l) = &inner.inner
                 && let [
                     Token {
                         id,
-                        inner: TA_Parenthesis(_),
+                        inner: TaParenthesis(_),
                     },
                 ] = l.as_slice()
             {
@@ -2754,7 +2744,7 @@ pub fn check_unnecessary_parens(params: &Parameters<'_>, t: &Token, out: &mut Ou
 }
 
 pub fn check_plus_equals_number(params: &Parameters<'_>, t: &Token, out: &mut Out) {
-    let T_Assignment(AssignmentMode::Append, var, _, word) = &t.inner else {
+    let TAssignment(AssignmentMode::Append, var, _, word) = &t.inner else {
         return;
     };
     let Some(cfga) = params.cfg_analysis.as_ref() else {
@@ -2774,7 +2764,7 @@ pub fn check_plus_equals_number(params: &Parameters<'_>, t: &Token, out: &mut Ou
         .and_then(|s| cfganalysis::variable_may_be_assigned_integer(state, s))
         .unwrap_or(false);
     let is_numerical_variable_expansion = match &word.inner {
-        T_NormalWord(parts) if parts.len() == 1 => get_unmodified_parameter_expansion(&parts[0])
+        TNormalWord(parts) if parts.len() == 1 => get_unmodified_parameter_expansion(&parts[0])
             .and_then(|s| cfganalysis::variable_may_be_assigned_integer(state, &s))
             .unwrap_or(false),
         _ => false,
@@ -2797,20 +2787,20 @@ pub fn check_plus_equals_number(params: &Parameters<'_>, t: &Token, out: &mut Ou
 
 pub fn check_expansion_with_redirection(_: &Parameters<'_>, t: &Token, out: &mut Out) {
     let (capture_id, cmd) = match &t.inner {
-        T_DollarExpansion(c) | T_Backticked(c) | T_DollarBraceCommandExpansion(_, c)
+        TDollarExpansion(c) | TBackticked(c) | TDollarBraceCommandExpansion(_, c)
             if c.len() == 1 =>
         {
             (t.id, &c[0])
         }
         _ => return,
     };
-    let T_Pipeline(_, cmds) = &cmd.inner else {
+    let TPipeline(_, cmds) = &cmd.inner else {
         return;
     };
     let Some(last) = cmds.last() else {
         return;
     };
-    let T_Redirecting(redirs, _) = &last.inner else {
+    let TRedirecting(redirs, _) = &last.inner else {
         // checkCmd has no equation for anything else.
         panic!("ShellCheck: checkExpansionWithRedirection on a non-redirecting command");
     };
@@ -2836,18 +2826,18 @@ pub fn check_expansion_with_redirection(_: &Parameters<'_>, t: &Token, out: &mut
         );
     };
     for r in redirs {
-        let T_FdRedirect(fd, x) = &r.inner else {
+        let TFdRedirect(fd, x) = &r.inner else {
             continue;
         };
         match &x.inner {
-            T_IoDuplicate(_, target) if target == "1" => return,
-            T_IoDuplicate(..) if fd == "1" => return,
-            T_IoDuplicate(op, _) if fd.is_empty() && matches!(op.inner, T_GREATAND | T_Greater) => {
+            TIoDuplicate(_, target) if target == "1" => return,
+            TIoDuplicate(..) if fd == "1" => return,
+            TIoDuplicate(op, _) if fd.is_empty() && matches!(op.inner, TLexGreatand | TGreater) => {
                 emit(r.id, true, out);
                 return;
             }
-            T_IoFile(op, file)
-                if (fd.is_empty() || fd == "1") && matches!(op.inner, T_DGREAT | T_Greater) =>
+            TIoFile(op, file)
+                if (fd.is_empty() || fd == "1") && matches!(op.inner, TLexDgreat | TGreater) =>
             {
                 emit(
                     r.id,
@@ -2862,7 +2852,7 @@ pub fn check_expansion_with_redirection(_: &Parameters<'_>, t: &Token, out: &mut
 }
 
 pub fn check_unary_test_a(params: &Parameters<'_>, t: &Token, out: &mut Out) {
-    if let TC_Unary(_, op, _) = &t.inner
+    if let TcUnary(_, op, _) = &t.inner
         && op == "-a"
     {
         style_with_fix(

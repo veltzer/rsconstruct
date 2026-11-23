@@ -21,12 +21,12 @@ use super::interface::Shell;
 use super::regex::{Regex, mk_regex};
 
 use Inner::{
-    T_Arithmetic, T_Array, T_Assignment, T_Backticked, T_Banged, T_BraceExpansion, T_CoProc,
-    T_Condition, T_DollarArithmetic, T_DollarBraced, T_DollarBracket, T_DollarDoubleQuoted,
-    T_DollarExpansion, T_DollarSingleQuoted, T_Extglob, T_FdRedirect, T_ForArithmetic, T_Function,
-    T_GREATAND, T_Glob, T_Greater, T_HereString, T_IndexedElement, T_IoFile, T_Literal, T_Pipe,
-    T_Pipeline, T_ProcSub, T_Redirecting, T_Script, T_SelectIn, T_SimpleCommand, T_SourceCommand,
-    TA_Binary, TA_Expansion, TA_Unary, TA_Variable, TC_Binary, TC_Unary,
+    TArithmetic, TArray, TAssignment, TBackticked, TBanged, TBraceExpansion, TCoProc, TCondition,
+    TDollarArithmetic, TDollarBraced, TDollarBracket, TDollarDoubleQuoted, TDollarExpansion,
+    TDollarSingleQuoted, TExtglob, TFdRedirect, TForArithmetic, TFunction, TGlob, TGreater,
+    THereString, TIndexedElement, TIoFile, TLexGreatand, TLiteral, TPipe, TPipeline, TProcSub,
+    TRedirecting, TScript, TSelectIn, TSimpleCommand, TSourceCommand, TaBinary, TaExpansion,
+    TaUnary, TaVariable, TcBinary, TcUnary,
 };
 
 const VAR_CHARS: &str = "_0-9a-zA-Z";
@@ -125,7 +125,7 @@ pub fn check(params: &Parameters<'_>, t: &Token, out: &mut Out) {
 }
 
 fn check_for_decimals(_: &Parameters<'_>, t: &Token, out: &mut Out) {
-    if let TA_Expansion(_) = &t.inner
+    if let TaExpansion(_) = &t.inner
         && let Some(s) = get_literal_string(t)
         && let Some(first) = s.chars().next()
         && first.is_ascii_digit()
@@ -228,48 +228,44 @@ fn check_bashisms(params: &Parameters<'_>, t: &Token, out: &mut Out) {
     bashism(&c, t, out);
 }
 
-#[allow(
-    clippy::too_many_lines,
-    reason = "one arm per equation of ShellCheck's bashism"
-)]
 fn bashism(c: &Ctx<'_, '_>, t: &Token, out: &mut Out) {
     let id = t.id;
     match &t.inner {
-        T_ProcSub(..) => return c.warn_msg(out, id, 3001, "process substitution is"),
-        T_Extglob(..) => return c.warn_msg(out, id, 3002, "extglob is"),
-        T_DollarSingleQuoted(_) => {
+        TProcSub(..) => return c.warn_msg(out, id, 3001, "process substitution is"),
+        TExtglob(..) => return c.warn_msg(out, id, 3002, "extglob is"),
+        TDollarSingleQuoted(_) => {
             if !c.is_busybox {
                 c.warn_msg(out, id, 3003, "$'..' is");
             }
             return;
         }
-        T_DollarDoubleQuoted(_) => return c.warn_msg(out, id, 3004, "$\"..\" is"),
-        T_ForArithmetic(..) => return c.warn_msg(out, id, 3005, "arithmetic for loops are"),
-        T_Arithmetic(_) => return c.warn_msg(out, id, 3006, "standalone ((..)) is"),
-        T_DollarBracket(_) => return c.warn_msg(out, id, 3007, "$[..] in place of $((..)) is"),
-        T_SelectIn(..) => return c.warn_msg(out, id, 3008, "select loops are"),
-        T_BraceExpansion(_) => return c.warn_msg(out, id, 3009, "brace expansion is"),
-        T_Condition(ConditionType::DoubleBracket, _) => {
+        TDollarDoubleQuoted(_) => return c.warn_msg(out, id, 3004, "$\"..\" is"),
+        TForArithmetic(..) => return c.warn_msg(out, id, 3005, "arithmetic for loops are"),
+        TArithmetic(_) => return c.warn_msg(out, id, 3006, "standalone ((..)) is"),
+        TDollarBracket(_) => return c.warn_msg(out, id, 3007, "$[..] in place of $((..)) is"),
+        TSelectIn(..) => return c.warn_msg(out, id, 3008, "select loops are"),
+        TBraceExpansion(_) => return c.warn_msg(out, id, 3009, "brace expansion is"),
+        TCondition(ConditionType::DoubleBracket, _) => {
             if !c.is_busybox {
                 c.warn_msg(out, id, 3010, "[[ ]] is");
             }
             return;
         }
-        T_HereString(_) => return c.warn_msg(out, id, 3011, "here-strings are"),
-        TC_Binary(_, op, _, _) => return c.check_test_op(out, true, op, id),
+        THereString(_) => return c.warn_msg(out, id, 3011, "here-strings are"),
+        TcBinary(_, op, _, _) => return c.check_test_op(out, true, op, id),
         _ => {}
     }
-    if let T_SimpleCommand(_, words) = &t.inner
+    if let TSimpleCommand(_, words) = &t.inner
         && let [w0, _, w2, _] = words.as_slice()
         && get_literal_string(w0).as_deref() == Some("test")
         && let Some(op) = get_literal_string(w2)
     {
         return c.check_test_op(out, true, &op, id);
     }
-    if let TC_Unary(_, op, _) = &t.inner {
+    if let TcUnary(_, op, _) = &t.inner {
         return c.check_test_op(out, false, op, id);
     }
-    if let T_SimpleCommand(_, words) = &t.inner
+    if let TSimpleCommand(_, words) = &t.inner
         && let [w0, w1, _] = words.as_slice()
         && get_literal_string(w0).as_deref() == Some("test")
         && let Some(op) = get_literal_string(w1)
@@ -277,25 +273,24 @@ fn bashism(c: &Ctx<'_, '_>, t: &Token, out: &mut Out) {
         return c.check_test_op(out, false, &op, id);
     }
     match &t.inner {
-        TA_Unary(op, _) if ["|++", "|--", "++|", "--|"].contains(&op.as_str()) => {
+        TaUnary(op, _) if ["|++", "|--", "++|", "--|"].contains(&op.as_str()) => {
             let o: String = op.chars().filter(|&ch| ch != '|').collect();
             return c.warn_msg(out, id, 3018, &format!("{o} is"));
         }
-        TA_Binary(op, _, _) if op == "**" => return c.warn_msg(out, id, 3019, "exponentials are"),
-        T_FdRedirect(fd, x)
-            if fd == "&"
-                && matches!(&x.inner, T_IoFile(op, _) if matches!(op.inner, T_Greater)) =>
+        TaBinary(op, _, _) if op == "**" => return c.warn_msg(out, id, 3019, "exponentials are"),
+        TFdRedirect(fd, x)
+            if fd == "&" && matches!(&x.inner, TIoFile(op, _) if matches!(op.inner, TGreater)) =>
         {
             if !c.is_busybox {
                 c.warn_msg(out, id, 3020, "&> is");
             }
             return;
         }
-        T_FdRedirect(fd, x)
+        TFdRedirect(fd, x)
             if fd.is_empty()
-                && matches!(&x.inner, T_IoFile(op, _) if matches!(op.inner, T_GREATAND)) =>
+                && matches!(&x.inner, TIoFile(op, _) if matches!(op.inner, TLexGreatand)) =>
         {
-            let T_IoFile(_, file) = &x.inner else {
+            let TIoFile(_, file) = &x.inner else {
                 unreachable!("matched above")
             };
             if !only_literal_string(file)
@@ -306,16 +301,16 @@ fn bashism(c: &Ctx<'_, '_>, t: &Token, out: &mut Out) {
             }
             return;
         }
-        T_FdRedirect(fd, _) if fd.starts_with('{') => {
+        TFdRedirect(fd, _) if fd.starts_with('{') => {
             return c.warn_msg(out, id, 3022, "named file descriptors are");
         }
-        T_FdRedirect(num, _)
+        TFdRedirect(num, _)
             if num.chars().all(|ch| ch.is_ascii_digit()) && num.chars().count() > 1 =>
         {
             return c.warn_msg(out, id, 3023, "FDs outside 0-9 are");
         }
-        T_Assignment(AssignmentMode::Append, ..) => return c.warn_msg(out, id, 3024, "+= is"),
-        T_IoFile(_, word)
+        TAssignment(AssignmentMode::Append, ..) => return c.warn_msg(out, id, 3024, "+= is"),
+        TIoFile(_, word)
             if {
                 let file = only_literal_string(word);
                 file.starts_with("/dev/tcp") || file.starts_with("/dev/udp")
@@ -323,7 +318,7 @@ fn bashism(c: &Ctx<'_, '_>, t: &Token, out: &mut Out) {
         {
             return c.warn_msg(out, id, 3025, "/dev/{tcp,udp} is");
         }
-        T_Glob(s) if s.contains("[^") => {
+        TGlob(s) if s.contains("[^") => {
             return c.warn_msg(
                 out,
                 id,
@@ -331,10 +326,10 @@ fn bashism(c: &Ctx<'_, '_>, t: &Token, out: &mut Out) {
                 "^ in place of ! in glob bracket expressions is",
             );
         }
-        TA_Variable(s, _) if c.is_bash_variable(s) => {
+        TaVariable(s, _) if c.is_bash_variable(s) => {
             return c.warn_msg(out, id, 3028, &format!("{s} is"));
         }
-        T_DollarBraced(_, token) => {
+        TDollarBraced(_, token) => {
             let s = concat_oversimplify(token);
             let var = get_braced_reference(&s);
             if !c.is_busybox {
@@ -358,13 +353,13 @@ fn bashism(c: &Ctx<'_, '_>, t: &Token, out: &mut Out) {
             }
             return;
         }
-        T_Pipe(s) if s == "|&" => return c.warn_msg(out, id, 3029, "|& in place of 2>&1 | is"),
-        T_Array(_) => return c.warn_msg(out, id, 3030, "arrays are"),
-        T_IoFile(_, w) if is_glob(w) => {
+        TPipe(s) if s == "|&" => return c.warn_msg(out, id, 3029, "|& in place of 2>&1 | is"),
+        TArray(_) => return c.warn_msg(out, id, 3030, "arrays are"),
+        TIoFile(_, w) if is_glob(w) => {
             return c.warn_msg(out, id, 3031, "redirecting to/from globs is");
         }
-        T_CoProc(..) => return c.warn_msg(out, id, 3032, "coproc is"),
-        T_Function(_, _, s, _) if !is_variable_name(s) => {
+        TCoProc(..) => return c.warn_msg(out, id, 3032, "coproc is"),
+        TFunction(_, _, s, _) if !is_variable_name(s) => {
             return c.warn_msg(
                 out,
                 id,
@@ -372,15 +367,15 @@ fn bashism(c: &Ctx<'_, '_>, t: &Token, out: &mut Out) {
                 "naming functions outside [a-zA-Z_][a-zA-Z0-9_]* is",
             );
         }
-        T_DollarExpansion(l) if l.len() == 1 && is_only_redirection(&l[0]) => {
+        TDollarExpansion(l) if l.len() == 1 && is_only_redirection(&l[0]) => {
             return c.warn_msg(out, id, 3034, "$(<file) to read files is");
         }
-        T_Backticked(l) if l.len() == 1 && is_only_redirection(&l[0]) => {
+        TBackticked(l) if l.len() == 1 && is_only_redirection(&l[0]) => {
             return c.warn_msg(out, id, 3035, "`<file` to read files is");
         }
         _ => {}
     }
-    if let T_SimpleCommand(_, words) = &t.inner {
+    if let TSimpleCommand(_, words) = &t.inner {
         if let [_, arg, ..] = words.as_slice() {
             let arg_string = concat_oversimplify(arg);
             if is_command(t, "echo") && ECHO_FLAG_RE.with(|re| re.is_match(&arg_string)) {
@@ -418,15 +413,15 @@ fn bashism(c: &Ctx<'_, '_>, t: &Token, out: &mut Out) {
         }
     }
     match &t.inner {
-        T_SourceCommand(src, _) if get_command_name(src).as_deref() == Some("source") => {
+        TSourceCommand(src, _) if get_command_name(src).as_deref() == Some("source") => {
             if !c.is_busybox {
                 c.warn_msg(out, id, 3051, "'source' in place of '.' is");
             }
         }
-        TA_Expansion(parts) => {
+        TaExpansion(parts) => {
             if let Some(Token {
                 id: lid,
-                inner: T_Literal(s),
+                inner: TLiteral(s),
             }) = parts.first()
                 && RADIX_RE.with(|re| re.is_match(s))
             {
@@ -614,14 +609,15 @@ fn check_echo_sed(_: &Parameters<'_>, t: &Token, out: &mut Out) {
         }
     };
     match &t.inner {
-        T_Redirecting(lefts, r) => {
-            if lefts.iter().any(
-                |l| matches!(&l.inner, T_FdRedirect(_, x) if matches!(x.inner, T_HereString(_))),
-            ) {
+        TRedirecting(lefts, r) => {
+            if lefts
+                .iter()
+                .any(|l| matches!(&l.inner, TFdRedirect(_, x) if matches!(x.inner, THereString(_))))
+            {
                 check_sed(t.id, &oversimplify(r), out);
             }
         }
-        T_Pipeline(_, cmds) => {
+        TPipeline(_, cmds) => {
             if let [a, b] = cmds.as_slice()
                 && oversimplify(a) == ["echo", "${VAR}"]
             {
@@ -633,14 +629,12 @@ fn check_echo_sed(_: &Parameters<'_>, t: &Token, out: &mut Out) {
 }
 
 fn check_brace_expansion_vars(params: &Parameters<'_>, t: &Token, out: &mut Out) {
-    let T_BraceExpansion(list) = &t.inner else {
+    let TBraceExpansion(list) = &t.inner else {
         return;
     };
     let to_string = |t: &Token| {
         get_literal_string_ext(t, &|x| match x.inner {
-            T_DollarBraced(..) | T_DollarExpansion(_) | T_DollarArithmetic(_) => {
-                Some("$".to_string())
-            }
+            TDollarBraced(..) | TDollarExpansion(_) | TDollarArithmetic(_) => Some("$".to_string()),
             _ => Some("-".to_string()),
         })
         .unwrap_or_default()
@@ -652,8 +646,8 @@ fn check_brace_expansion_vars(params: &Parameters<'_>, t: &Token, out: &mut Out)
             path.extend(get_parents_of_id(&params.parent_map, element.id));
             let cmd = find_first(
                 |x: &&Token| match x.inner {
-                    T_Redirecting(..) => Some(true),
-                    T_Script(..) => Some(false),
+                    TRedirecting(..) => Some(true),
+                    TScript(..) => Some(false),
                     _ => None,
                 },
                 &path,
@@ -688,10 +682,10 @@ fn check_multi_dimensional_arrays(_: &Parameters<'_>, t: &Token, out: &mut Out) 
         );
     };
     match &t.inner {
-        T_Assignment(_, _, indices, _) | T_IndexedElement(indices, _) if indices.len() >= 2 => {
+        TAssignment(_, _, indices, _) | TIndexedElement(indices, _) if indices.len() >= 2 => {
             about(indices[1].id, out);
         }
-        T_DollarBraced(_, l)
+        TDollarBraced(_, l)
             if MULTI_DIM_RE
                 .with(|re| re.is_match(&get_braced_modifier(&concat_oversimplify(l)))) =>
         {
@@ -702,7 +696,7 @@ fn check_multi_dimensional_arrays(_: &Parameters<'_>, t: &Token, out: &mut Out) 
 }
 
 fn check_ps1_assignments(_: &Parameters<'_>, t: &Token, out: &mut Out) {
-    if let T_Assignment(_, name, _, word) = &t.inner
+    if let TAssignment(_, name, _, word) = &t.inner
         && name == "PS1"
     {
         let contents = concat_oversimplify(word);
@@ -719,8 +713,8 @@ fn check_ps1_assignments(_: &Parameters<'_>, t: &Token, out: &mut Out) {
 }
 
 fn check_multiple_bangs(_: &Parameters<'_>, t: &Token, out: &mut Out) {
-    if let T_Banged(inner) = &t.inner
-        && matches!(inner.inner, T_Banged(_))
+    if let TBanged(inner) = &t.inner
+        && matches!(inner.inner, TBanged(_))
     {
         err(
             out,
@@ -732,9 +726,9 @@ fn check_multiple_bangs(_: &Parameters<'_>, t: &Token, out: &mut Out) {
 }
 
 fn check_bang_after_pipe(_: &Parameters<'_>, t: &Token, out: &mut Out) {
-    if let T_Pipeline(_, cmds) = &t.inner {
+    if let TPipeline(_, cmds) = &t.inner {
         for c in cmds {
-            if let T_Banged(_) = &c.inner {
+            if let TBanged(_) = &c.inner {
                 err(
                     out,
                     c.id,
@@ -747,9 +741,9 @@ fn check_bang_after_pipe(_: &Parameters<'_>, t: &Token, out: &mut Out) {
 }
 
 fn check_negated_unary_ops(_: &Parameters<'_>, t: &Token, out: &mut Out) {
-    if let TC_Unary(ConditionType::SingleBracket, bang, inner) = &t.inner
+    if let TcUnary(ConditionType::SingleBracket, bang, inner) = &t.inner
         && bang == "!"
-        && let TC_Unary(_, op, _) = &inner.inner
+        && let TcUnary(_, op, _) = &inner.inner
     {
         match op.as_str() {
             "-o" => err(

@@ -177,7 +177,7 @@ inventory::submit! {
                 doc: "File extension for generated output files" },
         ],
         omit_standard_fields: &["formats"],
-        scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &[], src_exclude_dirs: &[] }),
+        scan_defaults: Some(crate::config::ScanDefaultsData { src_extensions: &[], src_exclude_dirs: &[] }),
         defaults: Some(crate::config::ProcessorDefaults { output_dir: "out/processor.generator.generic", ..crate::config::ProcessorDefaults::EMPTY }),
         defconfig_json: crate::registries::default_config_json::<GeneratorConfig>,
         keywords: &["generator", "generic"],

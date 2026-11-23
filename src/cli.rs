@@ -985,9 +985,10 @@ impl SharedBuildArgs {
             timings: self.timings,
             keep_going: self.keep_going,
             summary: !self.no_summary,
-            batch_size: self
-                .batch_size
-                .map(|n| if n < 0 { None } else { Some(n as usize) }),
+            batch_size: self.batch_size.map(|n| match usize::try_from(n) {
+                Ok(size) => BatchSizeOverride::Size(size),
+                Err(_) => BatchSizeOverride::Disabled,
+            }),
             stop_after,
             verify_tool_versions,
             processor_filter: self.processor.clone(),
@@ -1005,6 +1006,15 @@ impl SharedBuildArgs {
     }
 }
 
+/// What `--batch-size` said on the command line.
+#[derive(Clone, Copy)]
+pub enum BatchSizeOverride {
+    /// `--batch-size -1`: batching explicitly disabled.
+    Disabled,
+    /// `--batch-size n`: an explicit size.
+    Size(usize),
+}
+
 /// Options shared by build and watch commands.
 #[derive(Clone)]
 pub struct BuildOptions {
@@ -1015,12 +1025,9 @@ pub struct BuildOptions {
     pub timings: bool,
     pub keep_going: bool,
     pub summary: bool,
-    /// Three distinct states, which is why this is nested rather than flat:
     /// `None` = not set on the CLI (fall back to `[build] batch_size`),
-    /// `Some(None)` = `--batch-size -1`, batching explicitly disabled,
-    /// `Some(Some(n))` = an explicit size.
-    #[allow(clippy::option_option)]
-    pub batch_size: Option<Option<usize>>,
+    /// otherwise what `--batch-size` said.
+    pub batch_size: Option<BatchSizeOverride>,
     pub stop_after: BuildPhase,
     /// Check rsconstruct.lock for the processors that build, after
     /// discovery and the `-p`/`-x` selection (`--verify-tool-versions`, or

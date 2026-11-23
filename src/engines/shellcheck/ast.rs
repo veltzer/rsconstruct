@@ -1,16 +1,15 @@
 //! `ShellCheck`'s AST (`ShellCheck.AST`).
 //!
-//! The variant names are `ShellCheck`'s own (`T_SimpleCommand`, `TA_Binary`,
-//! ...), so every check here can be read side by side with its Haskell
-//! original. A token is an id plus its inner variant; ids map to source
+//! The variant names are `ShellCheck`'s own with the underscore dropped
+//! (`T_SimpleCommand` is `TSimpleCommand`, `TA_Binary` is `TaBinary`, the
+//! lexer tokens such as `T_DGREAT` are `TLexDgreat`), so every check here
+//! can be read side by side with its Haskell original. A token is an id plus its inner variant; ids map to source
 //! spans in the parse result.
 //!
 //! Traversal visits children in the order Haskell's derived `Traversable`
 //! instance does: fields left to right, lists in order, and only fields of
 //! the token type (the name of a coprocess is a `Maybe Token` field and is
 //! not visited). Equality ignores ids, as `ShellCheck`'s `Eq Token` does.
-
-#![allow(non_camel_case_types)]
 
 use std::collections::HashMap;
 use std::fmt;
@@ -82,14 +81,10 @@ pub enum AssignmentMode {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[allow(
-    clippy::enum_variant_names,
-    reason = "ShellCheck's own constructor names (CaseBreak, ...)"
-)]
 pub enum CaseType {
-    CaseBreak,
-    CaseFallThrough,
-    CaseContinue,
+    Break,
+    FallThrough,
+    Continue,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -133,125 +128,124 @@ pub type L = Vec<Token>;
 
 #[derive(Clone, Debug, PartialEq)]
 pub enum Inner {
-    TA_Binary(String, B, B),
-    TA_Assignment(String, B, B),
-    TA_Variable(String, L),
-    TA_Expansion(L),
-    TA_Sequence(L),
-    TA_Parenthesis(B),
-    TA_Trinary(B, B, B),
-    TA_Unary(String, B),
-    TC_And(ConditionType, String, B, B),
-    TC_Binary(ConditionType, String, B, B),
-    TC_Group(ConditionType, B),
-    TC_Nullary(ConditionType, B),
-    TC_Or(ConditionType, String, B, B),
-    TC_Unary(ConditionType, String, B),
-    TC_Empty(ConditionType),
-    T_AND_IF,
-    T_AndIf(B, B),
-    T_Arithmetic(B),
-    T_Array(L),
-    T_IndexedElement(L, B),
-    T_UnparsedIndex(SourcePos, String),
-    T_Assignment(AssignmentMode, String, L, B),
-    T_Backgrounded(B),
-    T_Backticked(L),
-    T_Bang,
-    T_Banged(B),
-    T_BraceExpansion(L),
-    T_BraceGroup(L),
-    T_CLOBBER,
-    T_Case,
-    T_CaseExpression(B, Vec<(CaseType, L, L)>),
-    T_Condition(ConditionType, B),
-    T_DGREAT,
-    T_DSEMI,
-    T_Do,
-    T_DollarArithmetic(B),
-    T_DollarBraced(bool, B),
-    T_DollarBracket(B),
-    T_DollarDoubleQuoted(L),
-    T_DollarExpansion(L),
-    T_DollarSingleQuoted(String),
-    T_DollarBraceCommandExpansion(Piped, L),
-    T_Done,
-    T_DoubleQuoted(L),
-    T_EOF,
-    T_Elif,
-    T_Else,
-    T_Esac,
-    T_Extglob(String, L),
-    T_FdRedirect(String, B),
-    T_Fi,
-    T_For,
-    T_ForArithmetic(B, B, B, L),
-    T_ForIn(String, L, L),
+    TaBinary(String, B, B),
+    TaAssignment(String, B, B),
+    TaVariable(String, L),
+    TaExpansion(L),
+    TaSequence(L),
+    TaParenthesis(B),
+    TaTrinary(B, B, B),
+    TaUnary(String, B),
+    TcAnd(ConditionType, String, B, B),
+    TcBinary(ConditionType, String, B, B),
+    TcGroup(ConditionType, B),
+    TcNullary(ConditionType, B),
+    TcOr(ConditionType, String, B, B),
+    TcUnary(ConditionType, String, B),
+    TcEmpty(ConditionType),
+    TLexAndIf,
+    TAndIf(B, B),
+    TArithmetic(B),
+    TArray(L),
+    TIndexedElement(L, B),
+    TUnparsedIndex(SourcePos, String),
+    TAssignment(AssignmentMode, String, L, B),
+    TBackgrounded(B),
+    TBackticked(L),
+    TBang,
+    TBanged(B),
+    TBraceExpansion(L),
+    TBraceGroup(L),
+    TLexClobber,
+    TCase,
+    TCaseExpression(B, Vec<(CaseType, L, L)>),
+    TCondition(ConditionType, B),
+    TLexDgreat,
+    TLexDsemi,
+    TDo,
+    TDollarArithmetic(B),
+    TDollarBraced(bool, B),
+    TDollarBracket(B),
+    TDollarDoubleQuoted(L),
+    TDollarExpansion(L),
+    TDollarSingleQuoted(String),
+    TDollarBraceCommandExpansion(Piped, L),
+    TDone,
+    TDoubleQuoted(L),
+    TLexEof,
+    TElif,
+    TElse,
+    TEsac,
+    TExtglob(String, L),
+    TFdRedirect(String, B),
+    TFi,
+    TFor,
+    TForArithmetic(B, B, B, L),
+    TForIn(String, L, L),
     /// keyword, parentheses, name, body
-    T_Function(bool, bool, String, B),
-    T_GREATAND,
-    T_Glob(String),
-    T_Greater,
-    T_HereDoc(Dashed, Quoted, String, L),
-    T_HereString(B),
-    T_If,
-    T_IfExpression(Vec<(L, L)>, L),
-    T_In,
-    T_IoFile(B, B),
-    T_IoDuplicate(B, String),
-    T_LESSAND,
-    T_LESSGREAT,
-    T_Lbrace,
-    T_Less,
-    T_Literal(String),
-    T_Lparen,
-    T_NormalWord(L),
-    T_OR_IF,
-    T_OrIf(B, B),
-    T_ParamSubSpecialChar(String),
+    TFunction(bool, bool, String, B),
+    TLexGreatand,
+    TGlob(String),
+    TGreater,
+    THereDoc(Dashed, Quoted, String, L),
+    THereString(B),
+    TIf,
+    TIfExpression(Vec<(L, L)>, L),
+    TIn,
+    TIoFile(B, B),
+    TIoDuplicate(B, String),
+    TLexLessand,
+    TLexLessgreat,
+    TLbrace,
+    TLess,
+    TLiteral(String),
+    TLparen,
+    TNormalWord(L),
+    TLexOrIf,
+    TOrIf(B, B),
+    TParamSubSpecialChar(String),
     /// pipe separators, commands
-    T_Pipeline(L, L),
-    T_ProcSub(String, L),
-    T_Rbrace,
-    T_Redirecting(L, B),
-    T_Rparen,
-    T_Script(B, L),
-    T_Select,
-    T_SelectIn(String, L, L),
-    T_Semi,
-    T_SimpleCommand(L, L),
-    T_SingleQuoted(String),
-    T_Subshell(L),
-    T_Then,
-    T_Until,
-    T_UntilExpression(L, L),
-    T_While,
-    T_WhileExpression(L, L),
-    T_Annotation(Vec<Annotation>, B),
-    T_Pipe(String),
+    TPipeline(L, L),
+    TProcSub(String, L),
+    TRbrace,
+    TRedirecting(L, B),
+    TRparen,
+    TScript(B, L),
+    TSelect,
+    TSelectIn(String, L, L),
+    TSemi,
+    TSimpleCommand(L, L),
+    TSingleQuoted(String),
+    TSubshell(L),
+    TThen,
+    TUntil,
+    TUntilExpression(L, L),
+    TWhile,
+    TWhileExpression(L, L),
+    TAnnotation(Vec<Annotation>, B),
+    TPipe(String),
     /// The name is not a traversed child.
-    T_CoProc(Option<B>, B),
-    T_CoProcBody(B),
-    T_Include(B),
-    T_SourceCommand(B, B),
-    T_BatsTest(String, B),
+    TCoProc(Option<B>, B),
+    TCoProcBody(B),
+    TInclude(B),
+    TSourceCommand(B, B),
+    TBatsTest(String, B),
 }
 
 use Inner::{
-    T_AND_IF, T_AndIf, T_Annotation, T_Arithmetic, T_Array, T_Assignment, T_Backgrounded,
-    T_Backticked, T_Bang, T_Banged, T_BatsTest, T_BraceExpansion, T_BraceGroup, T_CLOBBER, T_Case,
-    T_CaseExpression, T_CoProc, T_CoProcBody, T_Condition, T_DGREAT, T_DSEMI, T_Do,
-    T_DollarArithmetic, T_DollarBraceCommandExpansion, T_DollarBraced, T_DollarBracket,
-    T_DollarDoubleQuoted, T_DollarExpansion, T_DollarSingleQuoted, T_Done, T_DoubleQuoted, T_EOF,
-    T_Elif, T_Else, T_Esac, T_Extglob, T_FdRedirect, T_Fi, T_For, T_ForArithmetic, T_ForIn,
-    T_Function, T_GREATAND, T_Glob, T_Greater, T_HereDoc, T_HereString, T_If, T_IfExpression, T_In,
-    T_Include, T_IndexedElement, T_IoDuplicate, T_IoFile, T_LESSAND, T_LESSGREAT, T_Lbrace, T_Less,
-    T_Literal, T_Lparen, T_NormalWord, T_OR_IF, T_OrIf, T_ParamSubSpecialChar, T_Pipe, T_Pipeline,
-    T_ProcSub, T_Rbrace, T_Redirecting, T_Rparen, T_Script, T_Select, T_SelectIn, T_Semi,
-    T_SimpleCommand, T_SingleQuoted, T_SourceCommand, T_Subshell, T_Then, T_UnparsedIndex, T_Until,
-    T_UntilExpression, T_While, T_WhileExpression, TA_Assignment, TA_Binary, TA_Expansion,
-    TA_Parenthesis, TA_Sequence, TA_Trinary, TA_Unary, TA_Variable, TC_And, TC_Binary, TC_Empty,
-    TC_Group, TC_Nullary, TC_Or, TC_Unary,
+    TAndIf, TAnnotation, TArithmetic, TArray, TAssignment, TBackgrounded, TBackticked, TBang,
+    TBanged, TBatsTest, TBraceExpansion, TBraceGroup, TCase, TCaseExpression, TCoProc, TCoProcBody,
+    TCondition, TDo, TDollarArithmetic, TDollarBraceCommandExpansion, TDollarBraced,
+    TDollarBracket, TDollarDoubleQuoted, TDollarExpansion, TDollarSingleQuoted, TDone,
+    TDoubleQuoted, TElif, TElse, TEsac, TExtglob, TFdRedirect, TFi, TFor, TForArithmetic, TForIn,
+    TFunction, TGlob, TGreater, THereDoc, THereString, TIf, TIfExpression, TIn, TInclude,
+    TIndexedElement, TIoDuplicate, TIoFile, TLbrace, TLess, TLexAndIf, TLexClobber, TLexDgreat,
+    TLexDsemi, TLexEof, TLexGreatand, TLexLessand, TLexLessgreat, TLexOrIf, TLiteral, TLparen,
+    TNormalWord, TOrIf, TParamSubSpecialChar, TPipe, TPipeline, TProcSub, TRbrace, TRedirecting,
+    TRparen, TScript, TSelect, TSelectIn, TSemi, TSimpleCommand, TSingleQuoted, TSourceCommand,
+    TSubshell, TThen, TUnparsedIndex, TUntil, TUntilExpression, TWhile, TWhileExpression,
+    TaAssignment, TaBinary, TaExpansion, TaParenthesis, TaSequence, TaTrinary, TaUnary, TaVariable,
+    TcAnd, TcBinary, TcEmpty, TcGroup, TcNullary, TcOr, TcUnary,
 };
 
 impl Token {
@@ -261,73 +255,73 @@ impl Token {
 
     pub fn for_each_child<'a>(&'a self, visit: &mut dyn FnMut(&'a Self)) {
         match &self.inner {
-            TA_Binary(_, a, b) | TA_Assignment(_, a, b) => {
+            TaBinary(_, a, b) | TaAssignment(_, a, b) => {
                 visit(a);
                 visit(b);
             }
-            TA_Variable(_, l)
-            | TA_Expansion(l)
-            | TA_Sequence(l)
-            | T_Array(l)
-            | T_Backticked(l)
-            | T_BraceExpansion(l)
-            | T_BraceGroup(l)
-            | T_DollarDoubleQuoted(l)
-            | T_DollarExpansion(l)
-            | T_DollarBraceCommandExpansion(_, l)
-            | T_DoubleQuoted(l)
-            | T_Extglob(_, l)
-            | T_HereDoc(_, _, _, l)
-            | T_NormalWord(l)
-            | T_ProcSub(_, l)
-            | T_Subshell(l) => {
+            TaVariable(_, l)
+            | TaExpansion(l)
+            | TaSequence(l)
+            | TArray(l)
+            | TBackticked(l)
+            | TBraceExpansion(l)
+            | TBraceGroup(l)
+            | TDollarDoubleQuoted(l)
+            | TDollarExpansion(l)
+            | TDollarBraceCommandExpansion(_, l)
+            | TDoubleQuoted(l)
+            | TExtglob(_, l)
+            | THereDoc(_, _, _, l)
+            | TNormalWord(l)
+            | TProcSub(_, l)
+            | TSubshell(l) => {
                 for child in l {
                     visit(child);
                 }
             }
-            TA_Parenthesis(a)
-            | TA_Unary(_, a)
-            | TC_Group(_, a)
-            | TC_Nullary(_, a)
-            | TC_Unary(_, _, a)
-            | T_Arithmetic(a)
-            | T_Backgrounded(a)
-            | T_Banged(a)
-            | T_Condition(_, a)
-            | T_DollarArithmetic(a)
-            | T_DollarBraced(_, a)
-            | T_DollarBracket(a)
-            | T_FdRedirect(_, a)
-            | T_Function(_, _, _, a)
-            | T_HereString(a)
-            | T_IoDuplicate(a, _)
-            | T_Annotation(_, a)
-            | T_CoProc(_, a)
-            | T_CoProcBody(a)
-            | T_Include(a)
-            | T_BatsTest(_, a) => visit(a),
-            TA_Trinary(a, b, c) => {
+            TaParenthesis(a)
+            | TaUnary(_, a)
+            | TcGroup(_, a)
+            | TcNullary(_, a)
+            | TcUnary(_, _, a)
+            | TArithmetic(a)
+            | TBackgrounded(a)
+            | TBanged(a)
+            | TCondition(_, a)
+            | TDollarArithmetic(a)
+            | TDollarBraced(_, a)
+            | TDollarBracket(a)
+            | TFdRedirect(_, a)
+            | TFunction(_, _, _, a)
+            | THereString(a)
+            | TIoDuplicate(a, _)
+            | TAnnotation(_, a)
+            | TCoProc(_, a)
+            | TCoProcBody(a)
+            | TInclude(a)
+            | TBatsTest(_, a) => visit(a),
+            TaTrinary(a, b, c) => {
                 visit(a);
                 visit(b);
                 visit(c);
             }
-            TC_And(_, _, a, b)
-            | TC_Binary(_, _, a, b)
-            | TC_Or(_, _, a, b)
-            | T_AndIf(a, b)
-            | T_OrIf(a, b)
-            | T_IoFile(a, b)
-            | T_SourceCommand(a, b) => {
+            TcAnd(_, _, a, b)
+            | TcBinary(_, _, a, b)
+            | TcOr(_, _, a, b)
+            | TAndIf(a, b)
+            | TOrIf(a, b)
+            | TIoFile(a, b)
+            | TSourceCommand(a, b) => {
                 visit(a);
                 visit(b);
             }
-            T_IndexedElement(l, a) | T_Assignment(_, _, l, a) | T_Redirecting(l, a) => {
+            TIndexedElement(l, a) | TAssignment(_, _, l, a) | TRedirecting(l, a) => {
                 for child in l {
                     visit(child);
                 }
                 visit(a);
             }
-            T_CaseExpression(w, cases) => {
+            TCaseExpression(w, cases) => {
                 visit(w);
                 for (_, a, b) in cases {
                     for child in a.iter().chain(b) {
@@ -335,7 +329,7 @@ impl Token {
                     }
                 }
             }
-            T_ForArithmetic(a, b, c, l) => {
+            TForArithmetic(a, b, c, l) => {
                 visit(a);
                 visit(b);
                 visit(c);
@@ -343,17 +337,17 @@ impl Token {
                     visit(child);
                 }
             }
-            T_ForIn(_, a, b)
-            | T_SelectIn(_, a, b)
-            | T_Pipeline(a, b)
-            | T_SimpleCommand(a, b)
-            | T_UntilExpression(a, b)
-            | T_WhileExpression(a, b) => {
+            TForIn(_, a, b)
+            | TSelectIn(_, a, b)
+            | TPipeline(a, b)
+            | TSimpleCommand(a, b)
+            | TUntilExpression(a, b)
+            | TWhileExpression(a, b) => {
                 for child in a.iter().chain(b) {
                     visit(child);
                 }
             }
-            T_IfExpression(branches, elses) => {
+            TIfExpression(branches, elses) => {
                 for (a, b) in branches {
                     for child in a.iter().chain(b) {
                         visit(child);
@@ -363,124 +357,124 @@ impl Token {
                     visit(child);
                 }
             }
-            T_Script(a, l) => {
+            TScript(a, l) => {
                 visit(a);
                 for child in l {
                     visit(child);
                 }
             }
-            TC_Empty(_)
-            | T_AND_IF
-            | T_UnparsedIndex(..)
-            | T_Bang
-            | T_CLOBBER
-            | T_Case
-            | T_DGREAT
-            | T_DSEMI
-            | T_Do
-            | T_DollarSingleQuoted(_)
-            | T_Done
-            | T_EOF
-            | T_Elif
-            | T_Else
-            | T_Esac
-            | T_Fi
-            | T_For
-            | T_GREATAND
-            | T_Glob(_)
-            | T_Greater
-            | T_If
-            | T_In
-            | T_LESSAND
-            | T_LESSGREAT
-            | T_Lbrace
-            | T_Less
-            | T_Literal(_)
-            | T_Lparen
-            | T_OR_IF
-            | T_ParamSubSpecialChar(_)
-            | T_Rbrace
-            | T_Rparen
-            | T_Select
-            | T_Semi
-            | T_SingleQuoted(_)
-            | T_Then
-            | T_Until
-            | T_While
-            | T_Pipe(_) => {}
+            TcEmpty(_)
+            | TLexAndIf
+            | TUnparsedIndex(..)
+            | TBang
+            | TLexClobber
+            | TCase
+            | TLexDgreat
+            | TLexDsemi
+            | TDo
+            | TDollarSingleQuoted(_)
+            | TDone
+            | TLexEof
+            | TElif
+            | TElse
+            | TEsac
+            | TFi
+            | TFor
+            | TLexGreatand
+            | TGlob(_)
+            | TGreater
+            | TIf
+            | TIn
+            | TLexLessand
+            | TLexLessgreat
+            | TLbrace
+            | TLess
+            | TLiteral(_)
+            | TLparen
+            | TLexOrIf
+            | TParamSubSpecialChar(_)
+            | TRbrace
+            | TRparen
+            | TSelect
+            | TSemi
+            | TSingleQuoted(_)
+            | TThen
+            | TUntil
+            | TWhile
+            | TPipe(_) => {}
         }
     }
 
     /// Mutable children, in the same order.
     pub fn for_each_child_mut(&mut self, visit: &mut dyn FnMut(&mut Self)) {
         match &mut self.inner {
-            TA_Binary(_, a, b) | TA_Assignment(_, a, b) => {
+            TaBinary(_, a, b) | TaAssignment(_, a, b) => {
                 visit(a);
                 visit(b);
             }
-            TA_Variable(_, l)
-            | TA_Expansion(l)
-            | TA_Sequence(l)
-            | T_Array(l)
-            | T_Backticked(l)
-            | T_BraceExpansion(l)
-            | T_BraceGroup(l)
-            | T_DollarDoubleQuoted(l)
-            | T_DollarExpansion(l)
-            | T_DollarBraceCommandExpansion(_, l)
-            | T_DoubleQuoted(l)
-            | T_Extglob(_, l)
-            | T_HereDoc(_, _, _, l)
-            | T_NormalWord(l)
-            | T_ProcSub(_, l)
-            | T_Subshell(l) => {
+            TaVariable(_, l)
+            | TaExpansion(l)
+            | TaSequence(l)
+            | TArray(l)
+            | TBackticked(l)
+            | TBraceExpansion(l)
+            | TBraceGroup(l)
+            | TDollarDoubleQuoted(l)
+            | TDollarExpansion(l)
+            | TDollarBraceCommandExpansion(_, l)
+            | TDoubleQuoted(l)
+            | TExtglob(_, l)
+            | THereDoc(_, _, _, l)
+            | TNormalWord(l)
+            | TProcSub(_, l)
+            | TSubshell(l) => {
                 for child in l {
                     visit(child);
                 }
             }
-            TA_Parenthesis(a)
-            | TA_Unary(_, a)
-            | TC_Group(_, a)
-            | TC_Nullary(_, a)
-            | TC_Unary(_, _, a)
-            | T_Arithmetic(a)
-            | T_Backgrounded(a)
-            | T_Banged(a)
-            | T_Condition(_, a)
-            | T_DollarArithmetic(a)
-            | T_DollarBraced(_, a)
-            | T_DollarBracket(a)
-            | T_FdRedirect(_, a)
-            | T_Function(_, _, _, a)
-            | T_HereString(a)
-            | T_IoDuplicate(a, _)
-            | T_Annotation(_, a)
-            | T_CoProc(_, a)
-            | T_CoProcBody(a)
-            | T_Include(a)
-            | T_BatsTest(_, a) => visit(a),
-            TA_Trinary(a, b, c) => {
+            TaParenthesis(a)
+            | TaUnary(_, a)
+            | TcGroup(_, a)
+            | TcNullary(_, a)
+            | TcUnary(_, _, a)
+            | TArithmetic(a)
+            | TBackgrounded(a)
+            | TBanged(a)
+            | TCondition(_, a)
+            | TDollarArithmetic(a)
+            | TDollarBraced(_, a)
+            | TDollarBracket(a)
+            | TFdRedirect(_, a)
+            | TFunction(_, _, _, a)
+            | THereString(a)
+            | TIoDuplicate(a, _)
+            | TAnnotation(_, a)
+            | TCoProc(_, a)
+            | TCoProcBody(a)
+            | TInclude(a)
+            | TBatsTest(_, a) => visit(a),
+            TaTrinary(a, b, c) => {
                 visit(a);
                 visit(b);
                 visit(c);
             }
-            TC_And(_, _, a, b)
-            | TC_Binary(_, _, a, b)
-            | TC_Or(_, _, a, b)
-            | T_AndIf(a, b)
-            | T_OrIf(a, b)
-            | T_IoFile(a, b)
-            | T_SourceCommand(a, b) => {
+            TcAnd(_, _, a, b)
+            | TcBinary(_, _, a, b)
+            | TcOr(_, _, a, b)
+            | TAndIf(a, b)
+            | TOrIf(a, b)
+            | TIoFile(a, b)
+            | TSourceCommand(a, b) => {
                 visit(a);
                 visit(b);
             }
-            T_IndexedElement(l, a) | T_Assignment(_, _, l, a) | T_Redirecting(l, a) => {
+            TIndexedElement(l, a) | TAssignment(_, _, l, a) | TRedirecting(l, a) => {
                 for child in l {
                     visit(child);
                 }
                 visit(a);
             }
-            T_CaseExpression(w, cases) => {
+            TCaseExpression(w, cases) => {
                 visit(w);
                 for (_, a, b) in cases {
                     for child in a.iter_mut().chain(b) {
@@ -488,7 +482,7 @@ impl Token {
                     }
                 }
             }
-            T_ForArithmetic(a, b, c, l) => {
+            TForArithmetic(a, b, c, l) => {
                 visit(a);
                 visit(b);
                 visit(c);
@@ -496,17 +490,17 @@ impl Token {
                     visit(child);
                 }
             }
-            T_ForIn(_, a, b)
-            | T_SelectIn(_, a, b)
-            | T_Pipeline(a, b)
-            | T_SimpleCommand(a, b)
-            | T_UntilExpression(a, b)
-            | T_WhileExpression(a, b) => {
+            TForIn(_, a, b)
+            | TSelectIn(_, a, b)
+            | TPipeline(a, b)
+            | TSimpleCommand(a, b)
+            | TUntilExpression(a, b)
+            | TWhileExpression(a, b) => {
                 for child in a.iter_mut().chain(b) {
                     visit(child);
                 }
             }
-            T_IfExpression(branches, elses) => {
+            TIfExpression(branches, elses) => {
                 for (a, b) in branches {
                     for child in a.iter_mut().chain(b) {
                         visit(child);
@@ -516,7 +510,7 @@ impl Token {
                     visit(child);
                 }
             }
-            T_Script(a, l) => {
+            TScript(a, l) => {
                 visit(a);
                 for child in l {
                     visit(child);

@@ -200,31 +200,11 @@ pub struct CopyFlags {
     pub exclude: Vec<String>,
 }
 
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct AddFlags {
-    pub checksum: Option<String>,
-    pub chown: Option<String>,
-    pub chmod: Option<String>,
-    pub link: Option<bool>,
-    pub keep_git_dir: Option<bool>,
-    pub unpack: Option<bool>,
-    pub exclude: Vec<String>,
-}
-
-/// The full tree is kept as language-docker defines it; the rules read
-/// only some of the fields, the rest document what the parser accepts.
-#[allow(
-    dead_code,
-    reason = "a faithful AST: fields no rule reads are still parsed"
-)]
+/// What the rules read of a `HEALTHCHECK`: its command. The timing flags are
+/// validated while parsing but no rule looks at their values.
 #[derive(Debug, Clone)]
 pub struct CheckArgs {
     pub command: Args,
-    pub interval: Option<f64>,
-    pub timeout: Option<f64>,
-    pub start_period: Option<f64>,
-    pub start_interval: Option<f64>,
-    pub retries: Option<i64>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -233,21 +213,15 @@ pub enum Pragma {
     Syntax(String),
 }
 
-#[allow(
-    dead_code,
-    reason = "a faithful AST: fields no rule reads are still parsed"
-)]
 #[derive(Debug, Clone)]
 pub enum Instruction {
     From(BaseImage),
     Add {
         sources: Vec<String>,
-        target: String,
-        flags: AddFlags,
     },
     User(String),
     Label(Pairs),
-    Stopsignal(String),
+    Stopsignal,
     Copy {
         sources: Vec<String>,
         target: String,
@@ -261,13 +235,12 @@ pub enum Instruction {
     Shell(Args),
     Workdir(String),
     Expose(Vec<PortSpec>),
-    Volume(String),
+    Volume,
     Entrypoint(Args),
-    Maintainer(String),
+    Maintainer,
     Env(Pairs),
     Arg {
         name: String,
-        default: Option<String>,
     },
     /// `None` is `HEALTHCHECK NONE`.
     Healthcheck(Option<CheckArgs>),
@@ -1408,37 +1381,17 @@ impl Parser {
             |p| p.string("--"),
             "only the --checksum, --chown, --chmod, --link, --exclude, --keep-git-dir, --unpack flags or the src and dest paths",
         )?;
-        let mut af = AddFlags::default();
         let (mut checksum, mut chown, mut chmod, mut link, mut kgd, mut unpack) =
             (0, 0, 0, 0, 0, 0);
         for f in &flags {
             match f {
                 Flag::Invalid(k, v) => return self.unexpected_flag(k, v),
-                Flag::Checksum(c) => {
-                    checksum += 1;
-                    af.checksum.get_or_insert_with(|| c.clone());
-                }
-                Flag::Chown(c) => {
-                    chown += 1;
-                    af.chown.get_or_insert_with(|| c.clone());
-                }
-                Flag::Chmod(c) => {
-                    chmod += 1;
-                    af.chmod.get_or_insert_with(|| c.clone());
-                }
-                Flag::Link(l) => {
-                    link += 1;
-                    af.link.get_or_insert(*l);
-                }
-                Flag::KeepGitDir(k) => {
-                    kgd += 1;
-                    af.keep_git_dir.get_or_insert(*k);
-                }
-                Flag::Unpack(u) => {
-                    unpack += 1;
-                    af.unpack.get_or_insert(*u);
-                }
-                Flag::Exclude(e) => af.exclude.push(e.clone()),
+                Flag::Checksum => checksum += 1,
+                Flag::Chown(_) => chown += 1,
+                Flag::Chmod(_) => chmod += 1,
+                Flag::Link(_) => link += 1,
+                Flag::KeepGitDir => kgd += 1,
+                Flag::Unpack => unpack += 1,
                 _ => {}
             }
         }
@@ -1454,12 +1407,8 @@ impl Parser {
                 return self.fail(&format!("duplicate flag: {name}"));
             }
         }
-        let (sources, target) = self.file_list("ADD")?;
-        Ok(Instruction::Add {
-            sources,
-            target,
-            flags: af,
-        })
+        let (sources, _target) = self.file_list("ADD")?;
+        Ok(Instruction::Add { sources })
     }
 
     fn unexpected_flag<T>(&self, name: &str, value: &str) -> PResult<T> {
@@ -1507,24 +1456,25 @@ impl Parser {
 
     fn add_flag(&mut self) -> PResult<Flag> {
         if self.attempt(|p| p.string("--checksum=")).is_ok() {
-            return Ok(Flag::Checksum(
-                self.some_unless("the remote file checksum", &|c| c == ' ')?,
-            ));
+            self.some_unless("the remote file checksum", &|c| c == ' ')?;
+            return Ok(Flag::Checksum);
         }
         if let Ok(f) = self.attempt(Self::common_flag) {
             return Ok(f);
         }
         if self.attempt(|p| p.string("--keep-git-dir=")).is_ok() {
-            return Ok(Flag::KeepGitDir(self.true_false()?));
+            self.true_false()?;
+            return Ok(Flag::KeepGitDir);
         }
         if self.attempt(|p| p.string("--keep-git-dir")).is_ok() {
-            return Ok(Flag::KeepGitDir(true));
+            return Ok(Flag::KeepGitDir);
         }
         if self.attempt(|p| p.string("--unpack=")).is_ok() {
-            return Ok(Flag::Unpack(self.true_false()?));
+            self.true_false()?;
+            return Ok(Flag::Unpack);
         }
         if self.attempt(|p| p.string("--unpack")).is_ok() {
-            return Ok(Flag::Unpack(true));
+            return Ok(Flag::Unpack);
         }
         if self.attempt(|p| p.string("--exclude=")).is_ok() {
             return Ok(Flag::Exclude(
@@ -1897,29 +1847,20 @@ impl Parser {
         if let Ok(i) = self.attempt(|p| {
             let name = p.some_unless("the argument name", &|c| c == '=')?;
             p.char('=')?;
-            let df = p.until_eol("the argument value")?;
-            Ok(Instruction::Arg {
-                name,
-                default: Some(df),
-            })
+            p.until_eol("the argument value")?;
+            Ok(Instruction::Arg { name })
         }) {
             return Ok(i);
         }
         if let Ok(i) = self.attempt(|p| {
             let name = p.some_unless("the argument name", &|c| c == '=')?;
             p.until_eol("the rest")?;
-            Ok(Instruction::Arg {
-                name,
-                default: None,
-            })
+            Ok(Instruction::Arg { name })
         }) {
             return Ok(i);
         }
         let name = self.until_eol("the argument name")?;
-        Ok(Instruction::Arg {
-            name,
-            default: None,
-        })
+        Ok(Instruction::Arg { name })
     }
 
     fn healthcheck(&mut self) -> PResult<Instruction> {
@@ -1950,23 +1891,23 @@ impl Parser {
                 })
                 .unwrap_or_default();
             let (mut interval, mut timeout, mut start_period, mut start_interval, mut retries) =
-                (Vec::new(), Vec::new(), Vec::new(), Vec::new(), Vec::new());
+                (0, 0, 0, 0, 0);
             for f in flags {
                 match f {
                     CheckFlag::Invalid(k, v) => return p.unexpected_flag(&k, &v),
-                    CheckFlag::Interval(d) => interval.push(d),
-                    CheckFlag::Timeout(d) => timeout.push(d),
-                    CheckFlag::StartPeriod(d) => start_period.push(d),
-                    CheckFlag::StartInterval(d) => start_interval.push(d),
-                    CheckFlag::Retries(n) => retries.push(n),
+                    CheckFlag::Interval => interval += 1,
+                    CheckFlag::Timeout => timeout += 1,
+                    CheckFlag::StartPeriod => start_period += 1,
+                    CheckFlag::StartInterval => start_interval += 1,
+                    CheckFlag::Retries => retries += 1,
                 }
             }
             for (v, name) in [
-                (interval.len(), "--interval"),
-                (timeout.len(), "--timeout"),
-                (start_period.len(), "--start-period"),
-                (start_interval.len(), "--start-interval"),
-                (retries.len(), "--retries"),
+                (interval, "--interval"),
+                (timeout, "--timeout"),
+                (start_period, "--start-period"),
+                (start_interval, "--start-interval"),
+                (retries, "--retries"),
             ] {
                 if v > 1 {
                     return p.fail(&format!("duplicate flag: {name}"));
@@ -1974,14 +1915,7 @@ impl Parser {
             }
             p.reserved("CMD")?;
             let command = p.arguments()?;
-            Ok(CheckArgs {
-                command,
-                interval: interval.first().copied(),
-                timeout: timeout.first().copied(),
-                start_period: start_period.first().copied(),
-                start_interval: start_interval.first().copied(),
-                retries: retries.first().copied(),
-            })
+            Ok(CheckArgs { command })
         }) {
             return Ok(Instruction::Healthcheck(Some(check)));
         }
@@ -1991,18 +1925,19 @@ impl Parser {
 
     fn check_flag(&mut self) -> PResult<CheckFlag> {
         for (name, make) in [
-            ("--interval=", CheckFlag::Interval as fn(f64) -> CheckFlag),
+            ("--interval=", CheckFlag::Interval),
             ("--timeout=", CheckFlag::Timeout),
             ("--start-period=", CheckFlag::StartPeriod),
             ("--start-interval=", CheckFlag::StartInterval),
         ] {
             if self.attempt(|p| p.string(name)).is_ok() {
-                return Ok(make(self.duration()?));
+                self.duration()?;
+                return Ok(make);
             }
         }
         if self.attempt(|p| p.string("--retries=")).is_ok() {
-            let n = self.natural()?;
-            return Ok(CheckFlag::Retries(n));
+            self.natural()?;
+            return Ok(CheckFlag::Retries);
         }
         match self.any_flag()? {
             Flag::Invalid(k, v) => Ok(CheckFlag::Invalid(k, v)),
@@ -2126,7 +2061,8 @@ impl Parser {
             }
             "VOLUME" => {
                 self.reserved("VOLUME")?;
-                Ok(Instruction::Volume(self.until_eol("the volume path")?))
+                self.until_eol("the volume path")?;
+                Ok(Instruction::Volume)
             }
             "EXPOSE" => self.expose(),
             "ENV" => {
@@ -2144,7 +2080,8 @@ impl Parser {
             }
             "STOPSIGNAL" => {
                 self.reserved("STOPSIGNAL")?;
-                Ok(Instruction::Stopsignal(self.until_eol("the stop signal")?))
+                self.until_eol("the stop signal")?;
+                Ok(Instruction::Stopsignal)
             }
             "CMD" => {
                 self.reserved("CMD")?;
@@ -2156,9 +2093,8 @@ impl Parser {
             }
             "MAINTAINER" => {
                 self.reserved("MAINTAINER")?;
-                Ok(Instruction::Maintainer(
-                    self.until_eol("the maintainer name")?,
-                ))
+                self.until_eol("the maintainer name")?;
+                Ok(Instruction::Maintainer)
             }
             "ADD" => self.add(),
             "HEALTHCHECK" => self.healthcheck(),
@@ -2264,23 +2200,23 @@ impl MountArg {
 }
 
 enum Flag {
-    Checksum(String),
+    Checksum,
     Chown(String),
     Chmod(String),
     Link(bool),
-    KeepGitDir(bool),
+    KeepGitDir,
     Parents(bool),
-    Unpack(bool),
+    Unpack,
     Source(String),
     Exclude(String),
     Invalid(String, String),
 }
 
 enum CheckFlag {
-    Interval(f64),
-    Timeout(f64),
-    StartPeriod(f64),
-    StartInterval(f64),
-    Retries(i64),
+    Interval,
+    Timeout,
+    StartPeriod,
+    StartInterval,
+    Retries,
     Invalid(String, String),
 }

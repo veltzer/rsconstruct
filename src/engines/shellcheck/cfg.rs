@@ -22,120 +22,90 @@ use super::data::{FLAGS_FOR_MAPFILE, FLAGS_FOR_READ};
 use super::regex::{Regex, mk_regex};
 
 use Inner::{
-    T_AndIf, T_Annotation, T_Arithmetic, T_Array, T_Assignment, T_Backgrounded, T_Backticked,
-    T_Banged, T_BatsTest, T_BraceExpansion, T_BraceGroup, T_CLOBBER, T_CaseExpression, T_CoProc,
-    T_CoProcBody, T_Condition, T_DGREAT, T_DollarArithmetic, T_DollarBraceCommandExpansion,
-    T_DollarBraced, T_DollarBracket, T_DollarDoubleQuoted, T_DollarExpansion, T_DollarSingleQuoted,
-    T_DoubleQuoted, T_Extglob, T_FdRedirect, T_ForArithmetic, T_ForIn, T_Function, T_GREATAND,
-    T_Glob, T_Greater, T_HereDoc, T_HereString, T_IfExpression, T_Include, T_IndexedElement,
-    T_IoDuplicate, T_IoFile, T_LESSAND, T_LESSGREAT, T_Less, T_Literal, T_NormalWord, T_OrIf,
-    T_ParamSubSpecialChar, T_Pipeline, T_ProcSub, T_Redirecting, T_Script, T_SelectIn,
-    T_SimpleCommand, T_SingleQuoted, T_SourceCommand, T_Subshell, T_UntilExpression,
-    T_WhileExpression, TA_Assignment, TA_Binary, TA_Expansion, TA_Parenthesis, TA_Sequence,
-    TA_Trinary, TA_Unary, TA_Variable, TC_And, TC_Binary, TC_Empty, TC_Group, TC_Nullary, TC_Or,
-    TC_Unary,
+    TAndIf, TAnnotation, TArithmetic, TArray, TAssignment, TBackgrounded, TBackticked, TBanged,
+    TBatsTest, TBraceExpansion, TBraceGroup, TCaseExpression, TCoProc, TCoProcBody, TCondition,
+    TDollarArithmetic, TDollarBraceCommandExpansion, TDollarBraced, TDollarBracket,
+    TDollarDoubleQuoted, TDollarExpansion, TDollarSingleQuoted, TDoubleQuoted, TExtglob,
+    TFdRedirect, TForArithmetic, TForIn, TFunction, TGlob, TGreater, THereDoc, THereString,
+    TIfExpression, TInclude, TIndexedElement, TIoDuplicate, TIoFile, TLess, TLexClobber,
+    TLexDgreat, TLexGreatand, TLexLessand, TLexLessgreat, TLiteral, TNormalWord, TOrIf,
+    TParamSubSpecialChar, TPipeline, TProcSub, TRedirecting, TScript, TSelectIn, TSimpleCommand,
+    TSingleQuoted, TSourceCommand, TSubshell, TUntilExpression, TWhileExpression, TaAssignment,
+    TaBinary, TaExpansion, TaParenthesis, TaSequence, TaTrinary, TaUnary, TaVariable, TcAnd,
+    TcBinary, TcEmpty, TcGroup, TcNullary, TcOr, TcUnary,
 };
 
 pub type Node = usize;
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
-#[allow(
-    clippy::enum_variant_names,
-    reason = "the variant names are ShellCheck's CFNode constructors"
-)]
 pub enum CfNode {
-    CFStructuralNode,
-    CFEntryPoint(String),
-    CFDropPrefixAssignments,
-    CFApplyEffects(Vec<IdTagged>),
-    CFExecuteCommand(Option<String>),
-    CFExecuteSubshell(String, Node, Node),
-    CFSetExitCode(Id),
-    CFImpliedExit,
-    CFResolvedExit,
-    CFUnresolvedExit,
-    CFUnreachable,
-    CFSetBackgroundPid(Id),
+    StructuralNode,
+    EntryPoint(String),
+    DropPrefixAssignments,
+    ApplyEffects(Vec<IdTagged>),
+    ExecuteCommand(Option<String>),
+    ExecuteSubshell(String, Node, Node),
+    SetExitCode(Id),
+    ImpliedExit,
+    ResolvedExit,
+    UnresolvedExit,
+    Unreachable,
+    SetBackgroundPid(Id),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-#[allow(
-    clippy::enum_variant_names,
-    reason = "the variant names are ShellCheck's CFEdge constructors"
-)]
 pub enum CfEdge {
-    CFEFlow,
-    CFEFalseFlow,
-    CFEExit,
+    Flow,
+    FalseFlow,
+    Exit,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
-#[allow(
-    clippy::enum_variant_names,
-    reason = "the variant names are ShellCheck's CFEffect constructors"
-)]
 pub enum CfEffect {
-    CFSetProps(Option<Scope>, String, PropSet),
-    CFUnsetProps(Option<Scope>, String, PropSet),
-    CFReadVariable(String),
-    CFWriteVariable(String, CfValue),
-    CFWriteGlobal(String, CfValue),
-    CFWriteLocal(String, CfValue),
-    CFWritePrefix(String, CfValue),
-    CFDefineFunction(String, Id, Node, Node),
-    CFUndefine(String),
-    CFUndefineVariable(String),
-    CFUndefineFunction(String),
-    CFUndefineNameref(String),
-    CFHintArray(String),
+    SetProps(Option<Scope>, String, PropSet),
+    UnsetProps(Option<Scope>, String, PropSet),
+    ReadVariable(String),
+    WriteVariable(String, CfValue),
+    WriteGlobal(String, CfValue),
+    WriteLocal(String, CfValue),
+    WritePrefix(String, CfValue),
+    DefineFunction(String, Id, Node, Node),
+    Undefine(String),
+    UndefineVariable(String),
+    UndefineFunction(String),
+    UndefineNameref(String),
+    HintArray(String),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct IdTagged(pub Id, pub CfEffect);
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
-#[allow(
-    clippy::enum_variant_names,
-    reason = "the variant names are ShellCheck's CFValue constructors"
-)]
 pub enum CfValue {
-    CFValueArray,
-    CFValueString,
-    CFValueInteger,
-    CFValueComputed(Id, Vec<CfStringPart>),
+    Array,
+    String,
+    Integer,
+    Computed(Id, Vec<CfStringPart>),
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
-#[allow(
-    clippy::enum_variant_names,
-    reason = "the variant names are ShellCheck's CFStringPart constructors"
-)]
 pub enum CfStringPart {
-    CFStringLiteral(String),
-    CFStringVariable(String),
-    CFStringInteger,
-    CFStringUnknown,
+    Literal(String),
+    Variable(String),
+    Integer,
+    Unknown,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-#[allow(
-    clippy::enum_variant_names,
-    reason = "the variant names are ShellCheck's CFVariableProp constructors"
-)]
 pub enum CfVariableProp {
-    CFVPExport,
-    CFVPArray,
-    CFVPAssociative,
-    CFVPInteger,
+    Export,
+    Array,
+    Associative,
+    Integer,
 }
 
 impl CfVariableProp {
-    const ALL: [Self; 4] = [
-        Self::CFVPExport,
-        Self::CFVPArray,
-        Self::CFVPAssociative,
-        Self::CFVPInteger,
-    ];
+    const ALL: [Self; 4] = [Self::Export, Self::Array, Self::Associative, Self::Integer];
 
     const fn bit(self) -> u8 {
         1 << self as u8
@@ -203,14 +173,10 @@ impl PartialOrd for PropSet {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-#[allow(
-    clippy::enum_variant_names,
-    reason = "the variant names are ShellCheck's Scope constructors"
-)]
 pub enum Scope {
-    GlobalScope,
-    LocalScope,
-    PrefixScope,
+    Global,
+    Local,
+    Prefix,
 }
 
 /// `CFGParameters`.
@@ -531,7 +497,7 @@ pub fn build_graph(params: CfgParameters, root: &Token) -> CfgResult {
     }
     let only_real_edges: Vec<(Node, Node, CfEdge)> = edges
         .iter()
-        .filter(|(_, _, e)| matches!(e, CfEdge::CFEFlow | CfEdge::CFEExit))
+        .filter(|(_, _, e)| matches!(e, CfEdge::Flow | CfEdge::Exit))
         .copied()
         .collect();
     let (_, main_exit) = *id_to_range
@@ -559,13 +525,13 @@ fn remap_graph(remap: &BTreeMap<Node, Node>, g: Cfw) -> Cfw {
             .into_iter()
             .map(|(n, label)| {
                 let new_label = match label {
-                    CfNode::CFApplyEffects(effects) => CfNode::CFApplyEffects(
+                    CfNode::ApplyEffects(effects) => CfNode::ApplyEffects(
                         effects
                             .into_iter()
                             .map(|IdTagged(id, e)| match e {
-                                CfEffect::CFDefineFunction(name, fid, start, end) => IdTagged(
+                                CfEffect::DefineFunction(name, fid, start, end) => IdTagged(
                                     id,
-                                    CfEffect::CFDefineFunction(
+                                    CfEffect::DefineFunction(
                                         name,
                                         fid,
                                         remap_helper(remap, start),
@@ -576,8 +542,8 @@ fn remap_graph(remap: &BTreeMap<Node, Node>, g: Cfw) -> Cfw {
                             })
                             .collect(),
                     ),
-                    CfNode::CFExecuteSubshell(s, a, b) => {
-                        CfNode::CFExecuteSubshell(s, remap_helper(remap, a), remap_helper(remap, b))
+                    CfNode::ExecuteSubshell(s, a, b) => {
+                        CfNode::ExecuteSubshell(s, remap_helper(remap, a), remap_helper(remap, b))
                     }
                     other => other,
                 };
@@ -604,7 +570,7 @@ fn remove_unnecessary_structural_nodes(g: Cfw) -> Cfw {
     let (nodes, edges, mapping, association) = g;
     let regular_edges: Vec<&(Node, Node, CfEdge)> = edges
         .iter()
-        .filter(|(_, _, l)| *l == CfEdge::CFEFlow)
+        .filter(|(_, _, l)| *l == CfEdge::Flow)
         .collect();
     let mut in_degree: IntMap<Node, usize> = IntMap::default();
     let mut out_degree: IntMap<Node, usize> = IntMap::default();
@@ -618,7 +584,7 @@ fn remove_unnecessary_structural_nodes(g: Cfw) -> Cfw {
     };
     let candidate_nodes: BTreeSet<Node> = nodes
         .iter()
-        .filter(|(n, l)| *l == CfNode::CFStructuralNode && is_linear(*n))
+        .filter(|(n, l)| *l == CfNode::StructuralNode && is_linear(*n))
         .map(|(n, _)| *n)
         .collect();
     let edges_to_collapse: BTreeSet<(Node, Node, CfEdge)> = regular_edges
@@ -664,7 +630,7 @@ fn inline_subshells(graph: &Graph) -> Graph {
         .decomposition_contexts()
         .into_iter()
         .filter_map(|(incoming, node, label, outgoing)| match &label {
-            CfNode::CFExecuteSubshell(_, start, end) => {
+            CfNode::ExecuteSubshell(_, start, end) => {
                 Some((node, label.clone(), *start, *end, incoming, outgoing))
             }
             _ => None,
@@ -674,7 +640,7 @@ fn inline_subshells(graph: &Graph) -> Graph {
     for (node, label, start, end, incoming, outgoing) in subshells {
         let (end_incoming, end_node, end_label, _) = g.context(end);
         g.safe_update((end_incoming, end_node, end_label, outgoing));
-        g.safe_update((incoming, node, label, vec![(CfEdge::CFEFlow, start)]));
+        g.safe_update((incoming, node, label, vec![(CfEdge::Flow, start)]));
     }
     g
 }
@@ -684,10 +650,10 @@ fn find_terminal_nodes(graph: &Graph) -> Vec<Node> {
     let mut out = Vec::new();
     for (n, label) in &graph.nodes {
         match label {
-            CfNode::CFUnresolvedExit => out.push(*n),
-            CfNode::CFApplyEffects(effects) => {
+            CfNode::UnresolvedExit => out.push(*n),
+            CfNode::ApplyEffects(effects) => {
                 for IdTagged(_, e) in effects {
-                    if let CfEffect::CFDefineFunction(_, _, _, end) = e {
+                    if let CfEffect::DefineFunction(_, _, _, end) = e {
                         out.push(*end);
                     }
                 }
@@ -703,7 +669,7 @@ fn find_post_dominators(main_exit: Node, graph: &Graph) -> Vec<BTreeSet<Node>> {
     let mut inlined = inline_subshells(graph);
     let terminals = find_terminal_nodes(&inlined);
     let (mut incoming, _, label, outgoing) = graph.context(main_exit);
-    incoming.extend(terminals.into_iter().map(|c| (CfEdge::CFEFlow, c)));
+    incoming.extend(terminals.into_iter().map(|c| (CfEdge::Flow, c)));
     inlined.safe_update((incoming, main_exit, label, outgoing));
     let reversed = inlined.reversed();
     let post_doms = reversed.dom(main_exit);
@@ -741,7 +707,7 @@ thread_local! {
 }
 
 fn apply_single(e: IdTagged) -> CfNode {
-    CfNode::CFApplyEffects(vec![e])
+    CfNode::ApplyEffects(vec![e])
 }
 
 impl Builder {
@@ -761,7 +727,7 @@ impl Builder {
     }
 
     fn none(&mut self, ctx: &CfContext) -> Range {
-        self.new_node_range(ctx, CfNode::CFStructuralNode)
+        self.new_node_range(ctx, CfNode::StructuralNode)
     }
 
     fn link(&mut self, from: Node, to: Node, label: CfEdge) {
@@ -773,7 +739,7 @@ impl Builder {
     }
 
     fn link_range(&mut self, a: Range, b: Range) -> Range {
-        self.link_range_as(CfEdge::CFEFlow, a, b)
+        self.link_range_as(CfEdge::Flow, a, b)
     }
 
     fn link_range_as(&mut self, label: CfEdge, a: Range, b: Range) -> Range {
@@ -823,18 +789,15 @@ impl Builder {
     ) -> Range {
         let start = self.new_node(
             ctx,
-            CfNode::CFEntryPoint(format!("Subshell Id {}: {reason}", id.0)),
+            CfNode::EntryPoint(format!("Subshell Id {}: {reason}", id.0)),
         );
-        let end = self.new_node(ctx, CfNode::CFStructuralNode);
+        let end = self.new_node(ctx, CfNode::StructuralNode);
         let mut inner = ctx.clone();
         inner.exit_target = Some(end);
         inner.return_target = Some(end);
         let middle = p(self, &inner);
         self.link_ranges(&[Range(start, start), middle, Range(end, end)]);
-        self.new_node_range(
-            ctx,
-            CfNode::CFExecuteSubshell(reason.to_string(), start, end),
-        )
+        self.new_node_range(ctx, CfNode::ExecuteSubshell(reason.to_string(), start, end))
     }
 
     fn with_function_scope(
@@ -842,7 +805,7 @@ impl Builder {
         ctx: &CfContext,
         p: &mut dyn FnMut(&mut Self, &CfContext) -> Range,
     ) -> Range {
-        let end = self.new_node(ctx, CfNode::CFStructuralNode);
+        let end = self.new_node(ctx, CfNode::StructuralNode);
         let mut inner = ctx.clone();
         inner.return_target = Some(end);
         inner.is_function = true;
@@ -852,9 +815,9 @@ impl Builder {
 
     fn build_root(&mut self, ctx: &CfContext, t: &Token) -> Range {
         let ctx = Self::under(ctx, t.id);
-        let entry = self.new_node_range(&ctx, CfNode::CFEntryPoint("MAIN".to_string()));
-        let implied_exit = self.new_node(&ctx, CfNode::CFImpliedExit);
-        let end = self.new_node(&ctx, CfNode::CFStructuralNode);
+        let entry = self.new_node_range(&ctx, CfNode::EntryPoint("MAIN".to_string()));
+        let implied_exit = self.new_node(&ctx, CfNode::ImpliedExit);
+        let end = self.new_node(&ctx, CfNode::StructuralNode);
         let mut inner = ctx.clone();
         inner.exit_target = Some(end);
         inner.return_target = Some(implied_exit);
@@ -876,17 +839,13 @@ impl Builder {
         range
     }
 
-    #[allow(
-        clippy::too_many_lines,
-        reason = "one arm per token type, as in ShellCheck's build'"
-    )]
     fn build_inner(&mut self, ctx: &CfContext, t: &Token) -> Range {
         let id = t.id;
         match &t.inner {
-            T_Annotation(_, list) => self.build(ctx, list),
-            T_Script(_, list) => self.sequentially(ctx, list),
-            TA_Assignment(op, var, rhs) if matches!(var.inner, TA_Variable(..)) => {
-                let TA_Variable(name, indices) = &var.inner else {
+            TAnnotation(_, list) => self.build(ctx, list),
+            TScript(_, list) => self.sequentially(ctx, list),
+            TaAssignment(op, var, rhs) if matches!(var.inner, TaVariable(..)) => {
+                let TaVariable(name, indices) = &var.inner else {
                     unreachable!("checked above")
                 };
                 let value = self.build(ctx, rhs);
@@ -896,25 +855,25 @@ impl Builder {
                 } else {
                     self.new_node_range(
                         ctx,
-                        apply_single(IdTagged(id, CfEffect::CFReadVariable(name.clone()))),
+                        apply_single(IdTagged(id, CfEffect::ReadVariable(name.clone()))),
                     )
                 };
                 let v = if indices.is_empty() {
-                    CfValue::CFValueInteger
+                    CfValue::Integer
                 } else {
-                    CfValue::CFValueArray
+                    CfValue::Array
                 };
                 let write = self.new_node_range(
                     ctx,
-                    apply_single(IdTagged(id, CfEffect::CFWriteVariable(name.clone(), v))),
+                    apply_single(IdTagged(id, CfEffect::WriteVariable(name.clone(), v))),
                 );
                 self.link_ranges(&[value, subscript, read, write])
             }
-            TA_Assignment(_, lhs, rhs) => self.sequentially_refs(ctx, &[lhs, rhs]),
-            TA_Binary(_, a, b) => self.sequentially_refs(ctx, &[a, b]),
-            TA_Expansion(list) | TA_Sequence(list) => self.sequentially(ctx, list),
-            TA_Parenthesis(t) => self.build(ctx, t),
-            TA_Trinary(cond, a, b) => {
+            TaAssignment(_, lhs, rhs) => self.sequentially_refs(ctx, &[lhs, rhs]),
+            TaBinary(_, a, b) => self.sequentially_refs(ctx, &[a, b]),
+            TaExpansion(list) | TaSequence(list) => self.sequentially(ctx, list),
+            TaParenthesis(t) => self.build(ctx, t),
+            TaTrinary(cond, a, b) => {
                 let condition = self.build(ctx, cond);
                 let ifthen = self.build(ctx, a);
                 let elsethen = self.build(ctx, b);
@@ -922,71 +881,71 @@ impl Builder {
                 self.link_ranges(&[condition, ifthen, end]);
                 self.link_ranges(&[condition, elsethen, end])
             }
-            TA_Variable(name, indices) => {
+            TaVariable(name, indices) => {
                 let subscript = self.sequentially(ctx, indices);
                 let hint = if indices.is_empty() {
                     self.none(ctx)
                 } else {
                     self.new_node_range(
                         ctx,
-                        apply_single(IdTagged(id, CfEffect::CFHintArray(name.clone()))),
+                        apply_single(IdTagged(id, CfEffect::HintArray(name.clone()))),
                     )
                 };
                 let read = self.new_node_range(
                     ctx,
-                    apply_single(IdTagged(id, CfEffect::CFReadVariable(name.clone()))),
+                    apply_single(IdTagged(id, CfEffect::ReadVariable(name.clone()))),
                 );
                 self.link_ranges(&[subscript, hint, read])
             }
-            TA_Unary(op, arg)
+            TaUnary(op, arg)
                 if (op.contains("--") || op.contains("++"))
-                    && matches!(arg.inner, TA_Variable(..)) =>
+                    && matches!(arg.inner, TaVariable(..)) =>
             {
-                let TA_Variable(name, indices) = &arg.inner else {
+                let TaVariable(name, indices) = &arg.inner else {
                     unreachable!("checked above")
                 };
                 let subscript = self.sequentially(ctx, indices);
                 let read = self.new_node_range(
                     ctx,
-                    apply_single(IdTagged(id, CfEffect::CFReadVariable(name.clone()))),
+                    apply_single(IdTagged(id, CfEffect::ReadVariable(name.clone()))),
                 );
                 let v = if indices.is_empty() {
-                    CfValue::CFValueInteger
+                    CfValue::Integer
                 } else {
-                    CfValue::CFValueArray
+                    CfValue::Array
                 };
                 let write = self.new_node_range(
                     ctx,
-                    apply_single(IdTagged(id, CfEffect::CFWriteVariable(name.clone(), v))),
+                    apply_single(IdTagged(id, CfEffect::WriteVariable(name.clone(), v))),
                 );
                 self.link_ranges(&[subscript, read, write])
             }
-            TA_Unary(_, arg) => self.build(ctx, arg),
-            TC_And(ConditionType::SingleBracket, _, lhs, rhs)
-            | TC_Or(ConditionType::SingleBracket, _, lhs, rhs) => {
+            TaUnary(_, arg) => self.build(ctx, arg),
+            TcAnd(ConditionType::SingleBracket, _, lhs, rhs)
+            | TcOr(ConditionType::SingleBracket, _, lhs, rhs) => {
                 self.sequentially_refs(ctx, &[lhs, rhs])
             }
-            TC_And(ConditionType::DoubleBracket, _, lhs, rhs)
-            | TC_Or(ConditionType::DoubleBracket, _, lhs, rhs) => {
+            TcAnd(ConditionType::DoubleBracket, _, lhs, rhs)
+            | TcOr(ConditionType::DoubleBracket, _, lhs, rhs) => {
                 let left = self.build(ctx, lhs);
                 let right = self.build(ctx, rhs);
                 let end = self.none(ctx);
                 self.link_ranges(&[left, right, end]);
                 self.link_range(left, end)
             }
-            TC_Binary(_, _, lhs, rhs) => {
+            TcBinary(_, _, lhs, rhs) => {
                 let left = self.build(ctx, lhs);
                 let right = self.build(ctx, rhs);
                 self.link_range(left, right)
             }
-            TC_Empty(_) => self.none(ctx),
-            TC_Group(_, t) | TC_Nullary(_, t) | TC_Unary(_, _, t) => self.build(ctx, t),
-            T_Arithmetic(root) => {
+            TcEmpty(_) => self.none(ctx),
+            TcGroup(_, t) | TcNullary(_, t) | TcUnary(_, _, t) => self.build(ctx, t),
+            TArithmetic(root) => {
                 let exe = self.build(ctx, root);
-                let status = self.new_node_range(ctx, CfNode::CFSetExitCode(id));
+                let status = self.new_node_range(ctx, CfNode::SetExitCode(id));
                 self.link_range(exe, status)
             }
-            T_AndIf(lhs, rhs) | T_OrIf(lhs, rhs) => {
+            TAndIf(lhs, rhs) | TOrIf(lhs, rhs) => {
                 let left = self.build(ctx, lhs);
                 let right = self.build(ctx, rhs);
                 let end = self.none(ctx);
@@ -994,89 +953,83 @@ impl Builder {
                 self.link_range(right, end);
                 self.link_range(left, end)
             }
-            T_Array(list) | T_BraceExpansion(list) | T_BraceGroup(list) => {
+            TArray(list) | TBraceExpansion(list) | TBraceGroup(list) => {
                 self.sequentially(ctx, list)
             }
-            T_Assignment(..) => self.build_assignment(ctx, None, t),
-            T_Backgrounded(body) => {
+            TAssignment(..) => self.build_assignment(ctx, None, t),
+            TBackgrounded(body) => {
                 let start = self.none(ctx);
                 let fork =
                     self.subshell(ctx, id, "backgrounding '&'", &mut |s, c| s.build(c, body));
-                let pid = self.new_node_range(ctx, CfNode::CFSetBackgroundPid(id));
-                let status = self.new_node_range(ctx, CfNode::CFSetExitCode(id));
+                let pid = self.new_node_range(ctx, CfNode::SetBackgroundPid(id));
+                let status = self.new_node_range(ctx, CfNode::SetExitCode(id));
                 self.link_range(start, fork);
-                self.link_range_as(CfEdge::CFEFalseFlow, fork, pid);
+                self.link_range_as(CfEdge::FalseFlow, fork, pid);
                 self.link_ranges(&[start, pid, status])
             }
-            T_Backticked(body) => self.subshell(ctx, id, "`..` expansion", &mut |s, c| {
+            TBackticked(body) => self.subshell(ctx, id, "`..` expansion", &mut |s, c| {
                 s.sequentially(c, body)
             }),
-            T_Banged(cmd) => {
+            TBanged(cmd) => {
                 let main = self.build(ctx, cmd);
-                let status = self.new_node_range(ctx, CfNode::CFSetExitCode(id));
+                let status = self.new_node_range(ctx, CfNode::SetExitCode(id));
                 self.link_range(main, status)
             }
-            T_BatsTest(_, body) => {
+            TBatsTest(_, body) => {
                 let status = self.new_node_range(
                     ctx,
                     apply_single(IdTagged(
                         id,
-                        CfEffect::CFWriteVariable("status".to_string(), CfValue::CFValueInteger),
+                        CfEffect::WriteVariable("status".to_string(), CfValue::Integer),
                     )),
                 );
                 let output = self.new_node_range(
                     ctx,
                     apply_single(IdTagged(
                         id,
-                        CfEffect::CFWriteVariable("output".to_string(), CfValue::CFValueString),
+                        CfEffect::WriteVariable("output".to_string(), CfValue::String),
                     )),
                 );
                 let main = self.build(ctx, body);
                 self.link_ranges(&[status, output, main])
             }
-            T_CaseExpression(w, list) if list.is_empty() => self.build(ctx, w),
-            T_CaseExpression(w, list) => self.build_case(ctx, w, list),
-            T_Condition(_, op) => {
+            TCaseExpression(w, list) if list.is_empty() => self.build(ctx, w),
+            TCaseExpression(w, list) => self.build_case(ctx, w, list),
+            TCondition(_, op) => {
                 let cond = self.build(ctx, op);
-                let status = self.new_node_range(ctx, CfNode::CFSetExitCode(id));
+                let status = self.new_node_range(ctx, CfNode::SetExitCode(id));
                 self.link_range(cond, status)
             }
-            T_CoProc(name_token, body) => {
+            TCoProc(name_token, body) => {
                 let maybe_name = match name_token {
                     Some(x) => get_literal_string(x),
                     None => Some("COPROC".to_string()),
                 };
                 let parent_node = match maybe_name {
-                    Some(s) => apply_single(IdTagged(
-                        id,
-                        CfEffect::CFWriteVariable(s, CfValue::CFValueArray),
-                    )),
-                    None => CfNode::CFStructuralNode,
+                    Some(s) => {
+                        apply_single(IdTagged(id, CfEffect::WriteVariable(s, CfValue::Array)))
+                    }
+                    None => CfNode::StructuralNode,
                 };
                 let start = self.none(ctx);
                 let parent = self.new_node_range(ctx, parent_node);
                 let child = self.subshell(ctx, id, "coproc", &mut |s, c| s.build(c, body));
-                let end = self.new_node_range(ctx, CfNode::CFSetExitCode(id));
+                let end = self.new_node_range(ctx, CfNode::SetExitCode(id));
                 self.link_range(start, parent);
                 self.link_range(start, child);
                 self.link_range(parent, end);
-                self.link_range_as(CfEdge::CFEFalseFlow, child, end);
+                self.link_range_as(CfEdge::FalseFlow, child, end);
                 Range(start.0, end.1)
             }
-            T_CoProcBody(t)
-            | T_DollarArithmetic(t)
-            | T_DollarBracket(t)
-            | T_HereString(t)
-            | T_Include(t) => self.build(ctx, t),
-            T_DollarDoubleQuoted(list)
-            | T_DoubleQuoted(list)
-            | T_Extglob(_, list)
-            | T_HereDoc(_, _, _, list)
-            | T_NormalWord(list) => self.sequentially(ctx, list),
-            T_DollarSingleQuoted(_) | T_Glob(_) | T_Literal(_) | T_SingleQuoted(_) => {
-                self.none(ctx)
-            }
-            T_DollarBraced(_, w) => {
+            TCoProcBody(t) | TDollarArithmetic(t) | TDollarBracket(t) | THereString(t)
+            | TInclude(t) => self.build(ctx, t),
+            TDollarDoubleQuoted(list)
+            | TDoubleQuoted(list)
+            | TExtglob(_, list)
+            | THereDoc(_, _, _, list)
+            | TNormalWord(list) => self.sequentially(ctx, list),
+            TDollarSingleQuoted(_) | TGlob(_) | TLiteral(_) | TSingleQuoted(_) => self.none(ctx),
+            TDollarBraced(_, w) => {
                 let s: String = oversimplify(w).concat();
                 let modifier = get_braced_modifier(&s);
                 let reference = get_braced_reference(&s);
@@ -1087,13 +1040,13 @@ impl Builder {
                 for x in extra {
                     ranges.push(self.new_node_range(
                         ctx,
-                        apply_single(IdTagged(id, CfEffect::CFReadVariable(x))),
+                        apply_single(IdTagged(id, CfEffect::ReadVariable(x))),
                     ));
                 }
                 let deps = self.link_ranges(&ranges);
                 let read = self.new_node_range(
                     ctx,
-                    apply_single(IdTagged(id, CfEffect::CFReadVariable(reference.clone()))),
+                    apply_single(IdTagged(id, CfEffect::ReadVariable(reference.clone()))),
                 );
                 let total_read = self.link_range(deps, read);
                 if modifier.starts_with('=') || modifier.starts_with(":=") {
@@ -1101,7 +1054,7 @@ impl Builder {
                         ctx,
                         apply_single(IdTagged(
                             id,
-                            CfEffect::CFWriteVariable(reference, CfValue::CFValueString),
+                            CfEffect::WriteVariable(reference, CfValue::String),
                         )),
                     );
                     let result = self.none(ctx);
@@ -1111,23 +1064,23 @@ impl Builder {
                     total_read
                 }
             }
-            T_DollarBraceCommandExpansion(_, body) => self.sequentially(ctx, body),
-            T_DollarExpansion(body) => self.subshell(ctx, id, "$(..) expansion", &mut |s, c| {
+            TDollarBraceCommandExpansion(_, body) => self.sequentially(ctx, body),
+            TDollarExpansion(body) => self.subshell(ctx, id, "$(..) expansion", &mut |s, c| {
                 s.sequentially(c, body)
             }),
-            T_FdRedirect(name, op) if name.starts_with('{') => {
+            TFdRedirect(name, op) if name.starts_with('{') => {
                 let var: String = name[1..].chars().take_while(|&c| c != '}').collect();
                 let expression = self.build(ctx, op);
                 let effect = if is_closing_file_op(op) {
-                    CfEffect::CFReadVariable(var)
+                    CfEffect::ReadVariable(var)
                 } else {
-                    CfEffect::CFWriteVariable(var, CfValue::CFValueInteger)
+                    CfEffect::WriteVariable(var, CfValue::Integer)
                 };
                 let rw = self.new_node_range(ctx, apply_single(IdTagged(id, effect)));
                 self.link_range(expression, rw)
             }
-            T_FdRedirect(_, t) => self.build(ctx, t),
-            T_ForArithmetic(init_t, cond_t, inc_t, body_t) => {
+            TFdRedirect(_, t) => self.build(ctx, t),
+            TForArithmetic(init_t, cond_t, inc_t, body_t) => {
                 let init = self.build(ctx, init_t);
                 let cond = self.build(ctx, cond_t);
                 let body = self.sequentially(ctx, body_t);
@@ -1138,27 +1091,27 @@ impl Builder {
                 self.link_range(inc, cond);
                 Range(init.0, end.1)
             }
-            T_ForIn(name, words, body) | T_SelectIn(name, words, body) => {
+            TForIn(name, words, body) | TSelectIn(name, words, body) => {
                 self.for_in_helper(ctx, id, name, words, body)
             }
-            T_Function(_, _, name, body) => {
+            TFunction(_, _, name, body) => {
                 let mut fctx = ctx.clone();
                 fctx.exit_target = None;
                 let entry =
-                    self.new_node_range(&fctx, CfNode::CFEntryPoint(format!("function {name}")));
+                    self.new_node_range(&fctx, CfNode::EntryPoint(format!("function {name}")));
                 let f = self.with_function_scope(&fctx, &mut |s, c| s.build(c, body));
                 let range = self.link_range(entry, f);
                 let definition = self.new_node_range(
                     ctx,
                     apply_single(IdTagged(
                         id,
-                        CfEffect::CFDefineFunction(name.clone(), id, range.0, range.1),
+                        CfEffect::DefineFunction(name.clone(), id, range.0, range.1),
                     )),
                 );
-                let exe = self.new_node_range(ctx, CfNode::CFSetExitCode(id));
+                let exe = self.new_node_range(ctx, CfNode::SetExitCode(id));
                 self.link_range(definition, exe)
             }
-            T_IfExpression(ifs, elses) => {
+            TIfExpression(ifs, elses) => {
                 let start = self.none(ctx);
                 let mut branches: Vec<Range> = Vec::new();
                 let mut prev = start;
@@ -1173,7 +1126,7 @@ impl Builder {
                     branches.insert(0, action);
                 }
                 let rest = if elses.is_empty() {
-                    self.new_node_range(ctx, CfNode::CFSetExitCode(id))
+                    self.new_node_range(ctx, CfNode::SetExitCode(id))
                 } else {
                     self.sequentially(ctx, elses)
                 };
@@ -1185,59 +1138,59 @@ impl Builder {
                 }
                 Range(start.0, end.1)
             }
-            T_IndexedElement(indices_t, value_t) => {
+            TIndexedElement(indices_t, value_t) => {
                 let indices = self.sequentially(ctx, indices_t);
                 let value = self.build(ctx, value_t);
                 self.link_range(indices, value)
             }
-            T_IoDuplicate(op, _) => self.build(ctx, op),
-            T_IoFile(op, t) => {
+            TIoDuplicate(op, _) => self.build(ctx, op),
+            TIoFile(op, t) => {
                 let exp = self.build(ctx, t);
                 let doesnt_do_much = self.build(ctx, op);
                 self.link_range(exp, doesnt_do_much)
             }
-            T_Pipeline(_, cmds) if cmds.len() == 1 => self.build(ctx, &cmds[0]),
-            T_Pipeline(_, cmds) => {
+            TPipeline(_, cmds) if cmds.len() == 1 => self.build(ctx, &cmds[0]),
+            TPipeline(_, cmds) => {
                 let start = self.none(ctx);
                 let has_lastpipe = ctx.params.cf_lastpipe;
                 let (leading, last) = self.build_pipe(ctx, id, has_lastpipe, cmds);
-                let end = self.new_node_range(ctx, CfNode::CFSetExitCode(id));
+                let end = self.new_node_range(ctx, CfNode::SetExitCode(id));
                 for l in &leading {
                     self.link_range(start, *l);
                 }
                 for l in &leading {
-                    self.link_range_as(CfEdge::CFEFalseFlow, *l, end);
+                    self.link_range_as(CfEdge::FalseFlow, *l, end);
                 }
                 let mut ranges = vec![start];
                 ranges.extend(last);
                 ranges.push(end);
                 self.link_ranges(&ranges)
             }
-            T_ProcSub(op, cmds) => {
+            TProcSub(op, cmds) => {
                 let start = self.none(ctx);
                 let reason = format!("{op}() process substitution");
                 let body = self.subshell(ctx, id, &reason, &mut |s, c| s.sequentially(c, cmds));
                 let end = self.none(ctx);
                 self.link_range(start, body);
-                self.link_range_as(CfEdge::CFEFalseFlow, body, end);
+                self.link_range_as(CfEdge::FalseFlow, body, end);
                 self.link_range(start, end)
             }
-            T_Redirecting(redirs, cmd) => {
+            TRedirecting(redirs, cmd) => {
                 let redir = self.sequentially(ctx, redirs);
                 let body = self.build(ctx, cmd);
                 self.link_range(redir, body)
             }
-            T_SimpleCommand(vars, words) if words.is_empty() => {
+            TSimpleCommand(vars, words) if words.is_empty() => {
                 let assignments = self.sequentially(ctx, vars);
-                let status = self.new_node_range(ctx, CfNode::CFSetExitCode(id));
+                let status = self.new_node_range(ctx, CfNode::SetExitCode(id));
                 self.link_range(assignments, status)
             }
-            T_SimpleCommand(vars, words) => {
+            TSimpleCommand(vars, words) => {
                 let literal = get_unquoted_literal(&words[0]);
                 let args: Vec<&Token> = words.iter().collect();
                 self.handle_command(ctx, t, vars, &args, literal)
             }
-            T_SourceCommand(original, inlined) => {
+            TSourceCommand(original, inlined) => {
                 let cmd = self.build(ctx, original);
                 let end = self.none(ctx);
                 let inline = self.build(ctx, inlined);
@@ -1245,31 +1198,31 @@ impl Builder {
                 self.link_range(inline, end);
                 Range(cmd.0, inline.1)
             }
-            T_Subshell(body) => {
+            TSubshell(body) => {
                 let main = self.subshell(ctx, id, "explicit (..) subshell", &mut |s, c| {
                     s.sequentially(c, body)
                 });
-                let status = self.new_node_range(ctx, CfNode::CFSetExitCode(id));
+                let status = self.new_node_range(ctx, CfNode::SetExitCode(id));
                 self.link_range(main, status)
             }
-            T_UntilExpression(cond, body) | T_WhileExpression(cond, body) => {
+            TUntilExpression(cond, body) | TWhileExpression(cond, body) => {
                 let mut cctx = ctx.clone();
                 cctx.is_condition = true;
                 let cond_range = self.sequentially(&cctx, cond);
                 let body_range = self.sequentially(ctx, body);
-                let end = self.new_node_range(ctx, CfNode::CFSetExitCode(id));
+                let end = self.new_node_range(ctx, CfNode::SetExitCode(id));
                 self.link_range(cond_range, body_range);
                 self.link_range(body_range, cond_range);
                 self.link_range(cond_range, end)
             }
-            T_CLOBBER
-            | T_GREATAND
-            | T_LESSAND
-            | T_LESSGREAT
-            | T_DGREAT
-            | T_Greater
-            | T_Less
-            | T_ParamSubSpecialChar(_) => self.none(ctx),
+            TLexClobber
+            | TLexGreatand
+            | TLexLessand
+            | TLexLessgreat
+            | TLexDgreat
+            | TGreater
+            | TLess
+            | TParamSubSpecialChar(_) => self.none(ctx),
             _ => panic!("ShellCheck CFG: Unimplemented: {t:?}"),
         }
     }
@@ -1312,13 +1265,13 @@ impl Builder {
             let (_, next_cond, next_body) = branches[i + 1];
             self.link_range(cond, next_cond);
             match typ {
-                CaseType::CaseBreak => {
+                CaseType::Break => {
                     self.link_range(body, end);
                 }
-                CaseType::CaseFallThrough => {
+                CaseType::FallThrough => {
                     self.link_range(body, next_body);
                 }
-                CaseType::CaseContinue => {
+                CaseType::Continue => {
                     self.link_range(body, next_cond);
                 }
             }
@@ -1326,7 +1279,7 @@ impl Builder {
         self.link_range(last_body, end);
         let is_catch_all = |c: &Token| {
             word_to_exact_pseudo_glob(c)
-                .is_some_and(|pg| pseudo_glob_is_super_set_of(&pg, &[PseudoGlob::PGMany]))
+                .is_some_and(|pg| pseudo_glob_is_super_set_of(&pg, &[PseudoGlob::Many]))
         };
         let has_catch_all = list
             .iter()
@@ -1372,7 +1325,7 @@ impl Builder {
                 ctx,
                 apply_single(IdTagged(
                     id,
-                    CfEffect::CFWriteVariable(name.to_string(), CfValue::CFValueString),
+                    CfEffect::WriteVariable(name.to_string(), CfValue::String),
                 )),
             )]
         } else {
@@ -1383,9 +1336,9 @@ impl Builder {
                         ctx,
                         apply_single(IdTagged(
                             id,
-                            CfEffect::CFWriteVariable(
+                            CfEffect::WriteVariable(
                                 name.to_string(),
-                                CfValue::CFValueComputed(t.id, token_to_parts(t)),
+                                CfValue::Computed(t.id, token_to_parts(t)),
                             ),
                         )),
                     )
@@ -1459,13 +1412,13 @@ impl Builder {
 
     fn handle_exit(&mut self, ctx: &CfContext) -> Range {
         if let Some(target) = ctx.exit_target {
-            let exit = self.new_node(ctx, CfNode::CFResolvedExit);
-            self.link(exit, target, CfEdge::CFEExit);
-            let unreachable = self.new_node(ctx, CfNode::CFUnreachable);
+            let exit = self.new_node(ctx, CfNode::ResolvedExit);
+            self.link(exit, target, CfEdge::Exit);
+            let unreachable = self.new_node(ctx, CfNode::Unreachable);
             Range(exit, unreachable)
         } else {
-            let exit = self.new_node(ctx, CfNode::CFUnresolvedExit);
-            let unreachable = self.new_node(ctx, CfNode::CFUnreachable);
+            let exit = self.new_node(ctx, CfNode::UnresolvedExit);
+            let unreachable = self.new_node(ctx, CfNode::Unreachable);
             Range(exit, unreachable)
         }
     }
@@ -1474,9 +1427,9 @@ impl Builder {
         let target = ctx
             .return_target
             .expect("ShellCheck internal error, please report: missing return target");
-        let ret = self.new_node(ctx, CfNode::CFStructuralNode);
-        self.link(ret, target, CfEdge::CFEFlow);
-        let unreachable = self.new_node(ctx, CfNode::CFUnreachable);
+        let ret = self.new_node(ctx, CfNode::StructuralNode);
+        self.link(ret, target, CfEdge::Flow);
+        let unreachable = self.new_node(ctx, CfNode::Unreachable);
         Range(ret, unreachable)
     }
 
@@ -1498,19 +1451,19 @@ impl Builder {
         let has = |f: &str| flag_names.iter().any(|x| *x == f);
         let make = |name: String| -> CfEffect {
             if has("n") {
-                CfEffect::CFUndefineNameref(name)
+                CfEffect::UndefineNameref(name)
             } else if has("v") {
-                CfEffect::CFUndefineVariable(name)
+                CfEffect::UndefineVariable(name)
             } else if has("f") {
-                CfEffect::CFUndefineFunction(name)
+                CfEffect::UndefineFunction(name)
             } else {
-                CfEffect::CFUndefine(name)
+                CfEffect::Undefine(name)
             }
         };
         let effects = literal_names
             .map(|(t, n)| IdTagged(t.id, make(n)))
             .collect();
-        self.new_node_range(ctx, CfNode::CFApplyEffects(effects))
+        self.new_node_range(ctx, CfNode::ApplyEffects(effects))
     }
 
     fn handle_declare(&mut self, ctx: &CfContext, args_with_cmd: &[&Token]) -> Range {
@@ -1530,32 +1483,32 @@ impl Builder {
         let export = has("x");
         let writer = |name: String, v: CfValue| -> CfEffect {
             if global {
-                CfEffect::CFWriteGlobal(name, v)
+                CfEffect::WriteGlobal(name, v)
             } else if is_func {
-                CfEffect::CFWriteLocal(name, v)
+                CfEffect::WriteLocal(name, v)
             } else {
-                CfEffect::CFWriteVariable(name, v)
+                CfEffect::WriteVariable(name, v)
             }
         };
         let scope = if global {
-            Some(Scope::GlobalScope)
+            Some(Scope::Global)
         } else if is_func {
-            Some(Scope::LocalScope)
+            Some(Scope::Local)
         } else {
             None
         };
         let mut added_props = PropSet::default();
         if array {
-            added_props.insert(CfVariableProp::CFVPArray);
+            added_props.insert(CfVariableProp::Array);
         }
         if integer {
-            added_props.insert(CfVariableProp::CFVPInteger);
+            added_props.insert(CfVariableProp::Integer);
         }
         if export {
-            added_props.insert(CfVariableProp::CFVPExport);
+            added_props.insert(CfVariableProp::Export);
         }
         if associative {
-            added_props.insert(CfVariableProp::CFVPAssociative);
+            added_props.insert(CfVariableProp::Associative);
         }
         let unset_options: String = args
             .iter()
@@ -1565,39 +1518,39 @@ impl Builder {
             .collect();
         let mut removed_props = PropSet::default();
         if unset_options.contains('i') {
-            removed_props.insert(CfVariableProp::CFVPInteger);
+            removed_props.insert(CfVariableProp::Integer);
         }
         if unset_options.contains('e') {
-            removed_props.insert(CfVariableProp::CFVPExport);
+            removed_props.insert(CfVariableProp::Export);
         }
         let mut evaluated: Vec<&Token> = Vec::new();
         let mut assignments: Vec<IdTagged> = Vec::new();
         let mut added: Vec<IdTagged> = Vec::new();
         let mut removed: Vec<IdTagged> = Vec::new();
         for t in args {
-            if let T_Assignment(mode, var, idx, value) = &t.inner {
+            if let TAssignment(mode, var, idx, value) = &t.inner {
                 evaluated.extend(idx.iter());
                 evaluated.push(value);
                 let mut parts = Vec::new();
                 if *mode == AssignmentMode::Append {
-                    parts.push(CfStringPart::CFStringVariable(var.clone()));
+                    parts.push(CfStringPart::Variable(var.clone()));
                 }
                 parts.extend(token_to_parts(value));
                 assignments.push(IdTagged(
                     t.id,
-                    writer(var.clone(), CfValue::CFValueComputed(value.id, parts)),
+                    writer(var.clone(), CfValue::Computed(value.id, parts)),
                 ));
                 if !added_props.is_empty() {
                     added.push(IdTagged(
                         t.id,
-                        CfEffect::CFSetProps(scope, var.clone(), added_props),
+                        CfEffect::SetProps(scope, var.clone(), added_props),
                     ));
                 }
                 if !removed_props.is_empty() {
                     // ShellCheck unsets the added properties here.
                     removed.push(IdTagged(
                         t.id,
-                        CfEffect::CFUnsetProps(scope, var.clone(), added_props),
+                        CfEffect::UnsetProps(scope, var.clone(), added_props),
                     ));
                 }
             } else {
@@ -1615,16 +1568,16 @@ impl Builder {
                     t.id,
                     writer(
                         name.clone(),
-                        CfValue::CFValueComputed(
+                        CfValue::Computed(
                             t.id,
-                            vec![CfStringPart::CFStringLiteral(match literal.find('=') {
+                            vec![CfStringPart::Literal(match literal.find('=') {
                                 Some(i) => literal[i + 1..].to_string(),
                                 None => String::new(),
                             })],
                         ),
                     ),
                 );
-                let as_unknown = IdTagged(t.id, writer(name.clone(), CfValue::CFValueString));
+                let as_unknown = IdTagged(t.id, writer(name.clone(), CfValue::String));
                 if matched.is_some() && is_known {
                     assignments.push(as_literal);
                 } else if matched.is_some() {
@@ -1632,27 +1585,27 @@ impl Builder {
                 }
                 added.push(IdTagged(
                     t.id,
-                    CfEffect::CFSetProps(scope, name.clone(), added_props),
+                    CfEffect::SetProps(scope, name.clone(), added_props),
                 ));
                 removed.push(IdTagged(
                     t.id,
-                    CfEffect::CFUnsetProps(scope, name, removed_props),
+                    CfEffect::UnsetProps(scope, name, removed_props),
                 ));
             }
         }
         let before = self.sequentially_refs(ctx, &evaluated);
-        let assignments_r = self.new_node_range(ctx, CfNode::CFApplyEffects(assignments));
+        let assignments_r = self.new_node_range(ctx, CfNode::ApplyEffects(assignments));
         let added_r = if added.is_empty() {
             self.none(ctx)
         } else {
-            self.new_node_range(ctx, CfNode::CFApplyEffects(added))
+            self.new_node_range(ctx, CfNode::ApplyEffects(added))
         };
         let removed_r = if removed.is_empty() {
             self.none(ctx)
         } else {
-            self.new_node_range(ctx, CfNode::CFApplyEffects(removed))
+            self.new_node_range(ctx, CfNode::ApplyEffects(removed))
         };
-        let result = self.new_node_range(ctx, CfNode::CFSetExitCode(cmd.id));
+        let result = self.new_node_range(ctx, CfNode::SetExitCode(cmd.id));
         self.link_ranges(&[before, assignments_r, added_r, removed_r, result])
     }
 
@@ -1664,10 +1617,10 @@ impl Builder {
             let name = get_literal_string(arg)?;
             Some(IdTagged(
                 arg.id,
-                CfEffect::CFWriteVariable(name, CfValue::CFValueString),
+                CfEffect::WriteVariable(name, CfValue::String),
             ))
         })();
-        self.new_node_range(ctx, CfNode::CFApplyEffects(effect.into_iter().collect()))
+        self.new_node_range(ctx, CfNode::ApplyEffects(effect.into_iter().collect()))
     }
 
     fn handle_wait(&mut self, ctx: &CfContext, args_with_cmd: &[&Token]) -> Range {
@@ -1678,10 +1631,10 @@ impl Builder {
             let name = get_literal_string(arg)?;
             Some(IdTagged(
                 arg.id,
-                CfEffect::CFWriteVariable(name, CfValue::CFValueInteger),
+                CfEffect::WriteVariable(name, CfValue::Integer),
             ))
         })();
-        self.new_node_range(ctx, CfNode::CFApplyEffects(effect.into_iter().collect()))
+        self.new_node_range(ctx, CfNode::ApplyEffects(effect.into_iter().collect()))
     }
 
     fn handle_mapfile(&mut self, ctx: &CfContext, args_with_cmd: &[&Token]) -> Range {
@@ -1708,9 +1661,9 @@ impl Builder {
             .unwrap_or_else(|| (cmd.id, "MAPFILE".to_string()));
         self.new_node_range(
             ctx,
-            CfNode::CFApplyEffects(vec![IdTagged(
+            CfNode::ApplyEffects(vec![IdTagged(
                 id,
-                CfEffect::CFWriteVariable(name, CfValue::CFValueArray),
+                CfEffect::WriteVariable(name, CfValue::Array),
             )]),
         )
     }
@@ -1732,13 +1685,13 @@ impl Builder {
             }
             let has_dash_a = get_generic_opts(&args).iter().any(|(f, _)| f == "a");
             let value = if has_dash_a {
-                CfValue::CFValueArray
+                CfValue::Array
             } else {
-                CfValue::CFValueString
+                CfValue::String
             };
             names
                 .into_iter()
-                .map(|(id, name)| IdTagged(id, CfEffect::CFWriteVariable(name, value.clone())))
+                .map(|(id, name)| IdTagged(id, CfEffect::WriteVariable(name, value.clone())))
                 .collect()
         };
         let main = match get_gnu_opts(FLAGS_FOR_READ, &args) {
@@ -1747,7 +1700,7 @@ impl Builder {
                 Some((_, (_, token))) => match get_literal_string(token) {
                     Some(name) => vec![IdTagged(
                         token.id,
-                        CfEffect::CFWriteVariable(name, CfValue::CFValueArray),
+                        CfEffect::WriteVariable(name, CfValue::Array),
                     )],
                     None => Vec::new(),
                 },
@@ -1758,13 +1711,13 @@ impl Builder {
                         let name = get_literal_string(t)?;
                         Some(IdTagged(
                             t.id,
-                            CfEffect::CFWriteVariable(name, CfValue::CFValueString),
+                            CfEffect::WriteVariable(name, CfValue::String),
                         ))
                     })
                     .collect(),
             },
         };
-        self.new_node_range(ctx, CfNode::CFApplyEffects(main))
+        self.new_node_range(ctx, CfNode::ApplyEffects(main))
     }
 
     fn handle_define(&mut self, ctx: &CfContext, args_with_cmd: &[&Token]) -> Range {
@@ -1777,10 +1730,10 @@ impl Builder {
             }
             Some(IdTagged(
                 name.id,
-                CfEffect::CFWriteVariable(s, CfValue::CFValueString),
+                CfEffect::WriteVariable(s, CfValue::String),
             ))
         })();
-        self.new_node_range(ctx, CfNode::CFApplyEffects(effect.into_iter().collect()))
+        self.new_node_range(ctx, CfNode::ApplyEffects(effect.into_iter().collect()))
     }
 
     fn handle_others(
@@ -1792,8 +1745,8 @@ impl Builder {
         cmd: Option<String>,
     ) -> Range {
         self.regular_expansion(ctx, vars, args, &mut |s, c| {
-            let exe = s.new_node_range(c, CfNode::CFExecuteCommand(cmd.clone()));
-            let status = s.new_node_range(c, CfNode::CFSetExitCode(id));
+            let exe = s.new_node_range(c, CfNode::ExecuteCommand(cmd.clone()));
+            let status = s.new_node_range(c, CfNode::SetExitCode(id));
             s.link_range(exe, status)
         })
     }
@@ -1808,14 +1761,14 @@ impl Builder {
         let args_r = self.sequentially_refs(ctx, args);
         let mut assignments = Vec::new();
         for v in vars {
-            assignments.push(self.build_assignment(ctx, Some(Scope::PrefixScope), v));
+            assignments.push(self.build_assignment(ctx, Some(Scope::Prefix), v));
         }
         let exe = p(self, ctx);
         let mut ranges = vec![args_r];
         ranges.extend(assignments);
         ranges.push(exe);
         if !vars.is_empty() {
-            ranges.push(self.new_node_range(ctx, CfNode::CFDropPrefixAssignments));
+            ranges.push(self.new_node_range(ctx, CfNode::DropPrefixAssignments));
         }
         self.link_ranges(&ranges)
     }
@@ -1828,12 +1781,12 @@ impl Builder {
         p: &mut dyn FnMut(&mut Self, &CfContext) -> Range,
     ) -> Range {
         let initial = self.regular_expansion(ctx, vars, args, p);
-        let status = self.new_node_range(ctx, CfNode::CFSetExitCode(args[0].id));
+        let status = self.new_node_range(ctx, CfNode::SetExitCode(args[0].id));
         self.link_range(initial, status)
     }
 
     fn build_assignment(&mut self, ctx: &CfContext, scope: Option<Scope>, t: &Token) -> Range {
-        let T_Assignment(mode, var, indices, value) = &t.inner else {
+        let TAssignment(mode, var, indices, value) = &t.inner else {
             panic!("ShellCheck CFG: buildAssignment on a non-assignment");
         };
         let id = t.id;
@@ -1842,31 +1795,31 @@ impl Builder {
         let read = match mode {
             AssignmentMode::Append => self.new_node_range(
                 ctx,
-                apply_single(IdTagged(id, CfEffect::CFReadVariable(var.clone()))),
+                apply_single(IdTagged(id, CfEffect::ReadVariable(var.clone()))),
             ),
             AssignmentMode::Assign => self.none(ctx),
         };
         let value_type = if indices.is_empty() {
             match &value.inner {
-                T_NormalWord(_) | T_Literal(_) => {
+                TNormalWord(_) | TLiteral(_) => {
                     let mut parts = Vec::new();
                     if *mode == AssignmentMode::Append {
-                        parts.push(CfStringPart::CFStringVariable(var.clone()));
+                        parts.push(CfStringPart::Variable(var.clone()));
                     }
                     parts.extend(token_to_parts(value));
-                    CfValue::CFValueComputed(id, parts)
+                    CfValue::Computed(id, parts)
                 }
-                T_Array(_) => CfValue::CFValueArray,
+                TArray(_) => CfValue::Array,
                 _ => panic!("ShellCheck CFG: unexpected assignment value"),
             }
         } else {
-            CfValue::CFValueArray
+            CfValue::Array
         };
         let effect = match scope {
-            Some(Scope::PrefixScope) => CfEffect::CFWritePrefix(var.clone(), value_type),
-            Some(Scope::LocalScope) => CfEffect::CFWriteLocal(var.clone(), value_type),
-            Some(Scope::GlobalScope) => CfEffect::CFWriteGlobal(var.clone(), value_type),
-            None => CfEffect::CFWriteVariable(var.clone(), value_type),
+            Some(Scope::Prefix) => CfEffect::WritePrefix(var.clone(), value_type),
+            Some(Scope::Local) => CfEffect::WriteLocal(var.clone(), value_type),
+            Some(Scope::Global) => CfEffect::WriteGlobal(var.clone(), value_type),
+            None => CfEffect::WriteVariable(var.clone(), value_type),
         };
         let write = self.new_node_range(ctx, apply_single(IdTagged(id, effect)));
         let op = self.link_ranges(&[expand, index, read, write]);
@@ -1883,17 +1836,14 @@ fn args_slice(args: &[&Token]) -> Vec<Token> {
 /// `tokenToParts`.
 pub fn token_to_parts(t: &Token) -> Vec<CfStringPart> {
     match &t.inner {
-        T_NormalWord(list) | T_DoubleQuoted(list) => list.iter().flat_map(token_to_parts).collect(),
-        T_SingleQuoted(s) | T_Literal(s) => vec![CfStringPart::CFStringLiteral(s.clone())],
-        T_DollarArithmetic(_) | T_DollarBracket(_) => vec![CfStringPart::CFStringInteger],
-        T_DollarBraced(_, list) if is_unmodified_parameter_expansion(t) => {
-            vec![CfStringPart::CFStringVariable(get_braced_reference(
+        TNormalWord(list) | TDoubleQuoted(list) => list.iter().flat_map(token_to_parts).collect(),
+        TSingleQuoted(s) | TLiteral(s) => vec![CfStringPart::Literal(s.clone())],
+        TDollarArithmetic(_) | TDollarBracket(_) => vec![CfStringPart::Integer],
+        TDollarBraced(_, list) if is_unmodified_parameter_expansion(t) => {
+            vec![CfStringPart::Variable(get_braced_reference(
                 &oversimplify(list).concat(),
             ))]
         }
-        _ => vec![
-            get_literal_string(t)
-                .map_or(CfStringPart::CFStringUnknown, CfStringPart::CFStringLiteral),
-        ],
+        _ => vec![get_literal_string(t).map_or(CfStringPart::Unknown, CfStringPart::Literal)],
     }
 }

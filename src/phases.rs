@@ -4,8 +4,6 @@
 //! [`crate::config::Config::load`], before any command consumes the config,
 //! in inventory registration order.
 
-use anyhow::Result;
-
 use crate::config::Config;
 
 /// A post-config hook. Submit one with `inventory::submit!`.
@@ -20,7 +18,7 @@ pub struct PhaseHook {
     pub description: &'static str,
     pub function: &'static str,
     pub location: &'static str,
-    pub run: fn(&mut Config) -> Result<()>,
+    pub run: fn(&mut Config),
 }
 
 inventory::collect!(PhaseHook);
@@ -30,9 +28,8 @@ pub fn all_hooks() -> impl Iterator<Item = &'static PhaseHook> {
 }
 
 /// Run every registered post-config hook, in inventory order.
-pub fn run_post_config_hooks(config: &mut Config) -> Result<()> {
+pub fn run_post_config_hooks(config: &mut Config) {
     for hook in all_hooks() {
-        (hook.run)(config).map_err(|e| e.context(format!("post-config hook '{}'", hook.name)))?;
+        (hook.run)(config);
     }
-    Ok(())
 }

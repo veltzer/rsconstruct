@@ -90,7 +90,6 @@ fn processor_description(name: &str) -> Option<String> {
 /// Render a single `[header]` block as a TOML snippet string with comments.
 /// `header` is the full dotted table name (`processor.checker.ruff`,
 /// `analyzer.tera`).
-#[allow(clippy::too_many_arguments)]
 fn render_section(
     header: &str,
     description: Option<&str>,

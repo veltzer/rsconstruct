@@ -502,10 +502,6 @@ impl Parser {
         self.finish();
     }
 
-    #[allow(
-        clippy::too_many_lines,
-        reason = "one state machine, one function, as in the original"
-    )]
     fn parse(&mut self) {
         while usize::try_from(self.index).is_ok_and(|i| i < self.buffer.len()) {
             let c = self.at(self.index);

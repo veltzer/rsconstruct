@@ -21,7 +21,7 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     name: "prettier", processor_type: crate::processor::ProcessorType::Checker, create: create_prettier,
     fields: &[],
     omit_standard_fields: &["formats", "output_dir"],
-    scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &[".js", ".jsx", ".ts", ".tsx", ".mjs", ".cjs", ".css", ".scss", ".less", ".html", ".json", ".md", ".yaml", ".yml"], src_exclude_dirs: &[] }),
+    scan_defaults: Some(crate::config::ScanDefaultsData { src_extensions: &[".js", ".jsx", ".ts", ".tsx", ".mjs", ".cjs", ".css", ".scss", ".less", ".html", ".json", ".md", ".yaml", ".yml"], src_exclude_dirs: &[] }),
     defaults: Some(crate::config::ProcessorDefaults { command: "prettier", dep_auto: &[".prettierrc", ".prettierrc.json", ".prettierrc.js", ".prettierrc.yml", ".prettierrc.yaml", ".prettierrc.toml", ".prettierrc.cjs", ".prettierrc.mjs", "prettier.config.js", "prettier.config.cjs", "prettier.config.mjs", ".prettierrc.json5", "prettier.config.ts", ".prettierignore", ".editorconfig", "package.json"], ..crate::config::ProcessorDefaults::EMPTY }),
     defconfig_json: crate::registries::default_config_json::<crate::config::StandardConfig>,
     keywords: &["javascript", "typescript", "css", "html", "json", "markdown", "yaml", "formatter", "web", "frontend", "node", "npm"],

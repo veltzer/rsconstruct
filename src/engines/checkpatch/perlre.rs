@@ -1452,7 +1452,7 @@ impl Regex {
             }
             Node::Repeat(inner, min, max, greed) => {
                 if let Some(set) = single_byte(inner) {
-                    return self.repeat_simple(&set, pos, *min, *max, *greed, st, k);
+                    return self.repeat_simple(&set, pos, (*min, *max), *greed, st, k);
                 }
                 let memo = RefCell::new(FastSet::default());
                 let lp = Loop {
@@ -1666,17 +1666,17 @@ impl Regex {
         false
     }
 
-    #[allow(clippy::too_many_arguments)]
+    /// `bounds` is the repeat's `(min, max)` count.
     fn repeat_simple<'h>(
         &self,
         set: &Set,
         pos: usize,
-        min: usize,
-        max: Option<usize>,
+        bounds: (usize, Option<usize>),
         greed: Greed,
         st: &mut State<'h>,
         k: &mut Cont<'_, 'h>,
     ) -> bool {
+        let (min, max) = bounds;
         let hay = st.hay;
         let limit = max.map_or(hay.len() - pos, |m| m.min(hay.len() - pos));
         let mut n = 0;

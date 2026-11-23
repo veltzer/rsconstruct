@@ -1491,7 +1491,7 @@ fn dl3043(doc: &Doc, out: &mut Vec<Failure>) {
         |i| match i {
             Instruction::OnBuild(inner) => !matches!(
                 **inner,
-                Instruction::OnBuild(_) | Instruction::From(_) | Instruction::Maintainer(_)
+                Instruction::OnBuild(_) | Instruction::From(_) | Instruction::Maintainer
             ),
             _ => true,
         },
@@ -2441,7 +2441,7 @@ fn dl4000(doc: &Doc, out: &mut Vec<Failure>) {
         "DL4000",
         Severity::Error,
         "MAINTAINER is deprecated",
-        |i| !matches!(i, Instruction::Maintainer(_)),
+        |i| !matches!(i, Instruction::Maintainer),
     );
 }
 

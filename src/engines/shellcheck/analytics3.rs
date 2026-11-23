@@ -65,11 +65,11 @@ use super::interface::Shell;
 use super::regex::{Regex, mk_regex};
 
 use Inner::{
-    T_AndIf, T_Arithmetic, T_Array, T_Assignment, T_Backticked, T_Banged, T_Condition,
-    T_DollarBraced, T_DollarExpansion, T_DoubleQuoted, T_ForIn, T_Function, T_HereDoc,
-    T_HereString, T_IfExpression, T_IndexedElement, T_Literal, T_NormalWord, T_OrIf, T_Pipeline,
-    T_ProcSub, T_Redirecting, T_Script, T_SimpleCommand, T_SourceCommand, T_UntilExpression,
-    T_WhileExpression, TA_Sequence, TA_Variable, TC_Binary, TC_Nullary, TC_Unary,
+    TAndIf, TArithmetic, TArray, TAssignment, TBackticked, TBanged, TCondition, TDollarBraced,
+    TDollarExpansion, TDoubleQuoted, TForIn, TFunction, THereDoc, THereString, TIfExpression,
+    TIndexedElement, TLiteral, TNormalWord, TOrIf, TPipeline, TProcSub, TRedirecting, TScript,
+    TSimpleCommand, TSourceCommand, TUntilExpression, TWhileExpression, TaSequence, TaVariable,
+    TcBinary, TcNullary, TcUnary,
 };
 
 thread_local! {
@@ -87,8 +87,8 @@ pub fn check_quotes_in_literals(params: &Parameters<'_>, _: &Token) -> Out {
         contains_quotes: &dyn Fn(&str) -> bool,
     ) -> Option<Id> {
         match &t.inner {
-            T_DollarBraced(_, l) => map.get(&concat_oversimplify(l)).copied(),
-            T_DoubleQuoted(tokens) | T_NormalWord(tokens) => tokens
+            TDollarBraced(_, l) => map.get(&concat_oversimplify(l)).copied(),
+            TDoubleQuoted(tokens) | TNormalWord(tokens) => tokens
                 .iter()
                 .find_map(|x| for_token(map, x, contains_quotes)),
             _ => {
@@ -100,7 +100,7 @@ pub fn check_quotes_in_literals(params: &Parameters<'_>, _: &Token) -> Out {
             }
         }
     }
-    let squashes_quotes = |t: &Token| matches!(&t.inner, T_DollarBraced(_, l) if concat_oversimplify(l).starts_with('#'));
+    let squashes_quotes = |t: &Token| matches!(&t.inner, TDollarBraced(_, l) if concat_oversimplify(l).starts_with('#'));
     let suggestion = if supports_arrays(params.shell_type) {
         "Use an array."
     } else {
@@ -135,7 +135,7 @@ pub fn check_quotes_in_literals(params: &Parameters<'_>, _: &Token) -> Out {
             }
         },
         &mut |m: &mut BTreeMap<String, Id>, _base, _t, name, data| {
-            if let DataType::DataString(DataSource::SourceFrom(values)) = data {
+            if let DataType::DataString(DataSource::From(values)) = data {
                 let quoted = values
                     .iter()
                     .find_map(|v| for_token(m, v, &contains_quotes));
@@ -168,7 +168,7 @@ pub fn check_functions_used_externally(params: &Parameters<'_>, t: &Token) -> Ou
     };
     let mut out = Vec::new();
     do_analysis(t, &mut |x| {
-        let T_SimpleCommand(_, argv) = &x.inner else {
+        let TSimpleCommand(_, argv) = &x.inner else {
             return;
         };
         let (Some(s), tok) = get_command_name_and_token(false, x) else {
@@ -351,7 +351,7 @@ fn check_unassigned_references_ext(
         get_path(&params.parent_map, this)
             .iter()
             .any(|t| match &t.inner {
-                T_DollarBraced(_, l) => {
+                TDollarBraced(_, l) => {
                     let s = concat_oversimplify(l);
                     let r = get_braced_reference(&s);
                     let m = get_braced_modifier(&s);
@@ -365,7 +365,7 @@ fn check_unassigned_references_ext(
             return false;
         };
         match &t.inner {
-            T_DollarBraced(_, v) => {
+            TDollarBraced(_, v) => {
                 let name = concat_oversimplify(v);
                 let rest: String = name
                     .trim_start_matches(['#', '!'])
@@ -420,7 +420,7 @@ pub fn check_unpassed_in_functions(params: &Parameters<'_>, root: &Token) -> Out
             || (!s.is_empty() && s.chars().all(|c| c.is_ascii_digit()) && s != "0")
     };
     let has_default_value = |t: &Token| match &t.inner {
-        T_DollarBraced(true, l) => {
+        TDollarBraced(true, l) => {
             let m: Vec<char> = get_braced_modifier(&concat_oversimplify(l))
                 .chars()
                 .collect();
@@ -437,12 +437,12 @@ pub fn check_unpassed_in_functions(params: &Parameters<'_>, root: &Token) -> Out
         };
         get_path(&params.parent_map, this)
             .iter()
-            .find(|x| matches!(x.inner, T_Function(..) | T_Script(..)))
+            .find(|x| matches!(x.inner, TFunction(..) | TScript(..)))
             .is_some_and(|f| f.id == parent.id)
     };
     let mut function_list: Vec<(String, &Token)> = Vec::new();
     do_analysis(root, &mut |t| {
-        if let T_Function(_, _, name, body) = &t.inner {
+        if let TFunction(_, _, name, body) = &t.inner {
             let flow =
                 get_variable_flow(params, params.id_map.get(&body.id).copied().unwrap_or(body));
             let any_ref = flow.iter().any(|x| match x {
@@ -465,7 +465,7 @@ pub fn check_unpassed_in_functions(params: &Parameters<'_>, root: &Token) -> Out
     }
     let mut reference_list: Vec<(String, bool, Id)> = Vec::new();
     do_analysis(root, &mut |t| {
-        if let T_SimpleCommand(_, words) = &t.inner
+        if let TSimpleCommand(_, words) = &t.inner
             && let Some((cmd, args)) = words.split_first()
             && let Some(s) = get_literal_string(cmd)
             && function_map.contains_key(&s)
@@ -511,7 +511,7 @@ pub fn check_unchecked_cd_pushd_popd(params: &Parameters<'_>, root: &Token) -> O
     }
     let mut out = Vec::new();
     do_analysis(root, &mut |t| {
-        if !matches!(t.inner, T_SimpleCommand(..)) {
+        if !matches!(t.inner, TSimpleCommand(..)) {
             return;
         }
         let name = get_command_name(t).unwrap_or_default();
@@ -551,20 +551,20 @@ pub fn check_array_assignment_indices(params: &Parameters<'_>, root: &Token) -> 
     let assocs = get_associative_arrays(root);
     let mut out = Vec::new();
     do_analysis(root, &mut |t| {
-        let T_Assignment(_, name, indices, value) = &t.inner else {
+        let TAssignment(_, name, indices, value) = &t.inner else {
             return;
         };
         if !indices.is_empty() {
             return;
         }
-        let T_Array(list) = &value.inner else {
+        let TArray(list) = &value.inner else {
             return;
         };
         let is_assoc = assocs.contains(name);
         for el in list {
             match &el.inner {
-                T_IndexedElement(_, v) => {
-                    if let T_Literal(s) = &v.inner
+                TIndexedElement(_, v) => {
+                    if let TLiteral(s) = &v.inner
                         && s.is_empty()
                     {
                         warn(
@@ -575,11 +575,11 @@ pub fn check_array_assignment_indices(params: &Parameters<'_>, root: &Token) -> 
                         );
                     }
                 }
-                T_NormalWord(parts) => {
+                TNormalWord(parts) => {
                     let literal_equals: Vec<Id> = parts
                         .iter()
                         .filter_map(|p| match &p.inner {
-                            T_Literal(s) => {
+                            TLiteral(s) => {
                                 let (before, after) = match s.find('=') {
                                     Some(i) => (&s[..i], &s[i..]),
                                     None => (s.as_str(), ""),
@@ -625,7 +625,7 @@ pub fn check_use_before_definition(params: &Parameters<'_>, t: &Token) -> Out {
     };
     let mut funcs: BTreeMap<String, Vec<Id>> = BTreeMap::new();
     do_analysis(t, &mut |x| {
-        if let T_Function(_, _, name, _) = &x.inner {
+        if let TFunction(_, _, name, _) = &x.inner {
             funcs.entry(name.clone()).or_default().insert(0, x.id);
         }
     });
@@ -634,7 +634,7 @@ pub fn check_use_before_definition(params: &Parameters<'_>, t: &Token) -> Out {
     }
     let mut out = Vec::new();
     do_analysis(t, &mut |x| {
-        if let T_SimpleCommand(_, words) = &x.inner
+        if let TSimpleCommand(_, words) = &x.inner
             && let Some(cmd) = words.first()
             && let Some(name) = get_literal_string(cmd)
             && let Some(invocations) = funcs.get(&name)
@@ -683,7 +683,7 @@ pub fn check_alias_used_in_same_parsing_unit(params: &Parameters<'_>, root: &Tok
         params.id_map.get(&t.id).is_some_and(|r| {
             get_path(&params.parent_map, r)
                 .iter()
-                .any(|p| matches!(p.inner, T_SourceCommand(..)))
+                .any(|p| matches!(p.inner, TSourceCommand(..)))
         })
     };
     let mut out = Vec::new();
@@ -691,7 +691,7 @@ pub fn check_alias_used_in_same_parsing_unit(params: &Parameters<'_>, root: &Tok
         let mut aliases: BTreeMap<String, &Token> = BTreeMap::new();
         for u in unit {
             do_analysis(u, &mut |t| {
-                let T_SimpleCommand(_, words) = &t.inner else {
+                let TSimpleCommand(_, words) = &t.inner else {
                     return;
                 };
                 let Some((cmd, args)) = words.split_first() else {
@@ -742,7 +742,7 @@ pub fn check_array_value_used_as_index(params: &Parameters<'_>, _: &Token) -> Ou
         let parts = get_word_parts(t);
         let [
             Token {
-                inner: T_DollarBraced(_, l),
+                inner: TDollarBraced(_, l),
                 ..
             },
         ] = parts.as_slice()
@@ -758,28 +758,26 @@ pub fn check_array_value_used_as_index(params: &Parameters<'_>, _: &Token) -> Ou
     };
     let get_array_if_used_as_index = |name: &str, t: &Token| -> Option<(Id, String)> {
         match &t.inner {
-            T_DollarBraced(_, list) => {
+            TDollarBraced(_, list) => {
                 if get_braced_reference(&concat_oversimplify(list)) != name {
                     return None;
                 }
                 let list_t = *parents.get(&t.id)?;
-                if !matches!(list_t.inner, T_NormalWord(_)) {
+                if !matches!(list_t.inner, TNormalWord(_)) {
                     return None;
                 }
                 let parent = *parents.get(&list_t.id)?;
-                let T_DollarBraced(_, parent_list) = &parent.inner else {
+                let TDollarBraced(_, parent_list) = &parent.inner else {
                     return None;
                 };
                 let parts = get_word_parts(parent_list);
                 let [
                     Token {
-                        inner: T_Literal(_),
-                        ..
+                        inner: TLiteral(_), ..
                     },
                     index,
                     Token {
-                        inner: T_Literal(_),
-                        ..
+                        inner: TLiteral(_), ..
                     },
                     ..,
                 ] = parts.as_slice()
@@ -793,9 +791,9 @@ pub fn check_array_value_used_as_index(params: &Parameters<'_>, _: &Token) -> Ou
                 }
                 Some((t.id, get_braced_reference(&s)))
             }
-            T_NormalWord(_) => {
+            TNormalWord(_) => {
                 let parent = *parents.get(&t.id)?;
-                if !matches!(parent.inner, T_DollarBraced(..)) {
+                if !matches!(parent.inner, TDollarBraced(..)) {
                     return None;
                 }
                 let s = concat_oversimplify(t);
@@ -805,12 +803,12 @@ pub fn check_array_value_used_as_index(params: &Parameters<'_>, _: &Token) -> Ou
                 }
                 Some((parent.id, get_braced_reference(&s)))
             }
-            TA_Variable(r, indices) if indices.is_empty() => {
+            TaVariable(r, indices) if indices.is_empty() => {
                 if r != name {
                     return None;
                 }
                 let seq = *parents.get(&t.id)?;
-                let TA_Sequence(elems) = &seq.inner else {
+                let TaSequence(elems) = &seq.inner else {
                     return None;
                 };
                 let [element] = elems.as_slice() else {
@@ -820,7 +818,7 @@ pub fn check_array_value_used_as_index(params: &Parameters<'_>, _: &Token) -> Ou
                     return None;
                 }
                 let parent = *parents.get(&seq.id)?;
-                let TA_Variable(array_name, pidx) = &parent.inner else {
+                let TaVariable(array_name, pidx) = &parent.inner else {
                     return None;
                 };
                 let [pelement] = pidx.as_slice() else {
@@ -864,8 +862,7 @@ pub fn check_array_value_used_as_index(params: &Parameters<'_>, _: &Token) -> Ou
             .unwrap_or_default()
         },
         &mut |m: &mut Loops, base, _t, name, data| {
-            if let (T_ForIn(..), DataType::DataString(DataSource::SourceFrom(words))) =
-                (&base.inner, data)
+            if let (TForIn(..), DataType::DataString(DataSource::From(words))) = (&base.inner, data)
             {
                 let arrays: Vec<(Id, String)> = words
                     .iter()
@@ -893,15 +890,15 @@ pub fn check_require_double_bracket(params: &Parameters<'_>, t: &Token) -> Out {
     }
     fn is_simple(t: &Token) -> bool {
         match &t.inner {
-            T_Condition(_, s) => is_simple(s),
-            TC_Binary(_, op, _, _) => !op.contains('<') && !op.contains('>'),
-            TC_Unary(..) | TC_Nullary(..) => true,
+            TCondition(_, s) => is_simple(s),
+            TcBinary(_, op, _, _) => !op.contains('<') && !op.contains('>'),
+            TcUnary(..) | TcNullary(..) => true,
             _ => false,
         }
     }
     let mut out = Vec::new();
     do_analysis(t, &mut |x| {
-        if let T_Condition(ConditionType::SingleBracket, _) = &x.inner {
+        if let TCondition(ConditionType::SingleBracket, _) = &x.inner {
             let fix = if is_simple(x) {
                 fix_with(vec![
                     replace_start(x.id, params, 0, "["),
@@ -931,7 +928,7 @@ pub fn check_set_e_suppressed(params: &Parameters<'_>, t: &Token) -> Out {
         |cmd: &Token| get_unquoted_literal(cmd).is_some_and(|s| functions_.contains_key(&s));
     let mut out = Vec::new();
     do_analysis(t, &mut |x| {
-        let T_SimpleCommand(_, words) = &x.inner else {
+        let TSimpleCommand(_, words) = &x.inner else {
             return;
         };
         let Some(cmd) = words.first() else {
@@ -960,16 +957,16 @@ pub fn check_set_e_suppressed(params: &Parameters<'_>, t: &Token) -> Out {
             let (child, parent) = (w[0], w[1]);
             let is_in = |cmds: &[&Token]| cmds.iter().any(|c| c.id == child.id);
             match &parent.inner {
-                T_Banged(condition) if is_in(&[condition]) => {
+                TBanged(condition) if is_in(&[condition]) => {
                     inform_conditional("a ! condition", &mut out);
                 }
-                T_AndIf(condition, _) if is_in(&[condition]) => {
+                TAndIf(condition, _) if is_in(&[condition]) => {
                     inform_conditional("an && condition", &mut out);
                 }
-                T_OrIf(condition, _) if is_in(&[condition]) => {
+                TOrIf(condition, _) if is_in(&[condition]) => {
                     inform_conditional("an || condition", &mut out);
                 }
-                T_IfExpression(conditions, _)
+                TIfExpression(conditions, _)
                     if is_in(
                         &conditions
                             .iter()
@@ -979,13 +976,13 @@ pub fn check_set_e_suppressed(params: &Parameters<'_>, t: &Token) -> Out {
                 {
                     inform_conditional("an 'if' condition", &mut out);
                 }
-                T_UntilExpression(condition, _) if is_in(&condition.iter().collect::<Vec<_>>()) => {
+                TUntilExpression(condition, _) if is_in(&condition.iter().collect::<Vec<_>>()) => {
                     inform_conditional("an 'until' condition", &mut out);
                 }
-                T_WhileExpression(condition, _) if is_in(&condition.iter().collect::<Vec<_>>()) => {
+                TWhileExpression(condition, _) if is_in(&condition.iter().collect::<Vec<_>>()) => {
                     inform_conditional("a 'while' condition", &mut out);
                 }
-                T_DollarExpansion(_) | T_Backticked(_) if !errexit_enabled(parent) => {
+                TDollarExpansion(_) | TBackticked(_) if !errexit_enabled(parent) => {
                     info(
                         &mut out,
                         cmd.id,
@@ -1004,10 +1001,10 @@ pub fn check_extra_masked_returns(params: &Parameters<'_>, t: &Token) -> Out {
     let is_transparent_command = |t: &Token| get_command_basename(t).as_deref() == Some("time");
     let mut transformed = t.clone();
     do_transform(&mut transformed, &mut |x| {
-        if let T_SimpleCommand(_, words) = &x.inner
+        if let TSimpleCommand(_, words) = &x.inner
             && !words.is_empty()
             && is_transparent_command(x)
-            && let T_SimpleCommand(_, words) = &mut x.inner
+            && let TSimpleCommand(_, words) = &mut x.inner
         {
             words.remove(0);
         }
@@ -1015,7 +1012,7 @@ pub fn check_extra_masked_returns(params: &Parameters<'_>, t: &Token) -> Out {
     fn contains_simple_command(t: &Token) -> bool {
         let mut found = false;
         do_analysis(t, &mut |x| {
-            if matches!(x.inner, T_SimpleCommand(..)) {
+            if matches!(x.inner, TSimpleCommand(..)) {
                 found = true;
             }
         });
@@ -1036,11 +1033,11 @@ pub fn check_extra_masked_returns(params: &Parameters<'_>, t: &Token) -> Out {
         path.extend(ancestors(t));
         path.pop();
         path.iter().any(|x| match &x.inner {
-            T_OrIf(_, rhs) => match &rhs.inner {
-                T_Pipeline(_, cmds) => match cmds.as_slice() {
+            TOrIf(_, rhs) => match &rhs.inner {
+                TPipeline(_, cmds) => match cmds.as_slice() {
                     [
                         Token {
-                            inner: T_Redirecting(_, cmd),
+                            inner: TRedirecting(_, cmd),
                             ..
                         },
                     ] => {
@@ -1080,8 +1077,8 @@ pub fn check_extra_masked_returns(params: &Parameters<'_>, t: &Token) -> Out {
         for l in list {
             do_analysis(l, &mut |x| {
                 let candidate = match &x.inner {
-                    T_SimpleCommand(_, words) => !words.is_empty(),
-                    T_Condition(..) => true,
+                    TSimpleCommand(_, words) => !words.is_empty(),
+                    TCondition(..) => true,
                     _ => false,
                 };
                 if candidate && is_masked_node(x) {
@@ -1096,23 +1093,23 @@ pub fn check_extra_masked_returns(params: &Parameters<'_>, t: &Token) -> Out {
         }
     };
     do_analysis(&transformed, &mut |x| match &x.inner {
-        T_Arithmetic(list) => find_masked_in_list(&[list], &mut out),
-        T_Array(list) | T_DoubleQuoted(list) | T_NormalWord(list) => {
+        TArithmetic(list) => find_masked_in_list(&[list], &mut out),
+        TArray(list) | TDoubleQuoted(list) | TNormalWord(list) => {
             find_masked_in_list(&all_but_last_simple_commands(list), &mut out);
         }
-        T_Condition(_, condition) => find_masked_in_list(&[condition], &mut out),
-        T_HereDoc(_, _, _, list) | T_ProcSub(_, list) => {
+        TCondition(_, condition) => find_masked_in_list(&[condition], &mut out),
+        THereDoc(_, _, _, list) | TProcSub(_, list) => {
             find_masked_in_list(&list.iter().collect::<Vec<_>>(), &mut out);
         }
-        T_HereString(word) => find_masked_in_list(&[word], &mut out),
-        T_Pipeline(_, cmds) if !params.has_pipefail => {
+        THereString(word) => find_masked_in_list(&[word], &mut out),
+        TPipeline(_, cmds) if !params.has_pipefail => {
             find_masked_in_list(&all_but_last_simple_commands(cmds), &mut out);
         }
-        T_SimpleCommand(assigns, words) if !words.is_empty() => {
+        TSimpleCommand(assigns, words) if !words.is_empty() => {
             let l: Vec<&Token> = assigns.iter().chain(words[1..].iter()).collect();
             find_masked_in_list(&l, &mut out);
         }
-        T_SimpleCommand(assigns, _) => {
+        TSimpleCommand(assigns, _) => {
             find_masked_in_list(&all_but_last_simple_commands(assigns), &mut out);
         }
         _ => {}

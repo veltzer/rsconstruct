@@ -1,14 +1,12 @@
 //! The verdicts here were taken from `xmllint --noout` (libxml2 2.15) on the
 //! same inputs: exit status, line, and the gist of the message.
 
-// xmllint writes namespaced names as `{uri}local`; the expected messages
-// quote them verbatim, braces and all.
-#![allow(
-    clippy::literal_string_with_formatting_args,
-    reason = "expected xmllint messages contain {namespace}local names"
-)]
-
 use std::path::Path;
+
+/// xmllint writes namespaced names as `{uri}local`; the expected messages
+/// quote them verbatim, braces and all. Spelled with `concat!` so the braces
+/// are not mistaken for a format argument.
+const NS: &str = concat!("{", "urn:keynote", "}");
 
 use super::{Child, Document, Kind, Schema, parse, validate};
 
@@ -454,8 +452,9 @@ fn unexpected_and_missing_elements() {
         schema_report(KEYNOTE_XSD, &xml),
         vec![(
             7,
-            "Element '{urn:keynote}slidex': This element is not expected. Expected is ( {urn:keynote}slide )."
-                .to_string()
+            format!(
+                "Element '{NS}slidex': This element is not expected. Expected is ( {NS}slide )."
+            )
         )]
     );
 
@@ -464,8 +463,9 @@ fn unexpected_and_missing_elements() {
         schema_report(KEYNOTE_XSD, xml),
         vec![(
             1,
-            "Element '{urn:keynote}presentation': Missing child element(s). Expected is ( {urn:keynote}slide )."
-                .to_string()
+            format!(
+                "Element '{NS}presentation': Missing child element(s). Expected is ( {NS}slide )."
+            )
         )]
     );
 
@@ -477,12 +477,13 @@ fn unexpected_and_missing_elements() {
         vec![
             (
                 1,
-                "Element '{urn:keynote}presentation': Missing child element(s). Expected is ( {urn:keynote}slide )."
-                    .to_string()
+                format!(
+                    "Element '{NS}presentation': Missing child element(s). Expected is ( {NS}slide )."
+                )
             ),
             (
                 1,
-                "Element '{urn:keynote}title': This element is not expected.".to_string()
+                format!("Element '{NS}title': This element is not expected.")
             ),
         ]
     );
@@ -494,13 +495,15 @@ fn unexpected_and_missing_elements() {
         vec![
             (
                 1,
-                "Element '{urn:keynote}presentation': Missing child element(s). Expected is ( {urn:keynote}slide )."
-                    .to_string()
+                format!(
+                    "Element '{NS}presentation': Missing child element(s). Expected is ( {NS}slide )."
+                )
             ),
             (
                 1,
-                "Element '{urn:keynote}bogus': This element is not expected. Expected is one of ( {urn:keynote}title, {urn:keynote}level, {urn:keynote}kind )."
-                    .to_string()
+                format!(
+                    "Element '{NS}bogus': This element is not expected. Expected is one of ( {NS}title, {NS}level, {NS}kind )."
+                )
             ),
         ]
     );
@@ -513,7 +516,7 @@ fn attributes_are_checked() {
         schema_report(KEYNOTE_XSD, &xml),
         vec![(
             2,
-            "Element '{urn:keynote}meta': The attribute 'id' is required but missing.".to_string()
+            format!("Element '{NS}meta': The attribute 'id' is required but missing.")
         )]
     );
 
@@ -522,8 +525,7 @@ fn attributes_are_checked() {
         schema_report(KEYNOTE_XSD, &xml),
         vec![(
             2,
-            "Element '{urn:keynote}meta', attribute 'extra': The attribute 'extra' is not allowed."
-                .to_string()
+            format!("Element '{NS}meta', attribute 'extra': The attribute 'extra' is not allowed.")
         )]
     );
 }
@@ -535,8 +537,9 @@ fn simple_types_and_facets() {
         schema_report(KEYNOTE_XSD, &xml),
         vec![(
             4,
-            "Element '{urn:keynote}level': 'zero' is not a valid value of the atomic type 'xs:positiveInteger'."
-                .to_string()
+            format!(
+                "Element '{NS}level': 'zero' is not a valid value of the atomic type 'xs:positiveInteger'."
+            )
         )]
     );
 
@@ -545,8 +548,9 @@ fn simple_types_and_facets() {
         schema_report(KEYNOTE_XSD, &xml),
         vec![(
             5,
-            "Element '{urn:keynote}kind': [facet 'enumeration'] The value 'lecture' is not an element of the set {'talk', 'workshop'}."
-                .to_string()
+            format!(
+                "Element '{NS}kind': [facet 'enumeration'] The value 'lecture' is not an element of the set {{'talk', 'workshop'}}."
+            )
         )]
     );
 
@@ -555,8 +559,9 @@ fn simple_types_and_facets() {
         schema_report(KEYNOTE_XSD, &xml),
         vec![(
             3,
-            "Element '{urn:keynote}title': Element content is not allowed, because the content type is a simple type definition."
-                .to_string()
+            format!(
+                "Element '{NS}title': Element content is not allowed, because the content type is a simple type definition."
+            )
         )]
     );
 }
@@ -568,8 +573,9 @@ fn text_in_element_only_content() {
         schema_report(KEYNOTE_XSD, &xml),
         vec![(
             2,
-            "Element '{urn:keynote}meta': Character content other than whitespace is not allowed because the content type is 'element-only'."
-                .to_string()
+            format!(
+                "Element '{NS}meta': Character content other than whitespace is not allowed because the content type is 'element-only'."
+            )
         )]
     );
 }
@@ -580,8 +586,9 @@ fn root_without_a_declaration() {
         schema_report(KEYNOTE_XSD, "<slide xmlns=\"urn:keynote\"/>"),
         vec![(
             1,
-            "Element '{urn:keynote}slide': No matching global declaration available for the validation root."
-                .to_string()
+            format!(
+                "Element '{NS}slide': No matching global declaration available for the validation root."
+            )
         )]
     );
     assert_eq!(

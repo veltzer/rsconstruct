@@ -21,7 +21,7 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     name: "actionlint", processor_type: crate::processor::ProcessorType::Checker, create: create_actionlint,
     fields: &[],
     omit_standard_fields: &["formats", "output_dir"],
-    scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &[".yml", ".yaml"], src_exclude_dirs: &[] }),
+    scan_defaults: Some(crate::config::ScanDefaultsData { src_extensions: &[".yml", ".yaml"], src_exclude_dirs: &[] }),
     // actionlint auto-discovers its config at .github/actionlint.yaml (or
     // .yml); track both so config edits retrigger the check.
     defaults: Some(crate::config::ProcessorDefaults { command: "actionlint", dep_auto: &[".github/actionlint.yaml", ".github/actionlint.yml"], ..crate::config::ProcessorDefaults::EMPTY }),

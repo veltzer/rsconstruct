@@ -85,7 +85,7 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     name: "vnu", processor_type: crate::processor::ProcessorType::Checker, create: create_vnu,
     fields: &[],
     omit_standard_fields: &["formats", "output_dir"],
-    scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &[".html", ".htm"], src_exclude_dirs: &[] }),
+    scan_defaults: Some(crate::config::ScanDefaultsData { src_extensions: &[".html", ".htm"], src_exclude_dirs: &[] }),
     defaults: Some(crate::config::ProcessorDefaults { command: "java", ..crate::config::ProcessorDefaults::EMPTY }),
     defconfig_json: crate::registries::default_config_json::<crate::config::CheckerConfig>,
     keywords: &["html", "html5", "validator", "linter", "web", "frontend", "w3c", "java"],

@@ -314,7 +314,7 @@ inventory::submit! {
         "required_tools",
         "batch",
     ],
-        scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &[".sh", ".bash"], src_exclude_dirs: &[] }),
+        scan_defaults: Some(crate::config::ScanDefaultsData { src_extensions: &[".sh", ".bash"], src_exclude_dirs: &[] }),
         defaults: Some(crate::config::ProcessorDefaults { dep_auto: &[".shellcheckrc"], ..crate::config::ProcessorDefaults::EMPTY }),
         keywords: &["shell", "bash", "sh", "linter", "script", "shellcheck", "rust"],
         description: "Lint shell scripts with ShellCheck's analysis (in-process)",

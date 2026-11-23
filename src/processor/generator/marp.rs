@@ -220,7 +220,7 @@ inventory::submit! { crate::registries::ProcessorPlugin {
             doc: "Total attempts (including the first) when marp times out" },
     ],
     omit_standard_fields: &["batch"],
-    scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &[".md"], src_exclude_dirs: &[] }),
+    scan_defaults: Some(crate::config::ScanDefaultsData { src_extensions: &[".md"], src_exclude_dirs: &[] }),
     defaults: Some(crate::config::ProcessorDefaults { command: "marp", output_dir: "out/processor.generator.marp", formats: &["pdf"],
         args: &["--html", "--allow-local-files"], ..crate::config::ProcessorDefaults::EMPTY }),
     defconfig_json: crate::registries::default_config_json::<MarpConfig>,
@@ -245,10 +245,9 @@ inventory::submit! { crate::tools::ToolInfo {
 /// when running marp at full project parallelism. Equivalent to the user
 /// passing `--pset marp.max_jobs=2`; only applies when the user hasn't set
 /// `max_jobs` themselves and `CI=true` is in the environment.
-#[allow(clippy::unnecessary_wraps)] // Result<()> is required by PhaseHook::run signature.
-fn marp_ci_cap(config: &mut crate::config::Config) -> anyhow::Result<()> {
+fn marp_ci_cap(config: &mut crate::config::Config) {
     if !std::env::var("CI").is_ok_and(|v| v == "true") {
-        return Ok(());
+        return;
     }
     for inst in config
         .processor
@@ -263,7 +262,6 @@ fn marp_ci_cap(config: &mut crate::config::Config) -> anyhow::Result<()> {
             table.insert("max_jobs".to_string(), toml::Value::Integer(2));
         }
     }
-    Ok(())
 }
 
 inventory::submit! { crate::phases::PhaseHook {

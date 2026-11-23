@@ -2464,6 +2464,7 @@ version = "0.9.201"
 dependencies = [
  "anstream",
  "anyhow",
+ "bytecount",
  "chrono",
  "clap",
  "clap_complete",

@@ -808,7 +808,7 @@ inventory::submit! {
                 doc: "Build profiles to run (e.g. dev, release)" },
         ],
         omit_standard_fields: &["formats", "dep_auto", "output_dir", "batch"],
-        scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &["Cargo.toml"], src_exclude_dirs: &[] }),
+        scan_defaults: Some(crate::config::ScanDefaultsData { src_extensions: &["Cargo.toml"], src_exclude_dirs: &[] }),
         defaults: Some(crate::config::ProcessorDefaults { command: "build", ..crate::config::ProcessorDefaults::EMPTY }),
         defconfig_json: crate::registries::default_config_json::<CargoConfig>,
         keywords: &["rust", "builder", "cargo", "rs", "package-manager"],

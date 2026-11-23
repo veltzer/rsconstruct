@@ -135,8 +135,10 @@ impl crate::processor::Processor for ItidyProcessor {
             file_index,
             &dep_inputs,
             &self.config.standard.dep_auto,
-            &self.config,
-            &crate::config::checksum_fields_of(instance_name),
+            crate::config::output_config_hash(
+                &self.config,
+                &crate::config::checksum_fields_of(instance_name),
+            ),
             instance_name,
         )
     }
@@ -185,7 +187,7 @@ inventory::submit! {
                 doc: "Further tidy options as \"name: value\" strings, applied after the config file, like --name value arguments" },
         ],
         omit_standard_fields: &["command", "formats", "args", "output_dir", "required_tools"],
-        scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &[".html", ".htm"], src_exclude_dirs: &[] }),
+        scan_defaults: Some(crate::config::ScanDefaultsData { src_extensions: &[".html", ".htm"], src_exclude_dirs: &[] }),
         defaults: None,
         keywords: &["html", "validator", "web", "tidy", "rust"],
         description: "Check HTML the way tidy -errors does (in-process)",

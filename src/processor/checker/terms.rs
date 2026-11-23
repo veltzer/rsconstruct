@@ -158,8 +158,10 @@ impl crate::processor::Processor for TermsProcessor {
             file_index,
             &dep_inputs,
             &self.config.standard.dep_auto,
-            &self.config,
-            &crate::config::checksum_fields_of(instance_name),
+            crate::config::output_config_hash(
+                &self.config,
+                &crate::config::checksum_fields_of(instance_name),
+            ),
             instance_name,
         )
     }
@@ -1107,7 +1109,7 @@ inventory::submit! {
                 doc: "If true (default), backticking an ambiguous term is a build error and `term fix` strips those backticks" },
         ],
         omit_standard_fields: &["command", "formats", "args", "output_dir", "required_tools"],
-        scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &[".md"], src_exclude_dirs: &[] }),
+        scan_defaults: Some(crate::config::ScanDefaultsData { src_extensions: &[".md"], src_exclude_dirs: &[] }),
         defaults: None,
         defconfig_json: crate::registries::default_config_json::<TermsConfig>,
         keywords: &["checker", "terminology", "text", "words"],

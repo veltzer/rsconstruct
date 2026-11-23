@@ -9,9 +9,6 @@
 //! is an `Err` with that exception's text; it aborts the file, as
 //! checkstyle's `haltOnException` does.
 
-// Token types are matched by the grammar's names (`LITERAL_return`).
-#![allow(non_upper_case_globals)]
-
 use std::collections::{HashMap, HashSet};
 
 use regex::Regex;
@@ -25,10 +22,10 @@ use super::tables::{
     BOR_ASSIGN, BSR_ASSIGN, BXOR_ASSIGN, CASE_GROUP, CLASS_DEF, COMPACT_CTOR_DEF, CTOR_DEF, DEC,
     DIV_ASSIGN, DO_WHILE, DOT, ELIST, EMPTY_STAT, ENUM_CONSTANT_DEF, ENUM_DEF, EQUAL, EXPR,
     FOR_EACH_CLAUSE, FOR_INIT, FOR_ITERATOR, IDENT, IMPORT, INC, INTERFACE_DEF, LAMBDA, LAND,
-    LITERAL_break, LITERAL_case, LITERAL_catch, LITERAL_continue, LITERAL_default, LITERAL_do,
-    LITERAL_false, LITERAL_finally, LITERAL_for, LITERAL_if, LITERAL_native, LITERAL_new,
-    LITERAL_return, LITERAL_static, LITERAL_switch, LITERAL_synchronized, LITERAL_throw,
-    LITERAL_true, LITERAL_try, LITERAL_while, LNOT, LOR, METHOD_DEF, MINUS_ASSIGN, MOD_ASSIGN,
+    LITERAL_BREAK, LITERAL_CASE, LITERAL_CATCH, LITERAL_CONTINUE, LITERAL_DEFAULT, LITERAL_DO,
+    LITERAL_FALSE, LITERAL_FINALLY, LITERAL_FOR, LITERAL_IF, LITERAL_NATIVE, LITERAL_NEW,
+    LITERAL_RETURN, LITERAL_STATIC, LITERAL_SWITCH, LITERAL_SYNCHRONIZED, LITERAL_THROW,
+    LITERAL_TRUE, LITERAL_TRY, LITERAL_WHILE, LNOT, LOR, METHOD_DEF, MINUS_ASSIGN, MOD_ASSIGN,
     MODIFIERS, NOT_EQUAL, NUM_LONG, OBJBLOCK, PACKAGE_DEF, PARAMETER_DEF, PARAMETERS, PLUS_ASSIGN,
     POST_DEC, POST_INC, RCURLY, RECORD_DEF, RESOURCE_SPECIFICATION, RESOURCES, RPAREN, SEMI,
     SL_ASSIGN, SLIST, SR_ASSIGN, STAR_ASSIGN, STATIC_IMPORT, STRING_LITERAL, SWITCH_RULE,
@@ -157,7 +154,7 @@ fn is_equals_method(ctx: &Ctx, ast: NodeId) -> Result<bool, Crash> {
         return Ok(false);
     }
     let modifiers = Ctx::some(ctx.find(ast, MODIFIERS))?;
-    if ctx.find(modifiers, LITERAL_static).is_some() || ctx.find(modifiers, ABSTRACT).is_some() {
+    if ctx.find(modifiers, LITERAL_STATIC).is_some() || ctx.find(modifiers, ABSTRACT).is_some() {
         return Ok(false);
     }
     let name = Ctx::some(ctx.find(ast, IDENT))?;
@@ -487,14 +484,14 @@ pub struct Check<'c> {
 pub const fn tokens(kind: &CheckKind) -> &'static [u16] {
     match kind {
         CheckKind::ArrayTypeStyle { .. } => &[ARRAY_DECLARATOR],
-        CheckKind::CovariantEquals => &[CLASS_DEF, LITERAL_new, ENUM_DEF, RECORD_DEF],
-        CheckKind::DefaultComesLast { .. } => &[LITERAL_default],
+        CheckKind::CovariantEquals => &[CLASS_DEF, LITERAL_NEW, ENUM_DEF, RECORD_DEF],
+        CheckKind::DefaultComesLast { .. } => &[LITERAL_DEFAULT],
         CheckKind::EmptyStatement => &[EMPTY_STAT],
         CheckKind::EqualsHashCode => &[METHOD_DEF],
         CheckKind::FallThrough { .. } => &[CASE_GROUP],
         CheckKind::ModifiedControlVariable { .. } => &[
             OBJBLOCK,
-            LITERAL_for,
+            LITERAL_FOR,
             FOR_ITERATOR,
             FOR_EACH_CLAUSE,
             ASSIGN,
@@ -516,8 +513,8 @@ pub const fn tokens(kind: &CheckKind) -> &'static [u16] {
         ],
         CheckKind::OneStatementPerLine { .. } => &[SEMI, FOR_INIT, FOR_ITERATOR, LAMBDA],
         CheckKind::RedundantImport => &[IMPORT, STATIC_IMPORT, PACKAGE_DEF],
-        CheckKind::SimplifyBooleanExpression => &[LITERAL_true, LITERAL_false],
-        CheckKind::SimplifyBooleanReturn => &[LITERAL_if],
+        CheckKind::SimplifyBooleanExpression => &[LITERAL_TRUE, LITERAL_FALSE],
+        CheckKind::SimplifyBooleanReturn => &[LITERAL_IF],
         CheckKind::StringLiteralEquality => &[EQUAL, NOT_EQUAL],
         CheckKind::UnusedImports { .. } => &[
             IDENT,
@@ -724,7 +721,7 @@ impl<'c> Check<'c> {
     }
 
     fn simplify_boolean_return(&mut self, ctx: &Ctx, ast: NodeId) -> Result<(), Crash> {
-        let Some(else_literal) = ctx.find(ast, super::tables::LITERAL_else) else {
+        let Some(else_literal) = ctx.find(ast, super::tables::LITERAL_ELSE) else {
             return Ok(());
         };
         let else_statement = ctx.ast.first_child(else_literal);
@@ -849,7 +846,7 @@ impl<'c> Check<'c> {
                 .find(|&n| ctx.ty(n) == ty)
         };
         if skip_if_last_and_shared_with_case && !is_switch_rule {
-            if next_of(ast, LITERAL_case).is_some() {
+            if next_of(ast, LITERAL_CASE).is_some() {
                 self.log(ctx, ast, "default.comes.last.in.casegroup", vec![])?;
             } else if ctx.ast.previous_sibling(ast).is_none()
                 && next_of(group, CASE_GROUP).is_some()
@@ -865,7 +862,7 @@ impl<'c> Check<'c> {
     fn equals_hash_code_visit(&mut self, ctx: &Ctx, ast: NodeId) -> Result<(), Crash> {
         let modifiers = ctx.first_child(ast)?;
         let has_body =
-            ctx.find(ast, SLIST).is_some() || ctx.find(modifiers, LITERAL_native).is_some();
+            ctx.find(ast, SLIST).is_some() || ctx.find(modifiers, LITERAL_NATIVE).is_some();
         let parameters = Ctx::some(ctx.find(ast, PARAMETERS))?;
         let is_equals = is_equals_method(ctx, ast)?
             && {
@@ -930,7 +927,7 @@ impl<'c> Check<'c> {
             stack.push(Vec::new());
             return Ok(());
         }
-        if matches!(ty, LITERAL_for | FOR_ITERATOR | FOR_EACH_CLAUSE) {
+        if matches!(ty, LITERAL_FOR | FOR_ITERATOR | FOR_EACH_CLAUSE) {
             return Ok(());
         }
         let current = stack.last();
@@ -968,7 +965,7 @@ impl<'c> Check<'c> {
             }
             _ => Vec::new(),
         };
-        let pops = if ty == LITERAL_for {
+        let pops = if ty == LITERAL_FOR {
             if ctx.find(ast, FOR_INIT).is_none() {
                 usize::from(!skip_enhanced)
             } else {
@@ -1192,7 +1189,7 @@ fn is_boolean_literal_return(ctx: &Ctx, ast: Option<NodeId>) -> Result<bool, Cra
     let Some(ast) = ast else {
         return Ok(false);
     };
-    if ctx.ty(ast) != LITERAL_return {
+    if ctx.ty(ast) != LITERAL_RETURN {
         return Ok(false);
     }
     let expr = ctx.first_child(ast)?;
@@ -1200,7 +1197,7 @@ fn is_boolean_literal_return(ctx: &Ctx, ast: Option<NodeId>) -> Result<bool, Cra
         return Ok(false);
     }
     let value = ctx.first_child(expr)?;
-    Ok(matches!(ctx.ty(value), LITERAL_true | LITERAL_false))
+    Ok(matches!(ctx.ty(value), LITERAL_TRUE | LITERAL_FALSE))
 }
 
 fn is_multiline_statement(ctx: &Ctx, ast: NodeId) -> bool {
@@ -1250,9 +1247,9 @@ fn is_terminated(
     use_continue: bool,
 ) -> Result<bool, Crash> {
     Ok(match ctx.ty(ast) {
-        LITERAL_return | LITERAL_throw => true,
-        LITERAL_break => use_break,
-        LITERAL_continue => use_continue,
+        LITERAL_RETURN | LITERAL_THROW => true,
+        LITERAL_BREAK => use_break,
+        LITERAL_CONTINUE => use_continue,
         SLIST => {
             let mut last = ctx.ast.last_child(ast);
             if let Some(l) = last
@@ -1265,7 +1262,7 @@ fn is_terminated(
                 None => false,
             }
         }
-        LITERAL_if => {
+        LITERAL_IF => {
             let then_stmt = ctx.next_sibling(Ctx::some(ctx.find(ast, RPAREN))?)?;
             match ctx.ast.next_sibling(then_stmt) {
                 Some(else_stmt) => {
@@ -1275,17 +1272,17 @@ fn is_terminated(
                 None => false,
             }
         }
-        LITERAL_for | LITERAL_while | LITERAL_do => {
-            let body = if ctx.ty(ast) == LITERAL_do {
+        LITERAL_FOR | LITERAL_WHILE | LITERAL_DO => {
+            let body = if ctx.ty(ast) == LITERAL_DO {
                 ctx.previous_sibling(Ctx::some(ctx.find(ast, DO_WHILE))?)?
             } else {
                 ctx.next_sibling(Ctx::some(ctx.find(ast, RPAREN))?)?
             };
             is_terminated(ctx, body, false, false)?
         }
-        LITERAL_try => {
+        LITERAL_TRY => {
             let final_stmt = Ctx::some(ctx.ast.last_child(ast))?;
-            let mut terminated = if ctx.ty(final_stmt) == LITERAL_finally {
+            let mut terminated = if ctx.ty(final_stmt) == LITERAL_FINALLY {
                 is_terminated(
                     ctx,
                     Ctx::some(ctx.find(final_stmt, SLIST))?,
@@ -1301,9 +1298,9 @@ fn is_terminated(
                     first = ctx.next_sibling(first)?;
                 }
                 terminated = is_terminated(ctx, first, use_break, use_continue)?;
-                let mut catch = ctx.find(ast, LITERAL_catch);
+                let mut catch = ctx.find(ast, LITERAL_CATCH);
                 while let Some(c) = catch {
-                    if !terminated || ctx.ty(c) != LITERAL_catch {
+                    if !terminated || ctx.ty(c) != LITERAL_CATCH {
                         break;
                     }
                     let body = Ctx::some(ctx.find(c, SLIST))?;
@@ -1313,7 +1310,7 @@ fn is_terminated(
             }
             terminated
         }
-        LITERAL_switch => {
+        LITERAL_SWITCH => {
             let mut group = ctx.find(ast, CASE_GROUP);
             let mut terminated = group.is_some();
             while terminated {
@@ -1331,7 +1328,7 @@ fn is_terminated(
             }
             terminated
         }
-        LITERAL_synchronized => is_terminated(
+        LITERAL_SYNCHRONIZED => is_terminated(
             ctx,
             Ctx::some(ctx.find(ast, SLIST))?,
             use_break,

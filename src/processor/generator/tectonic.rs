@@ -121,7 +121,7 @@ inventory::submit! {
         create: plugin_create,
         fields: &[],
         omit_standard_fields: &["formats", "batch"],
-        scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &[".tex"], src_exclude_dirs: &[] }),
+        scan_defaults: Some(crate::config::ScanDefaultsData { src_extensions: &[".tex"], src_exclude_dirs: &[] }),
         defaults: Some(crate::config::ProcessorDefaults { command: "tectonic", output_dir: "out/processor.generator.tectonic", ..crate::config::ProcessorDefaults::EMPTY }),
         defconfig_json: crate::registries::default_config_json::<StandardConfig>,
         keywords: &["latex", "tex", "pdf", "generator", "typesetting", "rust"],

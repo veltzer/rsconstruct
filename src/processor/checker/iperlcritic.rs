@@ -171,7 +171,7 @@ inventory::submit! {
         "required_tools",
         "batch",
     ],
-        scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &[".pl", ".pm"], src_exclude_dirs: &[] }),
+        scan_defaults: Some(crate::config::ScanDefaultsData { src_extensions: &[".pl", ".pm"], src_exclude_dirs: &[] }),
         defaults: Some(crate::config::ProcessorDefaults { dep_auto: &[".perlcriticrc"], ..crate::config::ProcessorDefaults::EMPTY }),
         keywords: &["perl", "linter", "checker", "pl", "pm", "perlcritic", "rust"],
         description: "Analyze Perl code with Perl::Critic's severity-5 policies (in-process)",

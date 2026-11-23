@@ -8,12 +8,12 @@ use super::parsec::{
     Alternative, P, R,
     Severity::{ErrorC, WarningC},
 };
-use super::parser::{bx, tk};
+use super::parser::tk;
 
 use Inner::{
-    T_Condition, T_Literal, T_NormalWord, T_UnparsedIndex, TA_Assignment, TA_Binary, TA_Expansion,
-    TA_Parenthesis, TA_Sequence, TA_Trinary, TA_Unary, TA_Variable, TC_And, TC_Binary, TC_Empty,
-    TC_Group, TC_Nullary, TC_Or, TC_Unary,
+    TCondition, TLiteral, TNormalWord, TUnparsedIndex, TaAssignment, TaBinary, TaExpansion,
+    TaParenthesis, TaSequence, TaTrinary, TaUnary, TaVariable, TcAnd, TcBinary, TcEmpty, TcGroup,
+    TcNullary, TcOr, TcUnary,
 };
 
 type Combine = Box<dyn FnOnce(Token, Token) -> Token>;
@@ -112,7 +112,8 @@ impl P {
             let id = s.end_span(start);
             s.spacing_or_lf(single)?;
             let typ = Self::cond_type(single);
-            let f: Combine = Box::new(move |x, y| tk(id, TC_Binary(typ, op, bx(x), bx(y))));
+            let f: Combine =
+                Box::new(move |x, y| tk(id, TcBinary(typ, op, Box::new(x), Box::new(y))));
             Ok((f, true))
         })
     }
@@ -188,7 +189,7 @@ impl P {
         self.or_fail(
             |s| {
                 s.read_cond_word(single)
-                    .map(|w| tk(id, TC_Unary(typ, op, bx(w))))
+                    .map(|w| tk(id, TcUnary(typ, op, Box::new(w))))
             },
             |s| {
                 s.parse_problem_at(
@@ -236,14 +237,14 @@ impl P {
         let x = self.read_normal_word()?;
         let pos = self.pos;
         let ended_with = |suffix: &str, x: &Token| match &x.inner {
-            T_NormalWord(parts) => {
-                matches!(parts.last(), Some(Token { inner: T_Literal(s), .. }) if s.ends_with(suffix))
+            TNormalWord(parts) => {
+                matches!(parts.last(), Some(Token { inner: TLiteral(s), .. }) if s.ends_with(suffix))
             }
             _ => false,
         };
         let not_array_index = match &x.inner {
-            T_NormalWord(parts) if parts.len() >= 2 => match &parts[1].inner {
-                T_Literal(t) => t != "[",
+            TNormalWord(parts) if parts.len() >= 2 => match &parts[1].inner {
+                TLiteral(t) => t != "[",
                 _ => true,
             },
             _ => true,
@@ -297,9 +298,9 @@ impl P {
         self.cond_spacing(single, requires_spacing)?;
         let typ = Self::cond_type(single);
         Ok(if and {
-            Box::new(move |a, b| tk(id, TC_And(typ, x, bx(a), bx(b))))
+            Box::new(move |a, b| tk(id, TcAnd(typ, x, Box::new(a), Box::new(b))))
         } else {
-            Box::new(move |a, b| tk(id, TC_Or(typ, x, bx(a), bx(b))))
+            Box::new(move |a, b| tk(id, TcOr(typ, x, Box::new(a), Box::new(b))))
         })
     }
 
@@ -351,7 +352,7 @@ impl P {
             },
             |s| {
                 s.check_trailing_op(&x2);
-                Ok(tk(id, TC_Nullary(typ, bx(x2))))
+                Ok(tk(id, TcNullary(typ, Box::new(x2))))
             },
         )
     }
@@ -359,7 +360,7 @@ impl P {
     fn check_trailing_op(&mut self, x: &Token) {
         if let Some(Token {
             id,
-            inner: T_Literal(s),
+            inner: TLiteral(s),
         }) = get_trailing_unquoted_literal(x)
             && let Some(op) = BINARY_TEST_OPS.iter().find(|op| s.ends_with(*op))
         {
@@ -395,7 +396,7 @@ impl P {
         if !single && rparen == "\\)" {
             self.cond_double_warning(cpos);
         }
-        Ok(tk(id, TC_Group(Self::cond_type(single), bx(x))))
+        Ok(tk(id, TcGroup(Self::cond_type(single), Box::new(x))))
     }
 
     fn cond_single_warning(&mut self, pos: super::ast::SourcePos) {
@@ -422,7 +423,7 @@ impl P {
                     Ok(true)
                 })
             },
-            |s| s.ok(false),
+            |_| Ok(false),
         )
     }
 
@@ -432,7 +433,7 @@ impl P {
             let parts = s.many1(Self::read_regex_part)?;
             let id = s.end_span(start);
             s.spacing()?;
-            Ok(tk(id, T_NormalWord(parts)))
+            Ok(tk(id, TNormalWord(parts)))
         })
     }
 
@@ -448,7 +449,7 @@ impl P {
                 let start = s.start_span();
                 let c = s.alt(Self::extglob_start, |s| s.one_of("{}[]$"))?;
                 let id = s.end_span(start);
-                Ok(tk(id, T_Literal(c.to_string())))
+                Ok(tk(id, TLiteral(c.to_string())))
             },
         ])
     }
@@ -466,7 +467,7 @@ impl P {
                         })
                     })?;
                     let id = s.end_span(start);
-                    Ok(tk(id, T_Literal(str_)))
+                    Ok(tk(id, TLiteral(str_)))
                 })
             })?;
             let p2 = s.read_literal_string(")")?;
@@ -474,7 +475,7 @@ impl P {
             let mut all = vec![p1];
             all.extend(parts);
             all.push(p2);
-            Ok(tk(id, T_NormalWord(all)))
+            Ok(tk(id, TNormalWord(all)))
         })
     }
 
@@ -482,7 +483,7 @@ impl P {
         let start = self.start_span();
         let str_ = self.string(lit)?;
         let id = self.end_span(start);
-        Ok(tk(id, T_Literal(str_)))
+        Ok(tk(id, TLiteral(str_)))
     }
 
     fn read_cond_term(&mut self, single: bool) -> R<Token> {
@@ -499,7 +500,7 @@ impl P {
         let expr = self.read_cond_expr(single)?;
         Ok(tk(
             id,
-            TC_Unary(Self::cond_type(single), "!".to_string(), bx(expr)),
+            TcUnary(Self::cond_type(single), "!".to_string(), Box::new(expr)),
         ))
     }
 
@@ -569,9 +570,9 @@ impl P {
         let id = self.end_span(start);
         self.arith_spacing()?;
         Ok(if assignment {
-            Box::new(move |a, b| tk(id, TA_Assignment(op, bx(a), bx(b))))
+            Box::new(move |a, b| tk(id, TaAssignment(op, Box::new(a), Box::new(b))))
         } else {
-            Box::new(move |a, b| tk(id, TA_Binary(op, bx(a), bx(b))))
+            Box::new(move |a, b| tk(id, TaBinary(op, Box::new(a), Box::new(b))))
         })
     }
 
@@ -608,7 +609,7 @@ impl P {
         let id = self.end_span(start);
         self.arith_spacing()?;
         Ok(Box::new(move |a, b| {
-            tk(id, TA_Binary("-".to_string(), bx(a), bx(b)))
+            tk(id, TaBinary("-".to_string(), Box::new(a), Box::new(b)))
         }))
     }
 
@@ -631,14 +632,14 @@ impl P {
         let middle = self.read_string_for_parser(Self::read_arithmetic_contents)?;
         self.char_(']')?;
         let id = self.end_span(start);
-        Ok(tk(id, T_UnparsedIndex(pos, middle)))
+        Ok(tk(id, TUnparsedIndex(pos, middle)))
     }
 
     fn arith_literal(&mut self, lit: &str) -> R<Token> {
         let start = self.start_span();
         self.string(lit)?;
         let id = self.end_span(start);
-        Ok(tk(id, T_Literal(lit.to_string())))
+        Ok(tk(id, TLiteral(lit.to_string())))
     }
 
     fn arith_variable(&mut self) -> R<Token> {
@@ -647,7 +648,7 @@ impl P {
         let indices = self.many(Self::arith_array_index)?;
         let id = self.end_span(start);
         self.arith_spacing()?;
-        Ok(tk(id, TA_Variable(name, indices)))
+        Ok(tk(id, TaVariable(name, indices)))
     }
 
     fn arith_expansion(&mut self) -> R<Token> {
@@ -665,7 +666,7 @@ impl P {
         })?;
         let id = self.end_span(start);
         self.arith_spacing()?;
-        Ok(tk(id, TA_Expansion(pieces)))
+        Ok(tk(id, TaExpansion(pieces)))
     }
 
     fn arith_group(&mut self) -> R<Token> {
@@ -675,7 +676,7 @@ impl P {
         self.char_(')')?;
         let id = self.end_span(start);
         self.arith_spacing()?;
-        Ok(tk(id, TA_Parenthesis(bx(s))))
+        Ok(tk(id, TaParenthesis(Box::new(s))))
     }
 
     fn arith_term(&mut self) -> R<Token> {
@@ -692,7 +693,7 @@ impl P {
             s.arith_spacing()
         })?;
         let id = self.end_span(start);
-        Ok(tk(id, TA_Sequence(l)))
+        Ok(tk(id, TaSequence(l)))
     }
 
     fn arith_assignment(&mut self) -> R<Token> {
@@ -719,9 +720,9 @@ impl P {
                 s.arith_spacing()?;
                 let z = s.arith_trinary()?;
                 let id = s.end_span(start);
-                Ok(tk(id, TA_Trinary(bx(x), bx(y), bx(z))))
+                Ok(tk(id, TaTrinary(Box::new(x), Box::new(y), Box::new(z))))
             },
-            |s| s.ok(x2),
+            |_| Ok(x2),
         )
     }
 
@@ -779,7 +780,7 @@ impl P {
                 let id = s.end_span(start);
                 s.arith_spacing()?;
                 let x = s.arith_any_negated()?;
-                Ok(tk(id, TA_Unary(op.to_string(), bx(x))))
+                Ok(tk(id, TaUnary(op.to_string(), Box::new(x))))
             },
             Self::arith_any_signed,
         )
@@ -796,7 +797,7 @@ impl P {
                 let id = s.end_span(start);
                 s.arith_spacing()?;
                 let x = s.arith_anycremented()?;
-                Ok(tk(id, TA_Unary(op.to_string(), bx(x))))
+                Ok(tk(id, TaUnary(op.to_string(), Box::new(x))))
             },
             Self::arith_anycremented,
         )
@@ -827,9 +828,9 @@ impl P {
                         let op = s.arith_increment_op()?;
                         let id = s.end_span(start);
                         s.arith_spacing()?;
-                        Ok(tk(id, TA_Unary(format!("|{op}"), bx(x))))
+                        Ok(tk(id, TaUnary(format!("|{op}"), Box::new(x))))
                     },
-                    |s| s.ok(x2),
+                    |_| Ok(x2),
                 )
             },
             |s| {
@@ -838,7 +839,7 @@ impl P {
                 let id = s.end_span(start);
                 s.arith_spacing()?;
                 let x = s.arith_term()?;
-                Ok(tk(id, TA_Unary(format!("{op}|"), bx(x))))
+                Ok(tk(id, TaUnary(format!("{op}|"), Box::new(x))))
             },
         )
     }
@@ -875,7 +876,7 @@ impl P {
                     s.guard(!space.is_empty())?;
                     s.look_ahead(|s| s.string("]"))?;
                     let id = s.end_span(start);
-                    Ok(tk(id, TC_Empty(typ)))
+                    Ok(tk(id, TcEmpty(typ)))
                 },
             )?;
             let cpos = s.pos;
@@ -901,7 +902,7 @@ impl P {
                 );
             }
             s.spacing()?;
-            Ok(tk(id, T_Condition(typ, bx(condition))))
+            Ok(tk(id, TCondition(typ, Box::new(condition))))
         })
     }
 }

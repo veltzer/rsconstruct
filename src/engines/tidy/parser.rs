@@ -107,16 +107,16 @@ impl Doc {
             return false;
         }
         let id = self.tags[tag].id;
-        if matches!(id, TagId::APPLET | TagId::OBJECT) {
+        if matches!(id, TagId::Applet | TagId::Object) {
             return false;
         }
         let known = tables::tables().known;
-        if id == TagId::SCRIPT && self.tree.attr_by_id(element, known.src).is_some() {
+        if id == TagId::Script && self.tree.attr_by_id(element, known.src).is_some() {
             return false;
         }
         if matches!(
             id,
-            TagId::TITLE | TagId::IFRAME | TagId::TEXTAREA | TagId::CANVAS | TagId::PROGRESS
+            TagId::Title | TagId::Iframe | TagId::Textarea | TagId::Canvas | TagId::Progress
         ) {
             return false;
         }
@@ -128,13 +128,13 @@ impl Doc {
         if self.tree.attr_by_id(element, known.datafld).is_some() {
             return false;
         }
-        if id == TagId::UNKNOWN {
+        if id == TagId::Unknown {
             return false;
         }
-        if matches!(id, TagId::BODY | TagId::COLGROUP) {
+        if matches!(id, TagId::Body | TagId::Colgroup) {
             return false;
         }
-        if id == TagId::OPTION && has_attrs {
+        if id == TagId::Option && has_attrs {
             return false;
         }
         if id == TagId::DD {
@@ -372,7 +372,7 @@ impl Doc {
 
     /// `TrimSpaces`.
     fn trim_spaces(&mut self, element: NodeId) {
-        if self.node_is(element, TagId::PRE) || self.is_pre_descendant(element) {
+        if self.node_is(element, TagId::Pre) || self.is_pre_descendant(element) {
             return;
         }
         if let Some(text) = self.tree.content(element)
@@ -425,7 +425,7 @@ impl Doc {
         if let Some(tag) = self.tree.node(node).tag
             && self.is_element(node)
             && (self.tags[tag].model & CM_EMPTY) != 0
-            && self.tags[tag].id == TagId::UNKNOWN
+            && self.tags[tag].id == TagId::Unknown
             && (self.tags[tag].versions & VERS_PROPRIETARY) != 0
         {
             self.tree.insert_node_at_end(element, node);
@@ -489,7 +489,7 @@ impl Doc {
         } else {
             self.report(Some(element), Some(doctype), Code::DoctypeAfterTags);
             let mut e = element;
-            while !self.node_is(e, TagId::HTML) {
+            while !self.node_is(e, TagId::Html) {
                 e = self.tree.parent(e).expect("an html ancestor exists");
             }
             self.tree.insert_node_before_element(e, doctype);
@@ -535,16 +535,12 @@ impl Doc {
     // ---- ParseBlock -----------------------------------------------------------
 
     /// `TY_(ParseBlock)`.
-    #[allow(
-        clippy::too_many_lines,
-        reason = "a one-to-one port of tidy's ParseBlock"
-    )]
     fn parse_block(&mut self, element: NodeId, mut mode: TokenMode) {
         let emodel = self.node_model(element);
         if (emodel & CM_EMPTY) != 0 {
             return;
         }
-        if self.node_is(element, TagId::FORM) && self.descendant_of(element, TagId::FORM) {
+        if self.node_is(element, TagId::Form) && self.descendant_of(element, TagId::Form) {
             self.report(Some(element), None, Code::IllegalNesting);
         }
         let mut istackbase = 0;
@@ -584,9 +580,9 @@ impl Doc {
                 return;
             }
 
-            if self.node_is(node, TagId::HTML)
-                || self.node_is(node, TagId::HEAD)
-                || self.node_is(node, TagId::BODY)
+            if self.node_is(node, TagId::Html)
+                || self.node_is(node, TagId::Head)
+                || self.node_is(node, TagId::Body)
             {
                 if self.is_element(node) {
                     self.report(Some(element), Some(node), Code::DiscardingUnexpected);
@@ -613,7 +609,7 @@ impl Doc {
                     self.unget_token();
                     break;
                 } else if self.lexer.exiled
-                    && (self.node_has_cm(node, CM_TABLE) || self.node_is(node, TagId::TABLE))
+                    && (self.node_has_cm(node, CM_TABLE) || self.node_is(node, TagId::Table))
                 {
                     self.unget_token();
                     self.trim_spaces(element);
@@ -633,7 +629,7 @@ impl Doc {
                 mode = TokenMode::MixedContent;
                 if matches!(
                     self.tag_id(element),
-                    TagId::BODY | TagId::MAP | TagId::BLOCKQUOTE | TagId::FORM | TagId::NOSCRIPT
+                    TagId::Body | TagId::Map | TagId::Blockquote | TagId::Form | TagId::Noscript
                 ) {
                     self.constrain_version(!VERS_HTML40_STRICT);
                 }
@@ -644,7 +640,7 @@ impl Doc {
                 continue;
             }
 
-            if self.node_is(node, TagId::PARAM) {
+            if self.node_is(node, TagId::Param) {
                 if self.node_has_cm(element, CM_PARAM) && self.is_element(node) {
                     self.tree.insert_node_at_end(element, node);
                     continue;
@@ -653,8 +649,8 @@ impl Doc {
                 continue;
             }
 
-            if self.node_is(node, TagId::AREA) {
-                if self.node_is(element, TagId::MAP) && self.is_element(node) {
+            if self.node_is(node, TagId::Area) {
+                if self.node_is(element, TagId::Map) && self.is_element(node) {
                     self.tree.insert_node_at_end(element, node);
                     continue;
                 }
@@ -669,7 +665,7 @@ impl Doc {
 
             if !self.node_has_cm(node, CM_INLINE) {
                 if !self.is_element(node) {
-                    if self.node_is(node, TagId::FORM) {
+                    if self.node_is(node, TagId::Form) {
                         self.bad_form();
                     }
                     self.report(Some(element), Some(node), Code::DiscardingUnexpected);
@@ -679,7 +675,7 @@ impl Doc {
                 if self.node_is(element, TagId::LI)
                     && matches!(
                         self.tag_id(node),
-                        TagId::FRAME | TagId::FRAMESET | TagId::OPTGROUP | TagId::OPTION
+                        TagId::Frame | TagId::Frameset | TagId::Optgroup | TagId::Option
                     )
                 {
                     self.report(Some(element), Some(node), Code::DiscardingUnexpected);
@@ -724,7 +720,7 @@ impl Doc {
                         continue;
                     }
 
-                    if self.node_is(element, TagId::FORM)
+                    if self.node_is(element, TagId::Form)
                         && let Some(parent) = self.tree.parent(element)
                         && self.node_is(parent, TagId::TD)
                         && self.tree.node(parent).implicit
@@ -775,7 +771,7 @@ impl Doc {
                         if self.lexer.exiled {
                             return;
                         }
-                        node = self.inferred_tag(TagId::TABLE);
+                        node = self.inferred_tag(TagId::Table);
                     } else if self.node_has_cm(element, CM_OBJECT) {
                         while self.lexer.istack.len() > self.lexer.istackbase {
                             self.pop_inline(None);
@@ -877,7 +873,7 @@ impl Doc {
         let mut cur = Some(parent);
         while let Some(n) = cur {
             if self.tag_id(n) == want_id
-                && (want_id != TagId::UNKNOWN
+                && (want_id != TagId::Unknown
                     || (self.tree.node(n).element.is_some()
                         && self.tree.node(n).element == want_name))
             {
@@ -950,10 +946,6 @@ impl Doc {
     // ---- ParseInline ------------------------------------------------------------
 
     /// `TY_(ParseInline)`.
-    #[allow(
-        clippy::too_many_lines,
-        reason = "a one-to-one port of tidy's ParseInline"
-    )]
     fn parse_inline(&mut self, mut element: NodeId, mut mode: TokenMode) {
         let emodel = self.node_model(element);
         if (emodel & CM_EMPTY) != 0 {
@@ -966,9 +958,9 @@ impl Doc {
         } else if self.node_has_cm(element, CM_INLINE) {
             self.push_inline(element);
         }
-        if self.node_is(element, TagId::NOBR) {
+        if self.node_is(element, TagId::Nobr) {
             self.bad_layout |= USING_NOBR;
-        } else if self.node_is(element, TagId::FONT) {
+        } else if self.node_is(element, TagId::Font) {
             self.bad_layout |= USING_FONT;
         }
         if mode != TokenMode::Preformatted {
@@ -988,7 +980,7 @@ impl Doc {
                 if !mode.is_preformatted_bit() {
                     self.trim_spaces(element);
                 }
-                if self.node_is(element, TagId::FONT)
+                if self.node_is(element, TagId::Font)
                     && let Some(child) = self.tree.content(element)
                     && Some(child) == self.tree.last(element)
                     && self.node_is(child, TagId::A)
@@ -1034,13 +1026,13 @@ impl Doc {
                 && !matches!(
                     self.tag_id(node),
                     TagId::A
-                        | TagId::FONT
-                        | TagId::BIG
-                        | TagId::SMALL
-                        | TagId::SUB
-                        | TagId::SUP
+                        | TagId::Font
+                        | TagId::Big
+                        | TagId::Small
+                        | TagId::Sub
+                        | TagId::Sup
                         | TagId::Q
-                        | TagId::SPAN
+                        | TagId::Span
                 )
                 && self.opts.coerce_endtags
             {
@@ -1084,7 +1076,7 @@ impl Doc {
                 continue;
             }
 
-            if self.node_is(node, TagId::HTML) {
+            if self.node_is(node, TagId::Html) {
                 if self.is_element(node) {
                     self.report(Some(element), Some(node), Code::DiscardingUnexpected);
                     continue;
@@ -1115,7 +1107,7 @@ impl Doc {
             // <p> allowed within <address> in HTML 4.01 Transitional
             if self.node_is(node, TagId::P)
                 && self.ntype(node) == NodeType::StartTag
-                && self.node_is(element, TagId::ADDRESS)
+                && self.node_is(element, TagId::Address)
             {
                 self.constrain_version(!VERS_HTML40_STRICT);
                 self.tree.insert_node_at_end(element, node);
@@ -1125,7 +1117,7 @@ impl Doc {
                 continue;
             }
 
-            if !self.has_tag(node) || self.node_is(node, TagId::PARAM) {
+            if !self.has_tag(node) || self.node_is(node, TagId::Param) {
                 self.report(Some(element), Some(node), Code::DiscardingUnexpected);
                 continue;
             }
@@ -1181,7 +1173,7 @@ impl Doc {
                     self.report(Some(element), Some(node), Code::DiscardingUnexpected);
                     continue;
                 } else if self.lexer.exiled
-                    && (self.node_has_cm(node, CM_TABLE) || self.node_is(node, TagId::TABLE))
+                    && (self.node_has_cm(node, CM_TABLE) || self.node_is(node, TagId::Table))
                 {
                     self.unget_token();
                     self.trim_spaces(element);
@@ -1226,7 +1218,7 @@ impl Doc {
             }
 
             if self.node_has_cm(element, CM_HEADING) {
-                if self.node_is(node, TagId::CENTER) || self.node_is(node, TagId::DIV) {
+                if self.node_is(node, TagId::Center) || self.node_is(node, TagId::Div) {
                     if !self.is_element(node) {
                         self.report(Some(element), Some(node), Code::DiscardingUnexpected);
                         continue;
@@ -1315,13 +1307,13 @@ impl Doc {
             // block level tags end this element
             let stays_inline = self.node_has_cm(node, CM_INLINE)
                 || self.node_has_cm(element, CM_MIXED)
-                || (self.node_is(element, TagId::SPAN) && self.node_is(node, TagId::META));
+                || (self.node_is(element, TagId::Span) && self.node_is(node, TagId::Meta));
             if !stays_inline {
                 if !self.is_element(node) {
                     self.report(Some(element), Some(node), Code::DiscardingUnexpected);
                     continue;
                 }
-                if self.node_is(element, TagId::DATALIST) {
+                if self.node_is(element, TagId::Datalist) {
                     self.constrain_version(!VERS_HTML5);
                 } else if !self.node_has_cm(element, CM_OPT) {
                     self.report(Some(element), Some(node), Code::MissingEndtagBefore);
@@ -1421,7 +1413,7 @@ impl Doc {
                 continue;
             }
             if self.ntype(node) == NodeType::EndTag {
-                if self.node_is(node, TagId::FORM) {
+                if self.node_is(node, TagId::Form) {
                     self.bad_form();
                     self.report(Some(list), Some(node), Code::DiscardingUnexpected);
                     continue;
@@ -1430,7 +1422,7 @@ impl Doc {
                 let mut parent = self.tree.parent(list);
                 let mut matched = false;
                 while let Some(p) = parent {
-                    if self.node_is(p, TagId::BODY) {
+                    if self.node_is(p, TagId::Body) {
                         discard_it = true;
                         break;
                     }
@@ -1450,7 +1442,7 @@ impl Doc {
                     continue;
                 }
             }
-            if self.node_is(node, TagId::CENTER) {
+            if self.node_is(node, TagId::Center) {
                 if self.tree.content(list).is_some() {
                     self.tree.insert_node_after_element(list, node);
                 } else {
@@ -1536,7 +1528,7 @@ impl Doc {
                 }
             }
             if self.ntype(node) == NodeType::EndTag {
-                if self.node_is(node, TagId::FORM) {
+                if self.node_is(node, TagId::Form) {
                     self.bad_form();
                     self.report(Some(list), Some(node), Code::DiscardingUnexpected);
                     continue;
@@ -1548,7 +1540,7 @@ impl Doc {
                 }
                 let mut parent = self.tree.parent(list);
                 while let Some(p) = parent {
-                    if self.node_is(p, TagId::BODY) {
+                    if self.node_is(p, TagId::Body) {
                         break;
                     }
                     if self.tags_equal(node, p) {
@@ -1575,7 +1567,7 @@ impl Doc {
                     return;
                 } else if self.lexer.exiled
                     && (self.node_has_cm(node, CM_TABLE | CM_ROWGRP | CM_ROW)
-                        || self.node_is(node, TagId::TABLE))
+                        || self.node_is(node, TagId::Table))
                 {
                     return;
                 }
@@ -1611,7 +1603,7 @@ impl Doc {
     fn move_before_table(&mut self, row: NodeId, node: NodeId) {
         let mut table = self.tree.parent(row);
         while let Some(t) = table {
-            if self.node_is(t, TagId::TABLE) {
+            if self.node_is(t, TagId::Table) {
                 self.tree.insert_node_before_element(t, node);
                 return;
             }
@@ -1647,7 +1639,7 @@ impl Doc {
                 return;
             }
             if self.ntype(node) == NodeType::EndTag {
-                if (self.node_has_cm(node, CM_HTML | CM_TABLE) || self.node_is(node, TagId::TABLE))
+                if (self.node_has_cm(node, CM_HTML | CM_TABLE) || self.node_is(node, TagId::Table))
                     && self
                         .tree
                         .node(node)
@@ -1657,8 +1649,8 @@ impl Doc {
                     self.unget_token();
                     return;
                 }
-                if self.node_is(node, TagId::FORM) || self.node_has_cm(node, CM_BLOCK | CM_INLINE) {
-                    if self.node_is(node, TagId::FORM) {
+                if self.node_is(node, TagId::Form) || self.node_has_cm(node, CM_BLOCK | CM_INLINE) {
+                    if self.node_is(node, TagId::Form) {
                         self.bad_form();
                     }
                     self.report(Some(row), Some(node), Code::DiscardingUnexpected);
@@ -1676,7 +1668,7 @@ impl Doc {
                 self.report(Some(row), Some(node), Code::DiscardingUnexpected);
                 continue;
             }
-            if self.node_is(node, TagId::TABLE) {
+            if self.node_is(node, TagId::Table) {
                 self.report(Some(row), Some(node), Code::DiscardingUnexpected);
                 continue;
             }
@@ -1688,7 +1680,7 @@ impl Doc {
                 self.report(Some(row), Some(node), Code::DiscardingUnexpected);
                 continue;
             }
-            if self.node_is(node, TagId::FORM) {
+            if self.node_is(node, TagId::Form) {
                 self.unget_token();
                 node = self.inferred_tag(TagId::TD);
                 self.report(Some(row), Some(node), Code::MissingStarttag);
@@ -1738,7 +1730,7 @@ impl Doc {
                 self.unget_token();
                 return;
             }
-            if self.node_is(node, TagId::TABLE) && self.ntype(node) == NodeType::EndTag {
+            if self.node_is(node, TagId::Table) && self.ntype(node) == NodeType::EndTag {
                 self.unget_token();
                 return;
             }
@@ -1770,8 +1762,8 @@ impl Doc {
                 }
             }
             if self.ntype(node) == NodeType::EndTag {
-                if self.node_is(node, TagId::FORM) || self.node_has_cm(node, CM_BLOCK | CM_INLINE) {
-                    if self.node_is(node, TagId::FORM) {
+                if self.node_is(node, TagId::Form) || self.node_has_cm(node, CM_BLOCK | CM_INLINE) {
+                    if self.node_is(node, TagId::Form) {
                         self.bad_form();
                     }
                     self.report(Some(rowgroup), Some(node), Code::DiscardingUnexpected);
@@ -1822,7 +1814,7 @@ impl Doc {
                 return;
             }
             if self.ntype(node) == NodeType::EndTag {
-                if self.node_is(node, TagId::FORM) {
+                if self.node_is(node, TagId::Form) {
                     self.bad_form();
                     self.report(Some(colgroup), Some(node), Code::DiscardingUnexpected);
                     continue;
@@ -1847,7 +1839,7 @@ impl Doc {
                 self.report(Some(colgroup), Some(node), Code::DiscardingUnexpected);
                 continue;
             }
-            if !self.node_is(node, TagId::COL) {
+            if !self.node_is(node, TagId::Col) {
                 self.unget_token();
                 return;
             }
@@ -1890,7 +1882,7 @@ impl Doc {
             if self.ntype(node) != NodeType::EndTag {
                 if self.node_is(node, TagId::TD)
                     || self.node_is(node, TagId::TH)
-                    || self.node_is(node, TagId::TABLE)
+                    || self.node_is(node, TagId::Table)
                 {
                     self.unget_token();
                     node = self.inferred_tag(TagId::TR);
@@ -1910,7 +1902,7 @@ impl Doc {
                 }
             }
             if self.ntype(node) == NodeType::EndTag {
-                if self.node_is(node, TagId::FORM) {
+                if self.node_is(node, TagId::Form) {
                     self.bad_form();
                     self.report(Some(table), Some(node), Code::DiscardingUnexpected);
                     continue;
@@ -1957,7 +1949,7 @@ impl Doc {
             return true;
         }
         if !self.has_tag(node)
-            || self.node_is(node, TagId::PARAM)
+            || self.node_is(node, TagId::Param)
             || !self.node_has_cm(node, CM_INLINE | CM_NEW)
         {
             return false;
@@ -1985,7 +1977,7 @@ impl Doc {
                         .tag
                         .is_some_and(|t| self.tree.descendant_of(pre, t)))
             {
-                if self.node_is(node, TagId::BODY) || self.node_is(node, TagId::HTML) {
+                if self.node_is(node, TagId::Body) || self.node_is(node, TagId::Html) {
                     self.report(Some(pre), Some(node), Code::DiscardingUnexpected);
                     continue;
                 }
@@ -2011,7 +2003,7 @@ impl Doc {
             if !self.pre_content(node) {
                 if self.ntype(node) == NodeType::EndTag {
                     if self.lexer.exiled
-                        && (self.node_has_cm(node, CM_TABLE) || self.node_is(node, TagId::TABLE))
+                        && (self.node_has_cm(node, CM_TABLE) || self.node_is(node, TagId::Table))
                     {
                         self.unget_token();
                         self.trim_spaces(pre);
@@ -2020,7 +2012,7 @@ impl Doc {
                     self.report(Some(pre), Some(node), Code::DiscardingUnexpected);
                     continue;
                 } else if self.node_has_cm(node, CM_TABLE | CM_ROW)
-                    || self.node_is(node, TagId::TABLE)
+                    || self.node_is(node, TagId::Table)
                 {
                     if !self.lexer.exiled {
                         self.report(Some(pre), Some(node), Code::MissingEndtagBefore);
@@ -2031,7 +2023,7 @@ impl Doc {
                 self.tree.insert_node_after_element(pre, node);
                 self.report(Some(pre), Some(node), Code::MissingEndtagBefore);
                 self.parse_tag(node, TokenMode::IgnoreWhitespace);
-                let newnode = self.inferred_tag(TagId::PRE);
+                let newnode = self.inferred_tag(TagId::Pre);
                 self.report(Some(pre), Some(newnode), Code::InsertingTag);
                 pre = newnode;
                 self.tree.insert_node_after_element(node, pre);
@@ -2075,9 +2067,9 @@ impl Doc {
                 continue;
             }
             if self.ntype(node) == NodeType::StartTag
-                && (self.node_is(node, TagId::OPTION) || self.node_is(node, TagId::OPTGROUP))
+                && (self.node_is(node, TagId::Option) || self.node_is(node, TagId::Optgroup))
             {
-                if self.node_is(node, TagId::OPTGROUP) {
+                if self.node_is(node, TagId::Optgroup) {
                     self.report(Some(field), Some(node), Code::CantBeNested);
                 }
                 self.tree.insert_node_at_end(field, node);
@@ -2108,7 +2100,7 @@ impl Doc {
             if self.ntype(node) == NodeType::StartTag
                 && matches!(
                     self.tag_id(node),
-                    TagId::OPTION | TagId::OPTGROUP | TagId::DATALIST | TagId::SCRIPT
+                    TagId::Option | TagId::Optgroup | TagId::Datalist | TagId::Script
                 )
             {
                 self.tree.insert_node_at_end(field, node);
@@ -2127,7 +2119,7 @@ impl Doc {
     /// `TY_(ParseText)`: option and textarea content.
     fn parse_text(&mut self, field: NodeId, _mode: TokenMode) {
         self.lexer.insert = None;
-        let mode = if self.node_is(field, TagId::TEXTAREA) {
+        let mode = if self.node_is(field, TagId::Textarea) {
             TokenMode::Preformatted
         } else {
             TokenMode::MixedContent
@@ -2259,7 +2251,7 @@ impl Doc {
                 self.tree.node_mut(head).closed = true;
                 break;
             }
-            if (self.tags_equal(node, head) || self.node_is(node, TagId::HTML))
+            if (self.tags_equal(node, head) || self.node_is(node, TagId::Html))
                 && self.ntype(node) == NodeType::StartTag
             {
                 self.report(Some(head), Some(node), Code::DiscardingUnexpected);
@@ -2299,12 +2291,12 @@ impl Doc {
                 break;
             }
             if self.is_element(node) {
-                if self.node_is(node, TagId::TITLE) {
+                if self.node_is(node, TagId::Title) {
                     has_title += 1;
                     if has_title > 1 {
                         self.report(Some(head), Some(node), Code::TooManyElementsIn);
                     }
-                } else if self.node_is(node, TagId::BASE) {
+                } else if self.node_is(node, TagId::Base) {
                     has_base += 1;
                     if has_base > 1 {
                         self.report(Some(head), Some(node), Code::TooManyElementsIn);
@@ -2344,10 +2336,10 @@ impl Doc {
         let mut body = None;
         let mut node = self.tree.content(html);
         while let Some(n) = node {
-            if self.node_is(n, TagId::HEAD) {
+            if self.node_is(n, TagId::Head) {
                 head = Some(n);
             }
-            if self.node_is(n, TagId::BODY) {
+            if self.node_is(n, TagId::Body) {
                 body = Some(n);
             }
             node = self.tree.next(n);
@@ -2358,11 +2350,11 @@ impl Doc {
         let mut node = self.tree.content(head);
         while let Some(n) = node {
             let next = self.tree.next(n);
-            if self.node_is(n, TagId::OBJECT) {
+            if self.node_is(n, TagId::Object) {
                 let mut bump = false;
                 let mut child = self.tree.content(n);
                 while let Some(c) = child {
-                    if (self.is_text(c) && !self.is_blank(n)) || !self.node_is(c, TagId::PARAM) {
+                    if (self.is_text(c) && !self.is_blank(n)) || !self.node_is(c, TagId::Param) {
                         bump = true;
                         break;
                     }
@@ -2378,10 +2370,6 @@ impl Doc {
     }
 
     /// `TY_(ParseBody)`.
-    #[allow(
-        clippy::too_many_lines,
-        reason = "a one-to-one port of tidy's ParseBody"
-    )]
     fn parse_body(&mut self, body: NodeId, _mode: TokenMode) {
         let mut mode = TokenMode::IgnoreWhitespace;
         let mut checkstack = true;
@@ -2393,7 +2381,7 @@ impl Doc {
                 self.report(Some(body), Some(node), Code::DiscardingUnexpected);
                 continue;
             }
-            if self.node_is(node, TagId::HTML) {
+            if self.node_is(node, TagId::Html) {
                 if self.is_element(node) || self.lexer.seen_end_html {
                     self.report(Some(body), Some(node), Code::DiscardingUnexpected);
                 } else {
@@ -2417,13 +2405,13 @@ impl Doc {
                 if self
                     .tree
                     .parent(body)
-                    .is_some_and(|p| self.node_is(p, TagId::NOFRAMES))
+                    .is_some_and(|p| self.node_is(p, TagId::Noframes))
                 {
                     break;
                 }
                 continue;
             }
-            if self.node_is(node, TagId::NOFRAMES) {
+            if self.node_is(node, TagId::Noframes) {
                 if self.ntype(node) == NodeType::StartTag {
                     self.tree.insert_node_at_end(body, node);
                     self.parse_block(node, mode);
@@ -2433,18 +2421,18 @@ impl Doc {
                     && self
                         .tree
                         .parent(body)
-                        .is_some_and(|p| self.node_is(p, TagId::NOFRAMES))
+                        .is_some_and(|p| self.node_is(p, TagId::Noframes))
                 {
                     self.trim_spaces(body);
                     self.unget_token();
                     break;
                 }
             }
-            if (self.node_is(node, TagId::FRAME) || self.node_is(node, TagId::FRAMESET))
+            if (self.node_is(node, TagId::Frame) || self.node_is(node, TagId::Frameset))
                 && self
                     .tree
                     .parent(body)
-                    .is_some_and(|p| self.node_is(p, TagId::NOFRAMES))
+                    .is_some_and(|p| self.node_is(p, TagId::Noframes))
             {
                 self.trim_spaces(body);
                 self.unget_token();
@@ -2480,14 +2468,14 @@ impl Doc {
                 self.insert_doctype(body, node);
                 continue;
             }
-            if !self.has_tag(node) || self.node_is(node, TagId::PARAM) {
+            if !self.has_tag(node) || self.node_is(node, TagId::Param) {
                 self.report(Some(body), Some(node), Code::DiscardingUnexpected);
                 continue;
             }
 
             self.lexer.exclude_blocks = false;
 
-            if (self.node_is(node, TagId::INPUT)
+            if (self.node_is(node, TagId::Input)
                 || (!self.node_has_cm(node, CM_BLOCK) && !self.node_has_cm(node, CM_INLINE)))
                 && !self.html5_mode
             {
@@ -2496,7 +2484,7 @@ impl Doc {
                 }
                 let model = self.node_model(node);
                 if (model & CM_HTML) != 0 {
-                    if self.node_is(node, TagId::BODY)
+                    if self.node_is(node, TagId::Body)
                         && self.tree.node(body).implicit
                         && self.tree.node(body).attributes.is_empty()
                     {
@@ -2521,12 +2509,12 @@ impl Doc {
                 } else if (model & (CM_TABLE | CM_ROWGRP | CM_ROW)) != 0 {
                     if self.ntype(node) != NodeType::EndTag {
                         self.unget_token();
-                        node = self.inferred_tag(TagId::TABLE);
+                        node = self.inferred_tag(TagId::Table);
                     }
                     self.lexer.exclude_blocks = true;
-                } else if self.node_is(node, TagId::INPUT) {
+                } else if self.node_is(node, TagId::Input) {
                     self.unget_token();
-                    node = self.inferred_tag(TagId::FORM);
+                    node = self.inferred_tag(TagId::Form);
                     self.lexer.exclude_blocks = true;
                 } else {
                     if !self.node_has_cm(node, CM_ROW | CM_FIELD) {
@@ -2550,13 +2538,13 @@ impl Doc {
             }
 
             if self.is_element(node) {
-                if self.node_is(node, TagId::MAIN) && self.find_node_by_id(TagId::MAIN) {
+                if self.node_is(node, TagId::Main) && self.find_node_by_id(TagId::Main) {
                     self.bad_form |= FLG_BAD_MAIN;
                     self.report(Some(body), Some(node), Code::DiscardingUnexpected);
                     continue;
                 }
                 if self.node_has_cm(node, CM_INLINE) {
-                    if self.node_is(node, TagId::IMG) {
+                    if self.node_is(node, TagId::Img) {
                         self.constrain_version(!VERS_HTML40_STRICT);
                     } else {
                         self.constrain_version(!(VERS_HTML40_STRICT | VERS_HTML20));
@@ -2598,7 +2586,7 @@ impl Doc {
                 self.trim_spaces(noframes);
                 return;
             }
-            if self.node_is(node, TagId::FRAME) || self.node_is(node, TagId::FRAMESET) {
+            if self.node_is(node, TagId::Frame) || self.node_is(node, TagId::Frameset) {
                 self.trim_spaces(noframes);
                 if self.ntype(node) == NodeType::EndTag {
                     self.report(Some(noframes), Some(node), Code::DiscardingUnexpected);
@@ -2608,7 +2596,7 @@ impl Doc {
                 }
                 return;
             }
-            if self.node_is(node, TagId::HTML) {
+            if self.node_is(node, TagId::Html) {
                 if self.is_element(node) {
                     self.report(Some(noframes), Some(node), Code::DiscardingUnexpected);
                 }
@@ -2617,12 +2605,12 @@ impl Doc {
             if self.insert_misc(noframes, node) {
                 continue;
             }
-            if self.node_is(node, TagId::BODY) && self.ntype(node) == NodeType::StartTag {
+            if self.node_is(node, TagId::Body) && self.ntype(node) == NodeType::StartTag {
                 let seen_body = self.lexer.seen_end_body;
                 self.tree.insert_node_at_end(noframes, node);
                 self.parse_tag(node, TokenMode::IgnoreWhitespace);
                 if seen_body && self.find_body() != Some(node) {
-                    self.coerce_node(node, TagId::DIV, false, false);
+                    self.coerce_node(node, TagId::Div, false, false);
                     self.move_node_to_body(node);
                 }
                 continue;
@@ -2642,7 +2630,7 @@ impl Doc {
                     self.tree.insert_node_at_end(body, node);
                 } else {
                     self.unget_token();
-                    node = self.inferred_tag(TagId::BODY);
+                    node = self.inferred_tag(TagId::Body);
                     if self.opts.output_xml {
                         self.report(Some(noframes), Some(node), Code::InsertingTag);
                     }
@@ -2681,9 +2669,9 @@ impl Doc {
                 self.move_to_head(frameset, node);
                 continue;
             }
-            if self.node_is(node, TagId::BODY) {
+            if self.node_is(node, TagId::Body) {
                 self.unget_token();
-                node = self.inferred_tag(TagId::NOFRAMES);
+                node = self.inferred_tag(TagId::Noframes);
                 self.report(Some(frameset), Some(node), Code::InsertingTag);
             }
             if self.ntype(node) == NodeType::StartTag && (self.node_model(node) & CM_FRAMES) != 0 {
@@ -2706,10 +2694,6 @@ impl Doc {
     }
 
     /// `TY_(ParseHTML)`.
-    #[allow(
-        clippy::too_many_lines,
-        reason = "a one-to-one port of tidy's ParseHTML"
-    )]
     fn parse_html(&mut self, html: NodeId, mode: TokenMode) {
         let mut frameset: Option<NodeId> = None;
         let mut noframes: Option<NodeId> = None;
@@ -2717,10 +2701,10 @@ impl Doc {
         loop {
             let node = self.get_token(TokenMode::IgnoreWhitespace);
             let Some(node) = node else {
-                head = self.inferred_tag(TagId::HEAD);
+                head = self.inferred_tag(TagId::Head);
                 break;
             };
-            if self.node_is(node, TagId::HEAD) {
+            if self.node_is(node, TagId::Head) {
                 head = node;
                 break;
             }
@@ -2736,7 +2720,7 @@ impl Doc {
                 continue;
             }
             self.unget_token();
-            head = self.inferred_tag(TagId::HEAD);
+            head = self.inferred_tag(TagId::Head);
             break;
         }
         self.tree.insert_node_at_end(html, head);
@@ -2747,7 +2731,7 @@ impl Doc {
             let node = self.get_token(TokenMode::IgnoreWhitespace);
             let Some(mut node) = node else {
                 if frameset.is_none() {
-                    let node = self.inferred_tag(TagId::BODY);
+                    let node = self.inferred_tag(TagId::Body);
                     self.tree.insert_node_at_end(html, node);
                     self.parse_body(node, mode);
                 }
@@ -2762,7 +2746,7 @@ impl Doc {
             if self.insert_misc(html, node) {
                 continue;
             }
-            if self.node_is(node, TagId::BODY) {
+            if self.node_is(node, TagId::Body) {
                 if self.ntype(node) != NodeType::StartTag {
                     self.report(Some(html), Some(node), Code::DiscardingUnexpected);
                     continue;
@@ -2771,7 +2755,7 @@ impl Doc {
                     self.unget_token();
                     match noframes {
                         None => {
-                            let nf = self.inferred_tag(TagId::NOFRAMES);
+                            let nf = self.inferred_tag(TagId::Noframes);
                             self.tree.insert_node_at_end(fs, nf);
                             self.report(Some(html), Some(nf), Code::InsertingTag);
                             noframes = Some(nf);
@@ -2790,7 +2774,7 @@ impl Doc {
                 body = node;
                 break;
             }
-            if self.node_is(node, TagId::FRAMESET) {
+            if self.node_is(node, TagId::Frameset) {
                 if self.ntype(node) != NodeType::StartTag {
                     self.report(Some(html), Some(node), Code::DiscardingUnexpected);
                     continue;
@@ -2805,21 +2789,21 @@ impl Doc {
                 let fs = frameset.expect("frameset was just set");
                 let mut child = self.tree.content(fs);
                 while let Some(c) = child {
-                    if self.node_is(c, TagId::NOFRAMES) {
+                    if self.node_is(c, TagId::Noframes) {
                         noframes = Some(c);
                     }
                     child = self.tree.next(c);
                 }
                 continue;
             }
-            if self.node_is(node, TagId::NOFRAMES) {
+            if self.node_is(node, TagId::Noframes) {
                 if self.ntype(node) != NodeType::StartTag {
                     self.report(Some(html), Some(node), Code::DiscardingUnexpected);
                     continue;
                 }
                 let Some(fs) = frameset else {
                     self.report(Some(html), Some(node), Code::DiscardingUnexpected);
-                    body = self.inferred_tag(TagId::BODY);
+                    body = self.inferred_tag(TagId::Body);
                     break;
                 };
                 if noframes.is_none() {
@@ -2835,7 +2819,7 @@ impl Doc {
                     self.move_to_head(html, node);
                     continue;
                 }
-                if frameset.is_some() && self.node_is(node, TagId::FRAME) {
+                if frameset.is_some() && self.node_is(node, TagId::Frame) {
                     self.report(Some(html), Some(node), Code::DiscardingUnexpected);
                     continue;
                 }
@@ -2844,7 +2828,7 @@ impl Doc {
             if let Some(fs) = frameset {
                 match noframes {
                     None => {
-                        let nf = self.inferred_tag(TagId::NOFRAMES);
+                        let nf = self.inferred_tag(TagId::Noframes);
                         self.tree.insert_node_at_end(fs, nf);
                         noframes = Some(nf);
                     }
@@ -2860,7 +2844,7 @@ impl Doc {
                 self.parse_tag(nf, mode);
                 continue;
             }
-            node = self.inferred_tag(TagId::BODY);
+            node = self.inferred_tag(TagId::Body);
             if !self.showing_body_only() {
                 self.report(Some(html), Some(node), Code::InsertingTag);
             }
@@ -2916,7 +2900,7 @@ impl Doc {
             }
             let is_target = matches!(
                 self.tag_id(n),
-                TagId::FORM | TagId::NOSCRIPT | TagId::BLOCKQUOTE
+                TagId::Form | TagId::Noscript | TagId::Blockquote
             );
             let Some(block) = self.tree.content(n).filter(|_| is_target) else {
                 node = next;
@@ -2947,14 +2931,14 @@ impl Doc {
     fn replace_obsolete_elements(&mut self, mut node: Option<NodeId>) {
         while let Some(n) = node {
             let next = self.tree.next(n);
-            if self.node_is(n, TagId::DIR) {
+            if self.node_is(n, TagId::Dir) {
                 self.coerce_node(n, TagId::UL, true, true);
             }
             if matches!(
                 self.tag_id(n),
-                TagId::XMP | TagId::LISTING | TagId::PLAINTEXT
+                TagId::Xmp | TagId::Listing | TagId::Plaintext
             ) {
-                self.coerce_node(n, TagId::PRE, true, true);
+                self.coerce_node(n, TagId::Pre, true, true);
             }
             if let Some(content) = self.tree.content(n) {
                 self.replace_obsolete_elements(Some(content));
@@ -2995,7 +2979,7 @@ impl Doc {
                 self.report(Some(root), Some(node), Code::DiscardingUnexpected);
                 continue;
             }
-            if self.ntype(node) == NodeType::StartTag && self.node_is(node, TagId::HTML) {
+            if self.ntype(node) == NodeType::StartTag && self.node_is(node, TagId::Html) {
                 let known = tables::tables().known;
                 if let Some(i) = self.tree.attr_by_id(node, known.xmlns)
                     && self.tree.node(node).attributes[i].value_is(XHTML_NAMESPACE)
@@ -3006,10 +2990,10 @@ impl Doc {
                     self.opts.output_xml = !html_out;
                 }
             }
-            let html = if self.ntype(node) != NodeType::StartTag || !self.node_is(node, TagId::HTML)
+            let html = if self.ntype(node) != NodeType::StartTag || !self.node_is(node, TagId::Html)
             {
                 self.unget_token();
-                self.inferred_tag(TagId::HTML)
+                self.inferred_tag(TagId::Html)
             } else {
                 node
             };
@@ -3028,7 +3012,7 @@ impl Doc {
         }
 
         if self.find_html().is_none() {
-            let html = self.inferred_tag(TagId::HTML);
+            let html = self.inferred_tag(TagId::Html);
             self.tree.insert_node_at_end(root, html);
             self.parse_html(html, TokenMode::IgnoreWhitespace);
         }
@@ -3039,7 +3023,7 @@ impl Doc {
                 if !self.showing_body_only() {
                     self.report(head, None, Code::MissingTitleElement);
                 }
-                let title = self.inferred_tag(TagId::TITLE);
+                let title = self.inferred_tag(TagId::Title);
                 if let Some(head) = head {
                     self.tree.insert_node_at_end(head, title);
                 }

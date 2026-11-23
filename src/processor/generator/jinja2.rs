@@ -150,7 +150,7 @@ inventory::submit! {
         create: plugin_create,
         fields: &[],
         omit_standard_fields: &["formats", "args", "output_dir", "batch"],
-        scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &[".j2"], src_exclude_dirs: &[] }),
+        scan_defaults: Some(crate::config::ScanDefaultsData { src_extensions: &[".j2"], src_exclude_dirs: &[] }),
         defaults: Some(crate::config::ProcessorDefaults { python_command: true, ..crate::config::ProcessorDefaults::EMPTY }),
         defconfig_json: crate::registries::default_config_json::<Jinja2Config>,
         keywords: &["python", "template", "generator", "jinja", "pip"],

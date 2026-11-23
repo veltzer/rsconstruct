@@ -166,7 +166,7 @@ inventory::submit! {
                 doc: "actionlint config file to read; empty means .github/actionlint.yaml, then .github/actionlint.yml, else no configuration" },
         ],
         omit_standard_fields: &["command", "formats", "args", "output_dir", "required_tools"],
-        scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &[".yml", ".yaml"], src_exclude_dirs: &[] }),
+        scan_defaults: Some(crate::config::ScanDefaultsData { src_extensions: &[".yml", ".yaml"], src_exclude_dirs: &[] }),
         defaults: Some(crate::config::ProcessorDefaults { dep_auto: CONFIG_FILES, ..crate::config::ProcessorDefaults::EMPTY }),
         keywords: &["github", "actions", "workflow", "ci", "linter", "yaml", "actionlint", "rust"],
         description: "Lint GitHub Actions workflow files with actionlint's rules (in-process)",

@@ -174,8 +174,10 @@ impl Processor for AspellProcessor {
             file_index,
             &dep_inputs,
             &dep_auto,
-            &self.config,
-            &crate::config::checksum_fields_of(instance_name),
+            crate::config::output_config_hash(
+                &self.config,
+                &crate::config::checksum_fields_of(instance_name),
+            ),
             instance_name,
         )
     }
@@ -226,7 +228,7 @@ inventory::submit! {
                 doc: "Path to the personal word list file" },
         ],
         omit_standard_fields: &["formats", "output_dir"],
-        scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &[".md"], src_exclude_dirs: &[] }),
+        scan_defaults: Some(crate::config::ScanDefaultsData { src_extensions: &[".md"], src_exclude_dirs: &[] }),
         defaults: Some(crate::config::ProcessorDefaults { command: "aspell", dep_auto: &[".aspell.conf", ".aspell.en.pws", ".aspell.en.prepl"], ..crate::config::ProcessorDefaults::EMPTY }),
         defconfig_json: crate::registries::default_config_json::<AspellConfig>,
         keywords: &["spellcheck", "spelling", "english", "checker"],

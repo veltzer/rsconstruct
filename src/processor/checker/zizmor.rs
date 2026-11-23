@@ -26,7 +26,7 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     name: "zizmor", processor_type: crate::processor::ProcessorType::Checker, create: create_zizmor,
     fields: &[],
     omit_standard_fields: &["formats", "output_dir"],
-    scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &[".yml", ".yaml"], src_exclude_dirs: &[] }),
+    scan_defaults: Some(crate::config::ScanDefaultsData { src_extensions: &[".yml", ".yaml"], src_exclude_dirs: &[] }),
     // zizmor discovers its config in `.github/` or the working directory;
     // track every name so a config edit retriggers the audit.
     defaults: Some(crate::config::ProcessorDefaults {

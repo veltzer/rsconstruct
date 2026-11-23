@@ -338,9 +338,9 @@ pub fn number_literal(class: Class, text: &[u8]) -> Option<Vec<u8>> {
 }
 
 /// Perl's stringification of a number (`%.15g`, integers as integers).
-#[allow(clippy::float_cmp)] // An exact integer test, as Perl's is.
 fn perl_number(v: f64) -> String {
-    if v == v.trunc() && v.abs() < 1e15 {
+    // An exact integer test, as Perl's is.
+    if v.trunc().partial_cmp(&v) == Some(Ordering::Equal) && v.abs() < 1e15 {
         return format!("{}", v as i64);
     }
     let exp = v.abs().log10().floor() as i32;

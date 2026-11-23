@@ -313,28 +313,25 @@ fn checkpatch_outputs(dir: &std::path::Path, files: &[String]) -> Vec<Option<Vec
     let chunks: Vec<&[String]> = files.chunks(files.len().div_ceil(jobs).max(1)).collect();
     std::thread::scope(|s| {
         // Every thread is spawned before any is joined: that is the point.
-        #[allow(clippy::needless_collect)]
-        let handles: Vec<_> = chunks
-            .iter()
-            .map(|chunk| {
-                s.spawn(move || {
-                    chunk
-                        .iter()
-                        .map(|f| {
-                            let out = Command::new("checkpatch.pl")
-                                .args(["--no-tree", "-f", f])
-                                .current_dir(dir)
-                                .stderr(std::process::Stdio::null())
-                                .output()
-                                .expect("checkpatch.pl is not installed: run `rsconstruct tool install checkpatch.pl`; missing tools fail tests, they never skip");
-                            // Perl dies with no output and whatever errno held.
-                            let died = out.stdout.is_empty() && !out.status.success();
-                            (!died).then_some(out.stdout)
-                        })
-                        .collect::<Vec<_>>()
-                })
-            })
-            .collect();
+        let mut handles = Vec::new();
+        for chunk in &chunks {
+            handles.push(s.spawn(move || {
+                chunk
+                    .iter()
+                    .map(|f| {
+                        let out = Command::new("checkpatch.pl")
+                            .args(["--no-tree", "-f", f])
+                            .current_dir(dir)
+                            .stderr(std::process::Stdio::null())
+                            .output()
+                            .expect("checkpatch.pl is not installed: run `rsconstruct tool install checkpatch.pl`; missing tools fail tests, they never skip");
+                        // Perl dies with no output and whatever errno held.
+                        let died = out.stdout.is_empty() && !out.status.success();
+                        (!died).then_some(out.stdout)
+                    })
+                    .collect::<Vec<_>>()
+            }));
+        }
         handles
             .into_iter()
             .flat_map(|h| h.join().expect("checkpatch thread"))

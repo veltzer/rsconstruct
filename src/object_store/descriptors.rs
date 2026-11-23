@@ -316,7 +316,7 @@ impl ObjectStore {
         } else if self.remote_push {
             let data = serde_json::to_vec(descriptor)
                 .context("Failed to serialize cache descriptor for remote push")?;
-            self.try_push_descriptor_to_remote(ctx, cache_key, &data)?;
+            self.try_push_descriptor_to_remote(ctx, cache_key, &data);
         }
         Ok(())
     }

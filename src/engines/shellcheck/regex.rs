@@ -32,6 +32,14 @@ enum Node {
     Repeat(Box<Self>, usize, Option<usize>),
 }
 
+/// A repeated node and how many times it may repeat.
+#[derive(Clone, Copy)]
+struct Repetition<'a> {
+    inner: &'a Node,
+    min: usize,
+    max: Option<usize>,
+}
+
 #[derive(Clone, Debug)]
 pub struct Regex {
     node: Node,
@@ -274,7 +282,14 @@ impl Regex {
             }
             Node::Alt(branches) => branches.iter().any(|b| self.m(b, s, pos, caps, k)),
             Node::Concat(items) => self.seq(items, s, pos, caps, k),
-            Node::Repeat(inner, min, max) => self.rep(inner, *min, *max, 0, s, pos, caps, k),
+            Node::Repeat(inner, min, max) => {
+                let repetition = Repetition {
+                    inner,
+                    min: *min,
+                    max: *max,
+                };
+                self.rep(repetition, 0, s, pos, caps, k)
+            }
         }
     }
 
@@ -294,21 +309,16 @@ impl Regex {
         }
     }
 
-    #[allow(
-        clippy::too_many_arguments,
-        reason = "the repetition state is the recursion's arguments"
-    )]
     fn rep(
         &self,
-        inner: &Node,
-        min: usize,
-        max: Option<usize>,
+        repetition: Repetition<'_>,
         count: usize,
         s: &[char],
         pos: usize,
         caps: &mut Caps,
         k: &mut dyn FnMut(usize, &mut Caps) -> bool,
     ) -> bool {
+        let Repetition { inner, min, max } = repetition;
         // Greedy: try one more iteration first. An iteration that matched
         // nothing ends the repetition (it could repeat forever).
         if max.is_none_or(|m| count < m)
@@ -316,7 +326,7 @@ impl Regex {
                 if p == pos && count >= min {
                     return false;
                 }
-                self.rep(inner, min, max, count + 1, s, p, caps, k)
+                self.rep(repetition, count + 1, s, p, caps, k)
             })
         {
             return true;

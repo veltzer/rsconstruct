@@ -239,8 +239,10 @@ impl crate::processor::Processor for IyamlschemaProcessor {
             file_index,
             &self.config.standard.dep_inputs,
             &self.config.standard.dep_auto,
-            &self.config,
-            &crate::config::checksum_fields_of(instance_name),
+            crate::config::output_config_hash(
+                &self.config,
+                &crate::config::checksum_fields_of(instance_name),
+            ),
             instance_name,
         )
     }
@@ -275,7 +277,7 @@ inventory::submit! {
                 doc: "Require YAML keys to appear in the order defined by the schema" },
         ],
         omit_standard_fields: &["command", "formats", "args", "output_dir", "required_tools"],
-        scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &[".yml", ".yaml"], src_exclude_dirs: &[] }),
+        scan_defaults: Some(crate::config::ScanDefaultsData { src_extensions: &[".yml", ".yaml"], src_exclude_dirs: &[] }),
         // It fetches the schemas each file names, from rsconstruct's own
         // code, so a sandboxed run needs the network with no tool to say so.
         defaults: Some(crate::config::ProcessorDefaults { sandbox_network: true, ..crate::config::ProcessorDefaults::EMPTY }),

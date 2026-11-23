@@ -94,7 +94,7 @@ inventory::submit! {
         "required_tools",
         "batch",
     ],
-        scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &[".c", ".h"], src_exclude_dirs: &[] }),
+        scan_defaults: Some(crate::config::ScanDefaultsData { src_extensions: &[".c", ".h"], src_exclude_dirs: &[] }),
         defaults: None,
         keywords: &["c", "linux", "kernel", "checker", "patch", "checkpatch", "rust"],
         description: "Check C source files with the Linux kernel's checkpatch.pl rules (in-process)",

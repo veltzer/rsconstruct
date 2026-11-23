@@ -70,7 +70,7 @@ impl Doc {
     fn style_to_head(&mut self, head: NodeId, mut node: Option<NodeId>, fix: bool) {
         while let Some(n) = node {
             let next = self.tree.next(n);
-            if self.node_is(n, TagId::STYLE) {
+            if self.node_is(n, TagId::Style) {
                 if fix {
                     self.tree.remove_node(n);
                     self.tree.insert_node_at_end(head, n);
@@ -201,7 +201,7 @@ impl Doc {
                     .is_some_and(|c| self.tree.node(c).implicit)
             {
                 self.strip_only_child(n);
-                self.rename_elem(n, TagId::BLOCKQUOTE);
+                self.rename_elem(n, TagId::Blockquote);
                 self.tree.node_mut(n).implicit = true;
             }
             node = self.tree.next(n);
@@ -211,13 +211,13 @@ impl Doc {
     /// `TY_(BQ2Div)`.
     fn bq2div(&mut self, mut node: Option<NodeId>) {
         while let Some(n) = node {
-            if self.node_is(n, TagId::BLOCKQUOTE) && self.tree.node(n).implicit {
+            if self.node_is(n, TagId::Blockquote) && self.tree.node(n).implicit {
                 let mut indent = 1;
                 while self.has_one_child(n)
                     && self
                         .tree
                         .content(n)
-                        .is_some_and(|c| self.node_is(c, TagId::BLOCKQUOTE))
+                        .is_some_and(|c| self.node_is(c, TagId::Blockquote))
                     && self.tree.node(n).implicit
                 {
                     indent += 1;
@@ -226,7 +226,7 @@ impl Doc {
                 if let Some(content) = self.tree.content(n) {
                     self.bq2div(Some(content));
                 }
-                self.rename_elem(n, TagId::DIV);
+                self.rename_elem(n, TagId::Div);
                 self.add_style_property(n, &format!("margin-left: {}em", 2 * indent));
             } else if let Some(content) = self.tree.content(n) {
                 self.bq2div(Some(content));
@@ -271,7 +271,7 @@ impl Doc {
         let mut charset_found = false;
         let mut current = self.tree.content(head);
         while let Some(node) = current {
-            if !self.node_is(node, TagId::META) {
+            if !self.node_is(node, TagId::Meta) {
                 current = self.tree.next(node);
                 continue;
             }
@@ -374,7 +374,7 @@ impl Doc {
             };
         }
         if self.opts.add_meta_charset && !charset_found {
-            let meta = self.inferred_tag(TagId::META);
+            let meta = self.inferred_tag(TagId::Meta);
             match self.html_version() {
                 HT50 | XH50 => {
                     self.add_attribute(meta, "charset", Some(enc));
@@ -748,17 +748,17 @@ impl Doc {
                 let id = self.tag_id(n);
                 let removed = matches!(
                     id,
-                    TagId::ACRONYM
-                        | TagId::APPLET
-                        | TagId::BASEFONT
-                        | TagId::BIG
-                        | TagId::CENTER
-                        | TagId::DIR
-                        | TagId::FONT
-                        | TagId::FRAME
-                        | TagId::FRAMESET
-                        | TagId::NOFRAMES
-                        | TagId::STRIKE
+                    TagId::Acronym
+                        | TagId::Applet
+                        | TagId::Basefont
+                        | TagId::Big
+                        | TagId::Center
+                        | TagId::Dir
+                        | TagId::Font
+                        | TagId::Frame
+                        | TagId::Frameset
+                        | TagId::Noframes
+                        | TagId::Strike
                         | TagId::TT
                 );
                 if removed {
@@ -815,17 +815,17 @@ impl Doc {
                     self.report(None, Some(n), tag_report);
                 } else if (versions & VERS_PROPRIETARY) != 0
                     && (!self.opts.make_clean
-                        || (!self.node_is(n, TagId::NOBR) && !self.node_is(n, TagId::WBR)))
+                        || (!self.node_is(n, TagId::Nobr) && !self.node_is(n, TagId::Wbr)))
                 {
                     let looks_custom = self.node_is_autonomous_custom_format(n);
                     if !html_is5 || !looks_custom {
                         self.report(None, Some(n), Code::ProprietaryElement);
                     }
-                    if self.node_is(n, TagId::LAYER) {
+                    if self.node_is(n, TagId::Layer) {
                         self.bad_layout |= USING_LAYER;
-                    } else if self.node_is(n, TagId::SPACER) {
+                    } else if self.node_is(n, TagId::Spacer) {
                         self.bad_layout |= USING_SPACER;
-                    } else if self.node_is(n, TagId::NOBR) {
+                    } else if self.node_is(n, TagId::Nobr) {
                         self.bad_layout |= USING_NOBR;
                     }
                 }
@@ -882,7 +882,7 @@ impl Doc {
         let mut node = self.tree.content(head);
         while let Some(n) = node {
             let next = self.tree.next(n);
-            if self.node_is(n, TagId::TITLE) {
+            if self.node_is(n, TagId::Title) {
                 titles += 1;
                 if titles > 1 {
                     self.report(Some(head), Some(n), Code::DiscardingUnexpected);

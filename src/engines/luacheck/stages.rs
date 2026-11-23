@@ -200,7 +200,6 @@ pub fn lua_str_tonumber(text: &[u8]) -> Option<f64> {
     Some(if negative { -value } else { value })
 }
 
-#[allow(clippy::suboptimal_flops)] // Unfused, digit by digit: fusing changes rounding.
 fn parse_hex_float(s: &str) -> Option<f64> {
     let (mantissa, exponent) = match s.find(['p', 'P']) {
         Some(i) => (&s[..i], Some(&s[i + 1..])),
@@ -215,11 +214,11 @@ fn parse_hex_float(s: &str) -> Option<f64> {
     }
     let mut value = 0f64;
     for c in int_part.chars() {
-        value = value * 16.0 + f64::from(c.to_digit(16)?);
+        value = value.mul_add(16.0, f64::from(c.to_digit(16)?));
     }
     let mut scale = 1.0 / 16.0;
     for c in frac_part.chars() {
-        value += f64::from(c.to_digit(16)?) * scale;
+        value = f64::from(c.to_digit(16)?).mul_add(scale, value);
         scale /= 16.0;
     }
     if let Some(exponent) = exponent {

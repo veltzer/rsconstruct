@@ -11,15 +11,6 @@
 //! two can be read side by side; the mutation and single-letter names
 //! (`p` for `process`'s variables, `l` for the line's) follow it too.
 
-// `${name}` in these templates is Perl interpolation, not a format argument.
-#![allow(clippy::literal_string_with_formatting_args)]
-// Written as the Perl is: mutated variables, `if` chains with equal arms.
-#![allow(
-    clippy::useless_let_if_seq,
-    clippy::if_same_then_else,
-    clippy::many_single_char_names
-)]
-
 use std::collections::{HashMap, HashSet};
 
 use super::check::{Checker, cat, count, len, split, subst, substr, substr_s};
@@ -956,11 +947,12 @@ impl Checker {
         } else if self.t(r"\.rst$", &p.realfile) {
             comment = b"..";
         }
-        let mut pattern = qr(&quotemeta_bytes(comment), "");
-        if self.t(r"\.(h|s|S)$", &p.realfile) {
+        let pattern = if self.t(r"\.(h|s|S)$", &p.realfile) {
             comment = b"/*";
-            pattern = qr(br"/\*", "");
-        }
+            qr(br"/\*", "")
+        } else {
+            qr(&quotemeta_bytes(comment), "")
+        };
         if self.t(r"\.[chsS]$", &p.realfile)
             && self.t(r"SPDX-License-Identifier:", &l.rawline)
             && !self.tl(r"^\+\s*$pattern\s*", &[("pattern", &pattern)], &l.rawline)
@@ -1019,23 +1011,19 @@ impl Checker {
                 substr(&l.line, 1, Some(len(&l.line) - len(tail) - 1)).unwrap_or(&[]),
             )) <= MAX_LINE_LENGTH
         };
-        if let Some(c) = self.m(
-            r#"^\+\s*$logFunctions\s*\(\s*(?:(?:KERN_\S+\s*|[^"]*))?($String\s*(?:|,|\)\s*;)\s*)$"#,
-            &l.line,
-        ) && rest_fits(&c.s(1))
-        {
-            msg_type = "";
-        } else if self.t(r"^\+\s*$String\s*(?:\s*|,|\)\s*;)\s*$", &l.line)
+        if self
+            .m(
+                r#"^\+\s*$logFunctions\s*\(\s*(?:(?:KERN_\S+\s*|[^"]*))?($String\s*(?:|,|\)\s*;)\s*)$"#,
+                &l.line,
+            )
+            .is_some_and(|c| rest_fits(&c.s(1)))
+            || self.t(r"^\+\s*$String\s*(?:\s*|,|\)\s*;)\s*$", &l.line)
             || self.t(r"^\+\s*#\s*define\s+\w+\s+$String$", &l.line)
-        {
-            msg_type = "";
-        } else if self.t(r"^\+.*\bEFI_GUID\s*\(", &l.line)
+            || self.t(r"^\+.*\bEFI_GUID\s*\(", &l.line)
             || self.t(r"^\+\s*(?:\w+)?\s*DEFINE_PER_CPU", &l.line)
-        {
-            msg_type = "";
-        } else if self
-            .mf(r"^\+.*\b[a-z][\w\.\+\-]*:\/\/\S+", "i", &l.rawline)
-            .is_some()
+            || self
+                .mf(r"^\+.*\b[a-z][\w\.\+\-]*:\/\/\S+", "i", &l.rawline)
+                .is_some()
         {
             msg_type = "";
         } else if let Some(c) = self.m(r"($;[\s$;]*)$", &l.line)
@@ -1959,10 +1947,11 @@ impl Checker {
             if level == b"warning" {
                 level = b"warn".to_vec();
             }
-            let mut level2 = level.clone();
-            if level == b"debug" {
-                level2 = b"dbg".to_vec();
-            }
+            let mut level2 = if level == b"debug" {
+                b"dbg".to_vec()
+            } else {
+                level.clone()
+            };
             level.extend_from_slice(&modifier);
             level2.extend_from_slice(&modifier);
             let msg = cat(&[
@@ -2505,63 +2494,56 @@ impl Checker {
         }
         off = 0;
         let blank = copy_spacing(opline);
-        let mut k = 0;
-        while k + 1 < elements.len() {
-            off += len(&elements[k]);
+        let mut idx = 0;
+        while idx + 1 < elements.len() {
+            off += len(&elements[idx]);
 
             // Pick up the preceding and succeeding characters.
             let ca = substr_s(opline, 0, Some(off));
-            let mut cc: Vec<u8> = Vec::new();
-            if len(opline) >= off + len(&elements[k + 1]) {
-                cc = substr_s(opline, off + len(&elements[k + 1]), None);
-            }
+            let cc: Vec<u8> = if len(opline) >= off + len(&elements[idx + 1]) {
+                substr_s(opline, off + len(&elements[idx + 1]), None)
+            } else {
+                Vec::new()
+            };
 
-            let el = &elements[k];
-            let mut a: u8 = 0;
-            if !el.is_empty() {
-                a = b'V';
-            }
-            if self.t(r"\s$", el) {
-                a = b'W';
-            }
-            if self.t(r"$;$", el) {
-                a = b'C';
-            }
-            if self.t(r"(\[|\()$", el) {
-                a = b'B';
-            }
-            if el.is_empty() {
-                a = b'O';
-            }
-            if self.t(r"^\s*$", &ca) {
-                a = b'E';
-            }
+            let el = &elements[idx];
+            // The Perl assigns these in turn, the last matching one wins:
+            // here the tests run from the last assignment to the first.
+            let a: u8 = if self.t(r"^\s*$", &ca) {
+                b'E'
+            } else if el.is_empty() {
+                b'O'
+            } else if self.t(r"(\[|\()$", el) {
+                b'B'
+            } else if self.t(r"$;$", el) {
+                b'C'
+            } else if self.t(r"\s$", el) {
+                b'W'
+            } else {
+                b'V'
+            };
 
-            let op = elements[k + 1].clone();
+            let op = elements[idx + 1].clone();
 
-            let mut c: u8 = 0;
-            if let Some(next) = elements.get(k + 2) {
-                if !next.is_empty() {
-                    c = b'V';
-                }
-                if self.t(r"^\s", next) {
-                    c = b'W';
-                }
-                if self.t(r"^$;", next) {
-                    c = b'C';
-                }
-                if self.t(r"^(\)|\]|;)", next) {
-                    c = b'B';
-                }
-                if next.is_empty() {
-                    c = b'O';
-                }
+            // As for `a`: the Perl's last matching assignment wins, so the
+            // tests run from the last to the first.
+            let c: u8 = if let Some(next) = elements.get(idx + 2) {
                 if self.t(r"^\s*\\$", next) {
-                    c = b'E';
+                    b'E'
+                } else if next.is_empty() {
+                    b'O'
+                } else if self.t(r"^(\)|\]|;)", next) {
+                    b'B'
+                } else if self.t(r"^$;", next) {
+                    b'C'
+                } else if self.t(r"^\s", next) {
+                    b'W'
+                } else {
+                    b'V'
                 }
             } else {
-                c = b'E';
-            }
+                b'E'
+            };
 
             let mut ctx = Vec::new();
             if a != 0 {
@@ -2661,11 +2643,11 @@ impl Checker {
             {
                 // << and >> may either have or not have spaces both sides
                 if self.check {
-                    if fix_elements.get(k + 2).is_some_and(Option::is_some)
+                    if fix_elements.get(idx + 2).is_some_and(Option::is_some)
                         && !ctx_m(self, r"[EW]x[EW]")
                     {
                         report(self, false, b"spaces preferred around that");
-                    } else if !fix_elements.get(k + 2).is_some_and(Option::is_some)
+                    } else if !fix_elements.get(idx + 2).is_some_and(Option::is_some)
                         && !ctx_m(self, r"Wx[OE]")
                     {
                         report(self, false, b"space preferred before that");
@@ -2681,21 +2663,15 @@ impl Checker {
                 }
             } else if !ctx_m(self, r"[EWC]x[CWE]") {
                 // All the others need spaces both sides.
-                let mut ok = false;
-
                 // Ignore email addresses <foo@bar>
-                if (op == b"<" && self.t(r"^\S+\@\S+>", &cc))
-                    || (op == b">" && self.t(r"<\S+\@\S+$", &ca))
-                {
-                    ok = true;
-                }
+                let email = (op == b"<" && self.t(r"^\S+\@\S+>", &cc))
+                    || (op == b">" && self.t(r"<\S+\@\S+$", &ca));
 
                 // for asm volatile statements
                 // ignore a colon with another
                 // colon immediately before or after
-                if op == b":" && (self.t(r":$", &ca) || self.t(r"^:", &cc)) {
-                    ok = true;
-                }
+                let asm_colon = op == b":" && (self.t(r":$", &ca) || self.t(r"^:", &cc));
+                let ok = email || asm_colon;
 
                 // messages are ERROR, but ?: are CHK
                 if !ok {
@@ -2703,8 +2679,8 @@ impl Checker {
                     report(self, !chk, b"spaces required around that");
                 }
             }
-            off += len(&elements[k + 1]);
-            k += 2;
+            off += len(&elements[idx + 1]);
+            idx += 2;
         }
     }
 
@@ -2753,13 +2729,14 @@ impl Checker {
             if !c.is_empty() && !self.t(r"^\s*{?\s*\\*\s*$", &s) && !self.t(r"}\s*while\s*", &c) {
                 // Find out how long the conditional actually is.
                 let cond_lines = count(&c, b'\n');
-                let mut stat_real: Vec<u8> = Vec::new();
-                if cond_lines != 0 {
-                    stat_real = cat(&[
+                let mut stat_real: Vec<u8> = if cond_lines != 0 {
+                    cat(&[
                         &self.raw_line(l.linenr, cond_lines).unwrap_or_default(),
                         b"\n",
-                    ]);
-                }
+                    ])
+                } else {
+                    Vec::new()
+                };
                 if cond_lines > 1 {
                     stat_real = cat(&[b"[...]\n", &stat_real]);
                 }
@@ -3066,13 +3043,14 @@ impl Checker {
             define_args = last_1;
         }
         let define_stmt = dstat.clone();
-        let mut def_args: Vec<Vec<u8>> = Vec::new();
-        if let Some(args) = define_args.filter(|a| !a.is_empty()) {
+        let def_args: Vec<Vec<u8>> = if let Some(args) = define_args.filter(|a| !a.is_empty()) {
             let mut args = substr_s(&args, 1, Some(len(&args) - 2));
             args.retain(|b| !super::check::perl_space(*b));
             self.s(r"\\\+?", "", &mut args, true, &mut |_| Vec::new());
-            def_args = split(&self.re(r",", ""), &args);
-        }
+            split(&self.re(r",", ""), &args)
+        } else {
+            Vec::new()
+        };
 
         dstat.retain(|&b| b != SUBSEP);
         self.s(r"\\\n.", "", &mut dstat, true, &mut |_| Vec::new());
@@ -3344,15 +3322,12 @@ impl Checker {
     }
 
     fn single_statement_braces(&mut self, p: &P, l: &L, start: usize) {
-        let mut allowed = false;
-        let mut off = start;
-
-        // Check the pre-context.
-        if let Some(c) = self.m(r"(\}\s*)$", &l.line[..start]) {
-            allowed = true;
-            // `$-[0]` is now this match's.
-            off = c.start(0).expect("match");
-        }
+        // Check the pre-context. `$-[0]` is now this match's.
+        let pre_start = self
+            .m(r"(\}\s*)$", &l.line[..start])
+            .map(|c| c.start(0).expect("match"));
+        let mut allowed = pre_start.is_some();
+        let off = pre_start.unwrap_or(start);
 
         let (level, _, chunks) =
             self.ctx_statement_full(l.linenr, p.realcnt, i64::try_from(off).expect("offset"));
@@ -3475,11 +3450,11 @@ impl Checker {
         let mut show_l = true;
         let mut show_z = true;
         for c in self.all(r#"(?:^|")([X\t]*)(?:"|$)"#, "", &l.line) {
-            let (s, e) = c.c.get(1).expect("group");
+            let (begin, end) = c.c.get(1).expect("group");
             let mut string = substr_s(
                 &l.rawline,
-                i64::try_from(s).expect("start"),
-                Some(i64::try_from(e - s).expect("length")),
+                i64::try_from(begin).expect("start"),
+                Some(i64::try_from(end - begin).expect("length")),
             );
             self.s(r"%%", "", &mut string, true, &mut |_| b"__".to_vec());
             // check for %L
@@ -4375,7 +4350,6 @@ impl Checker {
     }
 
     /// From the extern checks to the end of the loop.
-    #[allow(clippy::too_many_lines)] // One check after another, in checkpatch's order.
     fn declaration_checks(&mut self, p: &mut P, l: &L) {
         // check for new externs in .h files.
         if self.check
@@ -5049,8 +5023,10 @@ impl Checker {
     fn device_attr(&mut self, l: &L, var: &[u8], perms: &[u8], show: &[u8], store: &[u8]) {
         let octal_perms = self.perms_to_octal(perms);
         let v = [("var", var)];
-        let is_show = self.tl(r"^${var}_show$", &v, show);
-        let is_store = self.tl(r"^${var}_store$", &v, store);
+        // The `${var}` is Perl interpolation (`tl` substitutes it), spelled
+        // with `concat!` so it is not mistaken for a format argument.
+        let is_show = self.tl(concat!("^$", "{var}", "_show$"), &v, show);
+        let is_store = self.tl(concat!("^$", "{var}", "_store$"), &v, store);
         let warn = |this: &mut Self, ty: &str, what: &[u8]| {
             let msg = cat(&[what, &l.herecurr]);
             this.warn(ty, &msg);
@@ -5094,10 +5070,9 @@ impl Checker {
         for (func, arg_pos) in MODE_PERMISSION_FUNCS {
             let lc = count(stat, b'\n') + l.linenr;
             let stat_real = self.get_stat_real(l.linenr, lc);
-            let mut skip_args: Vec<u8> = Vec::new();
-            if *arg_pos > 1 {
+            let skip_args: Vec<u8> = if *arg_pos > 1 {
                 let skip = arg_pos - 1;
-                skip_args = cat(&[
+                cat(&[
                     br"(?:\s*",
                     &funcarg,
                     br"\s*,\s*){",
@@ -5105,8 +5080,10 @@ impl Checker {
                     b",",
                     skip.to_string().as_bytes(),
                     b"}",
-                ]);
-            }
+                ])
+            } else {
+                Vec::new()
+            };
             let test = cat(&[
                 br"\b",
                 func.as_bytes(),

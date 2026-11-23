@@ -419,7 +419,7 @@ inventory::submit! {
                 doc: "Report plan-vs-build mismatches as warnings instead of failing the build" },
         ],
         omit_standard_fields: &["formats", "dep_auto", "batch"],
-        scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &["book.toml"], src_exclude_dirs: &[] }),
+        scan_defaults: Some(crate::config::ScanDefaultsData { src_extensions: &["book.toml"], src_exclude_dirs: &[] }),
         defaults: Some(crate::config::ProcessorDefaults { command: "mdbook", output_dir: "book", ..crate::config::ProcessorDefaults::EMPTY }),
         defconfig_json: crate::registries::default_config_json::<MdbookConfig>,
         keywords: &["markdown", "md", "rust", "documentation", "book", "html"],

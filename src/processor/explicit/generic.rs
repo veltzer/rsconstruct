@@ -251,7 +251,7 @@ inventory::submit! {
                 doc: "Output directories produced by the command" },
         ],
         omit_standard_fields: &["formats", "dep_inputs", "dep_auto", "output_dir", "batch", "max_jobs"],
-        scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &[], src_exclude_dirs: &[] }),
+        scan_defaults: Some(crate::config::ScanDefaultsData { src_extensions: &[], src_exclude_dirs: &[] }),
         defaults: Some(crate::config::ProcessorDefaults::EMPTY),
         defconfig_json: crate::registries::default_config_json::<ExplicitConfig>,
         keywords: &["explicit", "command", "custom", "script"],

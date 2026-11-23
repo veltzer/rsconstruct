@@ -5,7 +5,6 @@
 use super::lexer::CharSet;
 use super::parser::TokenSet;
 
-pub const BLOCK: u16 = 4;
 pub const MODIFIERS: u16 = 5;
 pub const OBJBLOCK: u16 = 6;
 pub const SLIST: u16 = 7;
@@ -45,60 +44,53 @@ pub const ABSTRACT: u16 = 40;
 pub const STRICTFP: u16 = 41;
 pub const SUPER_CTOR_CALL: u16 = 42;
 pub const CTOR_CALL: u16 = 43;
-pub const LITERAL_package: u16 = 44;
+pub const LITERAL_PACKAGE: u16 = 44;
 pub const SEMI: u16 = 45;
-pub const LITERAL_import: u16 = 46;
+pub const LITERAL_IMPORT: u16 = 46;
 pub const LBRACK: u16 = 47;
 pub const RBRACK: u16 = 48;
-pub const LITERAL_void: u16 = 49;
-pub const LITERAL_boolean: u16 = 50;
-pub const LITERAL_byte: u16 = 51;
-pub const LITERAL_char: u16 = 52;
-pub const LITERAL_short: u16 = 53;
-pub const LITERAL_int: u16 = 54;
-pub const LITERAL_float: u16 = 55;
-pub const LITERAL_long: u16 = 56;
-pub const LITERAL_double: u16 = 57;
+pub const LITERAL_VOID: u16 = 49;
+pub const LITERAL_DOUBLE: u16 = 57;
 pub const IDENT: u16 = 58;
 pub const DOT: u16 = 59;
 pub const STAR: u16 = 60;
-pub const LITERAL_private: u16 = 61;
-pub const LITERAL_public: u16 = 62;
-pub const LITERAL_protected: u16 = 63;
-pub const LITERAL_static: u16 = 64;
-pub const LITERAL_transient: u16 = 65;
-pub const LITERAL_native: u16 = 66;
-pub const LITERAL_synchronized: u16 = 67;
-pub const LITERAL_volatile: u16 = 68;
-pub const LITERAL_class: u16 = 69;
-pub const LITERAL_extends: u16 = 70;
-pub const LITERAL_interface: u16 = 71;
+pub const LITERAL_PRIVATE: u16 = 61;
+pub const LITERAL_PUBLIC: u16 = 62;
+pub const LITERAL_PROTECTED: u16 = 63;
+pub const LITERAL_STATIC: u16 = 64;
+pub const LITERAL_TRANSIENT: u16 = 65;
+pub const LITERAL_NATIVE: u16 = 66;
+pub const LITERAL_SYNCHRONIZED: u16 = 67;
+pub const LITERAL_VOLATILE: u16 = 68;
+pub const LITERAL_CLASS: u16 = 69;
+pub const LITERAL_EXTENDS: u16 = 70;
+pub const LITERAL_INTERFACE: u16 = 71;
 pub const LCURLY: u16 = 72;
 pub const RCURLY: u16 = 73;
 pub const COMMA: u16 = 74;
-pub const LITERAL_implements: u16 = 75;
+pub const LITERAL_IMPLEMENTS: u16 = 75;
 pub const LPAREN: u16 = 76;
 pub const RPAREN: u16 = 77;
-pub const LITERAL_this: u16 = 78;
-pub const LITERAL_super: u16 = 79;
+pub const LITERAL_THIS: u16 = 78;
+pub const LITERAL_SUPER: u16 = 79;
 pub const ASSIGN: u16 = 80;
-pub const LITERAL_throws: u16 = 81;
+pub const LITERAL_THROWS: u16 = 81;
 pub const COLON: u16 = 82;
-pub const LITERAL_if: u16 = 83;
-pub const LITERAL_while: u16 = 84;
-pub const LITERAL_do: u16 = 85;
-pub const LITERAL_break: u16 = 86;
-pub const LITERAL_continue: u16 = 87;
-pub const LITERAL_return: u16 = 88;
-pub const LITERAL_switch: u16 = 89;
-pub const LITERAL_throw: u16 = 90;
-pub const LITERAL_for: u16 = 91;
-pub const LITERAL_else: u16 = 92;
-pub const LITERAL_case: u16 = 93;
-pub const LITERAL_default: u16 = 94;
-pub const LITERAL_try: u16 = 95;
-pub const LITERAL_catch: u16 = 96;
-pub const LITERAL_finally: u16 = 97;
+pub const LITERAL_IF: u16 = 83;
+pub const LITERAL_WHILE: u16 = 84;
+pub const LITERAL_DO: u16 = 85;
+pub const LITERAL_BREAK: u16 = 86;
+pub const LITERAL_CONTINUE: u16 = 87;
+pub const LITERAL_RETURN: u16 = 88;
+pub const LITERAL_SWITCH: u16 = 89;
+pub const LITERAL_THROW: u16 = 90;
+pub const LITERAL_FOR: u16 = 91;
+pub const LITERAL_ELSE: u16 = 92;
+pub const LITERAL_CASE: u16 = 93;
+pub const LITERAL_DEFAULT: u16 = 94;
+pub const LITERAL_TRY: u16 = 95;
+pub const LITERAL_CATCH: u16 = 96;
+pub const LITERAL_FINALLY: u16 = 97;
 pub const PLUS_ASSIGN: u16 = 98;
 pub const MINUS_ASSIGN: u16 = 99;
 pub const STAR_ASSIGN: u16 = 100;
@@ -122,7 +114,7 @@ pub const LT: u16 = 117;
 pub const GT: u16 = 118;
 pub const LE: u16 = 119;
 pub const GE: u16 = 120;
-pub const LITERAL_instanceof: u16 = 121;
+pub const LITERAL_INSTANCEOF: u16 = 121;
 pub const SL: u16 = 122;
 pub const SR: u16 = 123;
 pub const BSR: u16 = 124;
@@ -134,24 +126,18 @@ pub const INC: u16 = 129;
 pub const DEC: u16 = 130;
 pub const BNOT: u16 = 131;
 pub const LNOT: u16 = 132;
-pub const LITERAL_true: u16 = 133;
-pub const LITERAL_false: u16 = 134;
-pub const LITERAL_null: u16 = 135;
-pub const LITERAL_new: u16 = 136;
+pub const LITERAL_TRUE: u16 = 133;
+pub const LITERAL_FALSE: u16 = 134;
+pub const LITERAL_NULL: u16 = 135;
+pub const LITERAL_NEW: u16 = 136;
 pub const NUM_INT: u16 = 137;
 pub const CHAR_LITERAL: u16 = 138;
 pub const STRING_LITERAL: u16 = 139;
 pub const NUM_FLOAT: u16 = 140;
 pub const NUM_LONG: u16 = 141;
 pub const NUM_DOUBLE: u16 = 142;
-pub const WS: u16 = 143;
 pub const SINGLE_LINE_COMMENT: u16 = 144;
 pub const BLOCK_COMMENT_BEGIN: u16 = 145;
-pub const ESC: u16 = 146;
-pub const HEX_DIGIT: u16 = 147;
-pub const VOCAB: u16 = 148;
-pub const EXPONENT: u16 = 149;
-pub const FLOAT_SUFFIX: u16 = 150;
 pub const ASSERT: u16 = 151;
 pub const STATIC_IMPORT: u16 = 152;
 pub const ENUM: u16 = 153;
@@ -183,32 +169,16 @@ pub const RESOURCE: u16 = 178;
 pub const DOUBLE_COLON: u16 = 179;
 pub const METHOD_REF: u16 = 180;
 pub const LAMBDA: u16 = 181;
-pub const BLOCK_COMMENT_END: u16 = 182;
-pub const COMMENT_CONTENT: u16 = 183;
-pub const SINGLE_LINE_COMMENT_CONTENT: u16 = 184;
-pub const BLOCK_COMMENT_CONTENT: u16 = 185;
-pub const STD_ESC: u16 = 186;
-pub const BINARY_DIGIT: u16 = 187;
-pub const ID_START: u16 = 188;
-pub const ID_PART: u16 = 189;
-pub const INT_LITERAL: u16 = 190;
-pub const LONG_LITERAL: u16 = 191;
-pub const FLOAT_LITERAL: u16 = 192;
-pub const DOUBLE_LITERAL: u16 = 193;
-pub const HEX_FLOAT_LITERAL: u16 = 194;
-pub const HEX_DOUBLE_LITERAL: u16 = 195;
-pub const SIGNED_INTEGER: u16 = 196;
-pub const BINARY_EXPONENT: u16 = 197;
 pub const PATTERN_VARIABLE_DEF: u16 = 198;
 pub const RECORD_DEF: u16 = 199;
-pub const LITERAL_record: u16 = 200;
+pub const LITERAL_RECORD: u16 = 200;
 pub const RECORD_COMPONENTS: u16 = 201;
 pub const RECORD_COMPONENT_DEF: u16 = 202;
 pub const COMPACT_CTOR_DEF: u16 = 203;
 pub const TEXT_BLOCK_LITERAL_BEGIN: u16 = 204;
 pub const TEXT_BLOCK_CONTENT: u16 = 205;
 pub const TEXT_BLOCK_LITERAL_END: u16 = 206;
-pub const LITERAL_yield: u16 = 207;
+pub const LITERAL_YIELD: u16 = 207;
 pub const SWITCH_RULE: u16 = 208;
 
 /// The recognizer's `_tokenNames`, as its error messages print them.
@@ -499,12 +469,6 @@ pub const SET_2: TokenSet = TokenSet([
 ]);
 pub const SET_3: TokenSet = TokenSet([
     0xe000_2380_0000_0000,
-    0x0000_0000_4000_00bf,
-    0x0000_0400_0200_0000,
-    0x0000_0000_0000_0100,
-]);
-pub const SET_4: TokenSet = TokenSet([
-    0xe000_2380_0000_0002,
     0x0000_0000_4000_00bf,
     0x0000_0400_0200_0000,
     0x0000_0000_0000_0100,
@@ -1037,12 +1001,6 @@ pub const CHARS_2: CharSet = CharSet(&[
     (0x002b, 0xfffe),
 ]);
 pub const CHARS_3: CharSet = CharSet(&[(0x0000, 0x0026), (0x0028, 0x005b), (0x005d, 0xfffe)]);
-pub const CHARS_4: CharSet = CharSet(&[
-    (0x0030, 0x0039),
-    (0x0041, 0x0046),
-    (0x0061, 0x0066),
-    (0x0075, 0x0075),
-]);
 pub const CHARS_5: CharSet = CharSet(&[(0x0030, 0x0039), (0x0041, 0x0046), (0x0061, 0x0066)]);
 pub const CHARS_6: CharSet = CharSet(&[(0x0000, 0x0021), (0x0023, 0x005b), (0x005d, 0xfffe)]);
 pub const CHARS_7: CharSet = CharSet(&[

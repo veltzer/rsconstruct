@@ -342,8 +342,7 @@ impl Function for VersionStrFunction {
         // Case-sensitive on purpose: `path` comes from the template author,
         // and every other extension check in this codebase treats the
         // lowercase form as canonical.
-        #[allow(clippy::case_sensitive_file_extension_comparisons)]
-        let config = if path.ends_with(".lua") {
+        let config = if Path::new(path).extension().is_some_and(|e| e == "lua") {
             load_lua_config(Path::new(path))
         } else {
             load_python_config(self.ctx.get(), Path::new(path))
@@ -1021,7 +1020,7 @@ inventory::submit! {
             "required_tools",
             "batch",
         ],
-        scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &[".tera"], src_exclude_dirs: &[] }),
+        scan_defaults: Some(crate::config::ScanDefaultsData { src_extensions: &[".tera"], src_exclude_dirs: &[] }),
         defaults: None,
         defconfig_json: registry::default_config_json::<TeraConfig>,
         keywords: &["template", "generator", "jinja", "html", "rust"],

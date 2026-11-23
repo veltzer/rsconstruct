@@ -350,13 +350,7 @@ pub fn apply_scan_defaults(
     let Some(table) = value.as_table_mut() else {
         return;
     };
-    set_maybe_empty_array_default(
-        table,
-        "src_dirs",
-        defaults.src_dirs,
-        provenance,
-        FieldProvenance::ScanDefault,
-    );
+    set_empty_array_default(table, "src_dirs", provenance, FieldProvenance::ScanDefault);
     set_maybe_empty_array_default(
         table,
         "src_extensions",

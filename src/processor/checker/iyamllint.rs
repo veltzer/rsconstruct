@@ -188,7 +188,7 @@ inventory::submit! {
                 doc: "Fail on warnings too, like yamllint --strict (default: warnings are printed and the file passes)" },
         ],
         omit_standard_fields: &["command", "formats", "args", "output_dir", "required_tools"],
-        scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &[".yml", ".yaml"], src_exclude_dirs: &[] }),
+        scan_defaults: Some(crate::config::ScanDefaultsData { src_extensions: &[".yml", ".yaml"], src_exclude_dirs: &[] }),
         defaults: Some(crate::config::ProcessorDefaults { dep_auto: CONFIG_FILES, ..crate::config::ProcessorDefaults::EMPTY }),
         keywords: &["yaml", "yml", "linter", "validator", "yamllint", "rust"],
         description: "Lint YAML files with yamllint's rules (in-process)",

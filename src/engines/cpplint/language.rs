@@ -24,15 +24,15 @@ use super::{IncludeOrder, Lint, paths};
 
 /// `_DropCommonSuffixes`: `foo/foo_test.cc` → `foo/foo`, `foo/foo-inl.h` →
 /// `foo/foo`.
-fn drop_common_suffixes(lint: &Lint<'_>, filename: &str) -> String {
+fn drop_common_suffixes(sink: &Lint<'_>, filename: &str) -> String {
     let mut suffixes: Vec<String> = Vec::new();
     for test_suffix in TEST_SUFFIXES {
-        for ext in lint.non_header_extensions() {
+        for ext in sink.non_header_extensions() {
             suffixes.push(format!("{test_suffix}.{ext}"));
         }
     }
     for suffix in ["inl", "imp", "internal"] {
-        for ext in lint.header_extensions() {
+        for ext in sink.header_extensions() {
             suffixes.push(format!("{suffix}.{ext}"));
         }
     }
@@ -48,9 +48,9 @@ fn drop_common_suffixes(lint: &Lint<'_>, filename: &str) -> String {
 }
 
 /// `_ClassifyInclude`.
-fn classify_include(lint: &Lint<'_>, include: &str, used_angle_brackets: bool) -> HeaderType {
+fn classify_include(sink: &Lint<'_>, include: &str, used_angle_brackets: bool) -> HeaderType {
     let is_cpp_header = CPP_HEADERS.contains(&include);
-    let is_std_c_header = lint.include_order() == IncludeOrder::Default
+    let is_std_c_header = sink.include_order() == IncludeOrder::Default
         || C_HEADERS.contains(&include)
         || is_search(C_STANDARD_HEADER_FOLDERS_PATTERN, include);
     let include_ext = paths::splitext(include).1;
@@ -64,9 +64,9 @@ fn classify_include(lint: &Lint<'_>, include: &str, used_angle_brackets: bool) -
         }
         return HeaderType::OtherSys;
     }
-    let target = drop_common_suffixes(lint, &lint.repository_name(lint.filename()));
+    let target = drop_common_suffixes(sink, &sink.repository_name(sink.filename()));
     let (target_dir, target_base) = paths::split(&target);
-    let dropped_include = drop_common_suffixes(lint, include);
+    let dropped_include = drop_common_suffixes(sink, include);
     let (include_dir, include_base) = paths::split(&dropped_include);
     let target_dir_pub = paths::normpath(&format!("{target_dir}/../public"));
     if target_base == include_base && (include_dir == target_dir || include_dir == target_dir_pub) {
@@ -83,17 +83,17 @@ fn classify_include(lint: &Lint<'_>, include: &str, used_angle_brackets: bool) -
 
 /// `CheckIncludeLine`.
 fn check_include_line(
-    lint: &mut Lint<'_>,
+    sink: &mut Lint<'_>,
     cl: &CleansedLines,
     linenum: usize,
     include_state: &mut IncludeState,
 ) {
     let line = &cl.lines[linenum];
     if let Some(m) = pmatch(r#"#include\s*"([^/]+\.(.*))""#, line)
-        && lint.is_header_extension(g(&m, 2))
+        && sink.is_header_extension(g(&m, 2))
         && !is_match(THIRD_PARTY_HEADERS_PATTERN, g(&m, 1))
     {
-        lint.error(
+        sink.error(
             linenum,
             "build/include_subdir",
             4,
@@ -106,8 +106,8 @@ fn check_include_line(
     let include = g(&m, 2).to_string();
     let used_angle_brackets = g(&m, 1) == "<";
     if let Some(duplicate_line) = include_state.find_header(&include) {
-        let filename = lint.filename().to_string();
-        lint.error(
+        let filename = sink.filename().to_string();
+        sink.error(
             linenum,
             "build/include",
             4,
@@ -115,12 +115,12 @@ fn check_include_line(
         );
         return;
     }
-    let repository_name = lint.repository_name(lint.filename());
-    for extension in lint.non_header_extensions() {
+    let repository_name = sink.repository_name(sink.filename());
+    for extension in sink.non_header_extensions() {
         if include.ends_with(&format!(".{extension}"))
             && paths::dirname(&repository_name) != paths::dirname(&include)
         {
-            lint.error(
+            sink.error(
                 linenum,
                 "build/include",
                 4,
@@ -130,11 +130,11 @@ fn check_include_line(
         }
     }
     let mut third_src_header = false;
-    let filename = lint.filename().to_string();
-    let own_extension = lint.file_extension_with_dot(&filename);
+    let filename = sink.filename().to_string();
+    let own_extension = sink.file_extension_with_dot(&filename);
     let basefilename = &filename[..filename.len() - own_extension.len()];
-    for ext in lint.header_extensions() {
-        let headername = lint.repository_name(&format!("{basefilename}.{ext}"));
+    for ext in sink.header_extensions() {
+        let headername = sink.repository_name(&format!("{basefilename}.{ext}"));
         if include.contains(&headername) || headername.contains(&include) {
             third_src_header = true;
             break;
@@ -144,11 +144,11 @@ fn check_include_line(
         if let Some(section) = include_state.include_list.last_mut() {
             section.push((include.clone(), linenum));
         }
-        let header_type = classify_include(lint, &include, used_angle_brackets);
+        let header_type = classify_include(sink, &include, used_angle_brackets);
         let error_message = include_state.check_next_include_order(header_type);
         if !error_message.is_empty() {
-            let base = lint.base_name(&filename);
-            lint.error(
+            let base = sink.base_name(&filename);
+            sink.error(
                 linenum,
                 "build/include_order",
                 4,
@@ -157,7 +157,7 @@ fn check_include_line(
         }
         let canonical_include = IncludeState::canonicalize_alphabetical_order(&include);
         if !include_state.is_in_alphabetical_order(cl, linenum, &canonical_include) {
-            lint.error(
+            sink.error(
                 linenum,
                 "build/include_alpha",
                 4,
@@ -206,7 +206,7 @@ fn get_text_inside(text: &str, start_pattern: &str) -> Option<String> {
 
 /// `CheckLanguage`.
 pub fn check_language(
-    lint: &mut Lint<'_>,
+    sink: &mut Lint<'_>,
     cl: &CleansedLines,
     linenum: usize,
     file_extension: &str,
@@ -217,18 +217,18 @@ pub fn check_language(
         return;
     }
     if is_search(super::lines::INCLUDE_PATTERN, line) {
-        check_include_line(lint, cl, linenum, include_state);
+        check_include_line(sink, cl, linenum, include_state);
         return;
     }
     if let Some(m) = pmatch(r"\s*#\s*(if|ifdef|ifndef|elif|else|endif)\b", line) {
         include_state.reset_section(g(&m, 1));
     }
-    check_casts(lint, cl, linenum);
-    check_global_static(lint, cl, linenum);
-    check_printf(lint, cl, linenum);
+    check_casts(sink, cl, linenum);
+    check_global_static(sink, cl, linenum);
+    check_printf(sink, cl, linenum);
     if is_search(r"\bshort port\b", line) {
         if !is_search(r"\bunsigned short port\b", line) {
-            lint.error(
+            sink.error(
                 linenum,
                 "runtime/int",
                 4,
@@ -236,7 +236,7 @@ pub fn check_language(
             );
         }
     } else if let Some(m) = search(r"\b(short|long(?! +double)|long long)\b", line) {
-        lint.error(
+        sink.error(
             linenum,
             "runtime/int",
             4,
@@ -247,7 +247,7 @@ pub fn check_language(
         );
     }
     if is_search(r"\boperator\s*&\s*\(\s*\)", line) {
-        lint.error(
+        sink.error(
             linenum,
             "runtime/operator",
             4,
@@ -255,7 +255,7 @@ pub fn check_language(
         );
     }
     if is_search(r"\}\s*if\s*\(", line) {
-        lint.error(
+        sink.error(
             linenum,
             "readability/braces",
             4,
@@ -269,7 +269,7 @@ pub fn check_language(
         let function_name = search(r"(?i)\b((?:string)?printf)\s*\(", line)
             .map_or("", |f| g(&f, 1))
             .to_string();
-        lint.error(
+        sink.error(
             linenum,
             "runtime/printf",
             4,
@@ -282,7 +282,7 @@ pub fn check_language(
     if let Some(m) = search(r"memset\s*\(([^,]*),\s*([^,]*),\s*0\s*\)", line)
         && !is_match(r"''|-?[0-9]+|0x[0-9A-Fa-f]$", g(&m, 2))
     {
-        lint.error(
+        sink.error(
             linenum,
             "runtime/memset",
             4,
@@ -291,7 +291,7 @@ pub fn check_language(
     }
     if is_search(r"\busing namespace\b", line) {
         if is_search(r"\bliterals\b", line) {
-            lint.error(
+            sink.error(
                 linenum,
                 "build/namespaces_literals",
                 5,
@@ -299,7 +299,7 @@ pub fn check_language(
                     .to_string(),
             );
         } else {
-            lint.error(
+            sink.error(
                 linenum,
                 "build/namespaces",
                 5,
@@ -341,7 +341,7 @@ pub fn check_language(
             break;
         }
         if !is_const {
-            lint.error(
+            sink.error(
                 linenum,
                 "runtime/arrays",
                 1,
@@ -349,11 +349,11 @@ pub fn check_language(
             );
         }
     }
-    if lint.is_header_extension(file_extension)
+    if sink.is_header_extension(file_extension)
         && is_search(r"\bnamespace\s*{", line)
         && !line.ends_with('\\')
     {
-        lint.error(
+        sink.error(
             linenum,
             "build/namespaces_headers",
             4,
@@ -363,7 +363,7 @@ pub fn check_language(
 }
 
 /// `CheckGlobalStatic`.
-fn check_global_static(lint: &mut Lint<'_>, cl: &CleansedLines, linenum: usize) {
+fn check_global_static(sink: &mut Lint<'_>, cl: &CleansedLines, linenum: usize) {
     let mut line = cl.elided[linenum].clone();
     if linenum + 1 < cl.num_lines && !is_search(r"[;({]", &line) {
         line.push_str(cl.elided[linenum + 1].trim());
@@ -378,7 +378,7 @@ fn check_global_static(lint: &mut Lint<'_>, cl: &CleansedLines, linenum: usize) 
         && !is_match(r#"\s*(<.*>)?(::[a-zA-Z0-9_]+)*\s*\(([^"]|$)"#, g(&m, 4))
     {
         if is_search(r"\bconst\b", &line) {
-            lint.error(
+            sink.error(
                 linenum,
                 "runtime/string",
                 4,
@@ -390,7 +390,7 @@ fn check_global_static(lint: &mut Lint<'_>, cl: &CleansedLines, linenum: usize) 
                 ),
             );
         } else {
-            lint.error(
+            sink.error(
                 linenum,
                 "runtime/string",
                 4,
@@ -401,7 +401,7 @@ fn check_global_static(lint: &mut Lint<'_>, cl: &CleansedLines, linenum: usize) 
     if is_search(r"\b([A-Za-z0-9_]*_)\(\1\)", &line)
         || is_search(r"\b([A-Za-z0-9_]*_)\(CHECK_NOTNULL\(\1\)\)", &line)
     {
-        lint.error(
+        sink.error(
             linenum,
             "runtime/init",
             4,
@@ -411,12 +411,12 @@ fn check_global_static(lint: &mut Lint<'_>, cl: &CleansedLines, linenum: usize) 
 }
 
 /// `CheckPrintf`.
-fn check_printf(lint: &mut Lint<'_>, cl: &CleansedLines, linenum: usize) {
+fn check_printf(sink: &mut Lint<'_>, cl: &CleansedLines, linenum: usize) {
     let line = &cl.elided[linenum];
     if let Some(m) = search(r"snprintf\s*\(([^,]*),\s*([0-9]*)\s*,", line)
         && g(&m, 2) != "0"
     {
-        lint.error(
+        sink.error(
             linenum,
             "runtime/printf",
             3,
@@ -428,7 +428,7 @@ fn check_printf(lint: &mut Lint<'_>, cl: &CleansedLines, linenum: usize) {
         );
     }
     if is_search(r"\bsprintf\s*\(", line) {
-        lint.error(
+        sink.error(
             linenum,
             "runtime/printf",
             5,
@@ -436,7 +436,7 @@ fn check_printf(lint: &mut Lint<'_>, cl: &CleansedLines, linenum: usize) {
         );
     }
     if let Some(m) = search(r"\b(strcpy|strcat)\s*\(", line) {
-        lint.error(
+        sink.error(
             linenum,
             "runtime/printf",
             4,
@@ -497,7 +497,7 @@ const RE_PATTERN_TYPE: &str = r"(?:const\s+)?(?:typename\s+|class\s+|struct\s+|u
 
 /// `CheckForNonConstReference`.
 pub fn check_for_non_const_reference(
-    lint: &mut Lint<'_>,
+    sink: &mut Lint<'_>,
     cl: &CleansedLines,
     linenum: usize,
     nesting: &NestingState,
@@ -588,7 +588,7 @@ pub fn check_for_non_const_reference(
     for caps in super::regex::find_all(&ref_param, &decls) {
         let parameter = g(&caps, 1);
         if !is_match(&const_ref_param, parameter) && !is_match(&ref_stream_param, parameter) {
-            lint.error(
+            sink.error(
                 linenum,
                 "runtime/references",
                 2,
@@ -602,7 +602,7 @@ pub fn check_for_non_const_reference(
 }
 
 /// `CheckCasts`.
-fn check_casts(lint: &mut Lint<'_>, cl: &CleansedLines, linenum: usize) {
+fn check_casts(sink: &mut Lint<'_>, cl: &CleansedLines, linenum: usize) {
     let line = &cl.elided[linenum];
     let matched = search(
         r"(\bnew\s+(?:const\s+)?|\S<\s*(?:const\s+)?)?\b(int|float|double|bool|char|int16_t|uint16_t|int32_t|uint32_t|int64_t|uint64_t)(\([^)].*)",
@@ -626,7 +626,7 @@ fn check_casts(lint: &mut Lint<'_>, cl: &CleansedLines, linenum: usize) {
             && !is_match(&format!(r"\s*using\s+\S+\s*=\s*{matched_type}"), line)
             && !is_search(&format!(r"new\(\S+\)\s*{matched_type}"), line)
         {
-            lint.error(
+            sink.error(
                 linenum,
                 "readability/casting",
                 4,
@@ -638,7 +638,7 @@ fn check_casts(lint: &mut Lint<'_>, cl: &CleansedLines, linenum: usize) {
     }
     if !expecting_function {
         check_c_style_cast(
-            lint,
+            sink,
             cl,
             linenum,
             "static_cast",
@@ -646,13 +646,13 @@ fn check_casts(lint: &mut Lint<'_>, cl: &CleansedLines, linenum: usize) {
         );
     }
     if !check_c_style_cast(
-        lint,
+        sink,
         cl,
         linenum,
         "const_cast",
         r#"\((char\s?\*+\s?)\)\s*""#,
     ) {
-        check_c_style_cast(lint, cl, linenum, "reinterpret_cast", r"\((\w+\s?\*+\s?)\)");
+        check_c_style_cast(sink, cl, linenum, "reinterpret_cast", r"\((\w+\s?\*+\s?)\)");
     }
     if is_search(
         r"(?:[^\w]&\(([^)*][^)]*)\)[\w(])|(?:[^\w]&(static|dynamic|down|reinterpret)_cast\b)",
@@ -677,14 +677,14 @@ fn check_casts(lint: &mut Lint<'_>, cl: &CleansedLines, linenum: usize) {
             }
         }
         if parenthesis_error {
-            lint.error(
+            sink.error(
                 linenum,
                 "readability/casting",
                 4,
                 "Are you taking an address of something dereferenced from a cast?  Wrapping the dereferenced expression in parentheses will make the binding more obvious".to_string(),
             );
         } else {
-            lint.error(
+            sink.error(
                 linenum,
                 "runtime/casting",
                 4,
@@ -696,7 +696,7 @@ fn check_casts(lint: &mut Lint<'_>, cl: &CleansedLines, linenum: usize) {
 
 /// `CheckCStyleCast`: true when an error was reported.
 fn check_c_style_cast(
-    lint: &mut Lint<'_>,
+    sink: &mut Lint<'_>,
     cl: &CleansedLines,
     linenum: usize,
     cast_type: &str,
@@ -737,7 +737,7 @@ fn check_c_style_cast(
     ) {
         return false;
     }
-    lint.error(
+    sink.error(
         linenum,
         "readability/casting",
         4,
@@ -837,7 +837,7 @@ fn iwyu_match(pattern: &IwyuPattern, line: &str) -> Option<usize> {
 /// `CheckForIncludeWhatYouUse`: STL headers the file uses but does not
 /// include.
 pub fn check_for_include_what_you_use(
-    lint: &mut Lint<'_>,
+    sink: &mut Lint<'_>,
     cl: &CleansedLines,
     include_state: &IncludeState,
 ) {
@@ -887,7 +887,7 @@ pub fn check_for_include_what_you_use(
             .strip_prefix('c')
             .is_some_and(|rest| included.contains(format!("{rest}.h").as_str()));
         if !included.contains(header_stripped) && !c_alias {
-            lint.error(
+            sink.error(
                 *linenum,
                 "build/include_what_you_use",
                 4,
@@ -898,21 +898,21 @@ pub fn check_for_include_what_you_use(
 }
 
 /// `CheckHeaderFileIncluded`: a source file includes its own header.
-pub fn check_header_file_included(lint: &mut Lint<'_>, include_state: &IncludeState) {
-    let filename = lint.filename().to_string();
-    if is_search(TEST_FILE_SUFFIX, &lint.base_name(&filename)) {
+pub fn check_header_file_included(sink: &mut Lint<'_>, include_state: &IncludeState) {
+    let filename = sink.filename().to_string();
+    if is_search(TEST_FILE_SUFFIX, &sink.base_name(&filename)) {
         return;
     }
     let mut first_include: Option<usize> = None;
     let mut message: Option<String> = None;
-    let extension = lint.file_extension_with_dot(&filename);
+    let extension = sink.file_extension_with_dot(&filename);
     let basefilename = &filename[..filename.len() - extension.len()];
-    for ext in lint.header_extensions() {
+    for ext in sink.header_extensions() {
         let headerfile = format!("{basefilename}.{ext}");
         if !paths::exists(&headerfile) {
             continue;
         }
-        let headername = lint.repository_name(&headerfile);
+        let headername = sink.repository_name(&headerfile);
         let mut include_uses_unix_dir_aliases = false;
         for (include_text, line) in include_state.include_list.iter().flatten() {
             if include_text.contains("./") {
@@ -927,7 +927,7 @@ pub fn check_header_file_included(lint: &mut Lint<'_>, include_state: &IncludeSt
         }
         let mut text = format!(
             "{} should include its header file {headername}",
-            lint.repository_name(&filename)
+            sink.repository_name(&filename)
         );
         if include_uses_unix_dir_aliases {
             text.push_str(". Relative paths like . and .. are not allowed.");
@@ -935,7 +935,7 @@ pub fn check_header_file_included(lint: &mut Lint<'_>, include_state: &IncludeSt
         message = Some(text);
     }
     if let Some(message) = message {
-        lint.error(
+        sink.error(
             first_include.unwrap_or(super::LINE_NONE),
             "build/include",
             5,

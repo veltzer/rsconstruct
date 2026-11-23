@@ -21,7 +21,7 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     name: "htmllint", processor_type: crate::processor::ProcessorType::Checker, create: create_htmllint,
     fields: &[],
     omit_standard_fields: &["formats", "output_dir"],
-    scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &[".html", ".htm"], src_exclude_dirs: &[] }),
+    scan_defaults: Some(crate::config::ScanDefaultsData { src_extensions: &[".html", ".htm"], src_exclude_dirs: &[] }),
     // htmllint reads `.htmllintrc` from the working directory unless `--rc`
     // names another file.
     defaults: Some(crate::config::ProcessorDefaults { command: "htmllint", dep_auto: &[".htmllintrc"], ..crate::config::ProcessorDefaults::EMPTY }),

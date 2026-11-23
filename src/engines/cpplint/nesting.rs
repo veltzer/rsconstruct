@@ -95,15 +95,15 @@ impl BlockInfo {
         info
     }
 
-    fn check_end(&self, lint: &mut Lint<'_>, cl: &CleansedLines, linenum: usize) {
+    fn check_end(&self, sink: &mut Lint<'_>, cl: &CleansedLines, linenum: usize) {
         match self.kind {
-            Kind::Class => self.check_class_end(lint, cl, linenum),
-            Kind::Namespace => self.check_namespace_end(lint, cl, linenum),
+            Kind::Class => self.check_class_end(sink, cl, linenum),
+            Kind::Namespace => self.check_namespace_end(sink, cl, linenum),
             _ => {}
         }
     }
 
-    fn check_class_end(&self, lint: &mut Lint<'_>, cl: &CleansedLines, linenum: usize) {
+    fn check_class_end(&self, sink: &mut Lint<'_>, cl: &CleansedLines, linenum: usize) {
         let mut seen_last_thing_in_class = false;
         let mut i = linenum;
         while i > self.starting_linenum + 1 {
@@ -114,7 +114,7 @@ impl BlockInfo {
             );
             if let Some(m) = search(&pattern, &cl.elided[i]) {
                 if seen_last_thing_in_class {
-                    lint.error(
+                    sink.error(
                         i,
                         "readability/constructors",
                         3,
@@ -135,7 +135,7 @@ impl BlockInfo {
             } else {
                 format!("class {}", self.name)
             };
-            lint.error(
+            sink.error(
                 linenum,
                 "whitespace/indent",
                 3,
@@ -144,7 +144,7 @@ impl BlockInfo {
         }
     }
 
-    fn check_namespace_end(&self, lint: &mut Lint<'_>, cl: &CleansedLines, linenum: usize) {
+    fn check_namespace_end(&self, sink: &mut Lint<'_>, cl: &CleansedLines, linenum: usize) {
         let line = &cl.raw_lines[linenum];
         if linenum - self.starting_linenum < 10
             && !is_match(r"\s*};*\s*(//|/\*).*\bnamespace\b", line)
@@ -154,7 +154,7 @@ impl BlockInfo {
         if self.name.is_empty() {
             if !is_match(r"\s*};*\s*(//|/\*).*\bnamespace[*/.\\\s]*$", line) {
                 if is_match(r"\s*}.*\b(namespace anonymous|anonymous namespace)\b", line) {
-                    lint.error(
+                    sink.error(
                         linenum,
                         "readability/namespace",
                         5,
@@ -162,7 +162,7 @@ impl BlockInfo {
                             .to_string(),
                     );
                 } else {
-                    lint.error(
+                    sink.error(
                         linenum,
                         "readability/namespace",
                         5,
@@ -177,7 +177,7 @@ impl BlockInfo {
                 escape(&self.name)
             );
             if !is_match(&pattern, line) {
-                lint.error(
+                sink.error(
                     linenum,
                     "readability/namespace",
                     5,
@@ -359,7 +359,7 @@ impl NestingState {
     }
 
     /// cpplint's `Update`: advance the state over one line.
-    pub fn update(&mut self, lint: &mut Lint<'_>, cl: &CleansedLines, linenum: usize) {
+    pub fn update(&mut self, sink: &mut Lint<'_>, cl: &CleansedLines, linenum: usize) {
         let mut line = cl.elided[linenum].clone();
         if let Some(top) = self.stack.last() {
             self.previous_stack_top = Some(top.kind);
@@ -413,7 +413,7 @@ impl NestingState {
                             format!("class {name}")
                         };
                         let slots = g(&m, 3);
-                        lint.error(
+                        sink.error(
                             linenum,
                             "whitespace/indent",
                             3,
@@ -479,7 +479,7 @@ impl NestingState {
                 _ => {
                     if let Some(top) = self.stack.last() {
                         let top = top.clone();
-                        top.check_end(lint, cl, linenum);
+                        top.check_end(sink, cl, linenum);
                         self.pop();
                     }
                 }
@@ -528,7 +528,7 @@ impl FunctionState {
         }
     }
 
-    pub fn check(&self, lint: &mut Lint<'_>, linenum: usize) {
+    pub fn check(&self, sink: &mut Lint<'_>, linenum: usize) {
         if !self.active {
             return;
         }
@@ -537,20 +537,15 @@ impl FunctionState {
         } else {
             Self::NORMAL_TRIGGER
         };
-        let trigger = base_trigger * 2u64.pow(lint.verbose_level());
+        let trigger = base_trigger * 2u64.pow(sink.verbose_level());
         if self.lines > trigger {
             // Precision is not a concern: the ratio is a small number and the
             // result is floored to one of 0..=5.
-            #[allow(
-                clippy::cast_precision_loss,
-                clippy::cast_possible_truncation,
-                clippy::cast_sign_loss
-            )]
             let error_level = {
                 let ratio = self.lines as f64 / base_trigger as f64;
                 (ratio.log2().floor() as u32).min(5)
             };
-            lint.error(
+            sink.error(
                 linenum,
                 "readability/fn_size",
                 error_level,

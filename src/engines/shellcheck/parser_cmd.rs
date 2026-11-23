@@ -16,18 +16,18 @@ use super::parsec::{
     SystemInterface, context_disables_code,
 };
 use super::parser::{
-    bx, is_extended_function_start_char, is_function_char, is_function_start_char, tk,
+    is_extended_function_start_char, is_function_char, is_function_start_char, tk,
 };
 
 use Inner::{
-    T_AND_IF, T_AndIf, T_Annotation, T_Array, T_Assignment, T_Backgrounded, T_Bang, T_Banged,
-    T_BatsTest, T_BraceGroup, T_CLOBBER, T_Case, T_CaseExpression, T_CoProc, T_CoProcBody,
-    T_DGREAT, T_DSEMI, T_Do, T_Done, T_EOF, T_Elif, T_Else, T_Esac, T_FdRedirect, T_Fi, T_For,
-    T_ForArithmetic, T_ForIn, T_Function, T_GREATAND, T_Glob, T_HereDoc, T_If, T_IfExpression,
-    T_In, T_Include, T_IndexedElement, T_LESSAND, T_LESSGREAT, T_Lbrace, T_Literal, T_Lparen,
-    T_NormalWord, T_OR_IF, T_OrIf, T_Pipe, T_Pipeline, T_Rbrace, T_Redirecting, T_Rparen, T_Script,
-    T_Select, T_SelectIn, T_Semi, T_SimpleCommand, T_SourceCommand, T_Subshell, T_Then,
-    T_UnparsedIndex, T_Until, T_UntilExpression, T_While, T_WhileExpression, TA_Variable,
+    TAndIf, TAnnotation, TArray, TAssignment, TBackgrounded, TBang, TBanged, TBatsTest,
+    TBraceGroup, TCase, TCaseExpression, TCoProc, TCoProcBody, TDo, TDone, TElif, TElse, TEsac,
+    TFdRedirect, TFi, TFor, TForArithmetic, TForIn, TFunction, TGlob, THereDoc, TIf, TIfExpression,
+    TIn, TInclude, TIndexedElement, TLbrace, TLexAndIf, TLexClobber, TLexDgreat, TLexDsemi,
+    TLexEof, TLexGreatand, TLexLessand, TLexLessgreat, TLexOrIf, TLiteral, TLparen, TNormalWord,
+    TOrIf, TPipe, TPipeline, TRbrace, TRedirecting, TRparen, TScript, TSelect, TSelectIn, TSemi,
+    TSimpleCommand, TSourceCommand, TSubshell, TThen, TUnparsedIndex, TUntil, TUntilExpression,
+    TWhile, TWhileExpression, TaVariable,
 };
 
 /// `ParseResult`.
@@ -48,8 +48,8 @@ pub struct ParseSpec {
 
 fn is_command(strings: &[&str], t: &Token) -> bool {
     match &t.inner {
-        T_NormalWord(parts) => {
-            matches!(parts.as_slice(), [Token { inner: T_Literal(s), .. }] if strings.contains(&s.as_str()))
+        TNormalWord(parts) => {
+            matches!(parts.as_slice(), [Token { inner: TLiteral(s), .. }] if strings.contains(&s.as_str()))
         }
         _ => false,
     }
@@ -122,112 +122,112 @@ impl P {
     }
 
     pub fn g_and_if(&mut self) -> R<Token> {
-        self.try_token("&&", T_AND_IF)
+        self.try_token("&&", TLexAndIf)
     }
 
     pub fn g_or_if(&mut self) -> R<Token> {
-        self.try_token("||", T_OR_IF)
+        self.try_token("||", TLexOrIf)
     }
 
     pub fn g_dsemi(&mut self) -> R<Token> {
-        self.try_token(";;", T_DSEMI)
+        self.try_token(";;", TLexDsemi)
     }
 
     pub fn g_dgreat(&mut self) -> R<Token> {
-        self.try_token(">>", T_DGREAT)
+        self.try_token(">>", TLexDgreat)
     }
 
     pub fn g_lessand(&mut self) -> R<Token> {
-        self.try_token("<&", T_LESSAND)
+        self.try_token("<&", TLexLessand)
     }
 
     pub fn g_greatand(&mut self) -> R<Token> {
-        self.try_token(">&", T_GREATAND)
+        self.try_token(">&", TLexGreatand)
     }
 
     pub fn g_lessgreat(&mut self) -> R<Token> {
-        self.try_token("<>", T_LESSGREAT)
+        self.try_token("<>", TLexLessgreat)
     }
 
     pub fn g_clobber(&mut self) -> R<Token> {
-        self.try_token(">|", T_CLOBBER)
+        self.try_token(">|", TLexClobber)
     }
 
     fn g_if(&mut self) -> R<Token> {
-        self.try_word_token("if", T_If)
+        self.try_word_token("if", TIf)
     }
 
     fn g_then(&mut self) -> R<Token> {
-        self.try_word_token("then", T_Then)
+        self.try_word_token("then", TThen)
     }
 
     fn g_else(&mut self) -> R<Token> {
-        self.try_word_token("else", T_Else)
+        self.try_word_token("else", TElse)
     }
 
     fn g_elif(&mut self) -> R<Token> {
-        self.try_word_token("elif", T_Elif)
+        self.try_word_token("elif", TElif)
     }
 
     fn g_fi(&mut self) -> R<Token> {
-        self.try_word_token("fi", T_Fi)
+        self.try_word_token("fi", TFi)
     }
 
     fn g_do(&mut self) -> R<Token> {
-        self.try_word_token("do", T_Do)
+        self.try_word_token("do", TDo)
     }
 
     fn g_done(&mut self) -> R<Token> {
-        self.try_word_token("done", T_Done)
+        self.try_word_token("done", TDone)
     }
 
     fn g_case(&mut self) -> R<Token> {
-        self.try_word_token("case", T_Case)
+        self.try_word_token("case", TCase)
     }
 
     fn g_esac(&mut self) -> R<Token> {
-        self.try_word_token("esac", T_Esac)
+        self.try_word_token("esac", TEsac)
     }
 
     fn g_while(&mut self) -> R<Token> {
-        self.try_word_token("while", T_While)
+        self.try_word_token("while", TWhile)
     }
 
     fn g_until(&mut self) -> R<Token> {
-        self.try_word_token("until", T_Until)
+        self.try_word_token("until", TUntil)
     }
 
     fn g_for(&mut self) -> R<Token> {
-        self.try_word_token("for", T_For)
+        self.try_word_token("for", TFor)
     }
 
     fn g_select(&mut self) -> R<Token> {
-        self.try_word_token("select", T_Select)
+        self.try_word_token("select", TSelect)
     }
 
     fn g_in(&mut self) -> R<Token> {
-        let t = self.try_word_token("in", T_In)?;
+        let t = self.try_word_token("in", TIn)?;
         self.skip_annotation_and_warn()?;
         Ok(t)
     }
 
     fn g_lbrace(&mut self) -> R<Token> {
-        self.try_word_token("{", T_Lbrace)
+        self.try_word_token("{", TLbrace)
     }
 
     fn g_rbrace(&mut self) -> R<Token> {
         let start = self.start_span();
         self.char_('}')?;
         let id = self.end_span(start);
-        Ok(tk(id, T_Rbrace))
+        Ok(tk(id, TRbrace))
     }
 
     fn g_lparen(&mut self) -> R<Token> {
-        self.try_token("(", T_Lparen)
+        self.try_token("(", TLparen)
     }
 
     fn g_rparen(&mut self) -> R<Token> {
-        self.try_token(")", T_Rparen)
+        self.try_token(")", TRparen)
     }
 
     fn g_bang(&mut self) -> R<Token> {
@@ -247,12 +247,12 @@ impl P {
                 Ok(())
             },
         )?;
-        Ok(tk(id, T_Bang))
+        Ok(tk(id, TBang))
     }
 
     fn g_semi(&mut self) -> R<Token> {
         self.not_followed_by2(Self::g_dsemi)?;
-        self.try_token(";", T_Semi)
+        self.try_token(";", TSemi)
     }
 
     fn keyword_separator(&mut self) -> R<()> {
@@ -462,23 +462,21 @@ impl P {
     }
 
     fn validate_command(&mut self, cmd: &Token) {
-        let T_NormalWord(parts) = &cmd.inner else {
+        let TNormalWord(parts) = &cmd.inner else {
             return;
         };
         match parts.as_slice() {
             [
                 Token {
-                    inner: T_Literal(s),
-                    ..
+                    inner: TLiteral(s), ..
                 },
             ] if s == "//" => self.comment_warning(cmd.id),
             [
                 Token {
-                    inner: T_Literal(s),
-                    ..
+                    inner: TLiteral(s), ..
                 },
                 Token {
-                    inner: T_Glob(g), ..
+                    inner: TGlob(g), ..
                 },
                 ..,
             ] if s == "/" && g == "*" => {
@@ -486,8 +484,7 @@ impl P {
             }
             [
                 Token {
-                    inner: T_Literal(s),
-                    ..
+                    inner: TLiteral(s), ..
                 },
                 ..,
             ] => {
@@ -516,10 +513,10 @@ impl P {
     }
 
     fn syntax_check_trap(&mut self, cmd: &Token) -> R<()> {
-        let T_Redirecting(_, inner) = &cmd.inner else {
+        let TRedirecting(_, inner) = &cmd.inner else {
             return Ok(());
         };
-        let T_SimpleCommand(_, words) = &inner.inner else {
+        let TSimpleCommand(_, words) = &inner.inner else {
             return Ok(());
         };
         if words.len() < 2 {
@@ -541,7 +538,7 @@ impl P {
                         p.verify_eof()
                     })
                 },
-                |p| p.ok(()),
+                |_| Ok(()),
             )
         })
     }
@@ -599,10 +596,10 @@ impl P {
 
     fn read_source(&mut self, t: Token) -> R<Token> {
         let (cmd_id, cmd, args) = {
-            let T_Redirecting(_, inner) = &t.inner else {
+            let TRedirecting(_, inner) = &t.inner else {
                 return Ok(t);
             };
-            let T_SimpleCommand(_, words) = &inner.inner else {
+            let TSimpleCommand(_, words) = &inner.inner else {
                 return Ok(t);
             };
             let Some((cmd, args)) = words.split_first() else {
@@ -627,7 +624,7 @@ impl P {
             }
             let rest_word = Token::new(
                 Id(0),
-                T_NormalWord(rest.iter().map(|t| (*t).clone()).collect()),
+                TNormalWord(rest.iter().map(|t| (*t).clone()).collect()),
             );
             let s = get_literal_string(&rest_word)?;
             if !s.starts_with('/') {
@@ -705,7 +702,7 @@ impl P {
                 match included {
                     Ok(src) => Ok(tk(
                         id1,
-                        T_SourceCommand(bx(t), bx(tk(id2, T_Include(bx(src))))),
+                        TSourceCommand(Box::new(t), Box::new(tk(id2, TInclude(Box::new(src))))),
                     )),
                     Err(f) if self.consumed_since(&f, &m) => Err(f),
                     Err(f) => {
@@ -734,7 +731,7 @@ impl P {
             |p| {
                 let bang = p.g_bang()?;
                 let next = p.read_banged(parser)?;
-                Ok(tk(bang.id, T_Banged(bx(next))))
+                Ok(tk(bang.id, TBanged(Box::new(next))))
             },
             parser,
         )
@@ -762,10 +759,10 @@ impl P {
                 let op = p.alt(Self::g_and_if, Self::g_or_if)?;
                 p.read_line_break()?;
                 let id = op.id;
-                let f: Box<dyn FnOnce(Token, Token) -> Token> = if matches!(op.inner, T_AND_IF) {
-                    Box::new(move |a, b| tk(id, T_AndIf(bx(a), bx(b))))
+                let f: Box<dyn FnOnce(Token, Token) -> Token> = if matches!(op.inner, TLexAndIf) {
+                    Box::new(move |a, b| tk(id, TAndIf(Box::new(a), Box::new(b))))
                 } else {
-                    Box::new(move |a, b| tk(id, T_OrIf(bx(a), bx(b))))
+                    Box::new(move |a, b| tk(id, TOrIf(Box::new(a), Box::new(b))))
                 };
                 Ok(f)
             })
@@ -773,7 +770,7 @@ impl P {
         Ok(if annotations.is_empty() {
             and_or
         } else {
-            tk(aid, T_Annotation(annotations, bx(and_or)))
+            tk(aid, TAnnotation(annotations, Box::new(and_or)))
         })
     }
 
@@ -792,7 +789,7 @@ impl P {
             match attempt {
                 Ok((id, sep, more)) => {
                     let transformed = if sep == '&' {
-                        tk(id, T_Backgrounded(bx(current)))
+                        tk(id, TBackgrounded(Box::new(current)))
                     } else {
                         current
                     };
@@ -838,17 +835,17 @@ impl P {
         )?;
         let id = self.end_span(start);
         self.spacing()?;
-        Ok(tk(id, T_Pipeline(pipes, cmds)))
+        Ok(tk(id, TPipeline(pipes, cmds)))
     }
 
     fn read_pipe(&mut self) -> R<Token> {
         self.not_followed_by2(Self::g_or_if)?;
         let start = self.start_span();
         self.char_('|')?;
-        let qualifier = self.alt(|p| p.string("&"), |p| p.ok(String::new()))?;
+        let qualifier = self.alt(|p| p.string("&"), |_| Ok(String::new()))?;
         let id = self.end_span(start);
         self.spacing()?;
-        Ok(tk(id, T_Pipe(format!("|{qualifier}"))))
+        Ok(tk(id, TPipe(format!("|{qualifier}"))))
     }
 
     fn read_command(&mut self) -> R<Token> {
@@ -918,7 +915,7 @@ impl P {
             let id = p.end_span(start);
             let mut branches = vec![first];
             branches.extend(elifs);
-            Ok(tk(id, T_IfExpression(branches, elses)))
+            Ok(tk(id, TIfExpression(branches, elses)))
         })
     }
 
@@ -1042,7 +1039,7 @@ impl P {
             )?;
             let id = p.end_span(start);
             p.spacing()?;
-            Ok(tk(id, T_Subshell(list)))
+            Ok(tk(id, TSubshell(list)))
         })
     }
 
@@ -1085,7 +1082,7 @@ impl P {
             )?;
             let id = p.end_span(start);
             p.spacing()?;
-            Ok(tk(id, T_BraceGroup(list)))
+            Ok(tk(id, TBraceGroup(list)))
         })
     }
 
@@ -1103,7 +1100,7 @@ impl P {
             p.spacing()?;
             let test = p.read_brace_group()?;
             let id = p.end_span(start);
-            Ok(tk(id, T_BatsTest(name, bx(test))))
+            Ok(tk(id, TBatsTest(name, Box::new(test))))
         })
     }
 
@@ -1116,7 +1113,7 @@ impl P {
             let condition = p.read_term()?;
             let statements = p.read_do_group(kw_id)?;
             let id = p.end_span(start);
-            Ok(tk(id, T_WhileExpression(condition, statements)))
+            Ok(tk(id, TWhileExpression(condition, statements)))
         })
     }
 
@@ -1127,7 +1124,7 @@ impl P {
             let condition = p.read_term()?;
             let statements = p.read_do_group(kw_id)?;
             let id = p.end_span(start);
-            Ok(tk(id, T_UntilExpression(condition, statements)))
+            Ok(tk(id, TUntilExpression(condition, statements)))
         })
     }
 
@@ -1226,7 +1223,10 @@ impl P {
                 p.spacing()
             })?;
             let group = p.alt(Self::read_braced_group_list, |p| p.read_do_group(id))?;
-            Ok(tk(id, T_ForArithmetic(bx(x), bx(y), bx(z), group)))
+            Ok(tk(
+                id,
+                TForArithmetic(Box::new(x), Box::new(y), Box::new(z), group),
+            ))
         })
     }
 
@@ -1257,7 +1257,7 @@ impl P {
     fn read_braced_group_list(&mut self) -> R<Vec<Token>> {
         let g = self.read_brace_group()?;
         match g.inner {
-            T_BraceGroup(list) => Ok(list),
+            TBraceGroup(list) => Ok(list),
             _ => self.fail("pattern match failure"),
         }
     }
@@ -1275,7 +1275,7 @@ impl P {
             Ok(Vec::new())
         })?;
         let group = self.alt(Self::read_braced_group_list, |p| p.read_do_group(id))?;
-        Ok(tk(id, T_ForIn(name, values, group)))
+        Ok(tk(id, TForIn(name, values, group)))
     }
 
     fn read_select_clause(&mut self) -> R<Token> {
@@ -1289,7 +1289,7 @@ impl P {
                 Ok(Vec::new())
             })?;
             let group = p.read_do_group(id)?;
-            Ok(tk(id, T_SelectIn(name, values, group)))
+            Ok(tk(id, TSelectIn(name, values, group)))
         })
     }
 
@@ -1335,7 +1335,7 @@ impl P {
                 |p| p.fail("Expected 'esac' to close the case statement"),
             )?;
             let id = p.end_span(start);
-            Ok(tk(id, T_CaseExpression(bx(word), list)))
+            Ok(tk(id, TCaseExpression(Box::new(word), list)))
         })
     }
 
@@ -1382,15 +1382,15 @@ impl P {
 
     fn read_case_separator(&mut self) -> R<CaseType> {
         self.choice(&mut [
-            &mut |p: &mut Self| p.try_token(";;&", T_EOF).map(|_| CaseType::CaseContinue),
-            &mut |p: &mut Self| p.try_token(";&", T_EOF).map(|_| CaseType::CaseFallThrough),
-            &mut |p: &mut Self| p.g_dsemi().map(|_| CaseType::CaseBreak),
+            &mut |p: &mut Self| p.try_token(";;&", TLexEof).map(|_| CaseType::Continue),
+            &mut |p: &mut Self| p.try_token(";&", TLexEof).map(|_| CaseType::FallThrough),
+            &mut |p: &mut Self| p.g_dsemi().map(|_| CaseType::Break),
             &mut |p: &mut Self| {
                 p.look_ahead(|p| {
                     p.read_line_break()?;
                     p.g_esac()
                 })?;
-                Ok(CaseType::CaseBreak)
+                Ok(CaseType::Break)
             },
         ])
     }
@@ -1422,7 +1422,7 @@ impl P {
             )?;
             let group = p.alt(Self::read_brace_group, Self::read_subshell)?;
             let id = p.end_span(start);
-            Ok(tk(id, T_Function(keyword, parens, name, bx(group))))
+            Ok(tk(id, TFunction(keyword, parens, name, Box::new(group))))
         })
     }
 
@@ -1496,7 +1496,7 @@ impl P {
                 &mut |p: &mut Self| {
                     let body = p.read_co_proc_body(Self::read_simple_command)?;
                     let id = p.end_span(start);
-                    Ok(tk(id, T_CoProc(None, bx(body))))
+                    Ok(tk(id, TCoProc(None, Box::new(body))))
                 },
             ])
         })
@@ -1515,19 +1515,19 @@ impl P {
                 p.try_(|p| {
                     let var = p.then_skip(Self::read_normal_word, Self::spacing)?;
                     let body = p.read_co_proc_body(Self::read_compound_command)?;
-                    Ok((Some(bx(var)), body))
+                    Ok((Some(Box::new(var)), body))
                 })
             },
         ])?;
         let id = self.end_span(start);
-        Ok(tk(id, T_CoProc(var, bx(body))))
+        Ok(tk(id, TCoProc(var, Box::new(body))))
     }
 
     fn read_co_proc_body(&mut self, parser: fn(&mut Self) -> R<Token>) -> R<Token> {
         let start = self.start_span();
         let body = parser(self)?;
         let id = self.end_span(start);
-        Ok(tk(id, T_CoProcBody(bx(body))))
+        Ok(tk(id, TCoProcBody(Box::new(body))))
     }
 
     // ----- compound commands
@@ -1573,7 +1573,7 @@ impl P {
                 "Unexpected parameters after condition. Missing &&/||, or bad expression?",
             );
         }
-        Ok(tk(id, T_Redirecting(redirs, bx(cmd))))
+        Ok(tk(id, TRedirecting(redirs, Box::new(cmd))))
     }
 
     fn read_compound_command(&mut self) -> R<Token> {
@@ -1619,7 +1619,7 @@ impl P {
                 Ok(())
             })
         })?;
-        Ok(tk(id, T_Redirecting(redirs, bx(cmd))))
+        Ok(tk(id, TRedirecting(redirs, Box::new(cmd))))
     }
 
     pub fn read_compound_list(&mut self) -> R<Vec<Token>> {
@@ -1628,7 +1628,7 @@ impl P {
 
     pub fn read_compound_list_or_empty(&mut self) -> R<Vec<Token>> {
         self.allspacing()?;
-        self.alt(Self::read_term, |p| p.ok(Vec::new()))
+        self.alt(Self::read_term, |_| Ok(Vec::new()))
     }
 
     fn read_cmd_prefix(&mut self) -> R<Vec<Token>> {
@@ -1750,8 +1750,8 @@ impl P {
                         "Remove space after = if trying to assign a value (for empty string, use var='' ... ).",
                     );
                 }
-                let value = p.read_empty_literal()?;
-                Ok(tk(id, T_Assignment(op, variable, indices, bx(value))))
+                let value = p.read_empty_literal();
+                Ok(tk(id, TAssignment(op, variable, indices, Box::new(value))))
             } else {
                 p.optional(|p| {
                     p.look_ahead(|p| p.char_('='))?;
@@ -1764,7 +1764,7 @@ impl P {
                 })?;
                 let value = p.alt(Self::read_array, Self::read_normal_word)?;
                 p.spacing()?;
-                Ok(tk(id, T_Assignment(op, variable, indices, bx(value))))
+                Ok(tk(id, TAssignment(op, variable, indices, Box::new(value))))
             }
         })
     }
@@ -1777,14 +1777,11 @@ impl P {
         ])
     }
 
-    #[allow(
-        clippy::unnecessary_wraps,
-        reason = "a parser that always succeeds, used as an `alt` alternative"
-    )]
-    fn read_empty_literal(&mut self) -> R<Token> {
+    /// A parser that always succeeds, used as an `alt` alternative.
+    fn read_empty_literal(&mut self) -> Token {
         let start = self.start_span();
         let id = self.end_span(start);
-        Ok(tk(id, T_Literal(String::new())))
+        tk(id, TLiteral(String::new()))
     }
 
     fn read_array_index(&mut self) -> R<Token> {
@@ -1794,7 +1791,7 @@ impl P {
         let str_ = self.read_string_for_parser(Self::read_index_span)?;
         self.char_(']')?;
         let id = self.end_span(start);
-        Ok(tk(id, T_UnparsedIndex(pos, str_)))
+        Ok(tk(id, TUnparsedIndex(pos, str_)))
     }
 
     fn read_array(&mut self) -> R<Token> {
@@ -1827,7 +1824,7 @@ impl P {
                 |p| p.fail("Expected ) to close array assignment"),
             )?;
             let id = p.end_span(start);
-            Ok(tk(id, T_Array(words)))
+            Ok(tk(id, TArray(words)))
         })
     }
 
@@ -1838,9 +1835,9 @@ impl P {
             p.char_('=')?;
             Ok(x)
         })?;
-        let value = self.alt(Self::read_array_regular, Self::read_empty_literal)?;
+        let value = self.alt(Self::read_array_regular, |p| Ok(p.read_empty_literal()))?;
         let id = self.end_span(start);
-        Ok(tk(id, T_IndexedElement(index, bx(value))))
+        Ok(tk(id, TIndexedElement(index, Box::new(value))))
     }
 
     fn read_array_regular(&mut self) -> R<Token> {
@@ -1880,7 +1877,7 @@ impl P {
         let id = self.end_span(start);
         self.optional(Self::carriage_return)?;
         self.optional(Self::linefeed)?;
-        Ok(tk(id, T_Literal(str_)))
+        Ok(tk(id, TLiteral(str_)))
     }
 
     fn any_shebang(&mut self) -> R<()> {
@@ -2089,9 +2086,9 @@ impl P {
         };
         self.with_annotations(rc_annotations.clone(), |p| {
             let has_bom = p.was_included(|p| p.called("Byte Order Mark", |p| p.string("\u{FEFF}")))?;
-            let shebang = p.alt(Self::read_shebang, Self::read_empty_literal)?;
+            let shebang = p.alt(Self::read_shebang, |p| Ok(p.read_empty_literal()))?;
             let shebang_string = match &shebang.inner {
-                T_Literal(s) => s.clone(),
+                TLiteral(s) => s.clone(),
                 _ => String::new(),
             };
             p.allspacing()?;
@@ -2135,7 +2132,7 @@ impl P {
                     let id = p.end_span(start);
                     p.read_pending_here_docs()?;
                     p.verify_eof()?;
-                    let script = tk(annotation_id, T_Annotation(annotations, bx(tk(id, T_Script(bx(shebang), commands)))));
+                    let script = tk(annotation_id, TAnnotation(annotations, Box::new(tk(id, TScript(Box::new(shebang), commands)))));
                     let mut here_docs: IntMap<Id, Vec<Token>> = IntMap::default();
                     for (hid, list) in &p.user.here_docs {
                         here_docs.insert(*hid, list.clone());
@@ -2145,7 +2142,7 @@ impl P {
                 } else {
                     p.many(Self::any_char)?;
                     let id = p.end_span(start);
-                    Ok(tk(id, T_Script(bx(shebang), Vec::new())))
+                    Ok(tk(id, TScript(Box::new(shebang), Vec::new())))
                 }
             })
         })
@@ -2163,7 +2160,7 @@ impl P {
             if failure.is_some() {
                 return;
             }
-            let taken = std::mem::replace(child, tk(Id(0), T_EOF));
+            let taken = std::mem::replace(child, tk(Id(0), TLexEof));
             match self.reparse_process(taken, associative) {
                 Ok(new) => *child = new,
                 Err(f) => failure = Some(f),
@@ -2173,7 +2170,7 @@ impl P {
             return Err(f);
         }
         match &mut t.inner {
-            T_Assignment(_, name, indices, value) => {
+            TAssignment(_, name, indices, value) => {
                 let name = name.clone();
                 let old = std::mem::take(indices);
                 let mut new_indices = Vec::new();
@@ -2181,17 +2178,17 @@ impl P {
                     new_indices.push(self.fix_assignment_index(&name, idx, associative)?);
                 }
                 *indices = new_indices;
-                if let T_Array(words) = &mut value.inner {
+                if let TArray(words) = &mut value.inner {
                     let old_words = std::mem::take(words);
                     let mut new_words = Vec::new();
                     for w in old_words {
                         new_words.push(match w.inner {
-                            T_IndexedElement(idxs, v) => {
+                            TIndexedElement(idxs, v) => {
                                 let mut new = Vec::new();
                                 for i in idxs {
                                     new.push(self.fix_assignment_index(&name, i, associative)?);
                                 }
-                                tk(w.id, T_IndexedElement(new, v))
+                                tk(w.id, TIndexedElement(new, v))
                             }
                             other => tk(w.id, other),
                         });
@@ -2199,7 +2196,7 @@ impl P {
                     *words = new_words;
                 }
             }
-            TA_Variable(name, indices) => {
+            TaVariable(name, indices) => {
                 let name = name.clone();
                 let old = std::mem::take(indices);
                 let mut new_indices = Vec::new();
@@ -2220,7 +2217,7 @@ impl P {
         associative: &[String],
     ) -> R<Token> {
         match word.inner {
-            T_UnparsedIndex(pos, src) => {
+            TUnparsedIndex(pos, src) => {
                 let idx = if associative.iter().any(|a| a == name) {
                     self.sub_parse(pos, &src, |p| {
                         p.called("associative array index", Self::read_index_span)
@@ -2249,13 +2246,13 @@ fn make_simple_command(
 ) -> Token {
     let (pre_assigned, pre_rest): (Vec<Token>, Vec<Token>) = prefix
         .into_iter()
-        .partition(|t| matches!(t.inner, T_Assignment(..)));
+        .partition(|t| matches!(t.inner, TAssignment(..)));
     let (pre_redirected, pre_rest2): (Vec<Token>, Vec<Token>) = pre_rest
         .into_iter()
-        .partition(|t| matches!(t.inner, T_FdRedirect(..)));
+        .partition(|t| matches!(t.inner, TFdRedirect(..)));
     let (post_redirected, post_rest): (Vec<Token>, Vec<Token>) = suffix
         .into_iter()
-        .partition(|t| matches!(t.inner, T_FdRedirect(..)));
+        .partition(|t| matches!(t.inner, TFdRedirect(..)));
     let mut redirs = pre_redirected;
     redirs.extend(post_redirected);
     let mut args = cmd;
@@ -2263,7 +2260,10 @@ fn make_simple_command(
     args.extend(post_rest);
     tk(
         id1,
-        T_Redirecting(redirs, bx(tk(id2, T_SimpleCommand(pre_assigned, args)))),
+        TRedirecting(
+            redirs,
+            Box::new(tk(id2, TSimpleCommand(pre_assigned, args))),
+        ),
     )
 }
 
@@ -2324,7 +2324,7 @@ fn is_valid_shell(s: &str) -> Option<bool> {
 
 fn reattach_here_docs(mut root: Token, map: &IntMap<Id, Vec<Token>>) -> Token {
     super::ast::do_transform(&mut root, &mut |t| {
-        if let T_HereDoc(_, _, _, list) = &mut t.inner
+        if let THereDoc(_, _, _, list) = &mut t.inner
             && list.is_empty()
             && let Some(found) = map.get(&t.id)
         {

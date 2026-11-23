@@ -185,9 +185,9 @@ fn read_user_config() -> Result<Option<(toml::Value, String)>> {
 /// The `[build]` table of one config file, whatever else the file holds.
 #[derive(Deserialize)]
 struct BuildSection {
-    #[serde(default)]
-    #[allow(dead_code)] // deserialized for its errors only
-    build: BuildConfig,
+    /// Deserialized for its errors only, never read.
+    #[serde(default, rename = "build")]
+    _build: BuildConfig,
 }
 
 /// The parse error of the first of `files` that does not deserialize as
@@ -386,26 +386,21 @@ pub trait KnownFields {
 /// Default scan configuration for a processor, as plain data.
 /// Used to resolve None scan fields in `StandardConfig` after TOML deserialization.
 ///
-/// The shared `src_` prefix is deliberate: these field names are the TOML
-/// keys users write in `rsconstruct.toml`, so renaming them to satisfy
-/// `struct_field_names` would desynchronize the struct from the config
-/// format it mirrors.
-#[allow(clippy::struct_field_names)]
+/// There is no default for `src_dirs`: every processor defaults to scanning
+/// nothing, and `apply_scan_defaults` writes the empty list itself.
+///
+/// No processor guesses where its files live. A default like `["src"]` or
+/// `["tests"]` is a guess that silently matches nothing in a project with
+/// a different layout, or worse, silently matches the wrong directory;
+/// `[]` makes the processor build nothing until the user says where to
+/// look, which is visible and unambiguous. Scanning the whole tree remains
+/// available as an explicit `src_dirs = [""]`.
+///
+/// Do not reintroduce a non-empty default here. `src_extensions` is the
+/// field that carries a processor's identity (which file types it handles);
+/// `src_dirs` is the user's to state.
 #[derive(Clone, Copy)]
 pub struct ScanDefaultsData {
-    /// Always `&[]` — every processor defaults to scanning nothing.
-    ///
-    /// No processor guesses where its files live. A default like `["src"]` or
-    /// `["tests"]` is a guess that silently matches nothing in a project with
-    /// a different layout, or worse, silently matches the wrong directory;
-    /// `&[]` makes the processor build nothing until the user says where to
-    /// look, which is visible and unambiguous. Scanning the whole tree remains
-    /// available as an explicit `src_dirs = [""]`.
-    ///
-    /// Do not reintroduce a non-empty default here. `src_extensions` is the
-    /// field that carries a processor's identity (which file types it handles);
-    /// `src_dirs` is the user's to state.
-    pub src_dirs: &'static [&'static str],
     pub src_extensions: &'static [&'static str],
     pub src_exclude_dirs: &'static [&'static str],
 }
@@ -1083,7 +1078,7 @@ impl Config {
         validate_dep_auto_exist(&config.processor.instances, &config.build)?;
         validate_no_dot_src_dirs(&config.processor.instances, &config.build)?;
         config.populate_global_provenance(&global_span_map)?;
-        crate::phases::run_post_config_hooks(&mut config)?;
+        crate::phases::run_post_config_hooks(&mut config);
         Ok(config)
     }
 
@@ -1300,12 +1295,10 @@ fn apply_spans_to_instance(
 /// transient CI hosts and wrong for developer workstations, so we tie
 /// the policy to `CI=true`. Users who want a different policy adjust
 /// the env var.
-#[allow(clippy::unnecessary_wraps)] // Result<()> required by PhaseHook::run signature.
-fn eatmydata_ci_default(config: &mut Config) -> anyhow::Result<()> {
+fn eatmydata_ci_default(config: &mut Config) {
     if running_in_ci() {
         config.dependencies.eatmydata = true;
     }
-    Ok(())
 }
 
 /// The `CI=true` policy predicate behind [`eatmydata_ci_default`], shared with

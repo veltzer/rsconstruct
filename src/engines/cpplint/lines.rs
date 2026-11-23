@@ -139,7 +139,7 @@ fn find_next_multi_line_comment_end(lines: &[String], mut lineix: usize) -> usiz
 
 /// cpplint's `RemoveMultiLineComments`: every line of a comment that spans
 /// lines becomes `/**/`.
-pub fn remove_multi_line_comments(lint: &mut Lint<'_>, lines: &mut [String]) {
+pub fn remove_multi_line_comments(sink: &mut Lint<'_>, lines: &mut [String]) {
     let mut lineix = 0;
     while lineix < lines.len() {
         let begin = find_next_multi_line_comment_start(lines, lineix);
@@ -148,7 +148,7 @@ pub fn remove_multi_line_comments(lint: &mut Lint<'_>, lines: &mut [String]) {
         }
         let end = find_next_multi_line_comment_end(lines, begin);
         if end >= lines.len() {
-            lint.error(
+            sink.error(
                 begin + 1,
                 "readability/multiline_comment",
                 5,

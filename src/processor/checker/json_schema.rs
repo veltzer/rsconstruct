@@ -130,7 +130,7 @@ inventory::submit! {
         "required_tools",
         "batch",
     ],
-        scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &[".json"], src_exclude_dirs: &[] }),
+        scan_defaults: Some(crate::config::ScanDefaultsData { src_extensions: &[".json"], src_exclude_dirs: &[] }),
         defaults: None,
         keywords: &["json", "schema", "validator", "checker"],
         description: "Validate propertyOrdering in JSON schema files",

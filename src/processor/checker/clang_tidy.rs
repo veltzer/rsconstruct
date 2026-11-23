@@ -76,8 +76,10 @@ impl crate::processor::Processor for ClangTidyProcessor {
             file_index,
             &self.config.standard.dep_inputs,
             &self.config.standard.dep_auto,
-            &self.config,
-            &crate::config::checksum_fields_of(instance_name),
+            crate::config::output_config_hash(
+                &self.config,
+                &crate::config::checksum_fields_of(instance_name),
+            ),
             instance_name,
         )
     }
@@ -106,7 +108,7 @@ inventory::submit! {
                 doc: "Compiler flags forwarded to clang-tidy for parsing" },
         ],
         omit_standard_fields: &["command", "formats", "output_dir", "batch"],
-        scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &[".c", ".cc"], src_exclude_dirs: &[] }),
+        scan_defaults: Some(crate::config::ScanDefaultsData { src_extensions: &[".c", ".cc"], src_exclude_dirs: &[] }),
         // clang-tidy finds `.clang-tidy` in the source file's parent
         // directories (that is the only name its options provider knows).
         // `compile_commands.json` is not an input: `execute_product` always

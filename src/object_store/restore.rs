@@ -225,13 +225,13 @@ impl ObjectStore {
                 // exactly wrong here — its own lint note warns that `all`
                 // short-circuits and changes semantics when the closure has
                 // side effects, and pulling an object is the side effect.
-                #[allow(
-                    clippy::unnecessary_fold,
-                    reason = "must not short-circuit: every object has to be pulled"
-                )]
-                entries.iter().fold(true, |ok, e| {
-                    (e.link.is_some() || self.ensure_object(ctx, &e.checksum)) && ok
-                })
+                let mut all_present = true;
+                for e in entries {
+                    if e.link.is_none() && !self.ensure_object(ctx, &e.checksum) {
+                        all_present = false;
+                    }
+                }
+                all_present
             }
         }
     }

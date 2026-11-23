@@ -493,9 +493,8 @@ pub fn at<T>(v: &[T], i: i64) -> Option<&T> {
 }
 
 /// `tr/c//` on `s`: how many `c`.
-#[allow(clippy::naive_bytecount)] // Lines are short; no crate for this.
 pub fn count(s: &[u8], c: u8) -> i64 {
-    i64::try_from(s.iter().filter(|&&b| b == c).count()).expect("count")
+    i64::try_from(bytecount::count(s, c)).expect("count")
 }
 
 /// `length`.

@@ -59,8 +59,10 @@ impl Processor for MarkdownlintProcessor {
             file_index,
             &self.config.standard.dep_inputs,
             &self.config.standard.dep_auto,
-            &self.config,
-            &crate::config::checksum_fields_of(instance_name),
+            crate::config::output_config_hash(
+                &self.config,
+                &crate::config::checksum_fields_of(instance_name),
+            ),
             instance_name,
         )
     }
@@ -88,7 +90,7 @@ inventory::submit! {
         create: plugin_create,
         fields: &[],
         omit_standard_fields: &["formats", "output_dir", "batch"],
-        scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &[".md"], src_exclude_dirs: &[] }),
+        scan_defaults: Some(crate::config::ScanDefaultsData { src_extensions: &[".md"], src_exclude_dirs: &[] }),
         // markdownlint-cli's `projectConfigFiles` (looked up in the working
         // directory) plus the `.markdownlintignore` it reads by default.
         defaults: Some(crate::config::ProcessorDefaults { command: "markdownlint", dep_auto: &[".markdownlint.jsonc", ".markdownlint.json", ".markdownlint.yaml", ".markdownlint.yml", ".markdownlintignore"], ..crate::config::ProcessorDefaults::EMPTY }),

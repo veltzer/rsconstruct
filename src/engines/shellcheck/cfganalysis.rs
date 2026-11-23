@@ -26,26 +26,18 @@ const FALLBACK_THRESHOLD: u64 = 10_000;
 const CACHE_ENTRIES: usize = 10;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-#[allow(
-    clippy::enum_variant_names,
-    reason = "the variant names are ShellCheck's SpaceStatus constructors"
-)]
 pub enum SpaceStatus {
-    SpaceStatusEmpty,
-    SpaceStatusClean,
-    SpaceStatusDirty,
+    Empty,
+    Clean,
+    Dirty,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
-#[allow(
-    clippy::enum_variant_names,
-    reason = "the variant names are ShellCheck's NumericalStatus constructors"
-)]
 pub enum NumericalStatus {
-    NumericalStatusUnknown,
-    NumericalStatusEmpty,
-    NumericalStatusMaybe,
-    NumericalStatusDefinitely,
+    Unknown,
+    Empty,
+    Maybe,
+    Definitely,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -186,13 +178,13 @@ fn variable_may_have_state(
 
 /// `variableMayBeDeclaredInteger`.
 pub fn variable_may_be_declared_integer(state: &ProgramState, var: &str) -> Option<bool> {
-    variable_may_have_state(state, var, CfVariableProp::CFVPInteger)
+    variable_may_have_state(state, var, CfVariableProp::Integer)
 }
 
 /// `variableMayBeAssignedInteger`.
 pub fn variable_may_be_assigned_integer(state: &ProgramState, var: &str) -> Option<bool> {
     let value = state.variable(var)?;
-    Some(value.variable_value.numerical_status >= NumericalStatus::NumericalStatusMaybe)
+    Some(value.variable_value.numerical_status >= NumericalStatus::Maybe)
 }
 
 // ----- versioned maps
@@ -399,24 +391,24 @@ const fn default_properties() -> VariableProperties {
 const fn unknown_variable_value() -> VariableValue {
     VariableValue {
         literal_value: None,
-        space_status: SpaceStatus::SpaceStatusDirty,
-        numerical_status: NumericalStatus::NumericalStatusUnknown,
+        space_status: SpaceStatus::Dirty,
+        numerical_status: NumericalStatus::Unknown,
     }
 }
 
 const fn empty_variable_value() -> VariableValue {
     VariableValue {
         literal_value: Some(String::new()),
-        space_status: SpaceStatus::SpaceStatusEmpty,
-        numerical_status: NumericalStatus::NumericalStatusEmpty,
+        space_status: SpaceStatus::Empty,
+        numerical_status: NumericalStatus::Empty,
     }
 }
 
 const fn unknown_integer_value() -> VariableValue {
     VariableValue {
         literal_value: None,
-        space_status: SpaceStatus::SpaceStatusClean,
-        numerical_status: NumericalStatus::NumericalStatusDefinitely,
+        space_status: SpaceStatus::Clean,
+        numerical_status: NumericalStatus::Definitely,
     }
 }
 
@@ -486,8 +478,8 @@ fn create_environment_state() -> InternalState {
     let spaceless = VariableState {
         variable_value: VariableValue {
             literal_value: None,
-            space_status: SpaceStatus::SpaceStatusClean,
-            numerical_status: NumericalStatus::NumericalStatusUnknown,
+            space_status: SpaceStatus::Clean,
+            numerical_status: NumericalStatus::Unknown,
         },
         variable_properties: default_properties(),
     };
@@ -509,35 +501,31 @@ fn create_environment_state() -> InternalState {
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
-#[allow(
-    clippy::enum_variant_names,
-    reason = "the variant names are ShellCheck's StateDependency constructors"
-)]
 enum StateDependency {
-    DepState(Scope, String, VariableState),
-    DepProperties(Scope, String, VariableProperties),
-    DepFunction(String, FunctionValue),
-    DepIsRecursive(Node, bool),
-    DepExitCodes(BTreeSet<Id>),
+    State(Scope, String, VariableState),
+    Properties(Scope, String, VariableProperties),
+    Function(String, FunctionValue),
+    IsRecursive(Node, bool),
+    ExitCodes(BTreeSet<Id>),
 }
 
 fn deps_to_state(set: &BTreeSet<StateDependency>) -> InternalState {
     let mut state = new_internal_state();
     for dep in set {
         state = match dep {
-            StateDependency::DepFunction(name, val) => insert_function(name, val.clone(), state),
-            StateDependency::DepState(scope, name, val) => {
+            StateDependency::Function(name, val) => insert_function(name, val.clone(), state),
+            StateDependency::State(scope, name, val) => {
                 insert_in(true, *scope, name, val.clone(), state)
             }
-            StateDependency::DepProperties(scope, name, props) => {
+            StateDependency::Properties(scope, name, props) => {
                 let v = VariableState {
                     variable_value: unknown_variable_value(),
                     variable_properties: *props,
                 };
                 insert_in(false, *scope, name, v, state)
             }
-            StateDependency::DepIsRecursive(..) => state,
-            StateDependency::DepExitCodes(s) => set_exit_codes(s.clone(), state),
+            StateDependency::IsRecursive(..) => state,
+            StateDependency::ExitCodes(s) => set_exit_codes(s.clone(), state),
         };
     }
     state
@@ -551,15 +539,15 @@ fn insert_in(
     state: InternalState,
 ) -> InternalState {
     let already_exists = match scope {
-        Scope::PrefixScope => vm_lookup(name, &state.prefix_values).is_some(),
-        Scope::LocalScope => vm_lookup(name, &state.local_values).is_some(),
-        Scope::GlobalScope => vm_lookup(name, &state.global_values).is_some(),
+        Scope::Prefix => vm_lookup(name, &state.prefix_values).is_some(),
+        Scope::Local => vm_lookup(name, &state.local_values).is_some(),
+        Scope::Global => vm_lookup(name, &state.global_values).is_some(),
     };
     if overwrite || !already_exists {
         match scope {
-            Scope::PrefixScope => insert_prefix(name, val, state),
-            Scope::LocalScope => insert_local(name, val, state),
-            Scope::GlobalScope => insert_global(name, val, state),
+            Scope::Prefix => insert_prefix(name, val, state),
+            Scope::Local => insert_local(name, val, state),
+            Scope::Global => insert_global(name, val, state),
         }
     } else {
         state
@@ -587,26 +575,21 @@ fn merge_variable_value(a: &VariableValue, b: &VariableValue) -> VariableValue {
 
 const fn merge_space_status(a: SpaceStatus, b: SpaceStatus) -> SpaceStatus {
     match (a, b) {
-        (SpaceStatus::SpaceStatusEmpty, y) => y,
-        (x, SpaceStatus::SpaceStatusEmpty) => x,
-        (SpaceStatus::SpaceStatusClean, SpaceStatus::SpaceStatusClean) => {
-            SpaceStatus::SpaceStatusClean
-        }
-        _ => SpaceStatus::SpaceStatusDirty,
+        (SpaceStatus::Empty, y) => y,
+        (x, SpaceStatus::Empty) => x,
+        (SpaceStatus::Clean, SpaceStatus::Clean) => SpaceStatus::Clean,
+        _ => SpaceStatus::Dirty,
     }
 }
 
 const fn merge_numerical_status(a: NumericalStatus, b: NumericalStatus) -> NumericalStatus {
-    use NumericalStatus::{
-        NumericalStatusDefinitely, NumericalStatusEmpty, NumericalStatusMaybe,
-        NumericalStatusUnknown,
-    };
+    use NumericalStatus::{Definitely, Empty, Maybe, Unknown};
     match (a, b) {
-        (NumericalStatusDefinitely, NumericalStatusDefinitely) => NumericalStatusDefinitely,
-        (NumericalStatusDefinitely, _) | (_, NumericalStatusDefinitely) => NumericalStatusMaybe,
-        (NumericalStatusMaybe, _) | (_, NumericalStatusMaybe) => NumericalStatusMaybe,
-        (NumericalStatusEmpty, NumericalStatusEmpty) => NumericalStatusEmpty,
-        _ => NumericalStatusUnknown,
+        (Definitely, Definitely) => Definitely,
+        (Definitely, _) | (_, Definitely) => Maybe,
+        (Maybe, _) | (_, Maybe) => Maybe,
+        (Empty, Empty) => Empty,
+        _ => Unknown,
     }
 }
 
@@ -797,9 +780,9 @@ impl Ctx<'_> {
             false,
             &|s| get_variable_with_scope(s, &n),
             &|(val, scope): &(VariableState, Scope)| {
-                StateDependency::DepState(*scope, n.clone(), val.clone())
+                StateDependency::State(*scope, n.clone(), val.clone())
             },
-            (unknown_variable_state(), Scope::GlobalScope),
+            (unknown_variable_state(), Scope::Global),
         )
     }
 
@@ -809,9 +792,9 @@ impl Ctx<'_> {
             false,
             &|s| get_variable_with_scope(s, &n).map(|(v, scope)| (v.variable_properties, scope)),
             &|(val, scope): &(VariableProperties, Scope)| {
-                StateDependency::DepProperties(*scope, n.clone(), *val)
+                StateDependency::Properties(*scope, n.clone(), *val)
             },
-            (default_properties(), Scope::GlobalScope),
+            (default_properties(), Scope::Global),
         )
     }
 
@@ -828,9 +811,7 @@ impl Ctx<'_> {
         self.lookup_stack(
             false,
             &|s| vm_lookup(&n, &s.global_values).cloned(),
-            &|v: &VariableState| {
-                StateDependency::DepState(Scope::GlobalScope, n.clone(), v.clone())
-            },
+            &|v: &VariableState| StateDependency::State(Scope::Global, n.clone(), v.clone()),
             unknown_variable_state(),
         )
     }
@@ -840,9 +821,7 @@ impl Ctx<'_> {
         self.lookup_stack(
             false,
             &|s| vm_lookup(&n, &s.global_values).map(|v| v.variable_properties),
-            &|v: &VariableProperties| {
-                StateDependency::DepProperties(Scope::GlobalScope, n.clone(), *v)
-            },
+            &|v: &VariableProperties| StateDependency::Properties(Scope::Global, n.clone(), *v),
             default_properties(),
         )
     }
@@ -852,7 +831,7 @@ impl Ctx<'_> {
         self.lookup_stack(
             true,
             &|s| vm_lookup(&n, &s.local_values).cloned(),
-            &|v: &VariableState| StateDependency::DepState(Scope::LocalScope, n.clone(), v.clone()),
+            &|v: &VariableState| StateDependency::State(Scope::Local, n.clone(), v.clone()),
             unset_variable_state(),
         )
     }
@@ -863,16 +842,16 @@ impl Ctx<'_> {
             true,
             &|s| {
                 vm_lookup(&n, &s.local_values)
-                    .map(|v| (v.variable_properties, Scope::LocalScope))
+                    .map(|v| (v.variable_properties, Scope::Local))
                     .or_else(|| {
                         vm_lookup(&n, &s.prefix_values)
-                            .map(|v| (v.variable_properties, Scope::PrefixScope))
+                            .map(|v| (v.variable_properties, Scope::Prefix))
                     })
             },
             &|(val, scope): &(VariableProperties, Scope)| {
-                StateDependency::DepProperties(*scope, n.clone(), *val)
+                StateDependency::Properties(*scope, n.clone(), *val)
             },
-            (default_properties(), Scope::LocalScope),
+            (default_properties(), Scope::Local),
         )
         .0
     }
@@ -882,7 +861,7 @@ impl Ctx<'_> {
         self.lookup_stack(
             false,
             &|s| vm_lookup(&n, &s.function_targets).cloned(),
-            &|v: &FunctionValue| StateDependency::DepFunction(n.clone(), v.clone()),
+            &|v: &FunctionValue| StateDependency::Function(n.clone(), v.clone()),
             unknown_function_value(),
         )
     }
@@ -891,7 +870,7 @@ impl Ctx<'_> {
         self.lookup_stack(
             false,
             &|s| s.exit_codes.as_ref().map(|r| (**r).clone()),
-            &|v: &BTreeSet<Id>| StateDependency::DepExitCodes(v.clone()),
+            &|v: &BTreeSet<Id>| StateDependency::ExitCodes(v.clone()),
             BTreeSet::new(),
         )
     }
@@ -900,8 +879,8 @@ impl Ctx<'_> {
 
     fn write_variable(&mut self, name: &str, val: VariableState) {
         match self.read_variable_scope(name) {
-            Scope::GlobalScope => self.write_global(name, val),
-            Scope::LocalScope | Scope::PrefixScope => self.write_local(name, val),
+            Scope::Global => self.write_global(name, val),
+            Scope::Local | Scope::Prefix => self.write_local(name, val),
         }
     }
 
@@ -928,8 +907,8 @@ impl Ctx<'_> {
             variable_properties: props,
         };
         match scope {
-            Scope::GlobalScope => self.write_global(name, v),
-            Scope::LocalScope | Scope::PrefixScope => self.write_local(name, v),
+            Scope::Global => self.write_global(name, v),
+            Scope::Local | Scope::Prefix => self.write_local(name, v),
         }
     }
 
@@ -1112,35 +1091,33 @@ impl Ctx<'_> {
 
     fn fulfills_dependency(&self, entry: Node, dep: &StateDependency) -> bool {
         let peek = |scope: Scope, name: &str| -> (VariableState, Scope) {
-            let def = if scope == Scope::GlobalScope {
-                (unknown_variable_state(), Scope::GlobalScope)
+            let def = if scope == Scope::Global {
+                (unknown_variable_state(), Scope::Global)
             } else {
-                (unset_variable_state(), Scope::LocalScope)
+                (unset_variable_state(), Scope::Local)
             };
             self.peek_stack(&|s| get_variable_with_scope(s, name), def)
         };
         match dep {
-            StateDependency::DepState(scope, name, val) => {
-                peek(*scope, name) == (val.clone(), *scope)
-            }
-            StateDependency::DepProperties(scope, name, props) => {
+            StateDependency::State(scope, name, val) => peek(*scope, name) == (val.clone(), *scope),
+            StateDependency::Properties(scope, name, props) => {
                 let (state, s) = peek(*scope, name);
                 *scope == s && state.variable_properties == *props
             }
-            StateDependency::DepFunction(name, val) => {
+            StateDependency::Function(name, val) => {
                 self.peek_stack(
                     &|s| vm_lookup(name, &s.function_targets).cloned(),
                     unknown_function_value(),
                 ) == *val
             }
-            StateDependency::DepIsRecursive(node, val) => {
+            StateDependency::IsRecursive(node, val) => {
                 if *node == entry {
                     true
                 } else {
                     *val == self.stack.iter().any(|f| f.entry_point == *node)
                 }
             }
-            StateDependency::DepExitCodes(val) => {
+            StateDependency::ExitCodes(val) => {
                 self.peek_stack(
                     &|s| s.exit_codes.as_ref().map(|r| (**r).clone()),
                     BTreeSet::new(),
@@ -1221,7 +1198,7 @@ impl Ctx<'_> {
         };
         for s in &mut self.stack[from..] {
             s.dependencies
-                .insert(StateDependency::DepIsRecursive(node, res));
+                .insert(StateDependency::IsRecursive(node, res));
         }
         res
     }
@@ -1243,27 +1220,27 @@ impl Ctx<'_> {
 
     fn transfer(&mut self, label: &CfNode) {
         match label {
-            CfNode::CFStructuralNode
-            | CfNode::CFEntryPoint(_)
-            | CfNode::CFImpliedExit
-            | CfNode::CFResolvedExit
-            | CfNode::CFSetBackgroundPid(_) => {}
-            CfNode::CFExecuteCommand(cmd) => self.transfer_command(cmd.as_deref()),
-            CfNode::CFExecuteSubshell(_, entry, exit) => self.transfer_subshell(*entry, *exit),
-            CfNode::CFApplyEffects(effects) => {
+            CfNode::StructuralNode
+            | CfNode::EntryPoint(_)
+            | CfNode::ImpliedExit
+            | CfNode::ResolvedExit
+            | CfNode::SetBackgroundPid(_) => {}
+            CfNode::ExecuteCommand(cmd) => self.transfer_command(cmd.as_deref()),
+            CfNode::ExecuteSubshell(_, entry, exit) => self.transfer_subshell(*entry, *exit),
+            CfNode::ApplyEffects(effects) => {
                 for IdTagged(_, f) in effects {
                     self.transfer_effect(f);
                 }
             }
-            CfNode::CFSetExitCode(id) => {
+            CfNode::SetExitCode(id) => {
                 let mut set = BTreeSet::new();
                 set.insert(*id);
                 self.modify_output(|s| set_exit_codes(set, s));
             }
-            CfNode::CFUnresolvedExit | CfNode::CFUnreachable => {
+            CfNode::UnresolvedExit | CfNode::Unreachable => {
                 self.patch_output(&unreachable_state());
             }
-            CfNode::CFDropPrefixAssignments => self.modify_output(|mut c| {
+            CfNode::DropPrefixAssignments => self.modify_output(|mut c| {
                 c.prefix_values = vm_empty();
                 modified(c)
             }),
@@ -1332,68 +1309,68 @@ impl Ctx<'_> {
 
     fn transfer_effect(&mut self, effect: &CfEffect) {
         match effect {
-            CfEffect::CFReadVariable(name) => {
+            CfEffect::ReadVariable(name) => {
                 if name == "?" {
                     self.read_exit_codes();
                 } else {
                     self.read_variable(name);
                 }
             }
-            CfEffect::CFWriteVariable(name, value) => {
+            CfEffect::WriteVariable(name, value) => {
                 let v = self.cf_value_to_variable_value(value);
                 self.update_variable_value(name, v);
             }
-            CfEffect::CFWriteGlobal(name, value) => {
+            CfEffect::WriteGlobal(name, value) => {
                 let v = self.cf_value_to_variable_value(value);
                 self.update_global_value(name, v);
             }
-            CfEffect::CFWriteLocal(name, value) => {
+            CfEffect::WriteLocal(name, value) => {
                 let v = self.cf_value_to_variable_value(value);
                 self.update_local_value(name, v);
             }
-            CfEffect::CFWritePrefix(name, value) => {
+            CfEffect::WritePrefix(name, value) => {
                 let v = self.cf_value_to_variable_value(value);
                 self.update_prefix_value(name, v);
             }
-            CfEffect::CFSetProps(scope, name, props) => match scope {
+            CfEffect::SetProps(scope, name, props) => match scope {
                 None => {
                     let state = self.read_variable(name);
                     self.write_variable(name, add_properties(*props, state));
                 }
-                Some(Scope::GlobalScope) => {
+                Some(Scope::Global) => {
                     let state = self.read_global(name);
                     self.write_global(name, add_properties(*props, state));
                 }
-                Some(Scope::LocalScope | Scope::PrefixScope) => {
+                Some(Scope::Local | Scope::Prefix) => {
                     let state = self.read_local(name);
                     self.write_local(name, add_properties(*props, state));
                 }
             },
-            CfEffect::CFUnsetProps(scope, name, props) => match scope {
+            CfEffect::UnsetProps(scope, name, props) => match scope {
                 None => {
                     let state = self.read_variable(name);
                     self.write_variable(name, remove_properties(*props, state));
                 }
-                Some(Scope::GlobalScope) => {
+                Some(Scope::Global) => {
                     let state = self.read_global(name);
                     self.write_global(name, remove_properties(*props, state));
                 }
-                Some(Scope::LocalScope | Scope::PrefixScope) => {
+                Some(Scope::Local | Scope::Prefix) => {
                     let state = self.read_local(name);
                     self.write_local(name, remove_properties(*props, state));
                 }
             },
-            CfEffect::CFUndefineVariable(name) | CfEffect::CFUndefineNameref(name) => {
+            CfEffect::UndefineVariable(name) | CfEffect::UndefineNameref(name) => {
                 self.write_variable(name, unset_variable_state());
             }
-            CfEffect::CFUndefineFunction(name) => {
+            CfEffect::UndefineFunction(name) => {
                 self.write_function(name, FunctionDefinition::FunctionUnknown);
             }
-            CfEffect::CFUndefine(name) => {
+            CfEffect::Undefine(name) => {
                 self.write_variable(name, unset_variable_state());
                 self.write_function(name, FunctionDefinition::FunctionUnknown);
             }
-            CfEffect::CFDefineFunction(name, _, entry, exit) => {
+            CfEffect::DefineFunction(name, _, entry, exit) => {
                 self.write_function(
                     name,
                     FunctionDefinition::FunctionDefinition(
@@ -1403,15 +1380,15 @@ impl Ctx<'_> {
                     ),
                 );
             }
-            CfEffect::CFHintArray(_) => {}
+            CfEffect::HintArray(_) => {}
         }
     }
 
     fn cf_value_to_variable_value(&mut self, val: &CfValue) -> VariableValue {
         match val {
-            CfValue::CFValueArray | CfValue::CFValueString => unknown_variable_value(),
-            CfValue::CFValueInteger => unknown_integer_value(),
-            CfValue::CFValueComputed(_, parts) => {
+            CfValue::Array | CfValue::String => unknown_variable_value(),
+            CfValue::Integer => unknown_integer_value(),
+            CfValue::Computed(_, parts) => {
                 let mut acc = empty_variable_value();
                 for part in parts {
                     let next = self.compute_value(part);
@@ -1424,14 +1401,14 @@ impl Ctx<'_> {
 
     fn compute_value(&mut self, part: &CfStringPart) -> VariableValue {
         match part {
-            CfStringPart::CFStringLiteral(s) => literal_to_variable_value(s),
-            CfStringPart::CFStringInteger => unknown_integer_value(),
-            CfStringPart::CFStringUnknown => unknown_variable_value(),
-            CfStringPart::CFStringVariable(name) => {
+            CfStringPart::Literal(s) => literal_to_variable_value(s),
+            CfStringPart::Integer => unknown_integer_value(),
+            CfStringPart::Unknown => unknown_variable_value(),
+            CfStringPart::Variable(name) => {
                 let state = self.read_variable(name);
                 if state
                     .variable_properties
-                    .all_contain(CfVariableProp::CFVPInteger)
+                    .all_contain(CfVariableProp::Integer)
                 {
                     unknown_integer_value()
                 } else {
@@ -1450,7 +1427,7 @@ impl Ctx<'_> {
                 label,
                 incoming_flow: incoming
                     .into_iter()
-                    .filter(|(l, _)| *l == CfEdge::CFEFlow)
+                    .filter(|(l, _)| *l == CfEdge::Flow)
                     .map(|(_, n)| n)
                     .collect(),
                 outgoing: outgoing.into_iter().map(|(_, n)| n).collect(),
@@ -1546,13 +1523,13 @@ impl Ctx<'_> {
 fn get_variable_with_scope(s: &InternalState, name: &str) -> Option<(VariableState, Scope)> {
     let n = name.to_string();
     if let Some(v) = vm_lookup(&n, &s.prefix_values) {
-        return Some((v.clone(), Scope::PrefixScope));
+        return Some((v.clone(), Scope::Prefix));
     }
     if let Some(v) = vm_lookup(&n, &s.local_values) {
-        return Some((v.clone(), Scope::LocalScope));
+        return Some((v.clone(), Scope::Local));
     }
     if let Some(v) = vm_lookup(&n, &s.global_values) {
-        return Some((v.clone(), Scope::GlobalScope));
+        return Some((v.clone(), Scope::Global));
     }
     None
 }
@@ -1570,23 +1547,20 @@ fn append_variable_value(a: &VariableValue, b: &VariableValue) -> VariableValue 
 
 const fn append_space_status(a: SpaceStatus, b: SpaceStatus) -> SpaceStatus {
     match (a, b) {
-        (SpaceStatus::SpaceStatusEmpty, _) => b,
-        (_, SpaceStatus::SpaceStatusEmpty) => a,
-        (SpaceStatus::SpaceStatusClean, SpaceStatus::SpaceStatusClean) => a,
-        _ => SpaceStatus::SpaceStatusDirty,
+        (SpaceStatus::Empty, _) => b,
+        (_, SpaceStatus::Empty) => a,
+        (SpaceStatus::Clean, SpaceStatus::Clean) => a,
+        _ => SpaceStatus::Dirty,
     }
 }
 
 const fn append_numerical_status(a: NumericalStatus, b: NumericalStatus) -> NumericalStatus {
-    use NumericalStatus::{
-        NumericalStatusDefinitely, NumericalStatusEmpty, NumericalStatusMaybe,
-        NumericalStatusUnknown,
-    };
+    use NumericalStatus::{Definitely, Empty, Maybe, Unknown};
     match (a, b) {
-        (NumericalStatusEmpty, x) | (x, NumericalStatusEmpty) => x,
-        (NumericalStatusDefinitely, NumericalStatusDefinitely) => NumericalStatusDefinitely,
-        (NumericalStatusUnknown, _) | (_, NumericalStatusUnknown) => NumericalStatusUnknown,
-        _ => NumericalStatusMaybe,
+        (Empty, x) | (x, Empty) => x,
+        (Definitely, Definitely) => Definitely,
+        (Unknown, _) | (_, Unknown) => Unknown,
+        _ => Maybe,
     }
 }
 
@@ -1600,23 +1574,23 @@ fn literal_to_variable_value(s: &str) -> VariableValue {
 
 fn literal_to_space_status(s: &str) -> SpaceStatus {
     if s.is_empty() {
-        SpaceStatus::SpaceStatusEmpty
+        SpaceStatus::Empty
     } else if s.chars().all(|c| !" \t\n*?[".contains(c)) {
-        SpaceStatus::SpaceStatusClean
+        SpaceStatus::Clean
     } else {
-        SpaceStatus::SpaceStatusDirty
+        SpaceStatus::Dirty
     }
 }
 
 fn literal_to_numerical_status(s: &str) -> NumericalStatus {
     if s.is_empty() {
-        return NumericalStatus::NumericalStatusEmpty;
+        return NumericalStatus::Empty;
     }
     let rest = s.strip_prefix('-').unwrap_or(s);
     if rest.chars().all(|c| c.is_ascii_digit()) {
-        NumericalStatus::NumericalStatusDefinitely
+        NumericalStatus::Definitely
     } else {
-        NumericalStatus::NumericalStatusUnknown
+        NumericalStatus::Unknown
     }
 }
 

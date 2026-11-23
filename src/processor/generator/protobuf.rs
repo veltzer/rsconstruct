@@ -53,7 +53,7 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     name: "protobuf", processor_type: crate::processor::ProcessorType::Generator, create: create_protobuf,
     fields: &[],
     omit_standard_fields: &["formats", "batch"],
-    scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &[".proto"], src_exclude_dirs: &[] }),
+    scan_defaults: Some(crate::config::ScanDefaultsData { src_extensions: &[".proto"], src_exclude_dirs: &[] }),
     defaults: Some(crate::config::ProcessorDefaults { output_dir: "out/processor.generator.protobuf", command: "protoc", ..crate::config::ProcessorDefaults::EMPTY }),
     defconfig_json: crate::registries::default_config_json::<crate::config::StandardConfig>,
     keywords: &["protobuf", "proto", "generator", "grpc", "serialization"],

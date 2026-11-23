@@ -157,23 +157,20 @@ impl ObjectStore {
     }
 
     /// Try to push a descriptor to remote cache
-    #[allow(clippy::unnecessary_wraps)] // Result kept for API symmetry with try_fetch_*.
     pub(super) fn try_push_descriptor_to_remote(
         &self,
         ctx: &crate::build_context::BuildContext,
         descriptor_key: &str,
         data: &[u8],
-    ) -> Result<()> {
+    ) {
         let Some(remote) = &self.remote else {
-            return Ok(());
+            return;
         };
 
         let remote_key = format!("descriptors/{descriptor_key}");
         if let Err(e) = remote.upload_bytes(ctx, &remote_key, data) {
             crate::output::warn(&format!("failed to push descriptor to remote cache: {e}"));
         }
-
-        Ok(())
     }
 
     /// Try to fetch a descriptor from remote cache, caching it locally.

@@ -142,7 +142,7 @@ inventory::submit! {
         create: plugin_create,
         fields: &[],
         omit_standard_fields: &["formats", "dep_auto", "output_dir", "batch"],
-        scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &["uv.lock"], src_exclude_dirs: &[] }),
+        scan_defaults: Some(crate::config::ScanDefaultsData { src_extensions: &["uv.lock"], src_exclude_dirs: &[] }),
         // `--locked` fails when uv.lock is out of date with pyproject.toml
         // instead of quietly re-resolving it during a build.
         defaults: Some(crate::config::ProcessorDefaults { command: "uv", args: &["--locked"], ..crate::config::ProcessorDefaults::EMPTY }),

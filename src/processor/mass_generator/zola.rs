@@ -9,10 +9,6 @@
 //! not model it refuses by name instead of guessing, and the plan-vs-build
 //! check fails the build if the plan and zola's output ever disagree.
 
-// Every suffix test here (`.md`, `.html`, `.scss`) is case-sensitive on
-// purpose: zola compares exactly, and the planner exists to match zola.
-#![allow(clippy::case_sensitive_file_extension_comparisons)]
-
 use anyhow::{Context, Result};
 use parking_lot::Mutex;
 use regex::Regex;
@@ -41,6 +37,13 @@ const ZOLA_VERSION: &str = "0.23.3";
 /// Above this many URLs zola splits the sitemap into `sitemapN.xml` files,
 /// which this planner does not model.
 const SITEMAP_SPLIT: usize = 30_000;
+
+/// Whether `name` has the extension `ext` (no dot). The comparison is
+/// case-sensitive on purpose: zola compares exactly, and the planner exists
+/// to match zola.
+fn has_extension(name: &str, ext: &str) -> bool {
+    Path::new(name).extension().is_some_and(|e| e == ext)
+}
 
 /// Zola processor config.
 /// Custom fields: `root`, `loose_manifest`. `output_dir` (standard) overrides
@@ -772,7 +775,10 @@ impl Site {
                     .unwrap_or_default()
                     .to_string_lossy()
                     .into_owned();
-                if name.starts_with("_index.") || name.starts_with('.') || !name.ends_with(".md") {
+                if name.starts_with("_index.")
+                    || name.starts_with('.')
+                    || !has_extension(&name, "md")
+                {
                     continue;
                 }
                 page_files.push(file);
@@ -1006,7 +1012,7 @@ impl Site {
             .chain(self.sections.iter().flat_map(|s| &s.meta.aliases));
         for alias in aliases {
             let mut path = alias.trim_start_matches('/').to_string();
-            if !path.ends_with(".html") {
+            if !has_extension(&path, "html") {
                 if !path.is_empty() && !path.ends_with('/') {
                     path.push('/');
                 }
@@ -1093,7 +1099,7 @@ impl Site {
         self.plan_sass(&mut plan)?;
         self.plan_static(&mut plan)?;
 
-        let html = plan.keys().filter(|p| p.ends_with(".html")).count();
+        let html = plan.keys().filter(|p| has_extension(p, "html")).count();
         if html >= SITEMAP_SPLIT {
             anyhow::bail!(
                 "the site renders {html} HTML files; at {SITEMAP_SPLIT} sitemap entries zola \
@@ -1263,7 +1269,7 @@ impl Site {
         for file in &all {
             let rel = relative_slash_path(&sass_dir, file);
             let partial = rel.split('/').any(|part| part.starts_with('_'));
-            let is_sass = rel.ends_with(".sass") || rel.ends_with(".scss");
+            let is_sass = has_extension(&rel, "sass") || has_extension(&rel, "scss");
             if partial || !is_sass {
                 continue;
             }
@@ -1490,7 +1496,7 @@ inventory::submit! {
                 doc: "Report plan-vs-build mismatches as warnings instead of failing the build" },
         ],
         omit_standard_fields: &["formats", "dep_auto", "batch"],
-        scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &[], src_exclude_dirs: &[] }),
+        scan_defaults: Some(crate::config::ScanDefaultsData { src_extensions: &[], src_exclude_dirs: &[] }),
         defaults: Some(crate::config::ProcessorDefaults { command: "zola", ..crate::config::ProcessorDefaults::EMPTY }),
         defconfig_json: crate::registries::default_config_json::<ZolaConfig>,
         keywords: &["zola", "static-site", "site", "html", "blog", "mass", "rust"],

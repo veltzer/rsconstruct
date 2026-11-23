@@ -169,7 +169,7 @@ impl Doc {
         self.tree
             .node(node)
             .tag
-            .map_or(TagId::UNKNOWN, |t| self.tags[t].id)
+            .map_or(TagId::Unknown, |t| self.tags[t].id)
     }
 
     /// `TagIsId(node, tid)`.
@@ -229,7 +229,7 @@ impl Doc {
         if let Some(existing) = self.lookup_tag(name) {
             // Never overwrite a predefined tag; a redeclared user tag gains
             // the new model bits (tidy ORs them in).
-            if self.tags[existing].id == TagId::UNKNOWN {
+            if self.tags[existing].id == TagId::Unknown {
                 self.tags[existing].versions = tables::VERS_PROPRIETARY;
                 self.tags[existing].model |= model;
                 self.tags[existing].parser = Some(parser);
@@ -239,7 +239,7 @@ impl Doc {
             return;
         }
         self.tags.push(TagDef {
-            id: TagId::UNKNOWN,
+            id: TagId::Unknown,
             name: name.to_string(),
             versions: tables::VERS_PROPRIETARY,
             attrvers: None,
@@ -283,12 +283,12 @@ impl Doc {
         let a = self.tag_index(TagId::A);
         self.tags[a].parser = Some(tables::ParserKind::ParseBlock);
         self.tags[a].model = tables::CM_INLINE | tables::CM_BLOCK | tables::CM_MIXED;
-        let caption = self.tag_index(TagId::CAPTION);
+        let caption = self.tag_index(TagId::Caption);
         self.tags[caption].parser = Some(tables::ParserKind::ParseBlock);
-        let object = self.tag_index(TagId::OBJECT);
+        let object = self.tag_index(TagId::Object);
         self.tags[object].model =
             tables::CM_OBJECT | tables::CM_IMG | tables::CM_INLINE | tables::CM_PARAM;
-        let button = self.tag_index(TagId::BUTTON);
+        let button = self.tag_index(TagId::Button);
         self.tags[button].parser = Some(tables::ParserKind::ParseInline);
         self.html5_mode = true;
     }
@@ -298,11 +298,11 @@ impl Doc {
         let a = self.tag_index(TagId::A);
         self.tags[a].parser = Some(tables::ParserKind::ParseInline);
         self.tags[a].model = tables::CM_INLINE;
-        let caption = self.tag_index(TagId::CAPTION);
+        let caption = self.tag_index(TagId::Caption);
         self.tags[caption].parser = Some(tables::ParserKind::ParseInline);
-        let object = self.tag_index(TagId::OBJECT);
+        let object = self.tag_index(TagId::Object);
         self.tags[object].model |= tables::CM_HEAD;
-        let button = self.tag_index(TagId::BUTTON);
+        let button = self.tag_index(TagId::Button);
         self.tags[button].parser = Some(tables::ParserKind::ParseBlock);
         self.html5_mode = false;
     }
@@ -323,7 +323,7 @@ impl Doc {
     pub(crate) fn find_html(&self) -> Option<NodeId> {
         let mut node = self.tree.content(0);
         while let Some(n) = node {
-            if self.node_is(n, TagId::HTML) {
+            if self.node_is(n, TagId::Html) {
                 return Some(n);
             }
             node = self.tree.next(n);
@@ -346,7 +346,7 @@ impl Doc {
         let html = self.find_html()?;
         let mut node = self.tree.content(html);
         while let Some(n) = node {
-            if self.node_is(n, TagId::HEAD) {
+            if self.node_is(n, TagId::Head) {
                 return Some(n);
             }
             node = self.tree.next(n);
@@ -358,7 +358,7 @@ impl Doc {
         let head = self.find_head()?;
         let mut node = self.tree.content(head);
         while let Some(n) = node {
-            if self.node_is(n, TagId::TITLE) {
+            if self.node_is(n, TagId::Title) {
                 return Some(n);
             }
             node = self.tree.next(n);
@@ -370,16 +370,16 @@ impl Doc {
         let html = self.find_html()?;
         let mut node = self.tree.content(html);
         while let Some(n) = node {
-            if self.node_is(n, TagId::BODY) || self.node_is(n, TagId::FRAMESET) {
+            if self.node_is(n, TagId::Body) || self.node_is(n, TagId::Frameset) {
                 break;
             }
             node = self.tree.next(n);
         }
         let mut node = node?;
-        if self.node_is(node, TagId::FRAMESET) {
+        if self.node_is(node, TagId::Frameset) {
             let mut child = self.tree.content(node);
             while let Some(c) = child {
-                if self.node_is(c, TagId::NOFRAMES) {
+                if self.node_is(c, TagId::Noframes) {
                     break;
                 }
                 child = self.tree.next(c);
@@ -387,7 +387,7 @@ impl Doc {
             let noframes = child?;
             let mut inner = self.tree.content(noframes);
             while let Some(c) = inner {
-                if self.node_is(c, TagId::BODY) {
+                if self.node_is(c, TagId::Body) {
                     break;
                 }
                 inner = self.tree.next(c);

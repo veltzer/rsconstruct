@@ -19,10 +19,10 @@ use super::tables::{
 };
 
 /// `CheckForCopyright`: a "Copyright" within the first ten lines.
-pub fn check_for_copyright(lint: &mut Lint<'_>, lines: &[String]) {
+pub fn check_for_copyright(sink: &mut Lint<'_>, lines: &[String]) {
     let limit = lines.len().min(11);
     if !(1..limit).any(|i| is_search("(?i)Copyright", &lines[i])) {
-        lint.error(
+        sink.error(
             0,
             "legal/copyright",
             5,
@@ -32,7 +32,7 @@ pub fn check_for_copyright(lint: &mut Lint<'_>, lines: &[String]) {
 }
 
 /// `CheckForHeaderGuard`.
-pub fn check_for_header_guard(lint: &mut Lint<'_>, cl: &CleansedLines, cppvar: &str) {
+pub fn check_for_header_guard(sink: &mut Lint<'_>, cl: &CleansedLines, cppvar: &str) {
     let raw_lines = &cl.lines_without_raw_strings;
     if raw_lines
         .iter()
@@ -68,7 +68,7 @@ pub fn check_for_header_guard(lint: &mut Lint<'_>, cl: &CleansedLines, cppvar: &
         }
     }
     if ifndef.is_empty() || define.is_empty() || ifndef != define {
-        lint.error(
+        sink.error(
             0,
             "build/header_guard",
             5,
@@ -78,19 +78,19 @@ pub fn check_for_header_guard(lint: &mut Lint<'_>, cl: &CleansedLines, cppvar: &
     }
     if ifndef != cppvar {
         let error_level = if ifndef == format!("{cppvar}_") { 0 } else { 5 };
-        lint.parse_nolint_suppressions(&raw_lines[ifndef_linenum], ifndef_linenum);
-        lint.error(
+        sink.parse_nolint_suppressions(&raw_lines[ifndef_linenum], ifndef_linenum);
+        sink.error(
             ifndef_linenum,
             "build/header_guard",
             error_level,
             format!("#ifndef header guard has wrong style, please use: {cppvar}"),
         );
     }
-    lint.parse_nolint_suppressions(&raw_lines[endif_linenum], endif_linenum);
+    sink.parse_nolint_suppressions(&raw_lines[endif_linenum], endif_linenum);
     let escaped = escape(cppvar);
     if let Some(m) = pmatch(&format!(r"#endif\s*//\s*{escaped}(_)?\b"), endif) {
         if group(&m, 1) == Some("_") {
-            lint.error(
+            sink.error(
                 endif_linenum,
                 "build/header_guard",
                 0,
@@ -117,7 +117,7 @@ pub fn check_for_header_guard(lint: &mut Lint<'_>, cl: &CleansedLines, cppvar: &
         && let Some(m) = pmatch(&format!(r"#endif\s*/\*\s*{escaped}(_)?\s*\*/"), endif)
     {
         if group(&m, 1) == Some("_") {
-            lint.error(
+            sink.error(
                 endif_linenum,
                 "build/header_guard",
                 0,
@@ -126,7 +126,7 @@ pub fn check_for_header_guard(lint: &mut Lint<'_>, cl: &CleansedLines, cppvar: &
         }
         return;
     }
-    lint.error(
+    sink.error(
         endif_linenum,
         "build/header_guard",
         5,
@@ -135,10 +135,10 @@ pub fn check_for_header_guard(lint: &mut Lint<'_>, cl: &CleansedLines, cppvar: &
 }
 
 /// `CheckForBadCharacters`: replacement characters and NUL bytes.
-pub fn check_for_bad_characters(lint: &mut Lint<'_>, lines: &[String]) {
+pub fn check_for_bad_characters(sink: &mut Lint<'_>, lines: &[String]) {
     for (linenum, line) in lines.iter().enumerate() {
         if line.contains('\u{fffd}') {
-            lint.error(
+            sink.error(
                 linenum,
                 "readability/utf8",
                 5,
@@ -146,7 +146,7 @@ pub fn check_for_bad_characters(lint: &mut Lint<'_>, lines: &[String]) {
             );
         }
         if line.contains('\0') {
-            lint.error(
+            sink.error(
                 linenum,
                 "readability/nul",
                 5,
@@ -157,9 +157,9 @@ pub fn check_for_bad_characters(lint: &mut Lint<'_>, lines: &[String]) {
 }
 
 /// `CheckForNewlineAtEOF`.
-pub fn check_for_newline_at_eof(lint: &mut Lint<'_>, lines: &[String]) {
+pub fn check_for_newline_at_eof(sink: &mut Lint<'_>, lines: &[String]) {
     if lines.len() < 3 || !lines[lines.len() - 2].is_empty() {
-        lint.error(
+        sink.error(
             lines.len().saturating_sub(2),
             "whitespace/ending_newline",
             5,
@@ -170,13 +170,13 @@ pub fn check_for_newline_at_eof(lint: &mut Lint<'_>, lines: &[String]) {
 
 /// `CheckForMultilineCommentsAndStrings`.
 pub fn check_for_multiline_comments_and_strings(
-    lint: &mut Lint<'_>,
+    sink: &mut Lint<'_>,
     cl: &CleansedLines,
     linenum: usize,
 ) {
     let line = cl.elided[linenum].replace("\\\\", "");
     if count(&line, "/*") > count(&line, "*/") {
-        lint.error(
+        sink.error(
             linenum,
             "readability/multiline_comment",
             5,
@@ -184,7 +184,7 @@ pub fn check_for_multiline_comments_and_strings(
         );
     }
     if (count(&line, "\"") - count(&line, "\\\"")) % 2 == 1 {
-        lint.error(
+        sink.error(
             linenum,
             "readability/multiline_string",
             5,
@@ -194,11 +194,11 @@ pub fn check_for_multiline_comments_and_strings(
 }
 
 /// `CheckPosixThreading`.
-pub fn check_posix_threading(lint: &mut Lint<'_>, cl: &CleansedLines, linenum: usize) {
+pub fn check_posix_threading(sink: &mut Lint<'_>, cl: &CleansedLines, linenum: usize) {
     let line = &cl.elided[linenum];
     for (single, multi, pattern) in THREADING_LIST {
         if is_search(pattern, line) {
-            lint.error(
+            sink.error(
                 linenum,
                 "runtime/threadsafe_fn",
                 2,
@@ -211,12 +211,12 @@ pub fn check_posix_threading(lint: &mut Lint<'_>, cl: &CleansedLines, linenum: u
 }
 
 /// `CheckVlogArguments`.
-pub fn check_vlog_arguments(lint: &mut Lint<'_>, cl: &CleansedLines, linenum: usize) {
+pub fn check_vlog_arguments(sink: &mut Lint<'_>, cl: &CleansedLines, linenum: usize) {
     if is_search(
         r"\bVLOG\((INFO|ERROR|WARNING|DFATAL|FATAL)\)",
         &cl.elided[linenum],
     ) {
-        lint.error(
+        sink.error(
             linenum,
             "runtime/vlog",
             5,
@@ -227,9 +227,9 @@ pub fn check_vlog_arguments(lint: &mut Lint<'_>, cl: &CleansedLines, linenum: us
 }
 
 /// `CheckInvalidIncrement`.
-pub fn check_invalid_increment(lint: &mut Lint<'_>, cl: &CleansedLines, linenum: usize) {
+pub fn check_invalid_increment(sink: &mut Lint<'_>, cl: &CleansedLines, linenum: usize) {
     if is_match(r"\s*\*\w+(\+\+|--);", &cl.elided[linenum]) {
-        lint.error(
+        sink.error(
             linenum,
             "runtime/invalid_increment",
             5,
@@ -240,14 +240,14 @@ pub fn check_invalid_increment(lint: &mut Lint<'_>, cl: &CleansedLines, linenum:
 
 /// `CheckForNonStandardConstructs`.
 pub fn check_for_non_standard_constructs(
-    lint: &mut Lint<'_>,
+    sink: &mut Lint<'_>,
     cl: &CleansedLines,
     linenum: usize,
     nesting: &NestingState,
 ) {
     let line = &cl.lines[linenum];
     if is_search(r#"printf\s*\(.*".*%[-+ ]?\d*q"#, line) {
-        lint.error(
+        sink.error(
             linenum,
             "runtime/printf_format",
             3,
@@ -255,7 +255,7 @@ pub fn check_for_non_standard_constructs(
         );
     }
     if is_search(r#"printf\s*\(.*".*%\d+\$"#, line) {
-        lint.error(
+        sink.error(
             linenum,
             "runtime/printf_format",
             2,
@@ -264,7 +264,7 @@ pub fn check_for_non_standard_constructs(
     }
     let line = line.replace("\\\\", "");
     if is_search(r#"("|').*\\(%|\[|\(|{)"#, &line) {
-        lint.error(
+        sink.error(
             linenum,
             "build/printf_format",
             3,
@@ -276,7 +276,7 @@ pub fn check_for_non_standard_constructs(
         r"\b(const|volatile|void|char|short|int|long|float|double|signed|unsigned|schar|u?int8_t|u?int16_t|u?int32_t|u?int64_t)\s+(register|static|extern|typedef)\b",
         line,
     ) {
-        lint.error(
+        sink.error(
             linenum,
             "build/storage_class",
             5,
@@ -285,7 +285,7 @@ pub fn check_for_non_standard_constructs(
         );
     }
     if is_match(r"\s*#\s*endif\s*[^/\s]+", line) {
-        lint.error(
+        sink.error(
             linenum,
             "build/endif_comment",
             5,
@@ -293,7 +293,7 @@ pub fn check_for_non_standard_constructs(
         );
     }
     if is_match(r"\s*class\s+(\w+\s*::\s*)+\w+\s*;", line) {
-        lint.error(
+        sink.error(
             linenum,
             "build/forward_decl",
             5,
@@ -304,7 +304,7 @@ pub fn check_for_non_standard_constructs(
         r"(\w+|[+-]?\d+(\.\d*)?)\s*(<|>)\?=?\s*(\w+|[+-]?\d+)(\.\d*)?",
         line,
     ) {
-        lint.error(
+        sink.error(
             linenum,
             "build/deprecated",
             3,
@@ -312,7 +312,7 @@ pub fn check_for_non_standard_constructs(
         );
     }
     if is_search(r"^\s*const\s*string\s*&\s*\w+\s*;", line) {
-        lint.error(
+        sink.error(
             linenum,
             "runtime/member_string_references",
             2,
@@ -378,14 +378,14 @@ pub fn check_for_non_standard_constructs(
         && !copy_constructor
     {
         if defaulted_args > 0 || variadic_args > 0 {
-            lint.error(
+            sink.error(
                 linenum,
                 "runtime/explicit",
                 4,
                 "Constructors callable with one argument should be marked explicit.".to_string(),
             );
         } else {
-            lint.error(
+            sink.error(
                 linenum,
                 "runtime/explicit",
                 4,
@@ -396,7 +396,7 @@ pub fn check_for_non_standard_constructs(
 }
 
 /// `CheckSpacingForFunctionCall`.
-pub fn check_spacing_for_function_call(lint: &mut Lint<'_>, cl: &CleansedLines, linenum: usize) {
+pub fn check_spacing_for_function_call(sink: &mut Lint<'_>, cl: &CleansedLines, linenum: usize) {
     let line = &cl.elided[linenum];
     let mut fncall = line.as_str();
     for pattern in [
@@ -419,14 +419,14 @@ pub fn check_spacing_for_function_call(lint: &mut Lint<'_>, cl: &CleansedLines, 
         return;
     }
     if is_search(r"\w\s*\(\s(?!\s*\\$)", fncall) {
-        lint.error(
+        sink.error(
             linenum,
             "whitespace/parens",
             4,
             "Extra space after ( in function call".to_string(),
         );
     } else if is_search(r"\(\s+(?!(\s*\\)|\()", fncall) {
-        lint.error(
+        sink.error(
             linenum,
             "whitespace/parens",
             2,
@@ -440,14 +440,14 @@ pub fn check_spacing_for_function_call(lint: &mut Lint<'_>, cl: &CleansedLines, 
         && !is_search(r"\bcase\s+\(", fncall)
     {
         if is_search(r"\boperator_*\b", line) {
-            lint.error(
+            sink.error(
                 linenum,
                 "whitespace/parens",
                 0,
                 "Extra space before ( in function call".to_string(),
             );
         } else {
-            lint.error(
+            sink.error(
                 linenum,
                 "whitespace/parens",
                 4,
@@ -457,14 +457,14 @@ pub fn check_spacing_for_function_call(lint: &mut Lint<'_>, cl: &CleansedLines, 
     }
     if is_search(r"[^)]\s+\)\s*[^{\s]", fncall) {
         if is_search(r"^\s+\)", fncall) {
-            lint.error(
+            sink.error(
                 linenum,
                 "whitespace/parens",
                 2,
                 "Closing ) should be moved to the previous line".to_string(),
             );
         } else {
-            lint.error(
+            sink.error(
                 linenum,
                 "whitespace/parens",
                 2,
@@ -546,7 +546,7 @@ fn should_check_namespace_indentation(
 
 /// `CheckForNamespaceIndentation`.
 pub fn check_for_namespace_indentation(
-    lint: &mut Lint<'_>,
+    sink: &mut Lint<'_>,
     nesting: &NestingState,
     cl: &CleansedLines,
     linenum: usize,
@@ -557,7 +557,7 @@ pub fn check_for_namespace_indentation(
     if should_check_namespace_indentation(nesting, is_namespace_indent_item, &cl.elided, linenum)
         && is_match(r"\s+", &cl.elided[linenum])
     {
-        lint.error(
+        sink.error(
             linenum,
             "whitespace/indent_namespace",
             4,
@@ -568,7 +568,7 @@ pub fn check_for_namespace_indentation(
 
 /// `CheckForFunctionLengths`.
 pub fn check_for_function_lengths(
-    lint: &mut Lint<'_>,
+    sink: &mut Lint<'_>,
     cl: &CleansedLines,
     linenum: usize,
     function_state: &mut FunctionState,
@@ -612,7 +612,7 @@ pub fn check_for_function_lengths(
             }
         }
         if !body_found {
-            lint.error(
+            sink.error(
                 linenum,
                 "readability/fn_size",
                 5,
@@ -620,7 +620,7 @@ pub fn check_for_function_lengths(
             );
         }
     } else if is_match(r"\}\s*$", line) {
-        function_state.check(lint, linenum);
+        function_state.check(sink, linenum);
         function_state.end();
     } else if !is_match(r"\s*$", line) {
         function_state.count();
@@ -633,7 +633,7 @@ const fn is_ascii_space_class(c: char) -> bool {
 }
 
 /// `CheckComment`.
-pub fn check_comment(lint: &mut Lint<'_>, line: &str, linenum: usize, next_line_start: usize) {
+pub fn check_comment(sink: &mut Lint<'_>, line: &str, linenum: usize, next_line_start: usize) {
     let Some(commentpos) = line.find("//") else {
         return;
     };
@@ -644,7 +644,7 @@ pub fn check_comment(lint: &mut Lint<'_>, line: &str, linenum: usize, next_line_
     let too_close = (!before.is_empty() && !is_ascii_space_class(before[0]))
         || (before.len() >= 2 && !is_ascii_space_class(before[1]));
     if !(is_match(r".*{ *//", line) && next_line_start == commentpos) && too_close {
-        lint.error(
+        sink.error(
             linenum,
             "whitespace/comments",
             2,
@@ -654,7 +654,7 @@ pub fn check_comment(lint: &mut Lint<'_>, line: &str, linenum: usize, next_line_
     let comment = &line[commentpos..];
     if let Some(m) = pmatch(r"//(\s*)TODO(\(.+?\))?:?(\s|$)?", comment) {
         if g(&m, 1).chars().count() > 1 {
-            lint.error(
+            sink.error(
                 linenum,
                 "whitespace/todo",
                 2,
@@ -662,7 +662,7 @@ pub fn check_comment(lint: &mut Lint<'_>, line: &str, linenum: usize, next_line_
             );
         }
         if group(&m, 2).is_none() {
-            lint.error(
+            sink.error(
                 linenum,
                 "readability/todo",
                 2,
@@ -671,7 +671,7 @@ pub fn check_comment(lint: &mut Lint<'_>, line: &str, linenum: usize, next_line_
             );
         }
         if !matches!(group(&m, 3), Some(" " | "")) {
-            lint.error(
+            sink.error(
                 linenum,
                 "whitespace/todo",
                 2,
@@ -680,7 +680,7 @@ pub fn check_comment(lint: &mut Lint<'_>, line: &str, linenum: usize, next_line_
         }
     }
     if is_match(r"//[^ ]*\w", comment) && !is_match(r"(///|//\!)(\s+|$)", comment) {
-        lint.error(
+        sink.error(
             linenum,
             "whitespace/comments",
             4,
@@ -691,7 +691,7 @@ pub fn check_comment(lint: &mut Lint<'_>, line: &str, linenum: usize, next_line_
 
 /// `CheckSpacing`.
 pub fn check_spacing(
-    lint: &mut Lint<'_>,
+    sink: &mut Lint<'_>,
     cl: &CleansedLines,
     linenum: usize,
     nesting: &NestingState,
@@ -721,7 +721,7 @@ pub fn check_spacing(
                     || is_match(r" {4}:", prev_line)
             };
             if !exception {
-                lint.error(
+                sink.error(
                     linenum,
                     "whitespace/blank_line",
                     2,
@@ -736,7 +736,7 @@ pub fn check_spacing(
                 && is_match(r"\s*}", next_line)
                 && !next_line.contains("} else ")
             {
-                lint.error(
+                sink.error(
                     linenum,
                     "whitespace/blank_line",
                     3,
@@ -746,7 +746,7 @@ pub fn check_spacing(
             }
         }
         if let Some(m) = pmatch(r"\s*(public|protected|private):", prev_line) {
-            lint.error(
+            sink.error(
                 linenum,
                 "whitespace/blank_line",
                 3,
@@ -760,10 +760,10 @@ pub fn check_spacing(
     } else {
         0
     };
-    check_comment(lint, line, linenum, next_line_start);
+    check_comment(sink, line, linenum, next_line_start);
     let line = &cl.elided[linenum];
     if is_search(r"\w\s+\[(?!\[)", line) && !is_search(r"(?:auto&?|delete|return)\s+\[", line) {
-        lint.error(
+        sink.error(
             linenum,
             "whitespace/braces",
             5,
@@ -771,7 +771,7 @@ pub fn check_spacing(
         );
     }
     if is_search(r"for *\(.*[^:]:[^: ]", line) || is_search(r"for *\(.*[^: ]:[^:]", line) {
-        lint.error(
+        sink.error(
             linenum,
             "whitespace/forcolon",
             2,
@@ -781,7 +781,7 @@ pub fn check_spacing(
 }
 
 /// `CheckOperatorSpacing`.
-pub fn check_operator_spacing(lint: &mut Lint<'_>, cl: &CleansedLines, linenum: usize) {
+pub fn check_operator_spacing(sink: &mut Lint<'_>, cl: &CleansedLines, linenum: usize) {
     let mut line = cl.elided[linenum].clone();
     while let Some(m) = pmatch(r"(.*\boperator\b)(\S+)(\s*\(.*)$", &line) {
         let replaced = format!(
@@ -797,7 +797,7 @@ pub fn check_operator_spacing(lint: &mut Lint<'_>, cl: &CleansedLines, linenum: 
         && !is_search(r"(>=|<=|==|!=|&=|\^=|\|=|\+=|\*=|\/=|\%=)", &line)
         && !is_search("operator=", &line)
     {
-        lint.error(
+        sink.error(
             linenum,
             "whitespace/operators",
             4,
@@ -805,7 +805,7 @@ pub fn check_operator_spacing(lint: &mut Lint<'_>, cl: &CleansedLines, linenum: 
         );
     }
     if let Some(m) = search(r"[^<>=!\s](==|!=|<=|>=|\|\|)[^<>=!\s,;\)]", &line) {
-        lint.error(
+        sink.error(
             linenum,
             "whitespace/operators",
             3,
@@ -815,7 +815,7 @@ pub fn check_operator_spacing(lint: &mut Lint<'_>, cl: &CleansedLines, linenum: 
         if let Some(m) = pmatch(r"(.*[^\s<])<[^\s=<,]", &line) {
             let (_, _, end_pos) = close_expression(cl, linenum, g(&m, 1).len());
             if end_pos.is_none() {
-                lint.error(
+                sink.error(
                     linenum,
                     "whitespace/operators",
                     3,
@@ -826,7 +826,7 @@ pub fn check_operator_spacing(lint: &mut Lint<'_>, cl: &CleansedLines, linenum: 
         if let Some(m) = pmatch(r"(.*[^-\s>])>[^\s=>,]", &line) {
             let (_, _, start_pos) = reverse_close_expression(cl, linenum, g(&m, 1).len());
             if start_pos.is_none() {
-                lint.error(
+                sink.error(
                     linenum,
                     "whitespace/operators",
                     3,
@@ -845,7 +845,7 @@ pub fn check_operator_spacing(lint: &mut Lint<'_>, cl: &CleansedLines, linenum: 
             && left.chars().all(|c| c.is_ascii_digit())
             && right.chars().all(|c| c.is_ascii_digit());
         if !(both_digits || (left == "operator" && right == ";")) {
-            lint.error(
+            sink.error(
                 linenum,
                 "whitespace/operators",
                 3,
@@ -854,7 +854,7 @@ pub fn check_operator_spacing(lint: &mut Lint<'_>, cl: &CleansedLines, linenum: 
         }
     }
     if is_search(r">>[a-zA-Z_]", &line) {
-        lint.error(
+        sink.error(
             linenum,
             "whitespace/operators",
             3,
@@ -862,7 +862,7 @@ pub fn check_operator_spacing(lint: &mut Lint<'_>, cl: &CleansedLines, linenum: 
         );
     }
     if let Some(m) = search(r"(!\s|~\s|[\s]--[\s;]|[\s]\+\+[\s;])", &line) {
-        lint.error(
+        sink.error(
             linenum,
             "whitespace/operators",
             4,
@@ -872,10 +872,10 @@ pub fn check_operator_spacing(lint: &mut Lint<'_>, cl: &CleansedLines, linenum: 
 }
 
 /// `CheckParenthesisSpacing`.
-pub fn check_parenthesis_spacing(lint: &mut Lint<'_>, cl: &CleansedLines, linenum: usize) {
+pub fn check_parenthesis_spacing(sink: &mut Lint<'_>, cl: &CleansedLines, linenum: usize) {
     let line = &cl.elided[linenum];
     if let Some(m) = search(r" (if\(|for\(|while\(|switch\()", line) {
-        lint.error(
+        sink.error(
             linenum,
             "whitespace/parens",
             5,
@@ -892,7 +892,7 @@ pub fn check_parenthesis_spacing(lint: &mut Lint<'_>, cl: &CleansedLines, linenu
             && !((g(&m, 3) == ";" && open_spaces == 1 + close_spaces)
                 || (open_spaces == 0 && is_search(r"\bfor\s*\(.*; \)", line)))
         {
-            lint.error(
+            sink.error(
                 linenum,
                 "whitespace/parens",
                 5,
@@ -900,7 +900,7 @@ pub fn check_parenthesis_spacing(lint: &mut Lint<'_>, cl: &CleansedLines, linenu
             );
         }
         if open_spaces > 1 {
-            lint.error(
+            sink.error(
                 linenum,
                 "whitespace/parens",
                 5,
@@ -914,7 +914,7 @@ pub fn check_parenthesis_spacing(lint: &mut Lint<'_>, cl: &CleansedLines, linenu
 }
 
 /// `CheckCommaSpacing`.
-pub fn check_comma_spacing(lint: &mut Lint<'_>, cl: &CleansedLines, linenum: usize) {
+pub fn check_comma_spacing(sink: &mut Lint<'_>, cl: &CleansedLines, linenum: usize) {
     let raw = &cl.lines_without_raw_strings;
     let line = &cl.elided[linenum];
     let reduced = sub(
@@ -923,7 +923,7 @@ pub fn check_comma_spacing(lint: &mut Lint<'_>, cl: &CleansedLines, linenum: usi
         &sub(r"\boperator\s*,\s*\(", "F(", line),
     );
     if is_search(r",[^,\s]", &reduced) && is_search(r",[^,\s]", &raw[linenum]) {
-        lint.error(
+        sink.error(
             linenum,
             "whitespace/comma",
             3,
@@ -931,7 +931,7 @@ pub fn check_comma_spacing(lint: &mut Lint<'_>, cl: &CleansedLines, linenum: usi
         );
     }
     if is_search(r";[^\s};\\)/]", line) {
-        lint.error(
+        sink.error(
             linenum,
             "whitespace/semicolon",
             3,
@@ -985,7 +985,7 @@ fn is_type(cl: &CleansedLines, nesting: &NestingState, expr: &str) -> bool {
 
 /// `CheckBracesSpacing`.
 pub fn check_braces_spacing(
-    lint: &mut Lint<'_>,
+    sink: &mut Lint<'_>,
     cl: &CleansedLines,
     linenum: usize,
     nesting: &NestingState,
@@ -1003,7 +1003,7 @@ pub fn check_braces_spacing(
             trailing_text.push_str(&cl.elided[offset]);
         }
         if !is_match(r"[\s}]*[{.;,)<>\]:]", &trailing_text) && !is_type(cl, nesting, leading_text) {
-            lint.error(
+            sink.error(
                 linenum,
                 "whitespace/braces",
                 5,
@@ -1012,7 +1012,7 @@ pub fn check_braces_spacing(
         }
     }
     if is_search("}else", line) {
-        lint.error(
+        sink.error(
             linenum,
             "whitespace/braces",
             5,
@@ -1020,14 +1020,14 @@ pub fn check_braces_spacing(
         );
     }
     if is_search(r":\s*;\s*$", line) {
-        lint.error(
+        sink.error(
             linenum,
             "whitespace/semicolon",
             5,
             "Semicolon defining empty statement. Use {} instead.".to_string(),
         );
     } else if is_search(r"^\s*;\s*$", line) {
-        lint.error(
+        sink.error(
             linenum,
             "whitespace/semicolon",
             5,
@@ -1035,7 +1035,7 @@ pub fn check_braces_spacing(
                 .to_string(),
         );
     } else if is_search(r"\s+;\s*$", line) && !is_search(r"\bfor\b", line) {
-        lint.error(
+        sink.error(
             linenum,
             "whitespace/semicolon",
             5,
@@ -1046,7 +1046,7 @@ pub fn check_braces_spacing(
 
 /// `CheckSectionSpacing`: a blank line before `public:` and friends.
 pub fn check_section_spacing(
-    lint: &mut Lint<'_>,
+    sink: &mut Lint<'_>,
     cl: &CleansedLines,
     class_info: &BlockInfo,
     linenum: usize,
@@ -1076,7 +1076,7 @@ pub fn check_section_spacing(
             }
         }
         if end_class_head + 1 < linenum {
-            lint.error(
+            sink.error(
                 linenum,
                 "whitespace/blank_line",
                 3,
@@ -1087,14 +1087,14 @@ pub fn check_section_spacing(
 }
 
 /// `CheckBraces`.
-pub fn check_braces(lint: &mut Lint<'_>, cl: &CleansedLines, linenum: usize) {
+pub fn check_braces(sink: &mut Lint<'_>, cl: &CleansedLines, linenum: usize) {
     let line = &cl.elided[linenum];
     if is_match(r"\s*{\s*$", line) {
         let prevline = get_previous_non_blank_line(cl, linenum).0;
         let long_array =
-            get_line_width(prevline) + 2 > lint.line_length() && prevline.contains("[]");
+            get_line_width(prevline) + 2 > sink.line_length() && prevline.contains("[]");
         if !(is_search(r"[,;:}{(]\s*$", prevline) || is_match(r"\s*#", prevline) || long_array) {
-            lint.error(
+            sink.error(
                 linenum,
                 "whitespace/braces",
                 4,
@@ -1106,7 +1106,7 @@ pub fn check_braces(lint: &mut Lint<'_>, cl: &CleansedLines, linenum: usize) {
     if is_match(r"\s*else\b\s*(?:if\b|\{|$)", line) {
         let prevline = get_previous_non_blank_line(cl, linenum).0;
         if is_match(r"\s*}\s*$", prevline) {
-            lint.error(
+            sink.error(
                 linenum,
                 "whitespace/newline",
                 4,
@@ -1124,7 +1124,7 @@ pub fn check_braces(lint: &mut Lint<'_>, cl: &CleansedLines, linenum: usize) {
             let (endline, _, endpos) = close_expression(cl, linenum, pos);
             let brace_on_right = from(endline, endpos.unwrap_or(0)).contains('{');
             if brace_on_left != brace_on_right {
-                lint.error(
+                sink.error(
                     linenum,
                     "readability/braces",
                     5,
@@ -1135,7 +1135,7 @@ pub fn check_braces(lint: &mut Lint<'_>, cl: &CleansedLines, linenum: usize) {
     } else if is_search(r"}\s*else[^{]*$", line)
         || (is_match(r"[^}]*else\s*{", line) && !last_wrong)
     {
-        lint.error(
+        sink.error(
             linenum,
             "readability/braces",
             5,
@@ -1153,7 +1153,7 @@ pub fn check_braces(lint: &mut Lint<'_>, cl: &CleansedLines, linenum: usize) {
         )
     });
     if let Some(m) = keyword {
-        lint.error(
+        sink.error(
             linenum,
             "whitespace/newline",
             5,
@@ -1206,7 +1206,7 @@ pub fn check_braces(lint: &mut Lint<'_>, cl: &CleansedLines, linenum: usize) {
             r"[^{};]*\[[^\[\]]*\][^{}]*\{[^{}]*\}\s*\)*[;,]\s*$",
             endline,
         ) {
-            lint.error(
+            sink.error(
                 linenum,
                 "readability/braces",
                 4,
@@ -1217,7 +1217,7 @@ pub fn check_braces(lint: &mut Lint<'_>, cl: &CleansedLines, linenum: usize) {
         let next_line = &cl.elided[endlinenum + 1];
         let next_indent = get_indent_level(next_line);
         if if_match.is_some() && is_match(r"\s*else\b", next_line) && next_indent != if_indent {
-            lint.error(
+            sink.error(
                 linenum,
                 "readability/braces",
                 4,
@@ -1225,7 +1225,7 @@ pub fn check_braces(lint: &mut Lint<'_>, cl: &CleansedLines, linenum: usize) {
                     .to_string(),
             );
         } else if next_indent > if_indent {
-            lint.error(
+            sink.error(
                 linenum,
                 "readability/braces",
                 4,
@@ -1236,7 +1236,7 @@ pub fn check_braces(lint: &mut Lint<'_>, cl: &CleansedLines, linenum: usize) {
 }
 
 /// `CheckTrailingSemicolon`: a `;` after a block's closing brace.
-pub fn check_trailing_semicolon(lint: &mut Lint<'_>, cl: &CleansedLines, linenum: usize) {
+pub fn check_trailing_semicolon(sink: &mut Lint<'_>, cl: &CleansedLines, linenum: usize) {
     let line = &cl.elided[linenum];
     let mut brace_prefix: Option<usize> = None;
     if let Some(m) = pmatch(r"(.*\)\s*)\{", line) {
@@ -1298,9 +1298,9 @@ pub fn check_trailing_semicolon(lint: &mut Lint<'_>, cl: &CleansedLines, linenum
             && is_match(r"\s*;", from(endline, endpos))
         {
             let raw_lines = &cl.raw_lines;
-            lint.parse_nolint_suppressions(&raw_lines[endlinenum - 1], endlinenum - 1);
-            lint.parse_nolint_suppressions(&raw_lines[endlinenum], endlinenum);
-            lint.error(
+            sink.parse_nolint_suppressions(&raw_lines[endlinenum - 1], endlinenum - 1);
+            sink.parse_nolint_suppressions(&raw_lines[endlinenum], endlinenum);
+            sink.error(
                 endlinenum,
                 "readability/braces",
                 4,
@@ -1311,7 +1311,7 @@ pub fn check_trailing_semicolon(lint: &mut Lint<'_>, cl: &CleansedLines, linenum
 }
 
 /// `CheckEmptyBlockBody`.
-pub fn check_empty_block_body(lint: &mut Lint<'_>, cl: &CleansedLines, linenum: usize) {
+pub fn check_empty_block_body(sink: &mut Lint<'_>, cl: &CleansedLines, linenum: usize) {
     let line = &cl.elided[linenum];
     let Some(matched) = pmatch(r"\s*(for|while|if)\s*\(", line) else {
         return;
@@ -1324,14 +1324,14 @@ pub fn check_empty_block_body(lint: &mut Lint<'_>, cl: &CleansedLines, linenum: 
     };
     if is_match(";", from(end_line, end_pos)) {
         if keyword == "if" {
-            lint.error(
+            sink.error(
                 end_linenum,
                 "whitespace/empty_conditional_body",
                 5,
                 "Empty conditional bodies should use {}".to_string(),
             );
         } else {
-            lint.error(
+            sink.error(
                 end_linenum,
                 "whitespace/empty_loop_body",
                 5,
@@ -1396,7 +1396,7 @@ pub fn check_empty_block_body(lint: &mut Lint<'_>, cl: &CleansedLines, linenum: 
         }
         current_line_fragment.clone_from(&cl.elided[current_linenum]);
     }
-    lint.error(
+    sink.error(
         end_linenum,
         "whitespace/empty_if_body",
         4,
@@ -1417,7 +1417,7 @@ fn find_check_macro(line: &str) -> Option<(&'static str, usize)> {
 }
 
 /// `CheckCheck`: `CHECK(a == b)` that should be `CHECK_EQ(a, b)`.
-pub fn check_check(lint: &mut Lint<'_>, cl: &CleansedLines, linenum: usize) {
+pub fn check_check(sink: &mut Lint<'_>, cl: &CleansedLines, linenum: usize) {
     let lines = &cl.elided;
     let Some((check_macro, start_pos)) = find_check_macro(&lines[linenum]) else {
         return;
@@ -1498,7 +1498,7 @@ pub fn check_check(lint: &mut Lint<'_>, cl: &CleansedLines, linenum: usize) {
     let rhs = rhs.trim();
     let constant = r#"([-+]?(\d+|0[xX][0-9a-fA-F]+)[lLuU]{0,3}|".*"|'.*')$"#;
     if is_match(constant, lhs) || is_match(constant, rhs) {
-        lint.error(
+        sink.error(
             linenum,
             "readability/check",
             2,
@@ -1511,7 +1511,7 @@ pub fn check_check(lint: &mut Lint<'_>, cl: &CleansedLines, linenum: usize) {
 }
 
 /// `CheckAltTokens`.
-pub fn check_alt_tokens(lint: &mut Lint<'_>, cl: &CleansedLines, linenum: usize) {
+pub fn check_alt_tokens(sink: &mut Lint<'_>, cl: &CleansedLines, linenum: usize) {
     let line = &cl.elided[linenum];
     if is_match(r"\s*#", line) {
         return;
@@ -1521,7 +1521,7 @@ pub fn check_alt_tokens(lint: &mut Lint<'_>, cl: &CleansedLines, linenum: usize)
     }
     for m in find_all(ALT_TOKEN_REPLACEMENT_PATTERN, line) {
         let word = g(&m, 2);
-        lint.error(
+        sink.error(
             linenum,
             "readability/alt_tokens",
             2,
@@ -1535,7 +1535,7 @@ pub fn check_alt_tokens(lint: &mut Lint<'_>, cl: &CleansedLines, linenum: usize)
 
 /// `CheckStyle`: the C++ style rules section.
 pub fn check_style(
-    lint: &mut Lint<'_>,
+    sink: &mut Lint<'_>,
     cl: &CleansedLines,
     linenum: usize,
     file_extension: &str,
@@ -1550,7 +1550,7 @@ pub fn check_style(
         ""
     };
     if line.contains('\t') {
-        lint.error(
+        sink.error(
             linenum,
             "whitespace/tab",
             1,
@@ -1566,7 +1566,7 @@ pub fn check_style(
         && !is_match(scope_or_label_pattern, cleansed_line)
         && !(cl.raw_lines[linenum] != *line && is_match(r#"\s*"""#, line))
     {
-        lint.error(
+        sink.error(
             linenum,
             "whitespace/indent",
             3,
@@ -1574,14 +1574,14 @@ pub fn check_style(
         );
     }
     if line.chars().last().is_some_and(char::is_whitespace) {
-        lint.error(
+        sink.error(
             linenum,
             "whitespace/end_of_line",
             4,
             "Line ends in whitespace.  Consider deleting these extra spaces.".to_string(),
         );
     }
-    let is_header_guard = lint.is_header_extension(file_extension)
+    let is_header_guard = sink.is_header_extension(file_extension)
         && cppvar.is_some_and(|v| {
             line.starts_with(&format!("#ifndef {v}"))
                 || line.starts_with(&format!("#define {v}"))
@@ -1595,12 +1595,12 @@ pub fn check_style(
         && !is_match(r"\s*/// [@\\](copydoc|copydetails|copybrief) .*$", line)
     {
         let line_width = get_line_width(line);
-        if line_width > lint.line_length() {
-            lint.error(
+        if line_width > sink.line_length() {
+            sink.error(
                 linenum,
                 "whitespace/line_length",
                 2,
-                format!("Lines should be <= {} characters long", lint.line_length()),
+                format!("Lines should be <= {} characters long", sink.line_length()),
             );
         }
     }
@@ -1612,33 +1612,33 @@ pub fn check_style(
         && !((cleansed_line.contains("case ") || cleansed_line.contains("default:"))
             && cleansed_line.contains("break;"))
     {
-        lint.error(
+        sink.error(
             linenum,
             "whitespace/newline",
             0,
             "More than one command on the same line".to_string(),
         );
     }
-    check_braces(lint, cl, linenum);
-    check_trailing_semicolon(lint, cl, linenum);
-    check_empty_block_body(lint, cl, linenum);
-    check_spacing(lint, cl, linenum, nesting);
-    check_operator_spacing(lint, cl, linenum);
-    check_parenthesis_spacing(lint, cl, linenum);
-    check_comma_spacing(lint, cl, linenum);
-    check_braces_spacing(lint, cl, linenum, nesting);
-    check_spacing_for_function_call(lint, cl, linenum);
-    check_check(lint, cl, linenum);
-    check_alt_tokens(lint, cl, linenum);
+    check_braces(sink, cl, linenum);
+    check_trailing_semicolon(sink, cl, linenum);
+    check_empty_block_body(sink, cl, linenum);
+    check_spacing(sink, cl, linenum, nesting);
+    check_operator_spacing(sink, cl, linenum);
+    check_parenthesis_spacing(sink, cl, linenum);
+    check_comma_spacing(sink, cl, linenum);
+    check_braces_spacing(sink, cl, linenum, nesting);
+    check_spacing_for_function_call(sink, cl, linenum);
+    check_check(sink, cl, linenum);
+    check_alt_tokens(sink, cl, linenum);
     if let Some(classinfo) = nesting.innermost_class() {
-        check_section_spacing(lint, cl, classinfo, linenum);
+        check_section_spacing(sink, cl, classinfo, linenum);
     }
 }
 
 /// `CheckMakePairUsesDeduction`.
-pub fn check_make_pair_uses_deduction(lint: &mut Lint<'_>, cl: &CleansedLines, linenum: usize) {
+pub fn check_make_pair_uses_deduction(sink: &mut Lint<'_>, cl: &CleansedLines, linenum: usize) {
     if is_search(r"\bmake_pair\s*<", &cl.elided[linenum]) {
-        lint.error(
+        sink.error(
             linenum,
             "build/explicit_make_pair",
             4,
@@ -1648,7 +1648,7 @@ pub fn check_make_pair_uses_deduction(lint: &mut Lint<'_>, cl: &CleansedLines, l
 }
 
 /// `CheckRedundantVirtual`.
-pub fn check_redundant_virtual(lint: &mut Lint<'_>, cl: &CleansedLines, linenum: usize) {
+pub fn check_redundant_virtual(sink: &mut Lint<'_>, cl: &CleansedLines, linenum: usize) {
     let line = &cl.elided[linenum];
     let Some(virtual_match) = pmatch(r"(.*)(\bvirtual\b)(.*)$", line) else {
         return;
@@ -1688,7 +1688,7 @@ pub fn check_redundant_virtual(lint: &mut Lint<'_>, cl: &CleansedLines, linenum:
     for i in end_line..stop {
         let rest = from(&cl.elided[i], end_col);
         if let Some(m) = search(r"\b(override|final)\b", rest) {
-            lint.error(
+            sink.error(
                 linenum,
                 "readability/inheritance",
                 4,
@@ -1706,7 +1706,7 @@ pub fn check_redundant_virtual(lint: &mut Lint<'_>, cl: &CleansedLines, linenum:
 }
 
 /// `CheckRedundantOverrideOrFinal`.
-pub fn check_redundant_override_or_final(lint: &mut Lint<'_>, cl: &CleansedLines, linenum: usize) {
+pub fn check_redundant_override_or_final(sink: &mut Lint<'_>, cl: &CleansedLines, linenum: usize) {
     let line = &cl.elided[linenum];
     let fragment = if let Some(declarator_end) = line.rfind(')') {
         &line[declarator_end..]
@@ -1716,7 +1716,7 @@ pub fn check_redundant_override_or_final(lint: &mut Lint<'_>, cl: &CleansedLines
         return;
     };
     if is_search(r"\boverride\b", fragment) && is_search(r"\bfinal\b", fragment) {
-        lint.error(
+        sink.error(
             linenum,
             "readability/inheritance",
             4,
@@ -1726,14 +1726,14 @@ pub fn check_redundant_override_or_final(lint: &mut Lint<'_>, cl: &CleansedLines
 }
 
 /// `FlagCxxHeaders`: unapproved C++11/17 headers.
-pub fn flag_cxx_headers(lint: &mut Lint<'_>, cl: &CleansedLines, linenum: usize) {
+pub fn flag_cxx_headers(sink: &mut Lint<'_>, cl: &CleansedLines, linenum: usize) {
     let line = &cl.elided[linenum];
     let Some(include) = pmatch(r#"\s*#\s*include\s+[<"]([^<"]+)[">]"#, line) else {
         return;
     };
     let name = g(&include, 1);
     if matches!(name, "cfenv" | "fenv.h" | "ratio") {
-        lint.error(
+        sink.error(
             linenum,
             "build/c++11",
             5,
@@ -1741,7 +1741,7 @@ pub fn flag_cxx_headers(lint: &mut Lint<'_>, cl: &CleansedLines, linenum: usize)
         );
     }
     if name == "filesystem" {
-        lint.error(
+        sink.error(
             linenum,
             "build/c++17",
             5,

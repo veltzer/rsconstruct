@@ -78,7 +78,7 @@ inventory::submit! {
         defconfig_json: crate::registries::default_config_json::<crate::config::CheckerConfig>,
         fields: &[],
         omit_standard_fields: &["command", "formats", "args", "output_dir", "required_tools"],
-        scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &[".json"], src_exclude_dirs: &[] }),
+        scan_defaults: Some(crate::config::ScanDefaultsData { src_extensions: &[".json"], src_exclude_dirs: &[] }),
         defaults: None,
         keywords: &["json", "checker", "jq", "validator"],
         description: "Validate JSON files (in-process)",

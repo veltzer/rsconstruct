@@ -709,26 +709,24 @@ pub fn discover_directory_products(
 /// Replaces the former `discover_checker_products` (no `dep_auto` merge)
 /// and `checker_discover` (with `dep_auto` merge) — the split was a
 /// correctness hazard since picking the wrong one silently lost `dep_auto`.
-/// 8 arguments against clippy's limit of 7. `dep_inputs` and `dep_auto` look
-/// redundant with `scan` but are not — `terms` and `zspell` pass computed
-/// lists rather than the config's own, so folding them into `scan` would
-/// silently change what those two processors depend on.
-#[allow(clippy::too_many_arguments)]
+/// `dep_inputs` and `dep_auto` look redundant with `scan` but are not —
+/// `terms` and `zspell` pass computed lists rather than the config's own, so
+/// folding them into `scan` would silently change what those two processors
+/// depend on. `config_hash` is the processor config's `output_config_hash`.
 pub fn discover_checker_products(
     graph: &mut BuildGraph,
     scan: &crate::config::StandardConfig,
     file_index: &FileIndex,
     dep_inputs: &[String],
     dep_auto: &[String],
-    cfg_hash: &impl serde::Serialize,
-    checksum_fields: &[&str],
+    config_hash: String,
     processor_name: &str,
 ) -> Result<()> {
     let files = file_index.scan(scan, true);
     if files.is_empty() {
         return Ok(());
     }
-    let hash = Some(output_config_hash(cfg_hash, checksum_fields));
+    let hash = Some(config_hash);
     let extra = resolve_dep_inputs(dep_inputs, dep_auto)?;
     for file in files {
         let mut inputs = Vec::with_capacity(1 + extra.len());
@@ -1169,8 +1167,7 @@ pub trait Processor: Sync + Send {
             file_index,
             &dep_inputs,
             &cfg.dep_auto,
-            &config,
-            &crate::config::checksum_fields_of(instance_name),
+            output_config_hash(&config, &crate::config::checksum_fields_of(instance_name)),
             instance_name,
         )
     }
@@ -1343,8 +1340,10 @@ impl Processor for SimpleChecker {
             file_index,
             &self.config.standard.dep_inputs,
             &self.config.standard.dep_auto,
-            &self.config,
-            <crate::config::CheckerConfig as crate::config::KnownFields>::checksum_fields(),
+            output_config_hash(
+                &self.config,
+                <crate::config::CheckerConfig as crate::config::KnownFields>::checksum_fields(),
+            ),
             instance_name,
         )
     }

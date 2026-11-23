@@ -111,11 +111,10 @@ impl ObjectStore {
             // Make writable before removing (objects are stored read-only so a
             // restored hardlink can't corrupt the cache). The file is unlinked
             // on the next line, so the widened mode never outlives this loop
-            // iteration — which is what the lint is warning about.
-            #[allow(clippy::permissions_set_readonly_false)]
-            if let Ok(mut perms) = fs::metadata(&path).map(|m| m.permissions()) {
-                perms.set_readonly(false);
-                fs::set_permissions(&path, perms).with_context(|| {
+            // iteration. Only the owner's write bit is added.
+            if let Ok(metadata) = fs::metadata(&path) {
+                let mode = crate::platform::get_mode(&metadata) | 0o200;
+                crate::platform::set_permissions_mode(&path, mode).with_context(|| {
                     format!("Failed to make cache object writable: {}", path.display())
                 })?;
             }

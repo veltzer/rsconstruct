@@ -17,11 +17,10 @@ use super::parsec::{
 };
 
 use Inner::{
-    T_Arithmetic, T_Backticked, T_BraceExpansion, T_DollarArithmetic,
-    T_DollarBraceCommandExpansion, T_DollarBraced, T_DollarBracket, T_DollarDoubleQuoted,
-    T_DollarExpansion, T_DollarSingleQuoted, T_DoubleQuoted, T_Extglob, T_FdRedirect, T_Glob,
-    T_Greater, T_HereDoc, T_HereString, T_IoDuplicate, T_IoFile, T_Less, T_Literal, T_NormalWord,
-    T_ParamSubSpecialChar, T_ProcSub, T_SingleQuoted,
+    TArithmetic, TBackticked, TBraceExpansion, TDollarArithmetic, TDollarBraceCommandExpansion,
+    TDollarBraced, TDollarBracket, TDollarDoubleQuoted, TDollarExpansion, TDollarSingleQuoted,
+    TDoubleQuoted, TExtglob, TFdRedirect, TGlob, TGreater, THereDoc, THereString, TIoDuplicate,
+    TIoFile, TLess, TLiteral, TNormalWord, TParamSubSpecialChar, TProcSub, TSingleQuoted,
 };
 
 pub const QUOTABLE_CHARS: &str = "|&;<>()\\ '\t\n\r\u{A0}\\\"$`";
@@ -37,14 +36,6 @@ pub const SPECIAL_VARIABLE_CHARS: &str = "-$?!#@*";
 
 pub const fn tk(id: Id, inner: Inner) -> Token {
     Token::new(id, inner)
-}
-
-#[allow(
-    clippy::unnecessary_box_returns,
-    reason = "the boxing helper for the AST's recursive fields"
-)]
-pub fn bx(t: Token) -> Box<Token> {
-    Box::new(t)
 }
 
 fn standard_end() -> String {
@@ -85,7 +76,7 @@ impl P {
                     st.try_(p)?;
                     st.fail(&msg)
                 },
-                |st| st.ok(()),
+                |_| Ok(()),
             )
         })
     }
@@ -97,10 +88,7 @@ impl P {
 
     /// `isFollowedBy`.
     pub fn is_followed_by<T>(&mut self, p: impl FnOnce(&mut Self) -> R<T>) -> R<bool> {
-        self.alt(
-            |s| s.look_ahead(|s| s.try_(p)).map(|_| true),
-            |s| s.ok(false),
-        )
+        self.alt(|s| s.look_ahead(|s| s.try_(p)).map(|_| true), |_| Ok(false))
     }
 
     /// `reluctantlyTill p end`.
@@ -425,7 +413,7 @@ impl P {
             1110,
             "This is a unicode quote. Delete and retype it (or quote to make literal).",
         );
-        Ok(tk(id, T_Literal(c.to_string())))
+        Ok(tk(id, TLiteral(c.to_string())))
     }
 
     pub fn carriage_return(&mut self) -> R<char> {
@@ -547,7 +535,7 @@ impl P {
                                         s.char_('-')?;
                                         s.read_code()
                                     },
-                                    |s| s.ok(from + 1),
+                                    |_| Ok(from + 1),
                                 )?;
                                 Ok(Annotation::DisableComment(from, to))
                             },
@@ -685,7 +673,7 @@ impl P {
         let x = self.many1(|s| s.read_normal_word_part(end))?;
         let id = self.end_span(start);
         self.check_possible_termination(pos, &x, terms);
-        Ok(tk(id, T_NormalWord(x)))
+        Ok(tk(id, TNormalWord(x)))
     }
 
     pub fn read_index_span(&mut self) -> R<Token> {
@@ -699,28 +687,27 @@ impl P {
                             let start = s.start_span();
                             let str_ = s.spacing1()?;
                             let id = s.end_span(start);
-                            Ok(tk(id, T_Literal(str_)))
+                            Ok(tk(id, TLiteral(str_)))
                         },
                         |s| {
                             let start = s.start_span();
                             let str_: String =
                                 s.many1(|s| s.one_of(QUOTABLE_CHARS))?.into_iter().collect();
                             let id = s.end_span(start);
-                            Ok(tk(id, T_Literal(str_)))
+                            Ok(tk(id, TLiteral(str_)))
                         },
                     )
                 },
             )
         })?;
         let id = self.end_span(start);
-        Ok(tk(id, T_NormalWord(x)))
+        Ok(tk(id, TNormalWord(x)))
     }
 
     fn check_possible_termination(&mut self, pos: SourcePos, x: &[Token], terminators: &[&str]) {
         if let [
             Token {
-                inner: T_Literal(s),
-                ..
+                inner: TLiteral(s), ..
             },
         ] = x
             && terminators.contains(&s.as_str())
@@ -737,7 +724,7 @@ impl P {
     pub fn read_normal_word_part(&mut self, end: &str) -> R<Token> {
         self.not_followed_by2(|s| s.one_of(end))?;
         self.attempting(
-            |s| s.ok(()),
+            |_| Ok(()),
             |s| {
                 let pos = s.pos;
                 s.look_ahead(|s| s.char_('('))?;
@@ -781,21 +768,21 @@ impl P {
             },
         )?;
         let id = self.end_span(start);
-        Ok(tk(id, T_Literal(str_)))
+        Ok(tk(id, TLiteral(str_)))
     }
 
     pub fn read_space_part(&mut self) -> R<Token> {
         let start = self.start_span();
         let x: String = self.many1(Self::whitespace)?.into_iter().collect();
         let id = self.end_span(start);
-        Ok(tk(id, T_Literal(x)))
+        Ok(tk(id, TLiteral(x)))
     }
 
     pub fn read_dollar_braced_word(&mut self) -> R<Token> {
         let start = self.start_span();
         let list = self.many(Self::read_dollar_braced_part)?;
         let id = self.end_span(start);
-        Ok(tk(id, T_NormalWord(list)))
+        Ok(tk(id, TNormalWord(list)))
     }
 
     fn read_dollar_braced_part(&mut self) -> R<Token> {
@@ -826,14 +813,14 @@ impl P {
             Self::braced_quotable,
         )?;
         let id = self.end_span(start);
-        Ok(tk(id, T_Literal(vars.concat())))
+        Ok(tk(id, TLiteral(vars.concat())))
     }
 
     fn read_param_sub_special_char(&mut self) -> R<Token> {
         let start = self.start_span();
         let x: String = self.many1(|s| s.one_of("/:+-=%"))?.into_iter().collect();
         let id = self.end_span(start);
-        Ok(tk(id, T_ParamSubSpecialChar(x)))
+        Ok(tk(id, TParamSubSpecialChar(x)))
     }
 
     pub fn read_proc_sub(&mut self) -> R<Token> {
@@ -848,7 +835,7 @@ impl P {
             s.allspacing()?;
             s.char_(')')?;
             let id = s.end_span(start);
-            Ok(tk(id, T_ProcSub(dir, list)))
+            Ok(tk(id, TProcSub(dir, list)))
         })
     }
 
@@ -881,7 +868,7 @@ impl P {
                 Ok(())
             })?;
             let id = s.end_span(start);
-            Ok(tk(id, T_SingleQuoted(string)))
+            Ok(tk(id, TSingleQuoted(string)))
         })
     }
 
@@ -957,10 +944,10 @@ impl P {
                             Ok(cmds)
                         })
                     },
-                    |s| s.ok(Vec::new()),
+                    |_| Ok(Vec::new()),
                 )
             })?;
-            Ok(tk(id, T_Backticked(result)))
+            Ok(tk(id, TBackticked(result)))
         })
     }
 
@@ -975,14 +962,14 @@ impl P {
             let id = s.end_span(start);
             s.optional(|s| {
                 s.try_(|s| s.look_ahead(|s| s.alt(Self::suspect_char_after_quotes, |s| s.one_of("$\""))))?;
-                let has_line_feed = x.iter().any(|t| matches!(&t.inner, T_Literal(s) if s.contains('\n')));
-                let starts_with_line_feed = matches!(x.first(), Some(Token { inner: T_Literal(s), .. }) if s.starts_with('\n'));
+                let has_line_feed = x.iter().any(|t| matches!(&t.inner, TLiteral(s) if s.contains('\n')));
+                let starts_with_line_feed = matches!(x.first(), Some(Token { inner: TLiteral(s), .. }) if s.starts_with('\n'));
                 if has_line_feed && !starts_with_line_feed {
                     s.suggest_forgot_closing_quote(start_pos, end_pos, "double quoted string");
                 }
                 Ok(())
             })?;
-            Ok(tk(id, T_DoubleQuoted(x)))
+            Ok(tk(id, TDoubleQuoted(x)))
         })
     }
 
@@ -1020,7 +1007,7 @@ impl P {
                         1111,
                         "This is a unicode quote. Delete and retype it (or ignore/singlequote for literal).",
                     );
-                    Ok(tk(id, T_Literal(c.to_string())))
+                    Ok(tk(id, TLiteral(c.to_string())))
                 })
             })
         })
@@ -1030,7 +1017,7 @@ impl P {
         let start = self.start_span();
         let s = self.many1(Self::read_double_literal_part)?;
         let id = self.end_span(start);
-        Ok(tk(id, T_Literal(s.concat())))
+        Ok(tk(id, TLiteral(s.concat())))
     }
 
     fn read_double_literal_part(&mut self) -> R<String> {
@@ -1048,7 +1035,7 @@ impl P {
         let start = self.start_span();
         let s = self.many1(|s| s.read_normal_literal_part(end))?;
         let id = self.end_span(start);
-        Ok(tk(id, T_Literal(s.concat())))
+        Ok(tk(id, TLiteral(s.concat())))
     }
 
     pub fn read_glob(&mut self) -> R<Token> {
@@ -1058,14 +1045,14 @@ impl P {
                     let start = s.start_span();
                     let c = s.one_of("*?")?;
                     let id = s.end_span(start);
-                    Ok(tk(id, T_Glob(c.to_string())))
+                    Ok(tk(id, TGlob(c.to_string())))
                 },
                 |s| {
                     s.alt(Self::read_glob_class, |s| {
                         let start = s.start_span();
                         let c = s.alt(Self::extglob_start, |s| s.char_('['))?;
                         let id = s.end_span(start);
-                        Ok(tk(id, T_Literal(c.to_string())))
+                        Ok(tk(id, TLiteral(c.to_string())))
                     })
                 },
             )
@@ -1078,11 +1065,11 @@ impl P {
             s.char_('[')?;
             let negation = s.alt(
                 |s| s.one_of("!^").map(|c| c.to_string()),
-                |s| s.ok(String::new()),
+                |_| Ok(String::new()),
             )?;
             let leading_bracket = s.alt(
                 |s| s.one_of("]").map(|c| c.to_string()),
-                |s| s.ok(String::new()),
+                |_| Ok(String::new()),
             )?;
             let globchars = format!("![{EXTGLOB_START_CHARS}");
             let parts = s.many(|s| {
@@ -1106,7 +1093,7 @@ impl P {
             let id = s.end_span(start);
             Ok(tk(
                 id,
-                T_Glob(format!("[{negation}{leading_bracket}{}]", parts.concat())),
+                TGlob(format!("[{negation}{leading_bracket}{}]", parts.concat())),
             ))
         })
     }
@@ -1127,7 +1114,7 @@ impl P {
                 |s| {
                     let next = s.alt(Self::quotable, |s| s.one_of("?*@!+[]{}.,~#"))?;
                     if next == ' ' {
-                        s.alt(|s| s.check_trailing_spaces(pos), |s| s.ok(()))?;
+                        s.alt(|s| s.check_trailing_spaces(pos), |_| Ok(()))?;
                     }
                     if next == '\n' {
                         s.try_(|s| s.look_ahead(Self::spacing))?;
@@ -1196,7 +1183,7 @@ impl P {
             let contents = s.sep_by(Self::read_extglob_part, |s| s.char_('|'))?;
             s.char_(')')?;
             let id = s.end_span(start);
-            Ok(tk(id, T_Extglob(c.to_string(), contents)))
+            Ok(tk(id, TExtglob(c.to_string(), contents)))
         })
     }
 
@@ -1212,14 +1199,14 @@ impl P {
                             let str_: String =
                                 s.many1(|s| s.one_of("<>#;&"))?.into_iter().collect();
                             let id = s.end_span(start);
-                            Ok(tk(id, T_Literal(str_)))
+                            Ok(tk(id, TLiteral(str_)))
                         })
                     },
                 )
             })
         })?;
         let id = self.end_span(start);
-        Ok(tk(id, T_NormalWord(x)))
+        Ok(tk(id, TNormalWord(x)))
     }
 
     fn read_extglob_group(&mut self) -> R<Token> {
@@ -1228,7 +1215,7 @@ impl P {
         let contents = self.sep_by(Self::read_extglob_part, |s| s.char_('|'))?;
         let id = self.end_span(start);
         self.char_(')')?;
-        Ok(tk(id, T_Extglob(String::new(), contents)))
+        Ok(tk(id, TExtglob(String::new(), contents)))
     }
 
     fn read_single_escaped(&mut self) -> R<String> {
@@ -1327,7 +1314,7 @@ impl P {
         self.guard(ok)?;
         self.char_('}')?;
         let id = self.end_span(start);
-        Ok(tk(id, T_BraceExpansion(elements)))
+        Ok(tk(id, TBraceExpansion(elements)))
     }
 
     fn braced_element(&mut self) -> R<Token> {
@@ -1344,12 +1331,12 @@ impl P {
                         s.alt(|s| s.one_of("{}\"$',"), Self::whitespace)
                     })?;
                     let id = s.end_span(start);
-                    Ok(tk(id, T_Literal(lit)))
+                    Ok(tk(id, TLiteral(lit)))
                 },
             ])
         })?;
         let id = self.end_span(start);
-        Ok(tk(id, T_NormalWord(parts)))
+        Ok(tk(id, TNormalWord(parts)))
     }
 
     // ----- dollar expressions
@@ -1410,7 +1397,7 @@ impl P {
             let str_ = s.read_generic_literal("'")?;
             s.char_('\'')?;
             let id = s.end_span(start);
-            Ok(tk(id, T_DollarSingleQuoted(str_)))
+            Ok(tk(id, TDollarSingleQuoted(str_)))
         })
     }
 
@@ -1425,7 +1412,7 @@ impl P {
             |s| s.fail("Expected end of translated double quoted string"),
         )?;
         let id = self.end_span(start);
-        Ok(tk(id, T_DollarDoubleQuoted(x)))
+        Ok(tk(id, TDollarDoubleQuoted(x)))
     }
 
     fn read_dollar_arithmetic(&mut self) -> R<Token> {
@@ -1439,7 +1426,7 @@ impl P {
                 |s| s.fail("Expected a double )) to end the $((..))"),
             )?;
             let id = s.end_span(start);
-            Ok(tk(id, T_DollarArithmetic(bx(c))))
+            Ok(tk(id, TDollarArithmetic(Box::new(c))))
         })
     }
 
@@ -1450,7 +1437,7 @@ impl P {
             let c = s.read_arithmetic_contents()?;
             s.string("]")?;
             let id = s.end_span(start);
-            Ok(tk(id, T_DollarBracket(bx(c))))
+            Ok(tk(id, TDollarBracket(Box::new(c))))
         })
     }
 
@@ -1462,7 +1449,7 @@ impl P {
             s.string("))")?;
             let id = s.end_span(start);
             s.spacing()?;
-            Ok(tk(id, T_Arithmetic(bx(c))))
+            Ok(tk(id, TArithmetic(Box::new(c))))
         })
     }
 
@@ -1512,7 +1499,7 @@ impl P {
             } else {
                 super::ast::Piped::Unpiped
             };
-            Ok(tk(id, T_DollarBraceCommandExpansion(piped, term)))
+            Ok(tk(id, TDollarBraceCommandExpansion(piped, term)))
         })
     }
 
@@ -1523,7 +1510,7 @@ impl P {
             let word = s.read_dollar_braced_word()?;
             s.char_('}')?;
             let id = s.end_span(start);
-            Ok(tk(id, T_DollarBraced(true, bx(word))))
+            Ok(tk(id, TDollarBraced(true, Box::new(word))))
         })
     }
 
@@ -1537,7 +1524,7 @@ impl P {
                 |s| s.fail("Expected end of $(..) expression"),
             )?;
             let id = s.end_span(start);
-            Ok(tk(id, T_DollarExpansion(cmds)))
+            Ok(tk(id, TDollarExpansion(cmds)))
         })
     }
 
@@ -1547,7 +1534,7 @@ impl P {
         let end = self.pos;
         let id1 = self.next_id_between(start, end);
         let id2 = self.next_id_between(start, end);
-        Ok(tk(id1, T_NormalWord(vec![tk(id2, T_Literal(s))])))
+        Ok(tk(id1, TNormalWord(vec![tk(id2, TLiteral(s))])))
     }
 
     fn read_dollar_variable(&mut self) -> R<Token> {
@@ -1560,9 +1547,9 @@ impl P {
                     // positional
                     let value = s.wrap_string(|s| s.digit().map(|c| c.to_string()))?;
                     let id = s.end_span(start);
-                    let t = tk(id, T_DollarBraced(false, bx(value)));
+                    let t = tk(id, TDollarBraced(false, Box::new(value)));
                     s.attempting(
-                        |s| s.ok(t.clone()),
+                        |_| Ok(t.clone()),
                         |s| {
                             s.look_ahead(Self::digit)?;
                             s.parse_note_at(pos, ErrorC, 1037, "Braces are required for positionals over 9, e.g. ${10}.");
@@ -1575,14 +1562,14 @@ impl P {
                         |s| {
                             let value = s.wrap_string(|s| s.special_variable().map(|c| c.to_string()))?;
                             let id = s.end_span(start);
-                            Ok(tk(id, T_DollarBraced(false, bx(value))))
+                            Ok(tk(id, TDollarBraced(false, Box::new(value))))
                         },
                         |s| {
                             let value = s.wrap_string(Self::read_variable_name)?;
                             let id = s.end_span(start);
-                            let t = tk(id, T_DollarBraced(false, bx(value)));
+                            let t = tk(id, TDollarBraced(false, Box::new(value)));
                             s.attempting(
-                                |s| s.ok(t.clone()),
+                                |_| Ok(t.clone()),
                                 |s| {
                                     s.look_ahead(|s| s.char_('['))?;
                                     s.parse_note_at(
@@ -1636,7 +1623,7 @@ impl P {
                 );
             }
         }
-        Ok(tk(id, T_Literal("$".to_string())))
+        Ok(tk(id, TLiteral("$".to_string())))
     }
 
     // ----- here documents
@@ -1647,7 +1634,7 @@ impl P {
             s.try_(|s| s.string("<<"))?;
             let dashed = s.alt(
                 |s| s.char_('-').map(|_| Dashed::Dashed),
-                |s| s.ok(Dashed::Undashed),
+                |_| Ok(Dashed::Undashed),
             )?;
             let sp = s.spacing()?;
             s.optional(|s| {
@@ -1664,7 +1651,7 @@ impl P {
                     s.carriage_return()?;
                     Ok(format!("{str_}\r"))
                 },
-                |s| s.ok(str_.clone()),
+                |_| Ok(str_.clone()),
             )?;
             let (quoted, end_token) = unquote_here_doc_token(&crstr);
             let hid = s.end_span(start);
@@ -1676,7 +1663,7 @@ impl P {
                 end_token: end_token.clone(),
                 contexts,
             });
-            Ok(tk(hid, T_HereDoc(dashed, quoted, end_token, Vec::new())))
+            Ok(tk(hid, THereDoc(dashed, quoted, end_token, Vec::new())))
         })
     }
 
@@ -1710,7 +1697,7 @@ impl P {
             let list = match quoted {
                 Quoted::Quoted => {
                     let lid = s.next_id_between(doc_start, doc_end);
-                    vec![tk(lid, T_Literal(here_data))]
+                    vec![tk(lid, TLiteral(here_data))]
                 }
                 Quoted::Unquoted => s.sub_parse(doc_start, &here_data, |s| {
                     s.many(|s| {
@@ -1719,7 +1706,7 @@ impl P {
                             let chars: String =
                                 s.many1(|s| s.none_of("`$\\"))?.into_iter().collect();
                             let id = s.end_span(start);
-                            Ok(tk(id, T_Literal(chars)))
+                            Ok(tk(id, TLiteral(chars)))
                         })
                     })
                 })?,
@@ -1885,8 +1872,8 @@ impl P {
             &mut Self::g_greatand,
             &mut Self::g_lessand,
             &mut Self::g_clobber,
-            &mut |s: &mut Self| s.redir_token('<', T_Less),
-            &mut |s: &mut Self| s.redir_token('>', T_Greater),
+            &mut |s: &mut Self| s.redir_token('<', TLess),
+            &mut |s: &mut Self| s.redir_token('>', TGreater),
         ])
     }
 
@@ -1904,7 +1891,7 @@ impl P {
                 Ok(format!("{digits}{dash}"))
             })?;
             let id = s.end_span(start);
-            Ok(tk(id, T_IoDuplicate(bx(op), target)))
+            Ok(tk(id, TIoDuplicate(Box::new(op), target)))
         })
     }
 
@@ -1915,7 +1902,7 @@ impl P {
             s.spacing()?;
             let file = s.read_normal_word()?;
             let id = s.end_span(start);
-            Ok(tk(id, T_IoFile(bx(op), bx(file))))
+            Ok(tk(id, TIoFile(Box::new(op), Box::new(file))))
         })
     }
 
@@ -1959,7 +1946,7 @@ impl P {
         let id = self.end_span(start);
         self.skip_annotation_and_warn()?;
         self.spacing()?;
-        Ok(tk(id, T_FdRedirect(n, bx(redir))))
+        Ok(tk(id, TFdRedirect(n, Box::new(redir))))
     }
 
     fn read_here_string(&mut self) -> R<Token> {
@@ -1969,7 +1956,7 @@ impl P {
             let id = s.end_span(start);
             s.spacing()?;
             let word = s.read_normal_word()?;
-            Ok(tk(id, T_HereString(bx(word))))
+            Ok(tk(id, THereString(Box::new(word))))
         })
     }
 
@@ -1999,7 +1986,7 @@ impl P {
         let start = self.start_span();
         let s = self.read_string_for_parser(parser)?;
         let id = self.end_span(start);
-        Ok(tk(id, T_Literal(s)))
+        Ok(tk(id, TLiteral(s)))
     }
 }
 

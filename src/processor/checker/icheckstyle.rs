@@ -175,7 +175,7 @@ inventory::submit! {
         "required_tools",
         "batch",
     ],
-        scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &[".java"], src_exclude_dirs: &[] }),
+        scan_defaults: Some(crate::config::ScanDefaultsData { src_extensions: &[".java"], src_exclude_dirs: &[] }),
         defaults: Some(crate::config::ProcessorDefaults { dep_auto: &["checkstyle.xml"], ..crate::config::ProcessorDefaults::EMPTY }),
         keywords: &["java", "linter", "checker", "style", "checkstyle", "rust"],
         description: "Check Java code with checkstyle's checks (in-process)",

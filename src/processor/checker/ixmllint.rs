@@ -212,7 +212,7 @@ inventory::submit! {
                 doc: "Fail on namespace errors and parser warnings too (default: they are printed and the file passes, as xmllint exits 0 on them)" },
         ],
         omit_standard_fields: &["command", "formats", "args", "output_dir", "required_tools"],
-        scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &[".xml", ".svg"], src_exclude_dirs: &[] }),
+        scan_defaults: Some(crate::config::ScanDefaultsData { src_extensions: &[".xml", ".svg"], src_exclude_dirs: &[] }),
         defaults: None,
         keywords: &["xml", "svg", "linter", "validator", "xsd", "xmllint", "rust"],
         description: "Check XML well-formedness and validate against an XSD schema (in-process)",

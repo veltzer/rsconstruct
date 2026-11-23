@@ -8,19 +8,18 @@ use super::hchar;
 use super::regex::{Regex, mk_regex};
 
 use Inner::{
-    T_Annotation, T_Assignment, T_Backticked, T_BatsTest, T_BraceExpansion, T_BraceGroup,
-    T_DollarArithmetic, T_DollarBraceCommandExpansion, T_DollarBraced, T_DollarDoubleQuoted,
-    T_DollarExpansion, T_DollarSingleQuoted, T_DoubleQuoted, T_Extglob, T_ForArithmetic, T_ForIn,
-    T_Function, T_GREATAND, T_Glob, T_IfExpression, T_IoDuplicate, T_LESSAND, T_Literal,
-    T_NormalWord, T_ParamSubSpecialChar, T_Pipeline, T_Redirecting, T_Script, T_SelectIn,
-    T_SimpleCommand, T_SingleQuoted, T_Subshell, T_UntilExpression, T_WhileExpression,
-    TA_Expansion, TA_Sequence,
+    TAnnotation, TAssignment, TBackticked, TBatsTest, TBraceExpansion, TBraceGroup,
+    TDollarArithmetic, TDollarBraceCommandExpansion, TDollarBraced, TDollarDoubleQuoted,
+    TDollarExpansion, TDollarSingleQuoted, TDoubleQuoted, TExtglob, TForArithmetic, TForIn,
+    TFunction, TGlob, TIfExpression, TIoDuplicate, TLexGreatand, TLexLessand, TLiteral,
+    TNormalWord, TParamSubSpecialChar, TPipeline, TRedirecting, TScript, TSelectIn, TSimpleCommand,
+    TSingleQuoted, TSubshell, TUntilExpression, TWhileExpression, TaExpansion, TaSequence,
 };
 
 /// `arguments`: a simple command's arguments after the name.
 pub fn arguments(t: &Token) -> &[Token] {
     match &t.inner {
-        T_SimpleCommand(_, words) if !words.is_empty() => &words[1..],
+        TSimpleCommand(_, words) if !words.is_empty() => &words[1..],
         _ => panic!("arguments on a non-command"),
     }
 }
@@ -28,32 +27,28 @@ pub fn arguments(t: &Token) -> &[Token] {
 pub const fn is_loop(t: &Token) -> bool {
     matches!(
         t.inner,
-        T_WhileExpression(..)
-            | T_UntilExpression(..)
-            | T_ForIn(..)
-            | T_ForArithmetic(..)
-            | T_SelectIn(..)
+        TWhileExpression(..)
+            | TUntilExpression(..)
+            | TForIn(..)
+            | TForArithmetic(..)
+            | TSelectIn(..)
     )
 }
 
 pub fn will_split(x: &Token) -> bool {
     match &x.inner {
-        T_DollarBraced(..)
-        | T_DollarExpansion(..)
-        | T_Backticked(..)
-        | T_BraceExpansion(..)
-        | T_Glob(..)
-        | T_Extglob(..) => true,
-        T_DoubleQuoted(l) => l.iter().any(will_become_multiple_args),
-        T_NormalWord(l) => l.iter().any(will_split),
+        TDollarBraced(..) | TDollarExpansion(..) | TBackticked(..) | TBraceExpansion(..)
+        | TGlob(..) | TExtglob(..) => true,
+        TDoubleQuoted(l) => l.iter().any(will_become_multiple_args),
+        TNormalWord(l) => l.iter().any(will_split),
         _ => false,
     }
 }
 
 pub fn is_glob(t: &Token) -> bool {
     match &t.inner {
-        T_Extglob(..) | T_Glob(..) => true,
-        T_NormalWord(l) => l.iter().any(is_glob) || has_split_range(l),
+        TExtglob(..) | TGlob(..) => true,
+        TNormalWord(l) => l.iter().any(is_glob) || has_split_range(l),
         _ => false,
     }
 }
@@ -61,18 +56,17 @@ pub fn is_glob(t: &Token) -> bool {
 fn has_split_range(l: &[Token]) -> bool {
     let after = l
         .iter()
-        .skip_while(|t| !matches!(&t.inner, T_Literal(s) if s == "["));
+        .skip_while(|t| !matches!(&t.inner, TLiteral(s) if s == "["));
     after
         .into_iter()
-        .any(|t| matches!(&t.inner, T_Literal(s) if s.contains(']')))
+        .any(|t| matches!(&t.inner, TLiteral(s) if s.contains(']')))
 }
 
 pub fn is_constant(token: &Token) -> bool {
     match &token.inner {
-        T_NormalWord(l) => {
+        TNormalWord(l) => {
             if let Some(Token {
-                inner: T_Literal(s),
-                ..
+                inner: TLiteral(s), ..
             }) = l.first()
                 && s.starts_with('~')
             {
@@ -80,8 +74,8 @@ pub fn is_constant(token: &Token) -> bool {
             }
             l.iter().all(is_constant)
         }
-        T_DoubleQuoted(l) => l.iter().all(is_constant),
-        T_SingleQuoted(_) | T_Literal(_) => true,
+        TDoubleQuoted(l) => l.iter().all(is_constant),
+        TSingleQuoted(_) | TLiteral(_) => true,
         _ => false,
     }
 }
@@ -89,22 +83,22 @@ pub fn is_constant(token: &Token) -> bool {
 /// `oversimplify`.
 pub fn oversimplify(token: &Token) -> Vec<String> {
     match &token.inner {
-        T_NormalWord(l) | T_DoubleQuoted(l) => {
+        TNormalWord(l) | TDoubleQuoted(l) => {
             vec![l.iter().flat_map(oversimplify).collect::<String>()]
         }
-        T_SingleQuoted(s)
-        | T_Glob(s)
-        | T_Literal(s)
-        | T_ParamSubSpecialChar(s)
-        | T_DollarSingleQuoted(s) => vec![s.clone()],
-        T_DollarBraced(..) | T_DollarArithmetic(_) | T_DollarExpansion(_) | T_Backticked(_) => {
+        TSingleQuoted(s)
+        | TGlob(s)
+        | TLiteral(s)
+        | TParamSubSpecialChar(s)
+        | TDollarSingleQuoted(s) => vec![s.clone()],
+        TDollarBraced(..) | TDollarArithmetic(_) | TDollarExpansion(_) | TBackticked(_) => {
             vec!["${VAR}".to_string()]
         }
-        T_Pipeline(_, cmds) if cmds.len() == 1 => oversimplify(&cmds[0]),
-        T_SimpleCommand(_, words) => words.iter().flat_map(oversimplify).collect(),
-        T_Redirecting(_, cmd) | T_Annotation(_, cmd) => oversimplify(cmd),
-        TA_Sequence(l) if l.len() == 1 => match &l[0].inner {
-            TA_Expansion(v) => v.iter().flat_map(oversimplify).collect(),
+        TPipeline(_, cmds) if cmds.len() == 1 => oversimplify(&cmds[0]),
+        TSimpleCommand(_, words) => words.iter().flat_map(oversimplify).collect(),
+        TRedirecting(_, cmd) | TAnnotation(_, cmd) => oversimplify(cmd),
+        TaSequence(l) if l.len() == 1 => match &l[0].inner {
+            TaExpansion(v) => v.iter().flat_map(oversimplify).collect(),
             _ => Vec::new(),
         },
         _ => Vec::new(),
@@ -120,7 +114,7 @@ pub fn get_flags_until<'a>(
     stop: &dyn Fn(&str) -> bool,
     cmd: &'a Token,
 ) -> Vec<(&'a Token, String)> {
-    let T_SimpleCommand(_, words) = &cmd.inner else {
+    let TSimpleCommand(_, words) = &cmd.inner else {
         panic!("getFlags on non-command");
     };
     assert!(!words.is_empty(), "getFlags on non-command");
@@ -160,7 +154,7 @@ pub fn has_flag(cmd: &Token, s: &str) -> bool {
 }
 
 pub fn is_flag(token: &Token) -> bool {
-    matches!(get_word_parts(token).first(), Some(Token { inner: T_Literal(s), .. }) if s.starts_with('-'))
+    matches!(get_word_parts(token).first(), Some(Token { inner: TLiteral(s), .. }) if s.starts_with('-'))
 }
 
 pub fn is_unquoted_flag(token: &Token) -> bool {
@@ -337,7 +331,7 @@ pub fn get_generic_opts(args: &[Token]) -> Opts<'_> {
 
 pub fn is_array_expansion(t: &Token) -> bool {
     match &t.inner {
-        T_DollarBraced(_, l) => {
+        TDollarBraced(_, l) => {
             let s = concat_oversimplify(l);
             s.starts_with('@') || (!s.starts_with('#') && s.contains("[@]"))
         }
@@ -348,12 +342,12 @@ pub fn is_array_expansion(t: &Token) -> bool {
 pub fn may_become_multiple_args(t: &Token) -> bool {
     fn f(quoted: bool, t: &Token) -> bool {
         match &t.inner {
-            T_DollarBraced(_, l) => {
+            TDollarBraced(_, l) => {
                 let s = concat_oversimplify(l);
                 !quoted || s.starts_with('!')
             }
-            T_DoubleQuoted(parts) => parts.iter().any(|p| f(true, p)),
-            T_NormalWord(parts) => parts.iter().any(|p| f(quoted, p)),
+            TDoubleQuoted(parts) => parts.iter().any(|p| f(true, p)),
+            TNormalWord(parts) => parts.iter().any(|p| f(quoted, p)),
             _ => false,
         }
     }
@@ -363,8 +357,8 @@ pub fn may_become_multiple_args(t: &Token) -> bool {
 pub fn will_become_multiple_args(t: &Token) -> bool {
     fn f(t: &Token) -> bool {
         match &t.inner {
-            T_Extglob(..) | T_Glob(_) | T_BraceExpansion(_) => true,
-            T_NormalWord(parts) => parts.iter().any(f),
+            TExtglob(..) | TGlob(_) | TBraceExpansion(_) => true,
+            TNormalWord(parts) => parts.iter().any(f),
             _ => false,
         }
     }
@@ -373,8 +367,8 @@ pub fn will_become_multiple_args(t: &Token) -> bool {
 
 pub fn will_concat_in_assignment(token: &Token) -> bool {
     match &token.inner {
-        T_DollarBraced(..) => is_array_expansion(token),
-        T_DoubleQuoted(parts) | T_NormalWord(parts) => parts.iter().any(will_concat_in_assignment),
+        TDollarBraced(..) => is_array_expansion(token),
+        TDoubleQuoted(parts) | TNormalWord(parts) => parts.iter().any(will_concat_in_assignment),
         _ => false,
     }
 }
@@ -385,15 +379,15 @@ pub fn get_literal_string_ext(
     more: &dyn Fn(&Token) -> Option<String>,
 ) -> Option<String> {
     match &t.inner {
-        T_DoubleQuoted(l) | T_DollarDoubleQuoted(l) | T_NormalWord(l) | TA_Expansion(l) => {
+        TDoubleQuoted(l) | TDollarDoubleQuoted(l) | TNormalWord(l) | TaExpansion(l) => {
             let mut out = String::new();
             for x in l {
                 out.push_str(&get_literal_string_ext(x, more)?);
             }
             Some(out)
         }
-        T_SingleQuoted(s) | T_Literal(s) | T_ParamSubSpecialChar(s) => Some(s.clone()),
-        T_DollarSingleQuoted(s) => Some(decode_escapes(s)),
+        TSingleQuoted(s) | TLiteral(s) | TParamSubSpecialChar(s) => Some(s.clone()),
+        TDollarSingleQuoted(s) => Some(decode_escapes(s)),
         _ => more(t),
     }
 }
@@ -482,11 +476,11 @@ pub fn only_literal_string(t: &Token) -> String {
 
 pub fn get_unquoted_literal(t: &Token) -> Option<String> {
     match &t.inner {
-        T_NormalWord(list) => {
+        TNormalWord(list) => {
             let mut out = String::new();
             for x in list {
                 match &x.inner {
-                    T_Literal(s) => out.push_str(s),
+                    TLiteral(s) => out.push_str(s),
                     _ => return None,
                 }
             }
@@ -497,16 +491,15 @@ pub fn get_unquoted_literal(t: &Token) -> Option<String> {
 }
 
 pub const fn is_quotes(t: &Token) -> bool {
-    matches!(t.inner, T_DoubleQuoted(_) | T_SingleQuoted(_))
+    matches!(t.inner, TDoubleQuoted(_) | TSingleQuoted(_))
 }
 
 pub fn get_trailing_unquoted_literal(t: &Token) -> Option<&Token> {
     match &t.inner {
-        T_NormalWord(parts) => match parts.last() {
+        TNormalWord(parts) => match parts.last() {
             Some(
                 last @ Token {
-                    inner: T_Literal(_),
-                    ..
+                    inner: TLiteral(_), ..
                 },
             ) => Some(last),
             _ => None,
@@ -517,15 +510,14 @@ pub fn get_trailing_unquoted_literal(t: &Token) -> Option<&Token> {
 
 pub fn get_leading_unquoted_string(t: &Token) -> Option<String> {
     match &t.inner {
-        T_NormalWord(list) => match list.first() {
+        TNormalWord(list) => match list.first() {
             Some(Token {
-                inner: T_Literal(s),
-                ..
+                inner: TLiteral(s), ..
             }) => {
                 let mut out = s.clone();
                 for x in &list[1..] {
                     match &x.inner {
-                        T_Literal(s) => out.push_str(s),
+                        TLiteral(s) => out.push_str(s),
                         _ => break,
                     }
                 }
@@ -539,7 +531,7 @@ pub fn get_leading_unquoted_string(t: &Token) -> Option<String> {
 
 pub fn get_glob_or_literal_string(t: &Token) -> Option<String> {
     get_literal_string_ext(t, &|x| match &x.inner {
-        T_Glob(s) => Some(s.clone()),
+        TGlob(s) => Some(s.clone()),
         _ => None,
     })
 }
@@ -582,21 +574,21 @@ pub fn e4m(s: &str) -> String {
 /// `getWordParts`.
 pub fn get_word_parts(t: &Token) -> Vec<&Token> {
     match &t.inner {
-        T_NormalWord(l) | TA_Expansion(l) => l.iter().flat_map(get_word_parts).collect(),
-        T_DoubleQuoted(l) => l.iter().collect(),
+        TNormalWord(l) | TaExpansion(l) => l.iter().flat_map(get_word_parts).collect(),
+        TDoubleQuoted(l) => l.iter().collect(),
         _ => vec![t],
     }
 }
 
 /// `braceExpand`: at most 1000 words.
 pub fn brace_expand(t: &Token) -> Vec<Token> {
-    let T_NormalWord(list) = &t.inner else {
+    let TNormalWord(list) = &t.inner else {
         panic!("braceExpand on a non-word");
     };
     let options: Vec<Vec<Token>> = list
         .iter()
         .map(|part| match &part.inner {
-            T_BraceExpansion(items) => items.iter().flat_map(brace_expand).collect(),
+            TBraceExpansion(items) => items.iter().flat_map(brace_expand).collect(),
             _ => vec![part.clone()],
         })
         .collect();
@@ -617,7 +609,7 @@ fn product(
         return;
     }
     if i == options.len() {
-        out.push(Token::new(id, T_NormalWord(current.clone())));
+        out.push(Token::new(id, TNormalWord(current.clone())));
         return;
     }
     for opt in &options[i] {
@@ -633,8 +625,8 @@ fn product(
 /// `getCommand`.
 pub fn get_command(t: &Token) -> Option<&Token> {
     match &t.inner {
-        T_Redirecting(_, w) | T_Annotation(_, w) => get_command(w),
-        T_SimpleCommand(_, words) if !words.is_empty() => Some(t),
+        TRedirecting(_, w) | TAnnotation(_, w) => get_command(w),
+        TSimpleCommand(_, words) if !words.is_empty() => Some(t),
         _ => None,
     }
 }
@@ -645,7 +637,7 @@ pub fn get_command_name(t: &Token) -> Option<String> {
 
 pub fn get_command_argv(t: &Token) -> Option<&[Token]> {
     match &get_command(t)?.inner {
-        T_SimpleCommand(_, args) if !args.is_empty() => Some(args),
+        TSimpleCommand(_, args) if !args.is_empty() => Some(args),
         _ => None,
     }
 }
@@ -659,7 +651,7 @@ pub fn get_command_name_and_token(direct: bool, t: &Token) -> (Option<String>, &
     let Some(cmd) = get_command(t) else {
         return (None, t);
     };
-    let T_SimpleCommand(_, words) = &cmd.inner else {
+    let TSimpleCommand(_, words) = &cmd.inner else {
         return (None, t);
     };
     let (w, rest) = words
@@ -692,7 +684,7 @@ fn get_effective_command_token<'a>(s: &str, args: &'a [Token]) -> Option<&'a Tok
 }
 
 pub fn get_command_name_from_expansion(t: &Token) -> Option<String> {
-    let (T_DollarExpansion(cmds) | T_Backticked(cmds) | T_DollarBraceCommandExpansion(_, cmds)) =
+    let (TDollarExpansion(cmds) | TBackticked(cmds) | TDollarBraceCommandExpansion(_, cmds)) =
         &t.inner
     else {
         return None;
@@ -701,7 +693,7 @@ pub fn get_command_name_from_expansion(t: &Token) -> Option<String> {
         return None;
     }
     match &cmds[0].inner {
-        T_Pipeline(_, cmd) if cmd.len() == 1 => get_command_name(&cmd[0]),
+        TPipeline(_, cmd) if cmd.len() == 1 => get_command_name(&cmd[0]),
         _ => None,
     }
 }
@@ -716,50 +708,50 @@ pub fn basename(s: &str) -> &str {
 
 pub fn is_assignment(t: &Token) -> bool {
     match &t.inner {
-        T_Redirecting(_, w) | T_Annotation(_, w) => is_assignment(w),
-        T_SimpleCommand(assigns, words) => !assigns.is_empty() && words.is_empty(),
-        T_Assignment(..) => true,
+        TRedirecting(_, w) | TAnnotation(_, w) => is_assignment(w),
+        TSimpleCommand(assigns, words) => !assigns.is_empty() && words.is_empty(),
+        TAssignment(..) => true,
         _ => false,
     }
 }
 
 pub fn is_only_redirection(t: &Token) -> bool {
     match &t.inner {
-        T_Pipeline(_, cmds) if cmds.len() == 1 => is_only_redirection(&cmds[0]),
-        T_Annotation(_, w) => is_only_redirection(w),
-        T_Redirecting(redirs, c) if !redirs.is_empty() => is_only_redirection(c),
-        T_SimpleCommand(a, w) => a.is_empty() && w.is_empty(),
+        TPipeline(_, cmds) if cmds.len() == 1 => is_only_redirection(&cmds[0]),
+        TAnnotation(_, w) => is_only_redirection(w),
+        TRedirecting(redirs, c) if !redirs.is_empty() => is_only_redirection(c),
+        TSimpleCommand(a, w) => a.is_empty() && w.is_empty(),
         _ => false,
     }
 }
 
 pub const fn is_function(t: &Token) -> bool {
-    matches!(t.inner, T_Function(..))
+    matches!(t.inner, TFunction(..))
 }
 
 pub const fn is_function_like(t: &Token) -> bool {
-    matches!(t.inner, T_Function(..) | T_BatsTest(..))
+    matches!(t.inner, TFunction(..) | TBatsTest(..))
 }
 
 pub const fn is_brace_expansion(t: &Token) -> bool {
-    matches!(t.inner, T_BraceExpansion(_))
+    matches!(t.inner, TBraceExpansion(_))
 }
 
 /// `getCommandSequences`.
 pub fn get_command_sequences(t: &Token) -> Vec<&[Token]> {
     match &t.inner {
-        T_Script(_, cmds)
-        | T_BraceGroup(cmds)
-        | T_Subshell(cmds)
-        | T_ForIn(_, _, cmds)
-        | T_ForArithmetic(_, _, _, cmds)
-        | T_DollarExpansion(cmds)
-        | T_DollarBraceCommandExpansion(_, cmds)
-        | T_Backticked(cmds) => vec![cmds.as_slice()],
-        T_WhileExpression(cond, cmds) | T_UntilExpression(cond, cmds) => {
+        TScript(_, cmds)
+        | TBraceGroup(cmds)
+        | TSubshell(cmds)
+        | TForIn(_, _, cmds)
+        | TForArithmetic(_, _, _, cmds)
+        | TDollarExpansion(cmds)
+        | TDollarBraceCommandExpansion(_, cmds)
+        | TBackticked(cmds) => vec![cmds.as_slice()],
+        TWhileExpression(cond, cmds) | TUntilExpression(cond, cmds) => {
             vec![cond.as_slice(), cmds.as_slice()]
         }
-        T_IfExpression(thens, elses) => {
+        TIfExpression(thens, elses) => {
             let mut out: Vec<&[Token]> = Vec::new();
             for (a, b) in thens {
                 out.push(a);
@@ -768,7 +760,7 @@ pub fn get_command_sequences(t: &Token) -> Vec<&[Token]> {
             out.push(elses);
             out
         }
-        T_Annotation(_, t) => get_command_sequences(t),
+        TAnnotation(_, t) => get_command_sequences(t),
         _ => Vec::new(),
     }
 }
@@ -777,7 +769,7 @@ pub fn get_command_sequences(t: &Token) -> Vec<&[Token]> {
 pub fn get_associative_arrays(t: &Token) -> Vec<String> {
     let mut names: Vec<String> = Vec::new();
     do_analysis(t, &mut |t| {
-        if !matches!(t.inner, T_SimpleCommand(..)) {
+        if !matches!(t.inner, TSimpleCommand(..)) {
             return;
         }
         let Some(name) = get_command_name(t) else {
@@ -795,7 +787,7 @@ pub fn get_associative_arrays(t: &Token) -> Vec<String> {
                 continue;
             }
             let found = get_literal_string_ext(arg, &|x| match &x.inner {
-                T_Assignment(_, name, _, _) => Some(name.clone()),
+                TAssignment(_, name, _, _) => Some(name.clone()),
                 _ => None,
             });
             if let Some(n) = found {
@@ -813,18 +805,14 @@ pub fn get_associative_arrays(t: &Token) -> Vec<String> {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-#[allow(
-    clippy::enum_variant_names,
-    reason = "mirrors ShellCheck's `PseudoGlob` constructors"
-)]
 pub enum PseudoGlob {
-    PGAny,
-    PGMany,
-    PGChar(char),
+    Any,
+    Many,
+    Char(char),
 }
 
 pub fn word_to_pseudo_glob(word: &Token) -> Vec<PseudoGlob> {
-    word_to_pseudo_glob_ext(false, word).unwrap_or_else(|| vec![PseudoGlob::PGMany])
+    word_to_pseudo_glob_ext(false, word).unwrap_or_else(|| vec![PseudoGlob::Many])
 }
 
 pub fn word_to_exact_pseudo_glob(word: &Token) -> Option<Vec<PseudoGlob>> {
@@ -834,39 +822,34 @@ pub fn word_to_exact_pseudo_glob(word: &Token) -> Option<Vec<PseudoGlob>> {
 fn word_to_pseudo_glob_ext(exact: bool, word: &Token) -> Option<Vec<PseudoGlob>> {
     let f = |x: &Token| -> Option<Vec<PseudoGlob>> {
         match &x.inner {
-            T_Literal(s) | T_SingleQuoted(s) => Some(s.chars().map(PseudoGlob::PGChar).collect()),
-            T_Glob(s) if s == "?" => Some(vec![PseudoGlob::PGAny]),
-            T_Glob(s) if s == "*" => Some(vec![PseudoGlob::PGMany]),
-            T_Glob(s) if s.starts_with('[') && !exact => Some(vec![PseudoGlob::PGAny]),
+            TLiteral(s) | TSingleQuoted(s) => Some(s.chars().map(PseudoGlob::Char).collect()),
+            TGlob(s) if s == "?" => Some(vec![PseudoGlob::Any]),
+            TGlob(s) if s == "*" => Some(vec![PseudoGlob::Many]),
+            TGlob(s) if s.starts_with('[') && !exact => Some(vec![PseudoGlob::Any]),
             _ => {
                 if exact {
                     None
                 } else {
-                    Some(vec![PseudoGlob::PGMany])
+                    Some(vec![PseudoGlob::Many])
                 }
             }
         }
     };
     let glob = match &word.inner {
-        T_NormalWord(parts) if matches!(parts.first(), Some(Token { inner: T_Literal(s), .. }) if s.starts_with('~')) =>
+        TNormalWord(parts) if matches!(parts.first(), Some(Token { inner: TLiteral(s), .. }) if s.starts_with('~')) =>
         {
             if exact {
                 return None;
             }
             let Some(Token {
-                inner: T_Literal(s),
-                ..
+                inner: TLiteral(s), ..
             }) = parts.first()
             else {
                 return None;
             };
             let str_ = &s[1..];
-            let mut this = vec![PseudoGlob::PGMany];
-            this.extend(
-                str_.chars()
-                    .skip_while(|&c| c != '/')
-                    .map(PseudoGlob::PGChar),
-            );
+            let mut this = vec![PseudoGlob::Many];
+            this.extend(str_.chars().skip_while(|&c| c != '/').map(PseudoGlob::Char));
             for p in parts[1..].iter().flat_map(get_word_parts) {
                 this.extend(f(p)?);
             }
@@ -888,19 +871,19 @@ pub fn simplify_pseudo_glob(list: &[PseudoGlob]) -> Vec<PseudoGlob> {
     let mut out = Vec::new();
     let mut i = 0;
     while i < list.len() {
-        if let PseudoGlob::PGChar(_) = list[i] {
+        if let PseudoGlob::Char(_) = list[i] {
             out.push(list[i]);
             i += 1;
             continue;
         }
         let start = i;
-        while i < list.len() && matches!(list[i], PseudoGlob::PGMany | PseudoGlob::PGAny) {
+        while i < list.len() && matches!(list[i], PseudoGlob::Many | PseudoGlob::Any) {
             i += 1;
         }
         let run = &list[start..i];
-        out.extend(run.iter().filter(|x| **x == PseudoGlob::PGAny));
-        if run.contains(&PseudoGlob::PGMany) {
-            out.push(PseudoGlob::PGMany);
+        out.extend(run.iter().filter(|x| **x == PseudoGlob::Any));
+        if run.contains(&PseudoGlob::Many) {
+            out.push(PseudoGlob::Many);
         }
     }
     out
@@ -909,14 +892,14 @@ pub fn simplify_pseudo_glob(list: &[PseudoGlob]) -> Vec<PseudoGlob> {
 pub fn pseudo_globs_can_overlap(x: &[PseudoGlob], y: &[PseudoGlob]) -> bool {
     match (x.split_first(), y.split_first()) {
         (Some((xf, xs)), Some((yf, ys))) => match (xf, yf) {
-            (PseudoGlob::PGMany, _) | (_, PseudoGlob::PGMany) => {
+            (PseudoGlob::Many, _) | (_, PseudoGlob::Many) => {
                 pseudo_globs_can_overlap(x, ys) || pseudo_globs_can_overlap(xs, y)
             }
-            (PseudoGlob::PGAny, _) | (_, PseudoGlob::PGAny) => pseudo_globs_can_overlap(xs, ys),
+            (PseudoGlob::Any, _) | (_, PseudoGlob::Any) => pseudo_globs_can_overlap(xs, ys),
             _ => xf == yf && pseudo_globs_can_overlap(xs, ys),
         },
         (None, None) => true,
-        (Some((PseudoGlob::PGMany, rest)), None) => pseudo_globs_can_overlap(rest, &[]),
+        (Some((PseudoGlob::Many, rest)), None) => pseudo_globs_can_overlap(rest, &[]),
         (Some(_), None) => false,
         (None, Some(_)) => pseudo_globs_can_overlap(y, &[]),
     }
@@ -925,17 +908,17 @@ pub fn pseudo_globs_can_overlap(x: &[PseudoGlob], y: &[PseudoGlob]) -> bool {
 pub fn pseudo_glob_is_super_set_of(x: &[PseudoGlob], y: &[PseudoGlob]) -> bool {
     match (x.split_first(), y.split_first()) {
         (Some((xf, xs)), Some((yf, ys))) => match (xf, yf) {
-            (PseudoGlob::PGMany, PseudoGlob::PGMany) => pseudo_glob_is_super_set_of(x, ys),
-            (PseudoGlob::PGMany, _) => {
+            (PseudoGlob::Many, PseudoGlob::Many) => pseudo_glob_is_super_set_of(x, ys),
+            (PseudoGlob::Many, _) => {
                 pseudo_glob_is_super_set_of(x, ys) || pseudo_glob_is_super_set_of(xs, y)
             }
-            (_, PseudoGlob::PGMany) => false,
-            (PseudoGlob::PGAny, _) => pseudo_glob_is_super_set_of(xs, ys),
-            (_, PseudoGlob::PGAny) => false,
+            (_, PseudoGlob::Many) => false,
+            (PseudoGlob::Any, _) => pseudo_glob_is_super_set_of(xs, ys),
+            (_, PseudoGlob::Any) => false,
             _ => xf == yf && pseudo_glob_is_super_set_of(xs, ys),
         },
         (None, None) => true,
-        (Some((PseudoGlob::PGMany, rest)), None) => pseudo_glob_is_super_set_of(rest, &[]),
+        (Some((PseudoGlob::Many, rest)), None) => pseudo_glob_is_super_set_of(rest, &[]),
         _ => false,
     }
 }
@@ -945,28 +928,28 @@ pub fn words_can_be_equal(x: &Token, y: &Token) -> bool {
 }
 
 pub const fn is_quoteable_expansion(t: &Token) -> bool {
-    matches!(t.inner, T_DollarBraced(..)) || is_command_substitution(t)
+    matches!(t.inner, TDollarBraced(..)) || is_command_substitution(t)
 }
 
 pub const fn is_command_substitution(t: &Token) -> bool {
     matches!(
         t.inner,
-        T_DollarExpansion(_) | T_DollarBraceCommandExpansion(..) | T_Backticked(_)
+        TDollarExpansion(_) | TDollarBraceCommandExpansion(..) | TBackticked(_)
     )
 }
 
 pub fn is_string_expansion(t: &Token) -> bool {
     is_command_substitution(t)
         || match &t.inner {
-            T_DollarArithmetic(_) => true,
-            T_DollarBraced(..) => !is_array_expansion(t),
+            TDollarArithmetic(_) => true,
+            TDollarBraced(..) => !is_array_expansion(t),
             _ => false,
         }
 }
 
 pub fn is_annotation_ignoring_code(code: i64, t: &Token) -> bool {
     match &t.inner {
-        T_Annotation(anns, _) => anns.iter().any(
+        TAnnotation(anns, _) => anns.iter().any(
             |a| matches!(a, Annotation::DisableComment(from, to) if code >= *from && code < *to),
         ),
         _ => false,
@@ -1113,8 +1096,8 @@ pub fn get_offset_references(mods: &str) -> Vec<String> {
 
 pub fn is_unmodified_parameter_expansion(t: &Token) -> bool {
     match &t.inner {
-        T_DollarBraced(false, _) => true,
-        T_DollarBraced(_, list) => {
+        TDollarBraced(false, _) => true,
+        TDollarBraced(_, list) => {
             let s = concat_oversimplify(list);
             get_braced_reference(&s) == s
         }
@@ -1124,7 +1107,7 @@ pub fn is_unmodified_parameter_expansion(t: &Token) -> bool {
 
 pub fn get_unmodified_parameter_expansion(t: &Token) -> Option<String> {
     match &t.inner {
-        T_DollarBraced(_, list) => {
+        TDollarBraced(_, list) => {
             let s = concat_oversimplify(list);
             if get_braced_reference(&s) == s {
                 Some(s)
@@ -1138,14 +1121,14 @@ pub fn get_unmodified_parameter_expansion(t: &Token) -> Option<String> {
 
 pub fn is_closing_file_op(op: &Token) -> bool {
     match &op.inner {
-        T_IoDuplicate(t, s) => s == "-" && matches!(t.inner, T_GREATAND | T_LESSAND),
+        TIoDuplicate(t, s) => s == "-" && matches!(t.inner, TLexGreatand | TLexLessand),
         _ => false,
     }
 }
 
 pub fn get_enable_directives(root: &Token) -> Vec<String> {
     match &root.inner {
-        T_Annotation(list, _) => list
+        TAnnotation(list, _) => list
             .iter()
             .filter_map(|a| match a {
                 Annotation::EnableComment(s) => Some(s.clone()),
@@ -1158,7 +1141,7 @@ pub fn get_enable_directives(root: &Token) -> Vec<String> {
 
 pub fn get_extended_analysis_directive(root: &Token) -> Option<bool> {
     match &root.inner {
-        T_Annotation(list, _) => list.iter().find_map(|a| match a {
+        TAnnotation(list, _) => list.iter().find_map(|a| match a {
             Annotation::ExtendedAnalysis(b) => Some(*b),
             _ => None,
         }),

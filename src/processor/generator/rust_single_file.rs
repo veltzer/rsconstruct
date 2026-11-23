@@ -150,7 +150,7 @@ inventory::submit! {
                 doc: "Suffix appended to output binary names" },
         ],
         omit_standard_fields: &["formats", "args", "batch"],
-        scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &[".rs"], src_exclude_dirs: &[] }),
+        scan_defaults: Some(crate::config::ScanDefaultsData { src_extensions: &[".rs"], src_exclude_dirs: &[] }),
         defaults: Some(crate::config::ProcessorDefaults { command: "rustc", output_dir: "out/processor.generator.rust_single_file", ..crate::config::ProcessorDefaults::EMPTY }),
         defconfig_json: crate::registries::default_config_json::<RustSingleFileConfig>,
         keywords: &["rust", "compiler", "rs", "cargo", "binary", "executable"],

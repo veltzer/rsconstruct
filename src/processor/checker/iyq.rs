@@ -174,7 +174,7 @@ inventory::submit! {
                 doc: "The jq filter evaluated over every YAML document; \".\" only checks that the YAML parses" },
         ],
         omit_standard_fields: &["command", "formats", "args", "output_dir", "required_tools"],
-        scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &[".yml", ".yaml"], src_exclude_dirs: &[] }),
+        scan_defaults: Some(crate::config::ScanDefaultsData { src_extensions: &[".yml", ".yaml"], src_exclude_dirs: &[] }),
         defaults: None,
         keywords: &["yaml", "yml", "jq", "checker", "validator", "rust"],
         description: "Check YAML files with a jq filter (in-process)",

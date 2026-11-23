@@ -24,7 +24,7 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     name: "pyrefly", processor_type: crate::processor::ProcessorType::Checker, create: create_pyrefly,
     fields: &[],
     omit_standard_fields: &["formats", "output_dir"],
-    scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &[".py"], src_exclude_dirs: &[] }),
+    scan_defaults: Some(crate::config::ScanDefaultsData { src_extensions: &[".py"], src_exclude_dirs: &[] }),
     defaults: Some(crate::config::ProcessorDefaults { command: "pyrefly", dep_auto: &["pyrefly.toml", "pyproject.toml"], hash_python_env: true, ..crate::config::ProcessorDefaults::EMPTY }),
     defconfig_json: crate::registries::default_config_json::<crate::config::StandardConfig>,
     keywords: &["python", "type-checker", "types", "py", "pip"],

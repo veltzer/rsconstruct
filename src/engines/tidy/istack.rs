@@ -44,7 +44,7 @@ impl Doc {
         if (model & CM_OBJECT) != 0 {
             return false;
         }
-        if self.node_is(node, TagId::INS) || self.node_is(node, TagId::DEL) {
+        if self.node_is(node, TagId::Ins) || self.node_is(node, TagId::Del) {
             return false;
         }
         true
@@ -58,7 +58,7 @@ impl Doc {
         if !self.is_node_pushable(node) {
             return;
         }
-        if !self.node_is(node, TagId::FONT) && self.is_pushed(node) {
+        if !self.node_is(node, TagId::Font) && self.is_pushed(node) {
             return;
         }
         let n = self.tree.node(node);

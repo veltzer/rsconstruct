@@ -51,11 +51,8 @@ fn validate_utf8(bytes: &[u8]) -> std::result::Result<(), String> {
     // Validate UTF-8
     if let Err(e) = std::str::from_utf8(bytes) {
         let byte_pos = e.valid_up_to();
-        // Find line number. Clippy suggests the `bytecount` crate; this runs
-        // once, only on the error path of a file that already failed UTF-8
-        // validation, so a whole dependency for it would not pay for itself.
-        #[allow(clippy::naive_bytecount)]
-        let line_num = bytes[..byte_pos].iter().filter(|&&b| b == b'\n').count() + 1;
+        // Find line number.
+        let line_num = bytecount::count(&bytes[..byte_pos], b'\n') + 1;
         return Err(format!(
             "invalid UTF-8 at byte {byte_pos} (line {line_num})"
         ));
@@ -102,7 +99,7 @@ inventory::submit! {
         defconfig_json: crate::registries::default_config_json::<crate::config::CheckerConfig>,
         fields: &[],
         omit_standard_fields: &["command", "formats", "args", "output_dir", "required_tools"],
-        scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &[".py", ".rs", ".js", ".ts", ".c", ".cc", ".h", ".hh", ".java", ".rb", ".go", ".sh", ".bash", ".lua", ".pl", ".pm", ".php", ".md", ".yaml", ".yml", ".json", ".toml", ".xml", ".html", ".htm", ".css", ".scss", ".sass", ".tex", ".txt"], src_exclude_dirs: &[] }),
+        scan_defaults: Some(crate::config::ScanDefaultsData { src_extensions: &[".py", ".rs", ".js", ".ts", ".c", ".cc", ".h", ".hh", ".java", ".rb", ".go", ".sh", ".bash", ".lua", ".pl", ".pm", ".php", ".md", ".yaml", ".yml", ".json", ".toml", ".xml", ".html", ".htm", ".css", ".scss", ".sass", ".tex", ".txt"], src_exclude_dirs: &[] }),
         defaults: None,
         keywords: &["checker", "encoding", "utf8", "text", "validator"],
         description: "Validate that text files are valid UTF-8 without BOM",

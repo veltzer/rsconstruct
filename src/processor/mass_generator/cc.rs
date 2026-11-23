@@ -375,20 +375,19 @@ impl CcProcessor {
     }
 
     /// Link object files into an executable.
-    /// `has_cxx` selects the C++ driver, which C++ objects need at link time.
-    #[allow(clippy::too_many_arguments)]
+    /// `compiler` is the driver to link with: the C++ driver when any object
+    /// is C++, which C++ objects need at link time. `ldflags` are the
+    /// manifest's, then the program's.
     fn link_program(
         ctx: &crate::build_context::BuildContext,
-        manifest: &CcManifest,
+        compiler: &str,
         exe_path: &Path,
         objects: &[PathBuf],
         lib_dir: &Path,
         link_libs: &[String],
         ldflags: &[String],
-        has_cxx: bool,
     ) -> Result<()> {
         crate::processor::ensure_output_dir(exe_path)?;
-        let compiler = if has_cxx { &manifest.cxx } else { &manifest.cc };
         let mut cmd = Command::new(compiler);
         cmd.arg("-o").arg(exe_path);
         for obj in objects {
@@ -399,9 +398,6 @@ impl CcProcessor {
             for lib in link_libs {
                 cmd.arg(format!("-l{lib}"));
             }
-        }
-        for flag in &manifest.ldflags {
-            cmd.arg(flag);
         }
         for flag in ldflags {
             cmd.arg(flag);
@@ -623,15 +619,15 @@ impl CcProcessor {
                     objects.push(obj);
                 }
                 let has_cxx = sources.iter().any(|s| Self::is_cxx(s));
+                let compiler = if has_cxx { &manifest.cxx } else { &manifest.cc };
+                let ldflags: Vec<String> = manifest
+                    .ldflags
+                    .iter()
+                    .chain(&prog.ldflags)
+                    .cloned()
+                    .collect();
                 Self::link_program(
-                    ctx,
-                    &manifest,
-                    &exe_path,
-                    &objects,
-                    &lib_dir,
-                    &prog.link,
-                    &prog.ldflags,
-                    has_cxx,
+                    ctx, compiler, &exe_path, &objects, &lib_dir, &prog.link, &ldflags,
                 )?;
             }
         }
@@ -767,7 +763,7 @@ inventory::submit! {
         "output_dir",
         "batch",
     ],
-        scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &["cc.yaml"], src_exclude_dirs: &[] }),
+        scan_defaults: Some(crate::config::ScanDefaultsData { src_extensions: &["cc.yaml"], src_exclude_dirs: &[] }),
         defaults: None,
         defconfig_json: crate::registries::default_config_json::<CcConfig>,
         keywords: &["c", "cpp", "builder", "compiler", "gcc", "clang", "cc", "h", "hpp"],

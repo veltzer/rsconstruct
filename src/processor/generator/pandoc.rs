@@ -152,7 +152,7 @@ inventory::submit! { crate::registries::ProcessorPlugin {
             doc: "PDF engine for --pdf-engine (e.g. xelatex, lualatex). Empty = pandoc default (pdflatex)." },
     ],
     omit_standard_fields: &["batch"],
-    scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &[".md"], src_exclude_dirs: &[] }),
+    scan_defaults: Some(crate::config::ScanDefaultsData { src_extensions: &[".md"], src_exclude_dirs: &[] }),
     defaults: Some(crate::config::ProcessorDefaults { output_dir: "out/processor.generator.pandoc", formats: &["pdf", "html", "docx"], command: "pandoc", ..crate::config::ProcessorDefaults::EMPTY }),
     defconfig_json: crate::registries::default_config_json::<PandocConfig>,
     keywords: &["markdown", "converter", "pdf", "html", "docx", "generator"],

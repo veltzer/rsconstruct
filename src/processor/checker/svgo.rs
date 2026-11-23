@@ -29,7 +29,7 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     name: "svgo", processor_type: crate::processor::ProcessorType::Checker, create: create_svgo,
     fields: &[],
     omit_standard_fields: &["formats", "output_dir", "batch"],
-    scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &[".svg"], src_exclude_dirs: &[] }),
+    scan_defaults: Some(crate::config::ScanDefaultsData { src_extensions: &[".svg"], src_exclude_dirs: &[] }),
     defaults: Some(crate::config::ProcessorDefaults { command: "svgo", dep_auto: &["svgo.config.js", "svgo.config.mjs", "svgo.config.cjs"], ..crate::config::ProcessorDefaults::EMPTY }),
     defconfig_json: crate::registries::default_config_json::<crate::config::StandardConfig>,
     keywords: &["svg", "optimizer", "xml", "node", "npm"],

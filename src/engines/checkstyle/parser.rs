@@ -17,12 +17,41 @@
 //! `SemanticException` of a failed `{...}?` predicate, plus whatever the
 //! token stream raised when the parser read that far.
 
-// The token type constants are the generated grammar's names
-// (`LITERAL_void`, ...), matched on as they are in the generated methods;
-// importing them all keeps each rule readable next to the method it ports.
-#![allow(non_upper_case_globals)]
-#[allow(clippy::wildcard_imports)]
-use super::tables::*;
+use super::tables::{
+    ABSTRACT, ANNOTATION, ANNOTATION_ARRAY_INIT, ANNOTATION_DEF, ANNOTATION_FIELD_DEF,
+    ANNOTATION_MEMBER_VALUE_PAIR, ANNOTATIONS, ARRAY_DECLARATOR, ARRAY_INIT, ASSERT, ASSIGN, AT,
+    BAND, BAND_ASSIGN, BNOT, BOR, BOR_ASSIGN, BSR, BSR_ASSIGN, BXOR, BXOR_ASSIGN, CASE_GROUP,
+    CHAR_LITERAL, CLASS_DEF, COLON, COMMA, COMPACT_CTOR_DEF, CTOR_CALL, CTOR_DEF, DEC, DIV,
+    DIV_ASSIGN, DO_WHILE, DOT, DOUBLE_COLON, ELIST, ELLIPSIS, EMPTY_STAT, ENUM, ENUM_CONSTANT_DEF,
+    ENUM_DEF, EQUAL, EXPR, EXTENDS_CLAUSE, FINAL, FOR_CONDITION, FOR_EACH_CLAUSE, FOR_INIT,
+    FOR_ITERATOR, GE, GENERIC_END, GENERIC_START, GT, IDENT, IMPLEMENTS_CLAUSE, IMPORT, INC,
+    INDEX_OP, INSTANCE_INIT, INTERFACE_DEF, LABELED_STAT, LAMBDA, LAND, LBRACK, LCURLY, LE,
+    LITERAL_BREAK, LITERAL_CASE, LITERAL_CATCH, LITERAL_CLASS, LITERAL_CONTINUE, LITERAL_DEFAULT,
+    LITERAL_DO, LITERAL_DOUBLE, LITERAL_ELSE, LITERAL_EXTENDS, LITERAL_FALSE, LITERAL_FINALLY,
+    LITERAL_FOR, LITERAL_IF, LITERAL_IMPLEMENTS, LITERAL_IMPORT, LITERAL_INSTANCEOF,
+    LITERAL_INTERFACE, LITERAL_NATIVE, LITERAL_NEW, LITERAL_NULL, LITERAL_PACKAGE, LITERAL_PRIVATE,
+    LITERAL_PROTECTED, LITERAL_PUBLIC, LITERAL_RECORD, LITERAL_RETURN, LITERAL_STATIC,
+    LITERAL_SUPER, LITERAL_SWITCH, LITERAL_SYNCHRONIZED, LITERAL_THIS, LITERAL_THROW,
+    LITERAL_THROWS, LITERAL_TRANSIENT, LITERAL_TRUE, LITERAL_TRY, LITERAL_VOID, LITERAL_VOLATILE,
+    LITERAL_WHILE, LITERAL_YIELD, LNOT, LOR, LPAREN, LT, METHOD_CALL, METHOD_DEF, METHOD_REF,
+    MINUS, MINUS_ASSIGN, MOD, MOD_ASSIGN, MODIFIERS, NOT_EQUAL, NUM_DOUBLE, NUM_FLOAT, NUM_INT,
+    NUM_LONG, OBJBLOCK, PACKAGE_DEF, PARAMETER_DEF, PARAMETERS, PATTERN_VARIABLE_DEF, PLUS,
+    PLUS_ASSIGN, POST_DEC, POST_INC, QUESTION, RBRACK, RCURLY, RECORD_COMPONENT_DEF,
+    RECORD_COMPONENTS, RECORD_DEF, RESOURCE, RESOURCE_SPECIFICATION, RESOURCES, RPAREN, SEMI,
+    SET_0, SET_1, SET_2, SET_3, SET_5, SET_6, SET_7, SET_8, SET_9, SET_10, SET_11, SET_12, SET_13,
+    SET_14, SET_15, SET_16, SET_17, SET_18, SET_19, SET_20, SET_21, SET_22, SET_23, SET_24, SET_25,
+    SET_26, SET_27, SET_28, SET_29, SET_30, SET_31, SET_32, SET_33, SET_34, SET_35, SET_36, SET_37,
+    SET_38, SET_39, SET_40, SET_41, SET_42, SET_43, SET_44, SET_45, SET_46, SET_47, SET_48, SET_49,
+    SET_50, SET_51, SET_52, SET_53, SET_54, SET_55, SET_56, SET_57, SET_58, SET_59, SET_60, SET_61,
+    SET_62, SET_63, SET_64, SET_65, SET_66, SET_67, SET_68, SET_69, SET_70, SET_71, SET_72, SET_73,
+    SET_74, SET_75, SET_76, SET_77, SET_78, SET_79, SET_80, SET_81, SET_82, SET_83, SET_84, SET_85,
+    SET_86, SET_87, SET_88, SET_89, SL, SL_ASSIGN, SLIST, SR, SR_ASSIGN, STAR, STAR_ASSIGN,
+    STATIC_IMPORT, STATIC_INIT, STRICTFP, STRING_LITERAL, SUPER_CTOR_CALL, SWITCH_RULE,
+    TEXT_BLOCK_CONTENT, TEXT_BLOCK_LITERAL_BEGIN, TEXT_BLOCK_LITERAL_END, TOKEN_NAMES, TYPE,
+    TYPE_ARGUMENT, TYPE_ARGUMENTS, TYPE_EXTENSION_AND, TYPE_LOWER_BOUNDS, TYPE_PARAMETER,
+    TYPE_PARAMETERS, TYPE_UPPER_BOUNDS, TYPECAST, UNARY_MINUS, UNARY_PLUS, VARIABLE_DEF,
+    WILDCARD_TYPE,
+};
 
 use super::ast::{Ast, NodeId, Pair};
 use super::lexer::{EOF_TYPE, StreamError, Token};
@@ -56,12 +85,12 @@ type R<T> = Result<T, ParseError>;
 type Node = Option<NodeId>;
 
 const fn is_builtin(t: u16) -> bool {
-    t >= LITERAL_void && t <= LITERAL_double
+    t >= LITERAL_VOID && t <= LITERAL_DOUBLE
 }
 
 /// `IDENT | "record" | "yield"`: what `id` starts with.
 const fn is_id(t: u16) -> bool {
-    matches!(t, IDENT | LITERAL_record | LITERAL_yield)
+    matches!(t, IDENT | LITERAL_RECORD | LITERAL_YIELD)
 }
 
 /// `classTypeSpec`'s first tokens (`id` or an annotation).
@@ -72,14 +101,14 @@ const fn is_class_type_start(t: u16) -> bool {
 const fn is_modifier_keyword(t: u16) -> bool {
     matches!(
         t,
-        LITERAL_private
-            | LITERAL_public
-            | LITERAL_protected
-            | LITERAL_static
-            | LITERAL_transient
-            | LITERAL_native
-            | LITERAL_synchronized
-            | LITERAL_volatile
+        LITERAL_PRIVATE
+            | LITERAL_PUBLIC
+            | LITERAL_PROTECTED
+            | LITERAL_STATIC
+            | LITERAL_TRANSIENT
+            | LITERAL_NATIVE
+            | LITERAL_SYNCHRONIZED
+            | LITERAL_VOLATILE
     )
 }
 
@@ -99,23 +128,23 @@ const fn is_expression_start(t: u16) -> bool {
             t,
             IDENT
                 | LPAREN
-                | LITERAL_this
-                | LITERAL_super
-                | LITERAL_switch
+                | LITERAL_THIS
+                | LITERAL_SUPER
+                | LITERAL_SWITCH
                 | PLUS
                 | MINUS
                 | INC
                 | DEC
                 | BNOT
                 | LNOT
-                | LITERAL_true
-                | LITERAL_false
-                | LITERAL_null
-                | LITERAL_new
+                | LITERAL_TRUE
+                | LITERAL_FALSE
+                | LITERAL_NULL
+                | LITERAL_NEW
                 | AT
-                | LITERAL_record
+                | LITERAL_RECORD
                 | TEXT_BLOCK_CONTENT
-                | LITERAL_yield
+                | LITERAL_YIELD
         )
 }
 
@@ -129,15 +158,15 @@ const fn is_field_start(t: u16) -> bool {
                 | ABSTRACT
                 | STRICTFP
                 | IDENT
-                | LITERAL_class
-                | LITERAL_interface
+                | LITERAL_CLASS
+                | LITERAL_INTERFACE
                 | LCURLY
-                | LITERAL_default
+                | LITERAL_DEFAULT
                 | LT
                 | ENUM
                 | AT
-                | LITERAL_record
-                | LITERAL_yield
+                | LITERAL_RECORD
+                | LITERAL_YIELD
         )
 }
 
@@ -145,15 +174,15 @@ const fn is_field_start(t: u16) -> bool {
 const fn is_statement_keyword(t: u16) -> bool {
     matches!(
         t,
-        LITERAL_if
-            | LITERAL_while
-            | LITERAL_do
-            | LITERAL_break
-            | LITERAL_continue
-            | LITERAL_return
-            | LITERAL_switch
-            | LITERAL_throw
-            | LITERAL_for
+        LITERAL_IF
+            | LITERAL_WHILE
+            | LITERAL_DO
+            | LITERAL_BREAK
+            | LITERAL_CONTINUE
+            | LITERAL_RETURN
+            | LITERAL_SWITCH
+            | LITERAL_THROW
+            | LITERAL_FOR
     )
 }
 
@@ -166,24 +195,24 @@ const fn annotation_follow(t: u16) -> bool {
             FINAL
                 | ABSTRACT
                 | STRICTFP
-                | LITERAL_package
+                | LITERAL_PACKAGE
                 | SEMI
                 | LBRACK
                 | IDENT
-                | LITERAL_class
-                | LITERAL_interface
+                | LITERAL_CLASS
+                | LITERAL_INTERFACE
                 | RCURLY
                 | COMMA
                 | RPAREN
-                | LITERAL_this
-                | LITERAL_default
+                | LITERAL_THIS
+                | LITERAL_DEFAULT
                 | QUESTION
                 | LT
                 | ENUM
                 | AT
                 | ELLIPSIS
-                | LITERAL_record
-                | LITERAL_yield
+                | LITERAL_RECORD
+                | LITERAL_YIELD
         )
 }
 
@@ -203,25 +232,25 @@ const fn assignment_follow(t: u16) -> bool {
                 | RBRACK
                 | IDENT
                 | STAR
-                | LITERAL_class
-                | LITERAL_interface
+                | LITERAL_CLASS
+                | LITERAL_INTERFACE
                 | LCURLY
                 | RCURLY
                 | COMMA
                 | LPAREN
                 | RPAREN
-                | LITERAL_this
-                | LITERAL_super
+                | LITERAL_THIS
+                | LITERAL_SUPER
                 | COLON
-                | LITERAL_else
-                | LITERAL_case
-                | LITERAL_default
-                | LITERAL_try
+                | LITERAL_ELSE
+                | LITERAL_CASE
+                | LITERAL_DEFAULT
+                | LITERAL_TRY
                 | LT
                 | GT
                 | LE
                 | GE
-                | LITERAL_instanceof
+                | LITERAL_INSTANCEOF
                 | SL
                 | SR
                 | BSR
@@ -233,16 +262,16 @@ const fn assignment_follow(t: u16) -> bool {
                 | DEC
                 | BNOT
                 | LNOT
-                | LITERAL_true
-                | LITERAL_false
-                | LITERAL_null
-                | LITERAL_new
+                | LITERAL_TRUE
+                | LITERAL_FALSE
+                | LITERAL_NULL
+                | LITERAL_NEW
                 | ASSERT
                 | ENUM
                 | AT
-                | LITERAL_record
+                | LITERAL_RECORD
                 | TEXT_BLOCK_CONTENT
-                | LITERAL_yield
+                | LITERAL_YIELD
         )
 }
 
@@ -284,23 +313,23 @@ const fn try_follow(t: u16) -> bool {
                 | SEMI
                 | IDENT
                 | STAR
-                | LITERAL_class
+                | LITERAL_CLASS
                 | LCURLY
                 | RCURLY
                 | LPAREN
                 | RPAREN
-                | LITERAL_this
-                | LITERAL_super
+                | LITERAL_THIS
+                | LITERAL_SUPER
                 | COLON
-                | LITERAL_else
-                | LITERAL_case
-                | LITERAL_default
-                | LITERAL_try
+                | LITERAL_ELSE
+                | LITERAL_CASE
+                | LITERAL_DEFAULT
+                | LITERAL_TRY
                 | LT
                 | GT
                 | LE
                 | GE
-                | LITERAL_instanceof
+                | LITERAL_INSTANCEOF
                 | SL
                 | SR
                 | BSR
@@ -312,15 +341,15 @@ const fn try_follow(t: u16) -> bool {
                 | DEC
                 | BNOT
                 | LNOT
-                | LITERAL_true
-                | LITERAL_false
-                | LITERAL_null
-                | LITERAL_new
+                | LITERAL_TRUE
+                | LITERAL_FALSE
+                | LITERAL_NULL
+                | LITERAL_NEW
                 | ASSERT
                 | AT
-                | LITERAL_record
+                | LITERAL_RECORD
                 | TEXT_BLOCK_CONTENT
-                | LITERAL_yield
+                | LITERAL_YIELD
         )
 }
 
@@ -335,18 +364,18 @@ const fn var_initializer_follow(t: u16) -> bool {
                 | STRICTFP
                 | SEMI
                 | IDENT
-                | LITERAL_class
-                | LITERAL_interface
+                | LITERAL_CLASS
+                | LITERAL_INTERFACE
                 | LCURLY
                 | RCURLY
                 | COMMA
                 | RPAREN
-                | LITERAL_default
+                | LITERAL_DEFAULT
                 | LT
                 | ENUM
                 | AT
-                | LITERAL_record
-                | LITERAL_yield
+                | LITERAL_RECORD
+                | LITERAL_YIELD
         )
 }
 
@@ -363,31 +392,31 @@ const fn switch_label_follow(t: u16) -> bool {
                 | STRICTFP
                 | SEMI
                 | IDENT
-                | LITERAL_class
+                | LITERAL_CLASS
                 | LCURLY
                 | RCURLY
                 | LPAREN
-                | LITERAL_this
-                | LITERAL_super
-                | LITERAL_case
-                | LITERAL_default
-                | LITERAL_try
+                | LITERAL_THIS
+                | LITERAL_SUPER
+                | LITERAL_CASE
+                | LITERAL_DEFAULT
+                | LITERAL_TRY
                 | PLUS
                 | MINUS
                 | INC
                 | DEC
                 | BNOT
                 | LNOT
-                | LITERAL_true
-                | LITERAL_false
-                | LITERAL_null
-                | LITERAL_new
+                | LITERAL_TRUE
+                | LITERAL_FALSE
+                | LITERAL_NULL
+                | LITERAL_NEW
                 | ASSERT
                 | AT
                 | LAMBDA
-                | LITERAL_record
+                | LITERAL_RECORD
                 | TEXT_BLOCK_CONTENT
-                | LITERAL_yield
+                | LITERAL_YIELD
         )
 }
 
@@ -404,27 +433,27 @@ const fn is_traditional_statement_start(t: u16) -> bool {
                 | STRICTFP
                 | SEMI
                 | IDENT
-                | LITERAL_class
+                | LITERAL_CLASS
                 | LCURLY
                 | LPAREN
-                | LITERAL_this
-                | LITERAL_super
-                | LITERAL_default
-                | LITERAL_try
+                | LITERAL_THIS
+                | LITERAL_SUPER
+                | LITERAL_DEFAULT
+                | LITERAL_TRY
                 | PLUS
                 | MINUS
                 | INC
                 | DEC
                 | BNOT
                 | LNOT
-                | LITERAL_true
-                | LITERAL_false
-                | LITERAL_null
-                | LITERAL_new
+                | LITERAL_TRUE
+                | LITERAL_FALSE
+                | LITERAL_NULL
+                | LITERAL_NEW
                 | AT
-                | LITERAL_record
+                | LITERAL_RECORD
                 | TEXT_BLOCK_CONTENT
-                | LITERAL_yield
+                | LITERAL_YIELD
         )
 }
 
@@ -659,11 +688,11 @@ impl<'a> Parser<'a> {
     pub fn compilation_unit(&mut self) -> R<Node> {
         let mut cur = Pair::default();
         let l1 = self.la(1)?;
-        let package = (l1 == LITERAL_package || l1 == AT)
+        let package = (l1 == LITERAL_PACKAGE || l1 == AT)
             && SET_0.contains(self.la(2)?)
             && self.synpred(|p| {
                 p.annotations()?;
-                p.match_(LITERAL_package)
+                p.match_(LITERAL_PACKAGE)
             })?;
         if package {
             let n = self.package_definition()?;
@@ -673,7 +702,7 @@ impl<'a> Parser<'a> {
         }
         loop {
             let l1 = self.la(1)?;
-            if (l1 == SEMI || l1 == LITERAL_import) && SET_2.contains(self.la(2)?) {
+            if (l1 == SEMI || l1 == LITERAL_IMPORT) && SET_2.contains(self.la(2)?) {
                 let n = self.import_definition()?;
                 self.add(&mut cur, n);
             } else {
@@ -692,7 +721,7 @@ impl<'a> Parser<'a> {
         let mut cur = Pair::default();
         let n = self.annotations()?;
         self.add(&mut cur, n);
-        let p = self.token_root(&mut cur, LITERAL_package)?;
+        let p = self.token_root(&mut cur, LITERAL_PACKAGE)?;
         self.set_type(p, PACKAGE_DEF);
         let n = self.identifier()?;
         self.add(&mut cur, n);
@@ -703,12 +732,12 @@ impl<'a> Parser<'a> {
     fn import_definition(&mut self) -> R<Node> {
         let mut cur = Pair::default();
         match self.la(1)? {
-            LITERAL_import => {
-                let i = self.token_root(&mut cur, LITERAL_import)?;
+            LITERAL_IMPORT => {
+                let i = self.token_root(&mut cur, LITERAL_IMPORT)?;
                 self.set_type(i, IMPORT);
                 match self.la(1)? {
-                    LITERAL_static => {
-                        self.token(&mut cur, LITERAL_static)?;
+                    LITERAL_STATIC => {
+                        self.token(&mut cur, LITERAL_STATIC)?;
                         self.set_type(i, STATIC_IMPORT);
                     }
                     t if is_id(t) => {}
@@ -735,12 +764,12 @@ impl<'a> Parser<'a> {
                 FINAL
                     | ABSTRACT
                     | STRICTFP
-                    | LITERAL_class
-                    | LITERAL_interface
-                    | LITERAL_default
+                    | LITERAL_CLASS
+                    | LITERAL_INTERFACE
+                    | LITERAL_DEFAULT
                     | ENUM
                     | AT
-                    | LITERAL_record
+                    | LITERAL_RECORD
             )
         {
             let m = self.modifiers()?;
@@ -810,11 +839,11 @@ impl<'a> Parser<'a> {
     fn type_definition_internal(&mut self, modifiers: Node) -> R<Node> {
         let mut cur = Pair::default();
         let n = match self.la(1)? {
-            LITERAL_class => self.class_definition(modifiers)?,
-            LITERAL_interface => self.interface_definition(modifiers)?,
+            LITERAL_CLASS => self.class_definition(modifiers)?,
+            LITERAL_INTERFACE => self.interface_definition(modifiers)?,
             ENUM => self.enum_definition(modifiers)?,
             AT => self.annotation_definition(modifiers)?,
-            LITERAL_record => self.record_definition(modifiers)?,
+            LITERAL_RECORD => self.record_definition(modifiers)?,
             _ => return self.fail(),
         };
         self.add(&mut cur, n);
@@ -823,11 +852,11 @@ impl<'a> Parser<'a> {
 
     fn class_definition(&mut self, modifiers: Node) -> R<Node> {
         let mut cur = Pair::default();
-        let c = self.token_alone(LITERAL_class)?;
+        let c = self.token_alone(LITERAL_CLASS)?;
         let id = self.id()?;
         let tp = match self.la(1)? {
             LT => self.type_parameters()?,
-            LITERAL_extends | LCURLY | LITERAL_implements => None,
+            LITERAL_EXTENDS | LCURLY | LITERAL_IMPLEMENTS => None,
             _ => return self.fail(),
         };
         let sc = self.super_class_clause()?;
@@ -843,11 +872,11 @@ impl<'a> Parser<'a> {
 
     fn interface_definition(&mut self, modifiers: Node) -> R<Node> {
         let mut cur = Pair::default();
-        let i = self.token_alone(LITERAL_interface)?;
+        let i = self.token_alone(LITERAL_INTERFACE)?;
         let id = self.id()?;
         let tp = match self.la(1)? {
             LT => self.type_parameters()?,
-            LITERAL_extends | LCURLY => None,
+            LITERAL_EXTENDS | LCURLY => None,
             _ => return self.fail(),
         };
         let ie = self.interface_extends()?;
@@ -877,7 +906,7 @@ impl<'a> Parser<'a> {
     fn annotation_definition(&mut self, modifiers: Node) -> R<Node> {
         let mut cur = Pair::default();
         let a = self.token_alone(AT)?;
-        let i = self.token_alone(LITERAL_interface)?;
+        let i = self.token_alone(LITERAL_INTERFACE)?;
         let id = self.id()?;
         let ab = self.annotation_block()?;
         if self.g0() {
@@ -890,7 +919,7 @@ impl<'a> Parser<'a> {
 
     fn record_definition(&mut self, modifiers: Node) -> R<Node> {
         let mut cur = Pair::default();
-        let r = self.token_alone(LITERAL_record)?;
+        let r = self.token_alone(LITERAL_RECORD)?;
         let id = self.id()?;
         let tp = match self.la(1)? {
             LT => self.type_parameters()?,
@@ -1055,12 +1084,12 @@ impl<'a> Parser<'a> {
             IDENT => {
                 self.token(&mut cur, IDENT)?;
             }
-            LITERAL_record => {
-                let n = self.keyword_as_id(LITERAL_record)?;
+            LITERAL_RECORD => {
+                let n = self.keyword_as_id(LITERAL_RECORD)?;
                 self.add(&mut cur, n);
             }
-            LITERAL_yield => {
-                let n = self.keyword_as_id(LITERAL_yield)?;
+            LITERAL_YIELD => {
+                let n = self.keyword_as_id(LITERAL_YIELD)?;
                 self.add(&mut cur, n);
             }
             _ => return self.fail(),
@@ -1148,11 +1177,11 @@ impl<'a> Parser<'a> {
         let q = self.token(&mut cur, QUESTION)?;
         self.set_type(q, WILDCARD_TYPE);
         let l1 = self.la(1)?;
-        let bounds = (l1 == LITERAL_extends || l1 == LITERAL_super)
+        let bounds = (l1 == LITERAL_EXTENDS || l1 == LITERAL_SUPER)
             && SET_13.contains(self.la(2)?)
             && self.synpred(|p| match p.la(1)? {
-                LITERAL_extends => p.match_(LITERAL_extends),
-                LITERAL_super => p.match_(LITERAL_super),
+                LITERAL_EXTENDS => p.match_(LITERAL_EXTENDS),
+                LITERAL_SUPER => p.match_(LITERAL_SUPER),
                 _ => p.fail(),
             })?;
         if bounds {
@@ -1167,12 +1196,12 @@ impl<'a> Parser<'a> {
     fn type_argument_bounds(&mut self, add_imag_node: bool) -> R<Node> {
         let mut cur = Pair::default();
         match self.la(1)? {
-            LITERAL_extends => {
-                let e = self.token_root(&mut cur, LITERAL_extends)?;
+            LITERAL_EXTENDS => {
+                let e = self.token_root(&mut cur, LITERAL_EXTENDS)?;
                 self.set_type(e, TYPE_UPPER_BOUNDS);
             }
-            LITERAL_super => {
-                let s = self.token_root(&mut cur, LITERAL_super)?;
+            LITERAL_SUPER => {
+                let s = self.token_root(&mut cur, LITERAL_SUPER)?;
                 self.set_type(s, TYPE_LOWER_BOUNDS);
             }
             _ => return self.fail(),
@@ -1262,7 +1291,7 @@ impl<'a> Parser<'a> {
     fn modifier(&mut self) -> R<Node> {
         let mut cur = Pair::default();
         let t = self.la(1)?;
-        if !(is_modifier_keyword(t) || matches!(t, FINAL | ABSTRACT | STRICTFP | LITERAL_default)) {
+        if !(is_modifier_keyword(t) || matches!(t, FINAL | ABSTRACT | STRICTFP | LITERAL_DEFAULT)) {
             return self.fail();
         }
         self.token(&mut cur, t)?;
@@ -1477,13 +1506,13 @@ impl<'a> Parser<'a> {
             || matches!(
                 t,
                 IDENT
-                    | LITERAL_extends
+                    | LITERAL_EXTENDS
                     | LCURLY
-                    | LITERAL_implements
+                    | LITERAL_IMPLEMENTS
                     | LPAREN
                     | AT
-                    | LITERAL_record
-                    | LITERAL_yield
+                    | LITERAL_RECORD
+                    | LITERAL_YIELD
             ))
         {
             return self.fail();
@@ -1513,8 +1542,8 @@ impl<'a> Parser<'a> {
     fn implements_clause(&mut self) -> R<Node> {
         let mut cur = Pair::default();
         match self.la(1)? {
-            LITERAL_implements => {
-                let i = self.token_root(&mut cur, LITERAL_implements)?;
+            LITERAL_IMPLEMENTS => {
+                let i = self.token_root(&mut cur, LITERAL_IMPLEMENTS)?;
                 self.set_type(i, IMPLEMENTS_CLAUSE);
                 let n = self.class_or_interface_type(false)?;
                 self.add(&mut cur, n);
@@ -1670,7 +1699,7 @@ impl<'a> Parser<'a> {
     /// `throwsClause` when `throws` is next; the method/ctor head's switch.
     fn optional_throws(&mut self, follow: &[u16]) -> R<Node> {
         let t = self.la(1)?;
-        if t == LITERAL_throws {
+        if t == LITERAL_THROWS {
             self.throws_clause()
         } else if follow.contains(&t) {
             Ok(None)
@@ -1770,8 +1799,8 @@ impl<'a> Parser<'a> {
             } else {
                 return self.fail();
             }
-        } else if l1 == LITERAL_static && self.la(2)? == LCURLY {
-            let si = self.token_alone(LITERAL_static)?;
+        } else if l1 == LITERAL_STATIC && self.la(2)? == LCURLY {
+            let si = self.token_alone(LITERAL_STATIC)?;
             let s3 = self.compound_statement()?;
             if let (true, Some(si)) = (self.g0(), si) {
                 self.ast.set_type(si, STATIC_INIT);
@@ -1817,13 +1846,13 @@ impl<'a> Parser<'a> {
     fn super_class_clause(&mut self) -> R<Node> {
         let mut cur = Pair::default();
         match self.la(1)? {
-            LITERAL_extends => {
-                let e = self.token_root(&mut cur, LITERAL_extends)?;
+            LITERAL_EXTENDS => {
+                let e = self.token_root(&mut cur, LITERAL_EXTENDS)?;
                 self.set_type(e, EXTENDS_CLAUSE);
                 let n = self.class_or_interface_type(false)?;
                 self.add(&mut cur, n);
             }
-            LCURLY | LITERAL_implements => {}
+            LCURLY | LITERAL_IMPLEMENTS => {}
             _ => return self.fail(),
         }
         Ok(cur.root)
@@ -1862,8 +1891,8 @@ impl<'a> Parser<'a> {
     fn interface_extends(&mut self) -> R<Node> {
         let mut cur = Pair::default();
         match self.la(1)? {
-            LITERAL_extends => {
-                let e = self.token_root(&mut cur, LITERAL_extends)?;
+            LITERAL_EXTENDS => {
+                let e = self.token_root(&mut cur, LITERAL_EXTENDS)?;
                 self.set_type(e, EXTENDS_CLAUSE);
                 let n = self.class_or_interface_type(false)?;
                 self.add(&mut cur, n);
@@ -1948,7 +1977,7 @@ impl<'a> Parser<'a> {
         let n = self.id()?;
         self.add(&mut cur, n);
         let l1 = self.la(1)?;
-        if l1 == LITERAL_extends && SET_8.contains(self.la(2)?) {
+        if l1 == LITERAL_EXTENDS && SET_8.contains(self.la(2)?) {
             let n = self.type_parameter_bounds()?;
             self.add(&mut cur, n);
         } else if !(SET_45.contains(l1) && SET_46.contains(self.la(2)?)) {
@@ -1960,7 +1989,7 @@ impl<'a> Parser<'a> {
 
     fn type_parameter_bounds(&mut self) -> R<Node> {
         let mut cur = Pair::default();
-        let e = self.token_root(&mut cur, LITERAL_extends)?;
+        let e = self.token_root(&mut cur, LITERAL_EXTENDS)?;
         let n = self.class_or_interface_type(true)?;
         self.add(&mut cur, n);
         while self.la(1)? == BAND {
@@ -1989,7 +2018,7 @@ impl<'a> Parser<'a> {
                 let rp = self.token_alone(RPAREN)?;
                 let rt = self.declarator_brackets(t)?;
                 let d = match self.la(1)? {
-                    LITERAL_default => self.annotation_default()?,
+                    LITERAL_DEFAULT => self.annotation_default()?,
                     SEMI => None,
                     _ => return self.fail(),
                 };
@@ -2019,7 +2048,7 @@ impl<'a> Parser<'a> {
 
     fn annotation_default(&mut self) -> R<Node> {
         let mut cur = Pair::default();
-        self.token_root(&mut cur, LITERAL_default)?;
+        self.token_root(&mut cur, LITERAL_DEFAULT)?;
         let n = self.annotation_member_value_initializer()?;
         self.add(&mut cur, n);
         Ok(cur.root)
@@ -2169,7 +2198,7 @@ impl<'a> Parser<'a> {
 
     fn throws_clause(&mut self) -> R<Node> {
         let mut cur = Pair::default();
-        self.token_root(&mut cur, LITERAL_throws)?;
+        self.token_root(&mut cur, LITERAL_THROWS)?;
         self.throws_entry(&mut cur)?;
         while self.la(1)? == COMMA {
             self.token(&mut cur, COMMA)?;
@@ -2225,12 +2254,12 @@ impl<'a> Parser<'a> {
                     let n = self.type_arguments(false)?;
                     self.add(&mut cur, n);
                 }
-                LITERAL_this | LITERAL_super => {}
+                LITERAL_THIS | LITERAL_SUPER => {}
                 _ => return self.fail(),
             }
             match self.la(1)? {
-                LITERAL_this => self.constructor_call(&mut cur, LITERAL_this, CTOR_CALL)?,
-                LITERAL_super => self.constructor_call(&mut cur, LITERAL_super, SUPER_CTOR_CALL)?,
+                LITERAL_THIS => self.constructor_call(&mut cur, LITERAL_THIS, CTOR_CALL)?,
+                LITERAL_SUPER => self.constructor_call(&mut cur, LITERAL_SUPER, SUPER_CTOR_CALL)?,
                 _ => return self.fail(),
             }
         } else if SET_56.contains(l1) && SET_57.contains(self.la(2)?) {
@@ -2242,10 +2271,10 @@ impl<'a> Parser<'a> {
                     let n = self.type_arguments(false)?;
                     self.add(&mut cur, n);
                 }
-                LITERAL_super => {}
+                LITERAL_SUPER => {}
                 _ => return self.fail(),
             }
-            self.constructor_call(&mut cur, LITERAL_super, SUPER_CTOR_CALL)?;
+            self.constructor_call(&mut cur, LITERAL_SUPER, SUPER_CTOR_CALL)?;
         } else {
             return self.fail();
         }
@@ -2274,10 +2303,10 @@ impl<'a> Parser<'a> {
             self.add(&mut cur, n);
         } else if matches!(
             t,
-            LITERAL_true | LITERAL_false | LITERAL_this | LITERAL_null | LITERAL_super
+            LITERAL_TRUE | LITERAL_FALSE | LITERAL_THIS | LITERAL_NULL | LITERAL_SUPER
         ) {
             self.token(&mut cur, t)?;
-        } else if t == LITERAL_new {
+        } else if t == LITERAL_NEW {
             let n = self.new_expression()?;
             self.add(&mut cur, n);
         } else if t == LPAREN {
@@ -2307,9 +2336,9 @@ impl<'a> Parser<'a> {
                     self.token(&mut cur, RBRACK)?;
                 }
                 let l1 = self.la(1)?;
-                if l1 == DOT && self.la(2)? == LITERAL_class {
+                if l1 == DOT && self.la(2)? == LITERAL_CLASS {
                     self.token_root(&mut cur, DOT)?;
-                    self.token(&mut cur, LITERAL_class)?;
+                    self.token(&mut cur, LITERAL_CLASS)?;
                 } else if !(SET_59.contains(l1) && SET_60.contains(self.la(2)?)) {
                     return self.fail();
                 }
@@ -2460,7 +2489,7 @@ impl<'a> Parser<'a> {
         } else if !(is_builtin(t)
             || matches!(
                 t,
-                IDENT | LITERAL_this | AT | LITERAL_record | LITERAL_yield
+                IDENT | LITERAL_THIS | AT | LITERAL_RECORD | LITERAL_YIELD
             ))
         {
             return self.fail();
@@ -2476,15 +2505,15 @@ impl<'a> Parser<'a> {
     fn parameter_ident(&mut self) -> R<Node> {
         let mut cur = Pair::default();
         let t = self.la(1)?;
-        if t == LITERAL_this {
-            self.token(&mut cur, LITERAL_this)?;
+        if t == LITERAL_THIS {
+            self.token(&mut cur, LITERAL_THIS)?;
         } else if is_id(t) {
             let n = self.id()?;
             self.add(&mut cur, n);
             match self.la(1)? {
                 DOT => {
                     self.token_root(&mut cur, DOT)?;
-                    self.token(&mut cur, LITERAL_this)?;
+                    self.token(&mut cur, LITERAL_THIS)?;
                 }
                 LBRACK | COMMA | RPAREN | AT => {}
                 _ => return self.fail(),
@@ -2554,32 +2583,32 @@ impl<'a> Parser<'a> {
                 let n = self.compound_statement()?;
                 self.add(&mut cur, n);
             }
-            LITERAL_if => {
-                self.parenthesized_head(&mut cur, LITERAL_if)?;
+            LITERAL_IF => {
+                self.parenthesized_head(&mut cur, LITERAL_IF)?;
                 let n = self.statement()?;
                 self.add(&mut cur, n);
                 let l1 = self.la(1)?;
-                if l1 == LITERAL_else && SET_44.contains(self.la(2)?) {
+                if l1 == LITERAL_ELSE && SET_44.contains(self.la(2)?) {
                     let n = self.else_statement()?;
                     self.add(&mut cur, n);
                 } else if !(SET_65.contains(l1) && SET_66.contains(self.la(2)?)) {
                     return self.fail();
                 }
             }
-            LITERAL_for => {
+            LITERAL_FOR => {
                 let n = self.for_statement()?;
                 self.add(&mut cur, n);
             }
-            LITERAL_while => {
-                self.parenthesized_head(&mut cur, LITERAL_while)?;
+            LITERAL_WHILE => {
+                self.parenthesized_head(&mut cur, LITERAL_WHILE)?;
                 let n = self.statement()?;
                 self.add(&mut cur, n);
             }
-            LITERAL_do => {
-                self.token_root(&mut cur, LITERAL_do)?;
+            LITERAL_DO => {
+                self.token_root(&mut cur, LITERAL_DO)?;
                 let n = self.statement()?;
                 self.add(&mut cur, n);
-                let w = self.token(&mut cur, LITERAL_while)?;
+                let w = self.token(&mut cur, LITERAL_WHILE)?;
                 self.set_type(w, DO_WHILE);
                 self.token(&mut cur, LPAREN)?;
                 let n = self.expression()?;
@@ -2587,10 +2616,10 @@ impl<'a> Parser<'a> {
                 self.token(&mut cur, RPAREN)?;
                 self.token(&mut cur, SEMI)?;
             }
-            LITERAL_break => self.jump_statement(&mut cur, LITERAL_break)?,
-            LITERAL_continue => self.jump_statement(&mut cur, LITERAL_continue)?,
-            LITERAL_return => {
-                self.token_root(&mut cur, LITERAL_return)?;
+            LITERAL_BREAK => self.jump_statement(&mut cur, LITERAL_BREAK)?,
+            LITERAL_CONTINUE => self.jump_statement(&mut cur, LITERAL_CONTINUE)?,
+            LITERAL_RETURN => {
+                self.token_root(&mut cur, LITERAL_RETURN)?;
                 let t = self.la(1)?;
                 if is_expression_start(t) {
                     let n = self.expression()?;
@@ -2600,11 +2629,11 @@ impl<'a> Parser<'a> {
                 }
                 self.token(&mut cur, SEMI)?;
             }
-            LITERAL_try => {
+            LITERAL_TRY => {
                 let n = self.try_block()?;
                 self.add(&mut cur, n);
             }
-            LITERAL_throw => {
+            LITERAL_THROW => {
                 let n = self.throw_statement()?;
                 self.add(&mut cur, n);
             }
@@ -2620,7 +2649,7 @@ impl<'a> Parser<'a> {
     /// The `default:` branch of `traditionalStatement`'s switch.
     fn other_statement(&mut self, cur: &mut Pair) -> R<()> {
         let l1 = self.la(1)?;
-        if l1 == LITERAL_yield && SET_17.contains(self.la(2)?) && self.switch_block_depth > 0 {
+        if l1 == LITERAL_YIELD && SET_17.contains(self.la(2)?) && self.switch_block_depth > 0 {
             let n = self.yield_statement()?;
             self.add(cur, n);
             return Ok(());
@@ -2634,13 +2663,13 @@ impl<'a> Parser<'a> {
             self.token(cur, SEMI)?;
             return Ok(());
         }
-        if l1 == LITERAL_record && SET_0.contains(self.la(2)?) {
+        if l1 == LITERAL_RECORD && SET_0.contains(self.la(2)?) {
             let mods = self.imaginary(MODIFIERS, "MODIFIERS");
             let n = self.record_definition(mods)?;
             self.add(cur, n);
             return Ok(());
         }
-        if l1 == LITERAL_switch && self.la(2)? == LPAREN {
+        if l1 == LITERAL_SWITCH && self.la(2)? == LPAREN {
             let n = self.switch_expression()?;
             self.add(cur, n);
             return Ok(());
@@ -2680,8 +2709,8 @@ impl<'a> Parser<'a> {
             self.set_type(c, LABELED_STAT);
             let n = self.statement()?;
             self.add(cur, n);
-        } else if l1 == LITERAL_synchronized && self.la(2)? == LPAREN {
-            self.parenthesized_head(cur, LITERAL_synchronized)?;
+        } else if l1 == LITERAL_SYNCHRONIZED && self.la(2)? == LPAREN {
+            self.parenthesized_head(cur, LITERAL_SYNCHRONIZED)?;
             let n = self.compound_statement()?;
             self.add(cur, n);
         } else {
@@ -2710,7 +2739,7 @@ impl<'a> Parser<'a> {
 
     fn yield_statement(&mut self) -> R<Node> {
         let mut cur = Pair::default();
-        let l = self.token_alone(LITERAL_yield)?;
+        let l = self.token_alone(LITERAL_YIELD)?;
         let e = self.expression()?;
         let s = self.token_alone(SEMI)?;
         let tree = self.make(&[l, e, s]);
@@ -2720,7 +2749,7 @@ impl<'a> Parser<'a> {
 
     fn switch_expression(&mut self) -> R<Node> {
         let mut cur = Pair::default();
-        self.parenthesized_head(&mut cur, LITERAL_switch)?;
+        self.parenthesized_head(&mut cur, LITERAL_SWITCH)?;
         let n = self.switch_block()?;
         self.add(&mut cur, n);
         Ok(cur.root)
@@ -2728,7 +2757,7 @@ impl<'a> Parser<'a> {
 
     fn else_statement(&mut self) -> R<Node> {
         let mut cur = Pair::default();
-        self.token_root(&mut cur, LITERAL_else)?;
+        self.token_root(&mut cur, LITERAL_ELSE)?;
         let n = self.statement()?;
         self.add(&mut cur, n);
         Ok(cur.root)
@@ -2736,7 +2765,7 @@ impl<'a> Parser<'a> {
 
     fn for_statement(&mut self) -> R<Node> {
         let mut cur = Pair::default();
-        self.token_root(&mut cur, LITERAL_for)?;
+        self.token_root(&mut cur, LITERAL_FOR)?;
         self.token(&mut cur, LPAREN)?;
         let l1 = self.la(1)?;
         let n = if SET_72.contains(l1)
@@ -2760,7 +2789,7 @@ impl<'a> Parser<'a> {
 
     fn try_block(&mut self) -> R<Node> {
         let mut cur = Pair::default();
-        self.token_root(&mut cur, LITERAL_try)?;
+        self.token_root(&mut cur, LITERAL_TRY)?;
         match self.la(1)? {
             LPAREN => {
                 let n = self.resource_specification()?;
@@ -2771,12 +2800,12 @@ impl<'a> Parser<'a> {
         }
         let n = self.compound_statement()?;
         self.add(&mut cur, n);
-        while self.la(1)? == LITERAL_catch {
+        while self.la(1)? == LITERAL_CATCH {
             let n = self.handler()?;
             self.add(&mut cur, n);
         }
         let t = self.la(1)?;
-        if t == LITERAL_finally {
+        if t == LITERAL_FINALLY {
             let n = self.finally_handler()?;
             self.add(&mut cur, n);
         } else if !try_follow(t) {
@@ -2787,7 +2816,7 @@ impl<'a> Parser<'a> {
 
     fn throw_statement(&mut self) -> R<Node> {
         let mut cur = Pair::default();
-        self.token_root(&mut cur, LITERAL_throw)?;
+        self.token_root(&mut cur, LITERAL_THROW)?;
         let n = self.expression()?;
         self.add(&mut cur, n);
         self.token(&mut cur, SEMI)?;
@@ -2881,7 +2910,7 @@ impl<'a> Parser<'a> {
 
     fn is_case_or_default(&self) -> R<bool> {
         let t = self.la(1)?;
-        Ok(t == LITERAL_case || t == LITERAL_default)
+        Ok(t == LITERAL_CASE || t == LITERAL_DEFAULT)
     }
 
     fn switch_block(&mut self) -> R<Node> {
@@ -2981,8 +3010,8 @@ impl<'a> Parser<'a> {
     fn switch_label(&mut self) -> R<Node> {
         let mut cur = Pair::default();
         match self.la(1)? {
-            LITERAL_case => {
-                self.token_root(&mut cur, LITERAL_case)?;
+            LITERAL_CASE => {
+                self.token_root(&mut cur, LITERAL_CASE)?;
                 let n = self.case_constant()?;
                 self.add(&mut cur, n);
                 while self.la(1)? == COMMA {
@@ -2991,8 +3020,8 @@ impl<'a> Parser<'a> {
                     self.add(&mut cur, n);
                 }
             }
-            LITERAL_default => {
-                self.token_root(&mut cur, LITERAL_default)?;
+            LITERAL_DEFAULT => {
+                self.token_root(&mut cur, LITERAL_DEFAULT)?;
             }
             _ => return self.fail(),
         }
@@ -3010,7 +3039,7 @@ impl<'a> Parser<'a> {
         let mut count = 0;
         loop {
             let l1 = self.la(1)?;
-            if SET_44.contains(l1) && SET_79.contains(self.la(2)?) && l1 != LITERAL_default {
+            if SET_44.contains(l1) && SET_79.contains(self.la(2)?) && l1 != LITERAL_DEFAULT {
                 let n = self.statement()?;
                 self.add(&mut cur, n);
             } else if count >= 1 {
@@ -3094,7 +3123,7 @@ impl<'a> Parser<'a> {
 
     fn handler(&mut self) -> R<Node> {
         let mut cur = Pair::default();
-        self.token_root(&mut cur, LITERAL_catch)?;
+        self.token_root(&mut cur, LITERAL_CATCH)?;
         self.token(&mut cur, LPAREN)?;
         let n = self.catch_parameter_declaration()?;
         self.add(&mut cur, n);
@@ -3106,7 +3135,7 @@ impl<'a> Parser<'a> {
 
     fn finally_handler(&mut self) -> R<Node> {
         let mut cur = Pair::default();
-        self.token_root(&mut cur, LITERAL_finally)?;
+        self.token_root(&mut cur, LITERAL_FINALLY)?;
         let n = self.compound_statement()?;
         self.add(&mut cur, n);
         Ok(cur.root)
@@ -3260,8 +3289,8 @@ impl<'a> Parser<'a> {
         let n = self.shift_expression()?;
         self.add(&mut cur, n);
         let l1 = self.la(1)?;
-        if l1 == LITERAL_instanceof && SET_13.contains(self.la(2)?) {
-            self.token_root(&mut cur, LITERAL_instanceof)?;
+        if l1 == LITERAL_INSTANCEOF && SET_13.contains(self.la(2)?) {
+            self.token_root(&mut cur, LITERAL_INSTANCEOF)?;
             let l1 = self.la(1)?;
             let n = if SET_13.contains(l1)
                 && SET_28.contains(self.la(2)?)
@@ -3371,7 +3400,7 @@ impl<'a> Parser<'a> {
             self.token_root(&mut cur, t)?;
             let n = self.unary_expression()?;
             self.add(&mut cur, n);
-        } else if t == LITERAL_switch {
+        } else if t == LITERAL_SWITCH {
             let n = self.switch_expression()?;
             self.add(&mut cur, n);
         } else if is_expression_start(t) && !matches!(t, PLUS | MINUS | INC | DEC) {
@@ -3469,7 +3498,7 @@ impl<'a> Parser<'a> {
                 DOT => {
                     self.token_root(&mut cur, DOT)?;
                     let t = self.la(1)?;
-                    if is_id(t) || matches!(t, LITERAL_this | LITERAL_super | LT) {
+                    if is_id(t) || matches!(t, LITERAL_THIS | LITERAL_SUPER | LT) {
                         if t == LT {
                             let n = self.type_arguments(false)?;
                             self.add(&mut cur, n);
@@ -3479,17 +3508,17 @@ impl<'a> Parser<'a> {
                                 let n = self.id()?;
                                 self.add(&mut cur, n);
                             }
-                            LITERAL_this => {
-                                self.token(&mut cur, LITERAL_this)?;
+                            LITERAL_THIS => {
+                                self.token(&mut cur, LITERAL_THIS)?;
                             }
-                            LITERAL_super => {
-                                self.token(&mut cur, LITERAL_super)?;
+                            LITERAL_SUPER => {
+                                self.token(&mut cur, LITERAL_SUPER)?;
                             }
                             _ => return self.fail(),
                         }
-                    } else if t == LITERAL_class {
-                        self.token(&mut cur, LITERAL_class)?;
-                    } else if t == LITERAL_new {
+                    } else if t == LITERAL_CLASS {
+                        self.token(&mut cur, LITERAL_CLASS)?;
+                    } else if t == LITERAL_NEW {
                         let n = self.new_expression()?;
                         self.add(&mut cur, n);
                     } else {
@@ -3503,7 +3532,7 @@ impl<'a> Parser<'a> {
                     if t == LT {
                         let n = self.type_arguments(false)?;
                         self.add(&mut cur, n);
-                    } else if !(is_id(t) || t == LITERAL_new) {
+                    } else if !(is_id(t) || t == LITERAL_NEW) {
                         return self.fail();
                     }
                     match self.la(1)? {
@@ -3511,8 +3540,8 @@ impl<'a> Parser<'a> {
                             let n = self.id()?;
                             self.add(&mut cur, n);
                         }
-                        LITERAL_new => {
-                            self.token(&mut cur, LITERAL_new)?;
+                        LITERAL_NEW => {
+                            self.token(&mut cur, LITERAL_NEW)?;
                         }
                         _ => return self.fail(),
                     }
@@ -3526,9 +3555,9 @@ impl<'a> Parser<'a> {
                             self.token(&mut cur, RBRACK)?;
                         }
                         let l1 = self.la(1)?;
-                        if l1 == DOT && self.la(2)? == LITERAL_class {
+                        if l1 == DOT && self.la(2)? == LITERAL_CLASS {
                             self.token_root(&mut cur, DOT)?;
-                            self.token(&mut cur, LITERAL_class)?;
+                            self.token(&mut cur, LITERAL_CLASS)?;
                         } else if !(SET_59.contains(l1) && SET_60.contains(self.la(2)?)) {
                             return self.fail();
                         }
@@ -3565,7 +3594,7 @@ impl<'a> Parser<'a> {
 
     fn new_expression(&mut self) -> R<Node> {
         let mut cur = Pair::default();
-        self.token_root(&mut cur, LITERAL_new)?;
+        self.token_root(&mut cur, LITERAL_NEW)?;
         let t = self.la(1)?;
         if t == LT {
             let n = self.type_arguments(false)?;

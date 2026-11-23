@@ -21,7 +21,7 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     name: "luacheck", processor_type: crate::processor::ProcessorType::Checker, create: create_luacheck,
     fields: &[],
     omit_standard_fields: &["formats", "output_dir"],
-    scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &[".lua"], src_exclude_dirs: &[] }),
+    scan_defaults: Some(crate::config::ScanDefaultsData { src_extensions: &[".lua"], src_exclude_dirs: &[] }),
     // `.luacheckrc` applies options per path (`files["glob"]`) and luacheck
     // picks a default std from the path (`*_spec.lua` under `spec/`), so the
     // verdict depends on the file's name, not only its content — as for

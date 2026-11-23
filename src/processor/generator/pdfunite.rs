@@ -226,7 +226,7 @@ inventory::submit! {
         // The sources are located by `source_dir`/`source_ext`, not by a
         // scan, so there is no extension to default: of the scan fields only
         // `src_exclude_*`/`src_files` apply to the lookup.
-        scan_defaults: Some(crate::config::ScanDefaultsData { src_dirs: &[], src_extensions: &[], src_exclude_dirs: &[] }),
+        scan_defaults: Some(crate::config::ScanDefaultsData { src_extensions: &[], src_exclude_dirs: &[] }),
         defaults: Some(crate::config::ProcessorDefaults { command: "pdfunite", output_dir: "out/processor.generator.pdfunite", ..crate::config::ProcessorDefaults::EMPTY }),
         defconfig_json: crate::registries::default_config_json::<PdfuniteConfig>,
         keywords: &["pdf", "merger", "generator"],

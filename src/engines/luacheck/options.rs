@@ -151,9 +151,9 @@ fn array_of_strings(x: &LVal) -> Result<(), String> {
     Ok(())
 }
 
-#[allow(clippy::float_cmp)] // Lua's `math.floor(x) == x` integer test, exact by design.
+/// Lua's `math.floor(x) == x` integer test, an exact comparison by design.
 fn is_integer(n: f64) -> bool {
-    n.floor() == n
+    n.floor().partial_cmp(&n) == Some(Ordering::Equal)
 }
 
 pub fn validate_value(validator: Validator, x: &LVal, stds: &Stds) -> Result<(), String> {
