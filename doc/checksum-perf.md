@@ -3,6 +3,7 @@
 ## Status
 
 Streaming hash (option A below) is implemented. xattr/sidecar (sub-question
+
 1) and mmap (option B/C below) are answered as recommendations not to
 pursue at this time.
 
@@ -126,6 +127,7 @@ Wins: zero-copy when pages are already in the page cache; potentially
 fastest path for large files.
 
 Loss:
+
 - `mmap` page-fault overhead can exceed read overhead for small files.
 - A file truncated under us → SIGBUS, which by default kills the
   process. Robust handling needs `sigaction` setup and is a project we

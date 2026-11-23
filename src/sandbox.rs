@@ -37,6 +37,11 @@ pub const SANDBOX_TOOL: &str = "bwrap";
 /// upper directory into the tree is a rename, not a copy.
 const SANDBOX_DIR: &str = ".rsconstruct/sandbox";
 
+/// The name of [`SANDBOX_DIR`] inside the `.rsconstruct` state directory, for
+/// code that holds the state directory rather than the project root
+/// (`tool_store::clear_state_dir`). A test keeps the two in step.
+pub const SANDBOX_DIR_NAME: &str = "sandbox";
+
 /// The xattr overlayfs sets on an upper directory that hides the lower
 /// directory's contents: the tool removed the directory and created a new
 /// one in its place. bwrap mounts the overlay with `userxattr`, so the
@@ -1269,8 +1274,6 @@ fn real_files_under(root: &Path, rel: &Path, out: &mut Vec<PathBuf>) -> Result<(
     Ok(())
 }
 
-/// Remove a run's directory. overlayfs leaves `work/work` with mode 000,
-/// which must be opened up before it can be deleted.
 /// Remove what killed builds left under `.rsconstruct/sandbox/` in the
 /// project at `root`, and the directory itself; returns how many runs were
 /// removed. A run's directory normally goes when the run is settled, but a
@@ -1283,8 +1286,18 @@ fn real_files_under(root: &Path, rel: &Path, out: &mut Vec<PathBuf>) -> Result<(
 /// and this one has not started a run yet. Nothing in a leftover run is
 /// worth keeping: a run reaches the tree only once it is accepted.
 pub fn remove_leftover_runs(root: &Path) -> Result<usize> {
-    let sandbox = root.join(SANDBOX_DIR);
-    let entries = match fs::read_dir(&sandbox) {
+    remove_sandbox_dir(&root.join(SANDBOX_DIR))
+}
+
+/// Remove the sandbox directory `sandbox` and every run in it; returns how
+/// many runs were removed (0 when there is no such directory). The one way
+/// to delete a sandbox directory: a plain `remove_dir_all` fails on the
+/// mode-000 `work/work` a killed run leaves. Used by
+/// [`remove_leftover_runs`] and by `tool_store::clear_state_dir` (`clean
+/// all`, `cache clear`), which names the directory by
+/// [`SANDBOX_DIR_NAME`] inside the state directory.
+pub fn remove_sandbox_dir(sandbox: &Path) -> Result<usize> {
+    let entries = match fs::read_dir(sandbox) {
         Ok(entries) => entries,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(0),
         Err(e) => {
@@ -1309,11 +1322,13 @@ pub fn remove_leftover_runs(root: &Path) -> Result<usize> {
         }
         removed += 1;
     }
-    fs::remove_dir(&sandbox)
+    fs::remove_dir(sandbox)
         .with_context(|| format!("Failed to remove sandbox directory {}", sandbox.display()))?;
     Ok(removed)
 }
 
+/// Remove a run's directory. overlayfs leaves `work/work` with mode 000,
+/// which must be opened up before it can be deleted.
 fn remove_run_dir(dir: &Path) -> Result<()> {
     let inner = dir.join("work").join("work");
     if inner.exists() {
@@ -1650,6 +1665,15 @@ mod tests {
         assert_eq!(remove_leftover_runs(root).unwrap(), 2);
         assert!(!root.join(SANDBOX_DIR).exists());
         assert!(root.join(".rsconstruct").is_dir(), "only the sandbox goes");
+    }
+
+    /// `SANDBOX_DIR_NAME` names the same directory as `SANDBOX_DIR`.
+    #[test]
+    fn sandbox_dir_name_matches_sandbox_dir() {
+        assert_eq!(
+            Path::new(".rsconstruct").join(SANDBOX_DIR_NAME),
+            Path::new(SANDBOX_DIR)
+        );
     }
 
     /// Removing a stale output is rsconstruct's own first step, so it is

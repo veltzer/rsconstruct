@@ -9,8 +9,9 @@ Draft — awaiting review. Two questions to answer plus a concrete proposal.
 `problems.txt`:
 
 > I want to add a variant feature to every processor.
->   - what is the difference between two variants and the same processor twice in the same file?
->   - the cargo processor seems to have variants, what does that mean?
+>
+> - what is the difference between two variants and the same processor twice in the same file?
+> - the cargo processor seems to have variants, what does that mean?
 
 ## Question 1 — what is cargo's variant?
 

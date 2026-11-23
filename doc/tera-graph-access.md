@@ -29,7 +29,7 @@ only the four custom Tera functions registered by rsconstruct:
 So when a template wants to say "this project has 1234 markdown files
 under the syllabi processor", it has to do:
 
-```
+```jinja
 {{ glob(pattern="syllabi/**/*.md") | length }}
 ```
 

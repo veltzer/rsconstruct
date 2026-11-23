@@ -580,15 +580,21 @@ fn gem_launcher(package: &Path, exe: &str) -> String {
 /// what `cache clear` and `clean all` do. The tools are not a cache of
 /// anything the build produced, and a build right after a clear needs them.
 /// Returns whether anything was removed.
+///
+/// The sandbox directory goes first, through the sandbox's own removal: a
+/// build killed mid-run leaves overlayfs `work/work` directories with mode
+/// 000 in it, which a plain `remove_dir_all` cannot delete.
 pub fn clear_state_dir(dir: &Path) -> Result<bool> {
     if !dir.exists() {
         return Ok(false);
     }
+    let sandbox = dir.join(crate::sandbox::SANDBOX_DIR_NAME);
+    let mut removed = sandbox.exists();
+    crate::sandbox::remove_sandbox_dir(&sandbox)?;
     if !dir.join(TOOLS_DIR_NAME).exists() {
         fs::remove_dir_all(dir).with_context(|| format!("Failed to remove {}", dir.display()))?;
         return Ok(true);
     }
-    let mut removed = false;
     let entries =
         fs::read_dir(dir).with_context(|| format!("Failed to read directory {}", dir.display()))?;
     for entry in entries {
@@ -914,6 +920,32 @@ mod tests {
         assert!(clear_state_dir(&bare).unwrap());
         assert!(!bare.exists());
         assert!(!clear_state_dir(&bare).unwrap());
+    }
+
+    /// A run a killed build left in the sandbox has a mode-000 overlayfs
+    /// `work/work`; clearing the state directory removes it anyway, with and
+    /// without a tools directory beside it.
+    #[test]
+    fn clear_state_dir_removes_leftover_sandbox_runs() {
+        let tmp = tempfile::TempDir::new().unwrap();
+        for with_tools in [true, false] {
+            let state = tmp.path().join(format!("state-{with_tools}"));
+            if with_tools {
+                fs::create_dir_all(state.join("tools/bin")).unwrap();
+            }
+            let work = state
+                .join(crate::sandbox::SANDBOX_DIR_NAME)
+                .join("4242-0/work/work");
+            fs::create_dir_all(&work).unwrap();
+            crate::platform::set_permissions_mode(&work, 0o000).unwrap();
+            assert!(clear_state_dir(&state).unwrap());
+            if with_tools {
+                assert!(!state.join(crate::sandbox::SANDBOX_DIR_NAME).exists());
+                assert!(state.join("tools").is_dir());
+            } else {
+                assert!(!state.exists());
+            }
+        }
     }
 
     /// A gem's bin entry is a launcher, not a symlink, and it scopes

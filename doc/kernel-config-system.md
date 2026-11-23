@@ -95,7 +95,7 @@ convention. No deep architecture change.
 
 A TUI that walks the user through every option:
 
-```
+```text
 [*] Enable ruff processor
     └── Target Python version: py313
 [*] Enable cc processor
@@ -170,7 +170,7 @@ a build tool with our knob count.
 A `configs/` directory at project root, gitignored or not at the
 user's discretion:
 
-```
+```text
 configs/
 ├── ci.toml
 ├── dev.toml

@@ -152,7 +152,7 @@ and exits 0. No automatic migration; a build always rewrites it.
 
 ### Layer 5 — the CLI
 
-```
+```text
 rsconstruct error show [--processor=NAME] [--severity=SEV] [--limit=N]
 rsconstruct error edit [--processor=NAME] [--severity=SEV] [--limit=N]
 rsconstruct error clear
@@ -162,7 +162,7 @@ rsconstruct error stats              # count by processor, severity
 
 `error show` prints them in a stable format:
 
-```
+```text
 src/foo.rs:42:5: error[E0308]: mismatched types
     expected `&str`, found `String`
   [from clippy]
@@ -189,6 +189,7 @@ Build the quickfix file from the diagnostic list. This is straightforward.
 ### Layer 6 — what about builds that already failed before producing diagnostics?
 
 Some failures don't have a "file:line" location:
+
 - `command not found`
 - `permission denied`
 - `Failed to create output directory`
