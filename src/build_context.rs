@@ -55,6 +55,9 @@ pub struct BuildContext {
     sandbox_by_default: AtomicBool,
     /// `[build] undeclared_reads == "report"`.
     report_undeclared_reads: AtomicBool,
+    /// `[build] inputs_changed_during_run == "warn"`: a product whose
+    /// inputs changed while its tool ran is warned about, not failed.
+    warn_on_inputs_changed: AtomicBool,
     /// Every path some product of the current graph declares as an output.
     /// Filled by the executor before the first product runs. A processor
     /// that inspects a shared output directory after its tool ran (the
@@ -91,6 +94,7 @@ impl BuildContext {
             command_timeout_secs: std::sync::atomic::AtomicU64::new(0),
             sandbox_by_default: AtomicBool::new(false),
             report_undeclared_reads: AtomicBool::new(false),
+            warn_on_inputs_changed: AtomicBool::new(false),
             declared_outputs: Mutex::new(HashSet::new()),
             declared_output_dirs: Mutex::new(Vec::new()),
             combined_memo: Mutex::new(crate::checksum::CombinedMemo::default()),
@@ -149,6 +153,22 @@ impl BuildContext {
     /// run under strace (see `crate::read_trace`).
     pub(crate) fn reports_undeclared_reads(&self) -> bool {
         self.report_undeclared_reads.load(Ordering::Relaxed)
+    }
+
+    pub(crate) fn set_inputs_changed_during_run(
+        &self,
+        mode: crate::config::InputsChangedDuringRun,
+    ) {
+        self.warn_on_inputs_changed.store(
+            mode == crate::config::InputsChangedDuringRun::Warn,
+            Ordering::Relaxed,
+        );
+    }
+
+    /// Whether `[build] inputs_changed_during_run = "warn"`. The default,
+    /// `"error"`, fails the product.
+    pub(crate) fn warns_on_inputs_changed(&self) -> bool {
+        self.warn_on_inputs_changed.load(Ordering::Relaxed)
     }
 
     pub(crate) fn set_command_timeout_secs(&self, n: u64) {

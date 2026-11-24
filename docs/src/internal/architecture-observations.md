@@ -399,8 +399,10 @@ output belonged to the new content: the next build skipped, stale.
 
 **Fix:** a product's own outputs are never its inputs
 (`graph::without_own_outputs`). Outputs are cached under the dispatch-time
-checksum; when the post-run checksum differs, the outputs are not cached
-and a warning says so, so the next build reruns the product. The post-run
+checksum; when the post-run checksum differs, the outputs are not cached,
+so the next build reruns the product, and the product fails
+(`[build] inputs_changed_during_run`, default `"error"`; `"warn"` only
+warns, as every build did before 2026-11-24). The post-run
 check uses `checksum::fresh_combined_input_checksum`, which ignores the
 in-session checksums and the combined-input memo (both assume content is
 stable within a build, and are what every other reader uses), so a

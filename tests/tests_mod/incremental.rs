@@ -575,20 +575,12 @@ src_dirs = ["src"]
     );
 }
 
-/// Outputs are cached under the inputs the tool started on. When an input
-/// changes while the tool runs, the outputs match neither version: they are
-/// not cached, and the next build runs the product again. (Caching them
-/// under the edited content, as keying by a post-run checksum did, makes
-/// the next build skip with outputs built from the old content.)
-#[test]
-fn input_edited_while_running_is_not_cached() {
-    let temp_dir = TempDir::new().unwrap();
-    let project = temp_dir.path();
-
-    // Copies its input, then edits it — standing in for a user saving the
-    // file while the build runs. Native: the tool itself does the editing
-    // here, and a sandboxed tool that writes its input fails, rightly; a
-    // real user's edit comes from outside the sandbox.
+/// A project whose one generator copies its input and then edits it,
+/// standing in for a user saving the file while the build runs. Native:
+/// the tool itself does the editing here, and a sandboxed tool that writes
+/// its input fails, rightly; a real user's edit comes from outside the
+/// sandbox. `build_extra` is appended to the `[build]` section.
+fn setup_input_edited_while_running(project: &Path, build_extra: &str) {
     write_tool(
         project,
         "copy_then_touch",
@@ -596,9 +588,11 @@ fn input_edited_while_running_is_not_cached() {
     );
     fs::write(
         project.join("rsconstruct.toml"),
-        r#"[build]
+        format!(
+            r#"[build]
 hash_tool_versions = false
 execution_model = "native"
+{build_extra}
 
 [processor.generator.generic]
 command = "copy_then_touch"
@@ -607,11 +601,53 @@ output_extension = "txt"
 batch = false
 src_extensions = [".src"]
 src_dirs = ["src"]
-"#,
+"#
+        ),
     )
     .unwrap();
     fs::create_dir_all(project.join("src")).unwrap();
     fs::write(project.join("src/a.src"), "a\n").unwrap();
+}
+
+/// By default (`[build] inputs_changed_during_run = "error"`), a product
+/// whose input changed while its tool ran fails, and since its outputs were
+/// not cached, the next build runs it again.
+#[test]
+fn input_edited_while_running_fails_by_default() {
+    let temp_dir = TempDir::new().unwrap();
+    let project = temp_dir.path();
+    setup_input_edited_while_running(project, "");
+
+    let first = build(project);
+    assert!(!first.exit_success, "{first:?}");
+    assert_eq!(first.failed, 1, "{first:?}");
+    assert!(
+        first
+            .errors
+            .iter()
+            .any(|e| e.contains("inputs changed while it ran")),
+        "{:?}",
+        first.errors
+    );
+
+    let second = build(project);
+    assert_eq!(
+        second.failed, 1,
+        "a product whose outputs were not cached must run again: {second:?}"
+    );
+}
+
+/// Outputs are cached under the inputs the tool started on. When an input
+/// changes while the tool runs, the outputs match neither version: they are
+/// not cached, and the next build runs the product again. (Caching them
+/// under the edited content, as keying by a post-run checksum did, makes
+/// the next build skip with outputs built from the old content.) With
+/// `inputs_changed_during_run = "warn"` the product counts as built.
+#[test]
+fn input_edited_while_running_is_not_cached() {
+    let temp_dir = TempDir::new().unwrap();
+    let project = temp_dir.path();
+    setup_input_edited_while_running(project, "inputs_changed_during_run = \"warn\"");
 
     let first = build(project);
     assert!(first.exit_success, "{:?}", first.errors);

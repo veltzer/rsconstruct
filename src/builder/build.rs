@@ -313,6 +313,7 @@ impl Builder {
         ctx.set_command_timeout_secs(self.config.build.command_timeout_secs);
         ctx.set_execution_model(self.config.build.execution_model);
         ctx.set_undeclared_reads(self.config.build.undeclared_reads);
+        ctx.set_inputs_changed_during_run(self.config.build.inputs_changed_during_run);
     }
 
     /// Discover → filter → validate: everything between "we have a config" and

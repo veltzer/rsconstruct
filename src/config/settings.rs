@@ -197,6 +197,24 @@ pub struct BuildConfig {
     /// docs/src/internal/undeclared-reads.md.
     #[serde(default)]
     pub undeclared_reads: UndeclaredReads,
+    /// What a build does when a product's inputs differ, after its tool
+    /// ran, from the inputs it was started on: `error` (the default) fails
+    /// the product, `warn` only warns. Either way its outputs are not
+    /// cached, since they match neither version of the inputs.
+    #[serde(default)]
+    pub inputs_changed_during_run: InputsChangedDuringRun,
+}
+
+/// What a build does when a product's inputs changed while its tool ran
+/// (`[build] inputs_changed_during_run`).
+#[derive(Debug, Deserialize, Serialize, Clone, Copy, Default, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum InputsChangedDuringRun {
+    /// Fail the product.
+    #[default]
+    Error,
+    /// Warn, count the product as built, and leave its outputs uncached.
+    Warn,
 }
 
 /// What a build does about files a tool reads without its product
@@ -391,6 +409,7 @@ impl Default for BuildConfig {
             sandbox_builtin_children: 0,
             remove_orphan_outputs: default_remove_orphan_outputs(),
             undeclared_reads: UndeclaredReads::Off,
+            inputs_changed_during_run: InputsChangedDuringRun::Error,
         }
     }
 }

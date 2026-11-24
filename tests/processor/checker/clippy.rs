@@ -121,12 +121,19 @@ fn clippy_rebuild_on_lockfile_change() {
     let output1 = run_rsconstruct_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
     assert!(output1.status.success());
 
-    // Change only the lockfile. A comment keeps it valid TOML that cargo
-    // has no reason to rewrite, while changing its checksum.
+    // Change only the lockfile, in a way cargo keeps: it accepts an older
+    // lockfile format version and leaves it as it is. (An appended comment
+    // does not do: cargo rewrites the lockfile in canonical form while
+    // clippy runs, dropping the comment, which changes an input under the
+    // running tool and fails the product.)
     let lockfile = project_path.join("mylib/Cargo.lock");
-    let mut contents = fs::read_to_string(&lockfile).unwrap();
-    contents.push_str("\n# a dependency bump\n");
-    fs::write(&lockfile, contents).unwrap();
+    let contents = fs::read_to_string(&lockfile).unwrap();
+    assert!(contents.contains("\nversion = 4\n"), "{contents}");
+    fs::write(
+        &lockfile,
+        contents.replace("\nversion = 4\n", "\nversion = 3\n"),
+    )
+    .unwrap();
 
     let output2 = run_rsconstruct_with_env(project_path, &["build", "-v"], &[("NO_COLOR", "1")]);
     assert!(output2.status.success());

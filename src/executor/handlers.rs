@@ -210,7 +210,11 @@ impl Executor<'_> {
         // under the new content would make the next build skip with stale
         // outputs; caching under the old would serve them if that content
         // ever came back. So they are not cached at all, and the next build
-        // runs the product again against whatever the input is then.
+        // runs the product again against whatever the input is then. By
+        // default the product also fails (`[build]
+        // inputs_changed_during_run`): something writes its inputs during
+        // the build, an edit or another tool writing a file it does not
+        // declare, and a green build would hide that.
         let post_input_checksum = match crate::checksum::fresh_combined_input_checksum(
             self.build_ctx,
             &ctx.product.inputs,
@@ -223,6 +227,15 @@ impl Executor<'_> {
             }
         };
         if post_input_checksum != ctx.input_checksum {
+            if !self.build_ctx.warns_on_inputs_changed() {
+                let e = anyhow::anyhow!(
+                    "inputs changed while it ran, so its outputs match neither version and were not cached. \
+                     Something wrote its inputs during the build: an edit, or another tool writing a file it \
+                     does not declare as an output. Set [build] inputs_changed_during_run = \"warn\" to only warn"
+                );
+                self.fail_product(ctx.shared, ctx.id, ctx.product, &e, duration, false);
+                return false;
+            }
             crate::output::warn(&format!(
                 "[{}] {}: inputs changed while it ran; outputs not cached, it will run again next build",
                 ctx.product.processor,
