@@ -104,7 +104,7 @@ pub struct BuildConfig {
     /// (`.pylintrc`, `ruff.toml`, ...) are optional by nature and are never
     /// checked, whatever this is set to.
     #[serde(default = "default_allow_missing_dep_auto")]
-    pub allow_missing_dep_auto: bool,
+    pub allow_missing_dep_auto: MissingEntry,
     /// When true, a `src_dirs` entry naming a directory that does not exist
     /// is skipped, as every entry used to be. Off by default: an entry in
     /// the config is a claim about where the project keeps its sources, and
@@ -114,7 +114,7 @@ pub struct BuildConfig {
     /// discovery fails naming the processor and the entry. A directory an
     /// upstream processor declares as its output is never reported.
     #[serde(default = "default_allow_missing_src_dirs")]
-    pub allow_missing_src_dirs: bool,
+    pub allow_missing_src_dirs: MissingEntry,
     /// When true, a `src_dirs` entry of `"."` is a config error. `"."` is
     /// the same as `""`: the whole project, recursively. Written as `"."`
     /// it reads like "the root directory" and hides that the stanza sweeps
@@ -122,7 +122,7 @@ pub struct BuildConfig {
     /// the directories they cover can forbid the spelling outright. Off by
     /// default: `"."` is not wrong, only easy to misread.
     #[serde(default = "default_reject_dot_src_dirs")]
-    pub reject_dot_src_dirs: bool,
+    pub reject_dot_src_dirs: DotSrcDirs,
     /// Wall-clock limit, in seconds, for every external command a processor
     /// runs; a command still running at the limit is killed and its product
     /// fails with "Command timed out after Ns". `0` (the default) means no
@@ -186,7 +186,7 @@ pub struct BuildConfig {
     /// to keep every output, as before. See
     /// docs/src/internal/orphan-outputs.md.
     #[serde(default = "default_remove_orphan_outputs")]
-    pub remove_orphan_outputs: bool,
+    pub remove_orphan_outputs: OrphanOutputs,
     /// Whether to watch which project files each tool reads and report the
     /// ones its product does not declare as inputs: `off` (the default) or
     /// `report`, which runs every external tool of a product under strace
@@ -253,20 +253,111 @@ const fn default_warn_symlinks() -> bool {
     false
 }
 
-const fn default_allow_missing_dep_auto() -> bool {
-    false
+const fn default_allow_missing_dep_auto() -> MissingEntry {
+    MissingEntry::Fail
 }
 
-const fn default_allow_missing_src_dirs() -> bool {
-    false
+const fn default_allow_missing_src_dirs() -> MissingEntry {
+    MissingEntry::Fail
 }
 
-const fn default_reject_dot_src_dirs() -> bool {
-    false
+const fn default_reject_dot_src_dirs() -> DotSrcDirs {
+    DotSrcDirs::Allow
 }
 
-const fn default_remove_orphan_outputs() -> bool {
-    true
+const fn default_remove_orphan_outputs() -> OrphanOutputs {
+    OrphanOutputs::Remove
+}
+
+/// What to do about a config entry that names a file or directory that does
+/// not exist. In the config file it is the boolean `allow_missing_*`:
+/// `true` skips the entry.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(from = "bool", into = "bool")]
+pub enum MissingEntry {
+    /// The build fails naming the entry.
+    Fail,
+    /// The entry is skipped.
+    Skip,
+}
+
+impl From<bool> for MissingEntry {
+    fn from(allow: bool) -> Self {
+        if allow { Self::Skip } else { Self::Fail }
+    }
+}
+
+impl From<MissingEntry> for bool {
+    fn from(entry: MissingEntry) -> Self {
+        entry == MissingEntry::Skip
+    }
+}
+
+/// Whether a `src_dirs` entry of `"."` is accepted. In the config file it is
+/// the boolean `reject_dot_src_dirs`: `true` rejects it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(from = "bool", into = "bool")]
+pub enum DotSrcDirs {
+    Allow,
+    Reject,
+}
+
+impl From<bool> for DotSrcDirs {
+    fn from(reject: bool) -> Self {
+        if reject { Self::Reject } else { Self::Allow }
+    }
+}
+
+impl From<DotSrcDirs> for bool {
+    fn from(dot: DotSrcDirs) -> Self {
+        dot == DotSrcDirs::Reject
+    }
+}
+
+/// What a full build does with outputs no product declares any more. In the
+/// config file it is the boolean `remove_orphan_outputs`: `true` removes them.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(from = "bool", into = "bool")]
+pub enum OrphanOutputs {
+    Keep,
+    Remove,
+}
+
+impl From<bool> for OrphanOutputs {
+    fn from(remove: bool) -> Self {
+        if remove { Self::Remove } else { Self::Keep }
+    }
+}
+
+impl From<OrphanOutputs> for bool {
+    fn from(orphans: OrphanOutputs) -> Self {
+        orphans == OrphanOutputs::Remove
+    }
+}
+
+/// Whether the mtime pre-check skips checksumming unchanged files. In the
+/// config file it is the boolean `mtime_check`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(from = "bool", into = "bool")]
+pub enum MtimeCheck {
+    Off,
+    On,
+}
+
+impl From<bool> for MtimeCheck {
+    fn from(on: bool) -> Self {
+        if on { Self::On } else { Self::Off }
+    }
+}
+
+impl From<MtimeCheck> for bool {
+    fn from(check: MtimeCheck) -> Self {
+        check == MtimeCheck::On
+    }
+}
+
+const fn default_mtime_check() -> MtimeCheck {
+    MtimeCheck::On
 }
 
 const fn default_worker_stack_mib() -> usize {
@@ -350,8 +441,8 @@ pub struct CacheConfig {
     #[serde(default = "default_true")]
     pub remote_pull: bool,
     /// Whether to use mtime pre-check to skip unchanged file checksums (default: true)
-    #[serde(default = "default_true")]
-    pub mtime_check: bool,
+    #[serde(default = "default_mtime_check")]
+    pub mtime_check: MtimeCheck,
     /// How long a cached HTTP response (remote JSON schemas, etc.) stays
     /// fresh, in seconds. Default: 7 days.
     ///
@@ -380,7 +471,7 @@ impl Default for CacheConfig {
             remote: None,
             remote_push: true,
             remote_pull: true,
-            mtime_check: true,
+            mtime_check: MtimeCheck::On,
             webcache_ttl_secs: default_webcache_ttl_secs(),
         }
     }

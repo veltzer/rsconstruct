@@ -11,6 +11,7 @@
 use std::collections::VecDeque;
 
 use super::{Class, DOCUMENT, Doc, HereDocData, Id, QuoteData, Section, is_space, is_word};
+use crate::numeric::to_isize;
 
 /// What a `__TOKENIZER__*` method returns.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -383,9 +384,8 @@ fn full_quote_data(init: &[u8]) -> Option<QuoteData> {
         b"qr" | b"m" => (Some(init), None, None, 1, true),
         b"s" | b"tr" | b"y" => (Some(init), None, None, 2, true),
         b"/" => (None, Some(false), Some(b'/'), 1, true),
-        b"<" => (None, Some(true), None, 1, false),
+        b"<" | b"(" => (None, Some(true), None, 1, false),
         b"?" => (None, Some(false), Some(b'?'), 1, true),
-        b"(" => (None, Some(true), None, 1, false),
         _ => return None,
     };
     let mut data = QuoteData {
@@ -648,7 +648,7 @@ impl Parser {
     fn fill_line(&mut self, inscan: bool) -> bool {
         let Some(line) = self.get_line() else {
             if inscan {
-                self.cursor = self.line_length as isize;
+                self.cursor = to_isize(self.line_length);
             } else {
                 self.line = None;
             }
@@ -667,10 +667,8 @@ impl Parser {
 
     /// `substr($line, $i, 1)`: empty past either end.
     fn at(&self, i: isize) -> Option<u8> {
-        if i < 0 {
-            return None;
-        }
-        self.line().get(i as usize).copied()
+        let i = usize::try_from(i).ok()?;
+        self.line().get(i).copied()
     }
 
     /// The character at the cursor, as a string (empty past the end).
@@ -679,7 +677,7 @@ impl Parser {
     }
 
     fn pos(&self) -> usize {
-        self.cursor.max(0) as usize
+        self.cursor.max(0).unsigned_abs()
     }
 
     fn sources_left(&self) -> bool {
@@ -730,7 +728,7 @@ impl Parser {
             return Ok(Rv::Undef);
         }
         self.cursor += 1;
-        if self.cursor >= self.line_length as isize {
+        if self.cursor >= to_isize(self.line_length) {
             return Ok(Rv::Zero);
         }
         let result = self.on_char(self.class)?;
@@ -1275,7 +1273,7 @@ impl Parser {
                 );
             }
             self.new_token(Class::Bom, bom)?;
-            self.cursor += bom.len() as isize;
+            self.cursor += to_isize(bom.len());
         }
         self.class = Class::Whitespace;
         self.whitespace_on_line_start()
@@ -1298,7 +1296,7 @@ impl Parser {
         } else {
             self.new_token(Class::Comment, &rest)?;
         }
-        self.cursor = self.line_length as isize - 1;
+        self.cursor = to_isize(self.line_length) - 1;
         Ok(Rv::Zero)
     }
 
@@ -1516,7 +1514,7 @@ impl Parser {
         if !content.contains(&b'.') && self.current_token_is_forced_word(Some(&content)) {
             return self.word_commit();
         }
-        self.cursor += len as isize;
+        self.cursor += to_isize(len);
         self.new_token(Class::NumberVersion, &content)?;
         self.finalize_and_continue()
     }
@@ -1548,7 +1546,7 @@ impl Parser {
         if let Some(len) = match_bareword(&line, pos, false) {
             let word = line[pos..pos + keyword_before_quote(&line[pos..pos + len])].to_vec();
             self.append(&word);
-            self.cursor += word.len() as isize;
+            self.cursor += to_isize(word.len());
         }
         if self.current_token_is_attribute() {
             self.set_class(Class::Attribute);
@@ -1589,10 +1587,10 @@ impl Parser {
             return Err("Fatal error... regex failed to match when expected".to_string());
         };
         let mut word = line[pos..pos + keyword_before_quote(&line[pos..pos + len])].to_vec();
-        self.cursor += word.len() as isize;
+        self.cursor += to_isize(word.len());
         if self.current_token_is_attribute() {
             self.new_token(Class::Attribute, &word)?;
-            return if self.cursor >= self.line_length as isize {
+            return if self.cursor >= to_isize(self.line_length) {
                 Ok(Rv::Zero)
             } else {
                 self.on_char(self.class)
@@ -1607,7 +1605,7 @@ impl Parser {
                 Class::Data
             };
             let rest = line[self.pos().min(line.len())..].to_vec();
-            self.cursor = line.len() as isize;
+            self.cursor = to_isize(line.len());
             if let Some(body) = rest.strip_suffix(b"\n") {
                 if !body.is_empty() {
                     self.new_token(Class::Comment, body)?;
@@ -1624,7 +1622,7 @@ impl Parser {
             token_class = Class::Word;
         } else if let Some(class) = quotelike(&word) {
             self.new_token(class, &word)?;
-            return if self.cursor >= self.line_length as isize {
+            return if self.cursor >= to_isize(self.line_length) {
                 Ok(Rv::Zero)
             } else {
                 self.on_char(self.class)
@@ -1640,7 +1638,7 @@ impl Parser {
                     token_class = Class::Word;
                 } else if !self.token_isa(prev, Class::Operator) {
                     word.extend_from_slice(&rest[..=spaces]);
-                    self.cursor += spaces as isize + 1;
+                    self.cursor += to_isize(spaces) + 1;
                     token_class = Class::Label;
                 } else {
                     token_class = Class::Word;
@@ -1652,7 +1650,7 @@ impl Parser {
             }
         }
         self.new_token(token_class, &word)?;
-        if self.cursor >= self.line_length as isize {
+        if self.cursor >= to_isize(self.line_length) {
             self.finalize();
             return Ok(Rv::Zero);
         }
@@ -1677,7 +1675,7 @@ impl Parser {
             .count();
         if w > 0 {
             self.append(&line[pos..pos + w]);
-            self.cursor += w as isize;
+            self.cursor += to_isize(w);
         }
         let content = self.token_content();
         let file_test = content.len() == 2
@@ -1700,7 +1698,7 @@ impl Parser {
             .count();
         if w > 0 {
             self.append(&line[pos..pos + w]);
-            self.cursor += w as isize;
+            self.cursor += to_isize(w);
         }
         self.finalize_and_continue()
     }
@@ -1723,7 +1721,7 @@ impl Parser {
             .count();
         if w > 0 {
             self.append(&line[pos..pos + w]);
-            self.cursor += w as isize;
+            self.cursor += to_isize(w);
         }
         let content = self.token_content().to_vec();
         if content == b"@_" || content == b"$_" {
@@ -1745,7 +1743,7 @@ impl Parser {
         {
             let rest = content.len() - 3;
             self.truncate_token(3);
-            self.cursor -= rest as isize;
+            self.cursor -= to_isize(rest);
             return self.finalize_and_continue();
         }
         if (content[0] == b'$' || content[0] == b'@')
@@ -1758,7 +1756,7 @@ impl Parser {
             return Ok(Rv::Undef);
         };
         if len != content.len() {
-            self.cursor += len as isize - content.len() as isize;
+            self.cursor += to_isize(len) - to_isize(content.len());
             self.truncate_token(len);
         }
         self.finalize_and_continue()
@@ -1837,7 +1835,7 @@ impl Parser {
         }
         if is_magic(&c) {
             let current = self.token_content().len();
-            self.cursor += c.len() as isize - current as isize;
+            self.cursor += to_isize(c.len()) - to_isize(current);
             if let Some(token) = self.token {
                 self.doc.elems[token].content = c;
             }
@@ -1846,7 +1844,7 @@ impl Parser {
             let pos = self.pos();
             if let Some(len) = curly_symbol(&line, pos) {
                 self.append(&line[pos..pos + len]);
-                self.cursor += len as isize;
+                self.cursor += to_isize(len);
             } else if magic_capture_variable(&c) {
                 let digits = line[pos.min(line.len())..]
                     .iter()
@@ -1854,7 +1852,7 @@ impl Parser {
                     .count();
                 if digits > 0 {
                     self.append(&line[pos..pos + digits]);
-                    self.cursor += digits as isize;
+                    self.cursor += to_isize(digits);
                 }
             }
         }
@@ -2109,10 +2107,11 @@ impl Parser {
     /// `_cast_or_op`.
     fn cast_or_op(&self) -> Class {
         let tokens = &self.tokens;
-        let sig = |cursor: &mut isize, extra: &mut dyn FnMut(Id) -> bool| -> Option<Id> {
-            while *cursor >= 0 {
-                let token = tokens[*cursor as usize];
-                *cursor -= 1;
+        // `remaining` counts the tokens not yet looked at, walking backwards.
+        let sig = |remaining: &mut usize, extra: &mut dyn FnMut(Id) -> bool| -> Option<Id> {
+            while *remaining > 0 {
+                *remaining -= 1;
+                let token = tokens[*remaining];
                 if !self.doc.significant(token) {
                     continue;
                 }
@@ -2123,7 +2122,7 @@ impl Parser {
             }
             None
         };
-        let mut cursor = tokens.len() as isize - 1;
+        let mut cursor = tokens.len();
         let Some(token) = sig(&mut cursor, &mut |_| true) else {
             return Class::Cast;
         };
@@ -2243,7 +2242,7 @@ impl Parser {
             };
             let m = &line[pos..=end];
             string.extend_from_slice(m);
-            self.cursor += m.len() as isize;
+            self.cursor += to_isize(m.len());
             depth += if line[end] == b'(' { 1 } else { -1 };
             if depth != 0 {
                 continue;
@@ -2263,7 +2262,7 @@ impl Parser {
             return self.finalize_and_continue();
         };
         self.append(&line[pos..pos + len]);
-        self.cursor += len as isize;
+        self.cursor += to_isize(len);
         let content = self.token_content().to_vec();
         let Some((indented, terminator)) = heredoc_terminator(&content) else {
             return Ok(Rv::Undef);
@@ -2660,7 +2659,7 @@ impl Parser {
             let pos = self.pos().min(line.len());
             if let Some(end) = find_unescaped(&line, pos, |c| c == target) {
                 let m = &line[pos..=end];
-                self.cursor += m.len() as isize - 1;
+                self.cursor += to_isize(m.len()) - 1;
                 string.extend_from_slice(m);
                 return Scan::Found(string);
             }
@@ -2696,7 +2695,7 @@ impl Parser {
             };
             let m = &line[pos..=end];
             string.extend_from_slice(m);
-            self.cursor += m.len() as isize;
+            self.cursor += to_isize(m.len());
             depth += if line[end] == open { 1 } else { -1 };
             if depth != 0 {
                 continue;
@@ -2716,7 +2715,7 @@ impl Parser {
             let len = gap_length(&line, pos);
             string.extend_from_slice(&line[pos..pos + len]);
             if pos + len != line.len() {
-                self.cursor += len as isize;
+                self.cursor += to_isize(len);
                 return Scan::Found(string);
             }
             if !self.fill_line(true) {

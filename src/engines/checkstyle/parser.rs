@@ -660,7 +660,7 @@ impl<'a> Parser<'a> {
             return;
         };
         self.current_gt_sequence = Some(node);
-        let len = self.ast.text(node).encode_utf16().count() as i32;
+        let len = crate::numeric::to_i32(self.ast.text(node).encode_utf16().count());
         self.gt_to_reconcile += len;
         self.lt_counter -= len;
     }
@@ -669,7 +669,7 @@ impl<'a> Parser<'a> {
     fn emit_single_gt(&mut self) -> Node {
         self.gt_to_reconcile -= 1;
         let sequence = self.current_gt_sequence?;
-        let len = self.ast.text(sequence).encode_utf16().count() as i32;
+        let len = crate::numeric::to_i32(self.ast.text(sequence).encode_utf16().count());
         let token = Token {
             ty: GENERIC_END,
             text: Some(">".into()),

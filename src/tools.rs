@@ -1323,6 +1323,8 @@ fn unpinned_binary_url(recipe: &BinaryRecipe) -> String {
 }
 
 fn run_binary(pkg: &str, ctx: &InstallCtx) -> anyhow::Result<()> {
+    use anyhow::Context as _;
+
     let recipe = binary_recipe(pkg)
         .ok_or_else(|| anyhow::anyhow!("no binary install recipe for '{pkg}'"))?;
     if matches!(recipe.archive, ArchiveKind::Tree { .. }) {
@@ -1344,7 +1346,6 @@ fn run_binary(pkg: &str, ctx: &InstallCtx) -> anyhow::Result<()> {
         Some(pin) => pin.url.clone(),
         None => unpinned_binary_url(&recipe),
     };
-    use anyhow::Context as _;
     let work_dir = install_work_dir();
     crate::platform::create_private_dir(std::path::Path::new(&work_dir)).with_context(|| {
         format!("Failed to create the install work directory {work_dir} (remove it if a crashed install left it)")

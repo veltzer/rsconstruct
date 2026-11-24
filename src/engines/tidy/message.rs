@@ -378,16 +378,16 @@ impl Doc {
         match at {
             At::Node(n) => {
                 let node = self.tree.node(n);
-                (node.line as i32, node.column as i32)
+                (node.line, node.column)
             }
-            At::Lexer => (self.lexer.lines as i32, self.lexer.columns as i32),
+            At::Lexer => (self.lexer.lines, self.lexer.columns),
             At::Nowhere => (0, 0),
         }
     }
 
     /// `messageOut`: count the message and print it if the display
     /// options allow.
-    fn emit(&mut self, level: Level, code: Code, at: At, message: String) {
+    fn emit(&mut self, level: Level, code: Code, at: At, message: &str) {
         match level {
             Level::Info => self.counts.infos += 1,
             Level::Warning => self.counts.warnings += 1,
@@ -399,7 +399,7 @@ impl Doc {
         // counted (the count above happens first, so the sixth error is
         // already silent).
         let mut go = self.counts.errors < opts.show_errors;
-        if opts.quiet {
+        if opts.report.quiet {
             go &= !matches!(
                 code,
                 Code::StringDoctypeGiven | Code::StringContentLooks | Code::StringNoSysid
@@ -407,10 +407,10 @@ impl Doc {
             go &= level != Level::Config;
             go &= level != Level::Info;
         }
-        if !opts.show_info {
+        if !opts.report.show_info {
             go &= level != Level::Info;
         }
-        if !opts.show_warnings {
+        if !opts.report.show_warnings {
             go &= level != Level::Warning;
         }
         if !go {
@@ -523,7 +523,7 @@ impl Doc {
             }
         };
         let message = format(code.text(), &args);
-        self.emit(level, code, at, message);
+        self.emit(level, code, at, &message);
         if code == TagNotAllowedIn || code == TooManyElementsIn {
             self.report(element, node, PreviousLocation);
         }
@@ -572,15 +572,15 @@ impl Doc {
             RepeatedAttribute => vec![tagdesc, value, name],
             UnexpectedEndOfFileAttr => {
                 // On end of file the position is the end of the input.
-                self.lexer.lines = self.stream.curline as u32;
-                self.lexer.columns = self.stream.curcol as u32;
+                self.lexer.lines = self.stream.curline;
+                self.lexer.columns = self.stream.curcol;
                 at = At::Lexer;
                 vec![tagdesc]
             }
             other => panic!("report_attr(): {other:?} is not an attribute report"),
         };
         let message = format(code.text(), &args);
-        self.emit(code.level(), code, at, message);
+        self.emit(code.level(), code, at, &message);
     }
 
     /// `TY_(ReportMissingAttr)`.
@@ -591,14 +591,14 @@ impl Doc {
             Level::Warning,
             Code::MissingAttribute,
             At::Node(node),
-            message,
+            &message,
         );
     }
 
     /// `TY_(ReportEntityError)`: positioned at the lexer.
     pub fn report_entity(&mut self, code: Code, entity: &str) {
         let message = format(code.text(), &[entity.to_string()]);
-        self.emit(code.level(), code, At::Lexer, message);
+        self.emit(code.level(), code, At::Lexer, &message);
     }
 
     /// `TY_(ReportEncodingError)`: `formatEncodingReport`.
@@ -614,13 +614,13 @@ impl Doc {
             self.bad_chars |= BC_OTHER;
         }
         let message = format(code.text(), &[action.to_string(), shown]);
-        self.emit(code.level(), code, At::Lexer, message);
+        self.emit(code.level(), code, At::Lexer, &message);
     }
 
     /// `TY_(ReportSurrogateError)`.
     pub fn report_surrogate(&mut self, code: Code, c1: u32, c2: u32) {
         let message = format(code.text(), &[format!("{c1:04X}"), format!("{c2:04X}")]);
-        self.emit(code.level(), code, At::Lexer, message);
+        self.emit(code.level(), code, At::Lexer, &message);
     }
 
     /// `ReportMarkupVersion`: the Info lines about the document's version
@@ -628,20 +628,20 @@ impl Doc {
     pub fn report_summary(&mut self) {
         if let Some(doctype) = self.given_doctype.clone() {
             let message = format(Code::StringDoctypeGiven.text(), &[doctype]);
-            self.emit(Level::Info, Code::StringDoctypeGiven, At::Nowhere, message);
+            self.emit(Level::Info, Code::StringDoctypeGiven, At::Nowhere, &message);
         }
         let apparent = self.apparent_version();
         let vers = tables::name_from_vers(apparent)
             .unwrap_or("HTML Proprietary")
             .to_string();
         let message = format(Code::StringContentLooks.text(), &[vers]);
-        self.emit(Level::Info, Code::StringContentLooks, At::Nowhere, message);
+        self.emit(Level::Info, Code::StringContentLooks, At::Nowhere, &message);
         if self.warn_missing_si_in_emitted_doctype() {
             self.emit(
                 Level::Info,
                 Code::StringNoSysid,
                 At::Nowhere,
-                Code::StringNoSysid.text().to_string(),
+                Code::StringNoSysid.text(),
             );
         }
     }
@@ -652,7 +652,8 @@ impl Doc {
         let vers = self.lexer.versions;
         let dtver = self.lexer.doctype;
         let dtmode = self.opts.doctype_mode;
-        let xhtml = (self.opts.output_xml || self.lexer.isvoyager) && !self.opts.output_html;
+        let xhtml = (self.opts.output.output_xml || self.lexer.document.isvoyager)
+            && !self.opts.output.output_html;
         let html4 = matches!(
             dtmode,
             super::DoctypeMode::Strict | super::DoctypeMode::Loose
@@ -701,7 +702,7 @@ impl Doc {
 
     /// `TY_(WarnMissingSIInEmittedDocType)`.
     fn warn_missing_si_in_emitted_doctype(&self) -> bool {
-        if self.lexer.isvoyager {
+        if self.lexer.document.isvoyager {
             return false;
         }
         if tables::name_from_vers(self.lexer.version_emitted).is_none() {

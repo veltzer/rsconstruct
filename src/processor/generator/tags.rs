@@ -1355,8 +1355,10 @@ pub fn coverage_tags(db_path: &str) -> Result<()> {
         "Failed to open tag_index table",
     )?;
 
-    let total_files =
-        crate::errors::ctx(fm_table.len(), "Failed to count frontmatter entries")? as usize;
+    let total_files = crate::numeric::u64_to_usize(crate::errors::ctx(
+        fm_table.len(),
+        "Failed to count frontmatter entries",
+    )?);
     if total_files == 0 {
         println!("No files indexed.");
         return Ok(());
@@ -1380,7 +1382,9 @@ pub fn coverage_tags(db_path: &str) -> Result<()> {
     let mut coverage: Vec<(String, usize, f64)> = category_files
         .iter()
         .map(|(cat, files)| {
-            let pct = (files.len() as f64 / total_files as f64) * 100.0;
+            let pct = (crate::numeric::usize_to_f64(files.len())
+                / crate::numeric::usize_to_f64(total_files))
+                * 100.0;
             (cat.clone(), files.len(), pct)
         })
         .collect();
@@ -1388,7 +1392,7 @@ pub fn coverage_tags(db_path: &str) -> Result<()> {
 
     if crate::json_output::is_json_mode() {
         let json: Vec<serde_json::Value> = coverage.iter()
-            .map(|(cat, count, pct)| serde_json::json!({"category": cat, "files": count, "total": total_files, "percent": *pct as u32}))
+            .map(|(cat, count, pct)| serde_json::json!({"category": cat, "files": count, "total": total_files, "percent": crate::numeric::f64_to_u32(*pct)}))
             .collect();
         println!(
             "{}",
@@ -1548,7 +1552,8 @@ pub fn suggest_tags(db_path: &str, path: &str, config: &TagsConfig) -> Result<()
             continue;
         }
         let union = target_tags.union(tags).count();
-        let jaccard = intersection as f64 / union as f64;
+        let jaccard =
+            crate::numeric::usize_to_f64(intersection) / crate::numeric::usize_to_f64(union);
         // Tags this file has that the target doesn't
         let new_tags: HashSet<String> = tags.difference(&target_tags).cloned().collect();
         if !new_tags.is_empty() {
@@ -2157,8 +2162,7 @@ inventory::submit! {
         defconfig_json: crate::registries::default_config_json::<TagsConfig>,
         keywords: &["ctags", "tags", "generator", "code-navigation"],
         description: "Extract YAML frontmatter tags from markdown files into a searchable database",
-        is_builtin: true,
-        is_rust: true,
+        implementation: crate::registries::Implementation::Builtin,
         supports_batch: false,
         caches_outputs: true,
         sandboxable: true,

@@ -117,7 +117,7 @@ fn passes_filter(opts: &Normalized, warning: &mut Warning) -> Result<bool, Inval
         let Some(max_complexity) = opts.max_cyclomatic_complexity else {
             return Ok(false);
         };
-        if warning.complexity.unwrap_or(0) as f64 <= max_complexity {
+        if crate::numeric::usize_to_f64(warning.complexity.unwrap_or(0)) <= max_complexity {
             return Ok(false);
         }
         warning.max_complexity = Some(max_complexity);
@@ -130,16 +130,16 @@ fn passes_filter(opts: &Normalized, warning: &mut Warning) -> Result<bool, Inval
         return Ok(!allowed);
     } else if matches!(code.as_bytes()[0], b'2' | b'3' | b'4')
         && warning.name.as_deref() == Some(b"_")
-        && !warning.useless
+        && !warning.unused.useless
     {
         return Ok(false);
     } else if code.starts_with("11") || code.starts_with("14") {
-        if warning.indirect
+        if warning.global.indirect
             && field_status(opts, warning, warning.previous_indexing_len) == FieldStatus::Undefined
         {
             return Ok(false);
         }
-        if !warning.module && field_status(opts, warning, None) != FieldStatus::Undefined {
+        if !warning.global.module && field_status(opts, warning, None) != FieldStatus::Undefined {
             return Ok(false);
         }
     }
@@ -147,10 +147,10 @@ fn passes_filter(opts: &Normalized, warning: &mut Warning) -> Result<bool, Inval
     if b[0] == b'1' && matches!(b[1], b'2' | b'4') && matches!(b[2], b'2' | b'3') {
         warning.field = Some(field_string(warning));
     }
-    if warning.secondary && !opts.unused_secondaries {
+    if warning.unused.secondary && !opts.unused_secondaries {
         return Ok(false);
     }
-    if warning.is_self && !opts.is_self {
+    if warning.unused.is_self && !opts.is_self {
         return Ok(false);
     }
     options::passes_rules_filter(&opts.rules, &code, warning.name.as_deref())
@@ -220,12 +220,12 @@ fn filter_not_global_related_in_file(
             Some(LineEnding::Comment) => line_opts.max_comment_line_length,
         };
         if let Some(max_length) = max_length
-            && line_length as f64 > max_length
+            && crate::numeric::usize_to_f64(line_length) > max_length
             && options::passes_rules_filter(&line_opts.rules, "631", None)?
         {
             let mut warning = Warning::new("631");
             warning.line = line;
-            warning.column = (max_length + 1.0) as usize;
+            warning.column = crate::numeric::f64_to_usize(max_length + 1.0);
             warning.end_column = line_length;
             warning.max_length = Some(max_length);
             file.filtered.push(warning);
@@ -252,7 +252,7 @@ fn filter_not_global_related_in_file(
 }
 
 const fn is_definition(opts: &Normalized, warning: &Warning) -> bool {
-    opts.allow_defined || (opts.allow_defined_top && warning.top)
+    opts.allow.allow_defined || (opts.allow.allow_defined_top && warning.global.top)
 }
 
 /// The final report of one file: warnings, or an error that kept it from
@@ -367,13 +367,13 @@ pub fn filter(inputs: Vec<FileInput>, stds: &Stds) -> Result<Vec<FileReport>, In
                         if locally_defined[index].contains(&name) {
                             continue;
                         }
-                        warning.module = true;
+                        warning.global.module = true;
                     } else if is_definition(&opts, &warning) {
                         if globally_used.contains(&name) {
                             continue;
                         }
                         warning.code = "131".into();
-                        warning.top = false;
+                        warning.global.top = false;
                     } else if globally_defined.contains(&name) {
                         continue;
                     }
@@ -383,7 +383,7 @@ pub fn filter(inputs: Vec<FileInput>, stds: &Stds) -> Result<Vec<FileReport>, In
                 }
             }
             if (warning.code == "111" || warning.code == "112")
-                && !warning.module
+                && !warning.global.module
                 && field_status(&opts, &warning, None) == FieldStatus::ReadOnly
             {
                 warning.code = format!("12{}", &warning.code[2..3]);

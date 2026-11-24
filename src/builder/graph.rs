@@ -20,10 +20,10 @@ impl Builder {
             GraphAction::View { viewer } => self.view_graph(ctx, viewer),
             GraphAction::Stats => self.graph_stats(ctx),
             GraphAction::Unreferenced { extensions, rm } => {
-                self.graph_unreferenced(ctx, extensions, rm)
+                self.graph_unreferenced(ctx, &extensions, rm)
             }
-            GraphAction::LookupFwd { files } => self.graph_lookup_fwd(ctx, files),
-            GraphAction::LookupRev { files } => self.graph_lookup_rev(ctx, files),
+            GraphAction::LookupFwd { files } => self.graph_lookup_fwd(ctx, &files),
+            GraphAction::LookupRev { files } => self.graph_lookup_rev(ctx, &files),
         }
     }
 
@@ -175,7 +175,7 @@ impl Builder {
     fn graph_unreferenced(
         &self,
         ctx: &crate::build_context::BuildContext,
-        extensions: Vec<String>,
+        extensions: &[String],
         rm: bool,
     ) -> Result<()> {
         let graph = self.build_graph(ctx)?;
@@ -263,10 +263,10 @@ impl Builder {
     fn graph_lookup_fwd(
         &self,
         ctx: &crate::build_context::BuildContext,
-        files: Vec<String>,
+        files: &[String],
     ) -> Result<()> {
         let graph = self.build_graph(ctx)?;
-        let queries = normalize_query_paths(&files);
+        let queries = normalize_query_paths(files);
 
         if json_output::is_json_mode() {
             #[derive(serde::Serialize)]
@@ -333,10 +333,10 @@ impl Builder {
     fn graph_lookup_rev(
         &self,
         ctx: &crate::build_context::BuildContext,
-        files: Vec<String>,
+        files: &[String],
     ) -> Result<()> {
         let graph = self.build_graph(ctx)?;
-        let queries = normalize_query_paths(&files);
+        let queries = normalize_query_paths(files);
 
         if json_output::is_json_mode() {
             #[derive(serde::Serialize)]

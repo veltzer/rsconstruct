@@ -103,13 +103,9 @@ pub struct ProcessorFileEntry {
     pub outputs: Vec<String>,
 }
 
-/// Entry for `rsconstruct processor list --json`.
+/// What a processor can do, as `processor list --json` reports it.
 #[derive(Debug, Serialize)]
-pub struct ProcessorListEntry {
-    pub name: String,
-    pub processor_type: String,
-    // No enabled/detected here: this is the registry, read without a
-    // project. `processor used` says what a project enables and detects.
+pub struct ProcessorCapabilities {
     /// Whether the processor can take several input files in one tool
     /// invocation (the plugin's `supports_batch`, as `info --json` reports
     /// it). A user's `batch = false` can switch batching off for an instance,
@@ -120,6 +116,18 @@ pub struct ProcessorListEntry {
     /// Whether the processor can run under `execution_model = "sandbox"`
     /// (see `ProcessorPlugin::sandboxable`).
     pub sandboxable: bool,
+}
+
+/// Entry for `rsconstruct processor list --json`.
+#[derive(Debug, Serialize)]
+pub struct ProcessorListEntry {
+    pub name: String,
+    pub processor_type: String,
+    // No enabled/detected here: this is the registry, read without a
+    // project. `processor used` says what a project enables and detects.
+    /// What the processor can do (serialized as three keys of this entry).
+    #[serde(flatten)]
+    pub capabilities: ProcessorCapabilities,
     pub builtin: bool,
     /// Whether the implementation (rsconstruct itself for a builtin processor,
     /// the external tool otherwise) is written in Rust.
@@ -310,7 +318,7 @@ pub fn emit_product_complete(
         product: product.to_string(),
         processor: processor.to_string(),
         status,
-        duration_ms: duration.map(|d| d.as_millis() as u64),
+        duration_ms: duration.map(crate::numeric::duration_millis),
         error: error.map(std::string::ToString::to_string),
     });
 }
@@ -338,7 +346,7 @@ pub fn emit_build_summary(counts: BuildCounts, duration: Duration, errors: &[Str
         blocked: counts.blocked,
         skipped: counts.skipped,
         restored: counts.restored,
-        duration_ms: duration.as_millis() as u64,
+        duration_ms: crate::numeric::duration_millis(duration),
         errors: errors.to_vec(),
     });
 }

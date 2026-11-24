@@ -429,6 +429,18 @@ pub struct FieldSpec {
     pub doc: &'static str,
 }
 
+/// The default of the `sandbox_network` field.
+#[derive(Default, Clone, Copy, PartialEq, Eq)]
+pub enum DefaultNetwork {
+    /// The field is left unset: no network access under the sandbox.
+    #[default]
+    Denied,
+    /// A builtin processor that reaches the network from rsconstruct's own
+    /// code (iyamlschema fetches JSON schemas), which has no tool to
+    /// declare it (`ToolInfo::needs_network`).
+    Allowed,
+}
+
 /// Per-processor default values applied after TOML deserialization.
 #[derive(Default, Clone, Copy)]
 pub struct ProcessorDefaults {
@@ -457,10 +469,8 @@ pub struct ProcessorDefaults {
     /// rather than `command`, which must then be empty: for processors that
     /// run `python -m <module>` or a Python program on the interpreter.
     pub python_command: bool,
-    /// Default `sandbox_network`: true for a builtin processor that reaches
-    /// the network from rsconstruct's own code (iyamlschema fetches JSON
-    /// schemas), which has no tool to declare it (`ToolInfo::needs_network`).
-    pub sandbox_network: bool,
+    /// Default `sandbox_network`.
+    pub sandbox_network: DefaultNetwork,
 }
 
 impl ProcessorDefaults {
@@ -476,7 +486,7 @@ impl ProcessorDefaults {
         output_depends_on_input_name: false,
         hash_python_env: false,
         python_command: false,
-        sandbox_network: false,
+        sandbox_network: DefaultNetwork::Denied,
     };
 }
 
@@ -487,7 +497,7 @@ pub struct SimpleCheckerParams {
     pub description: &'static str,
     /// Optional subcommand (e.g., "check" for ruff)
     pub subcommand: Option<&'static str>,
-    /// Args prepended before config args (e.g., ["--check"] for black)
+    /// Args prepended before config args (e.g., `["--check"]` for black)
     pub prepend_args: &'static [&'static str],
     /// Additional tools required beyond the command
     /// (e.g. `[ExtraTool::Python]`, `[ExtraTool::Named("node")]`)
@@ -831,6 +841,29 @@ impl AnalyzerConfig {
     }
 }
 
+/// When the dependency graph is checked for cycles (`[graph]
+/// validate_early_cycles`, a boolean in the config file).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(from = "bool", into = "bool")]
+pub enum CycleCheck {
+    /// At topological sort time.
+    AtSort,
+    /// Immediately after resolving dependencies.
+    Early,
+}
+
+impl From<bool> for CycleCheck {
+    fn from(early: bool) -> Self {
+        if early { Self::Early } else { Self::AtSort }
+    }
+}
+
+impl From<CycleCheck> for bool {
+    fn from(check: CycleCheck) -> Self {
+        check == CycleCheck::Early
+    }
+}
+
 #[derive(Debug, Deserialize, Serialize, Clone)]
 #[serde(deny_unknown_fields)]
 pub struct GraphConfig {
@@ -846,8 +879,12 @@ pub struct GraphConfig {
     #[serde(default)]
     pub validate_duplicate_inputs: bool,
     /// Check for cycles immediately after resolving dependencies (rather than at topological sort time). Default: false.
-    #[serde(default)]
-    pub validate_early_cycles: bool,
+    #[serde(default = "default_cycle_check")]
+    pub validate_early_cycles: CycleCheck,
+}
+
+const fn default_cycle_check() -> CycleCheck {
+    CycleCheck::AtSort
 }
 
 /// Hand-written so an absent `[graph]` table gets the same defaults as an
@@ -862,7 +899,7 @@ impl Default for GraphConfig {
             validate_empty_inputs: true,
             validate_dep_references: true,
             validate_duplicate_inputs: false,
-            validate_early_cycles: false,
+            validate_early_cycles: CycleCheck::AtSort,
         }
     }
 }

@@ -488,7 +488,9 @@ pub fn go_parse_int_base0(s: &str) -> Option<i64> {
         if magnitude > (i64::MAX as u64) + 1 {
             return None;
         }
-        Some((magnitude as i64).wrapping_neg())
+        // `magnitude` may be exactly 2^63, which wraps to `i64::MIN`, the
+        // value it negates to.
+        Some(magnitude.cast_signed().wrapping_neg())
     } else {
         i64::try_from(magnitude).ok()
     }
@@ -564,7 +566,7 @@ pub fn go_parse_float(s: &str) -> Option<f64> {
             scale /= 16.0;
         }
         let exponent: i32 = exponent.parse().ok()?;
-        let value = (int_value as f64 + frac_value) * 2f64.powi(exponent);
+        let value = (crate::numeric::u64_to_f64(int_value) + frac_value) * 2f64.powi(exponent);
         return Some(if lower.starts_with('-') {
             -value
         } else {

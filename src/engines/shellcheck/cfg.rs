@@ -121,7 +121,7 @@ pub struct PropSet(u8);
 
 impl PropSet {
     /// The number of distinct sets.
-    pub const COUNT: usize = 1 << CfVariableProp::ALL.len();
+    pub const COUNT: u8 = 1 << CfVariableProp::ALL.len();
 
     pub const fn bits(self) -> u8 {
         self.0
@@ -843,7 +843,6 @@ impl Builder {
         let id = t.id;
         match &t.inner {
             TAnnotation(_, list) => self.build(ctx, list),
-            TScript(_, list) => self.sequentially(ctx, list),
             TaAssignment(op, var, rhs) if matches!(var.inner, TaVariable(..)) => {
                 let TaVariable(name, indices) = &var.inner else {
                     unreachable!("checked above")
@@ -871,8 +870,6 @@ impl Builder {
             }
             TaAssignment(_, lhs, rhs) => self.sequentially_refs(ctx, &[lhs, rhs]),
             TaBinary(_, a, b) => self.sequentially_refs(ctx, &[a, b]),
-            TaExpansion(list) | TaSequence(list) => self.sequentially(ctx, list),
-            TaParenthesis(t) => self.build(ctx, t),
             TaTrinary(cond, a, b) => {
                 let condition = self.build(ctx, cond);
                 let ifthen = self.build(ctx, a);
@@ -938,8 +935,6 @@ impl Builder {
                 let right = self.build(ctx, rhs);
                 self.link_range(left, right)
             }
-            TcEmpty(_) => self.none(ctx),
-            TcGroup(_, t) | TcNullary(_, t) | TcUnary(_, _, t) => self.build(ctx, t),
             TArithmetic(root) => {
                 let exe = self.build(ctx, root);
                 let status = self.new_node_range(ctx, CfNode::SetExitCode(id));
@@ -1021,14 +1016,14 @@ impl Builder {
                 self.link_range_as(CfEdge::FalseFlow, child, end);
                 Range(start.0, end.1)
             }
-            TCoProcBody(t) | TDollarArithmetic(t) | TDollarBracket(t) | THereString(t)
-            | TInclude(t) => self.build(ctx, t),
-            TDollarDoubleQuoted(list)
+            TScript(_, list)
+            | TaExpansion(list)
+            | TaSequence(list)
+            | TDollarDoubleQuoted(list)
             | TDoubleQuoted(list)
             | TExtglob(_, list)
             | THereDoc(_, _, _, list)
             | TNormalWord(list) => self.sequentially(ctx, list),
-            TDollarSingleQuoted(_) | TGlob(_) | TLiteral(_) | TSingleQuoted(_) => self.none(ctx),
             TDollarBraced(_, w) => {
                 let s: String = oversimplify(w).concat();
                 let modifier = get_braced_modifier(&s);
@@ -1079,7 +1074,16 @@ impl Builder {
                 let rw = self.new_node_range(ctx, apply_single(IdTagged(id, effect)));
                 self.link_range(expression, rw)
             }
-            TFdRedirect(_, t) => self.build(ctx, t),
+            TaParenthesis(t)
+            | TcGroup(_, t)
+            | TcNullary(_, t)
+            | TcUnary(_, _, t)
+            | TCoProcBody(t)
+            | TDollarArithmetic(t)
+            | TDollarBracket(t)
+            | THereString(t)
+            | TInclude(t)
+            | TFdRedirect(_, t) => self.build(ctx, t),
             TForArithmetic(init_t, cond_t, inc_t, body_t) => {
                 let init = self.build(ctx, init_t);
                 let cond = self.build(ctx, cond_t);
@@ -1188,7 +1192,7 @@ impl Builder {
             TSimpleCommand(vars, words) => {
                 let literal = get_unquoted_literal(&words[0]);
                 let args: Vec<&Token> = words.iter().collect();
-                self.handle_command(ctx, t, vars, &args, literal)
+                self.handle_command(ctx, t, vars, &args, literal.as_deref())
             }
             TSourceCommand(original, inlined) => {
                 let cmd = self.build(ctx, original);
@@ -1215,7 +1219,12 @@ impl Builder {
                 self.link_range(body_range, cond_range);
                 self.link_range(cond_range, end)
             }
-            TLexClobber
+            TcEmpty(_)
+            | TDollarSingleQuoted(_)
+            | TGlob(_)
+            | TLiteral(_)
+            | TSingleQuoted(_)
+            | TLexClobber
             | TLexGreatand
             | TLexLessand
             | TLexLessgreat
@@ -1363,9 +1372,9 @@ impl Builder {
         cmd: &Token,
         vars: &[Token],
         args: &[&Token],
-        literal_cmd: Option<String>,
+        literal_cmd: Option<&str>,
     ) -> Range {
-        match literal_cmd.as_deref() {
+        match literal_cmd {
             Some("exit") => self.regular_expansion(ctx, vars, args, &mut |s, c| s.handle_exit(c)),
             Some("return") => {
                 self.regular_expansion(ctx, vars, args, &mut |s, c| s.handle_return(c))
@@ -1395,7 +1404,13 @@ impl Builder {
                     self.handle_others(ctx, cmd.id, vars, args, literal_cmd)
                 } else {
                     let newcmd = args[1];
-                    self.handle_command(ctx, newcmd, vars, &args[1..], get_literal_string(newcmd))
+                    self.handle_command(
+                        ctx,
+                        newcmd,
+                        vars,
+                        &args[1..],
+                        get_literal_string(newcmd).as_deref(),
+                    )
                 }
             }
             Some("command") => {
@@ -1403,7 +1418,13 @@ impl Builder {
                     self.handle_others(ctx, cmd.id, vars, args, literal_cmd)
                 } else {
                     let newcmd = args[1];
-                    self.handle_others(ctx, newcmd.id, vars, &args[1..], get_literal_string(newcmd))
+                    self.handle_others(
+                        ctx,
+                        newcmd.id,
+                        vars,
+                        &args[1..],
+                        get_literal_string(newcmd).as_deref(),
+                    )
                 }
             }
             _ => self.handle_others(ctx, cmd.id, vars, args, literal_cmd),
@@ -1742,10 +1763,10 @@ impl Builder {
         id: Id,
         vars: &[Token],
         args: &[&Token],
-        cmd: Option<String>,
+        cmd: Option<&str>,
     ) -> Range {
         self.regular_expansion(ctx, vars, args, &mut |s, c| {
-            let exe = s.new_node_range(c, CfNode::ExecuteCommand(cmd.clone()));
+            let exe = s.new_node_range(c, CfNode::ExecuteCommand(cmd.map(str::to_string)));
             let status = s.new_node_range(c, CfNode::SetExitCode(id));
             s.link_range(exe, status)
         })

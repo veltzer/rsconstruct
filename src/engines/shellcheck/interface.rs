@@ -25,8 +25,7 @@ impl Severity {
         match self {
             Self::ErrorC => "error",
             Self::WarningC => "warning",
-            Self::InfoC => "note",
-            Self::StyleC => "note",
+            Self::InfoC | Self::StyleC => "note",
         }
     }
 }

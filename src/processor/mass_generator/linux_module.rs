@@ -326,7 +326,6 @@ impl LinuxModuleProcessor {
     /// Execute a full linux-module.yaml build into staging, check against
     /// the plan, and move the planned `.ko` files into `output_dir`.
     fn execute_build(
-        &self,
         ctx: &crate::build_context::BuildContext,
         yaml_path: &Path,
         instance_name: &str,
@@ -417,10 +416,11 @@ impl Processor for LinuxModuleProcessor {
                 }
             };
             {
-                let mut tools = self.manifest_tools.lock();
-                let tools = tools.get_or_insert_with(ManifestTools::default);
+                let mut guard = self.manifest_tools.lock();
+                let tools = guard.get_or_insert_with(ManifestTools::default);
                 tools.make.insert(manifest.make.clone());
                 tools.needs_uname |= manifest.kdir.is_none();
+                drop(guard);
             }
 
             let anchor_dir = crate::processor::parent_dir_or_empty(&yaml_path);
@@ -446,7 +446,7 @@ impl Processor for LinuxModuleProcessor {
         let instance_name = &product.processor;
         let guard = self.run_guard(yaml_path);
         guard.run("linux_module", || {
-            self.execute_build(ctx, yaml_path, instance_name)
+            Self::execute_build(ctx, yaml_path, instance_name)
                 .with_context(|| format!("linux_module build failed in {display_dir}"))
         })?;
         require_planned_output(product, "linux_module")
@@ -469,8 +469,7 @@ inventory::submit! {
         defconfig_json: crate::registries::default_config_json::<LinuxModuleConfig>,
         keywords: &["c", "linux", "kernel", "module", "builder"],
         description: "Build Linux kernel modules from linux-module.yaml manifests",
-        is_builtin: false,
-        is_rust: false,
+        implementation: crate::registries::Implementation::External,
         supports_batch: false,
         caches_outputs: true,
         sandboxable: true,

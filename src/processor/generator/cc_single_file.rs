@@ -27,6 +27,7 @@ fn cached_shell_command(
 
     let result = runner(ctx, cmd_line)?;
     cache.insert(cmd_line.to_string(), result.clone());
+    drop(guard);
     Ok(result)
 }
 
@@ -740,8 +741,7 @@ inventory::submit! {
         defconfig_json: crate::registries::default_config_json::<CcSingleFileConfig>,
         keywords: &["c", "cpp", "compiler", "gcc", "clang", "binary", "executable"],
         description: "Compile C/C++ source files into executables (single-file)",
-        is_builtin: false,
-        is_rust: false,
+        implementation: crate::registries::Implementation::External,
         supports_batch: false,
         caches_outputs: true,
         sandboxable: true,

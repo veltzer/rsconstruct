@@ -12,6 +12,8 @@ use super::{
 };
 use crate::registries::{self as registry, ProcessorPlugin};
 
+use super::{DotSrcDirs, MissingEntry};
+
 /// A mistake in the config, and the key it is about. The checks here run on
 /// the merged value, which has no positions; the path is what
 /// [`SourceFiles::locate`] turns back into the file and line to edit.
@@ -139,33 +141,35 @@ impl FieldType {
 pub(super) fn expected_field_type(processor: &str, field: &str) -> Option<FieldType> {
     // Scan fields — shared by all processors
     match field {
-        "src_dirs" => return Some(FieldType::StringArray),
-        "src_extensions" => return Some(FieldType::StringArray),
-        "src_exclude_dirs" => return Some(FieldType::StringArray),
-        "src_exclude_files" => return Some(FieldType::StringArray),
-        "src_exclude_paths" => return Some(FieldType::StringArray),
-        "src_files" => return Some(FieldType::StringArray),
-        // Common processor fields
-        "args" => return Some(FieldType::StringArray),
-        "dep_inputs" => return Some(FieldType::StringArray),
-        "dep_auto" => return Some(FieldType::StringArray),
-        "required_tools" => return Some(FieldType::StringArray),
+        // String-array fields: the scan fields, then the common processor
+        // fields, then `formats` (a near-universal field from
+        // StandardConfig — declared by almost every processor, so it is
+        // validated generically rather than repeated in every
+        // processor-specific arm below).
+        "src_dirs"
+        | "src_extensions"
+        | "src_exclude_dirs"
+        | "src_exclude_files"
+        | "src_exclude_paths"
+        | "src_files"
+        | "args"
+        | "dep_inputs"
+        | "dep_auto"
+        | "required_tools"
+        | super::SANDBOX_WRITABLE
+        | "formats" => return Some(FieldType::StringArray),
         "max_jobs" => return Some(FieldType::Integer),
-        "enabled" => return Some(FieldType::Bool),
-        super::ENABLED_IF_DIR_EXISTS => return Some(FieldType::String),
-        super::OUTPUT_DEPENDS_ON_INPUT_NAME => return Some(FieldType::Bool),
-        super::HASH_PYTHON_ENV => return Some(FieldType::Bool),
-        super::EXECUTION_MODEL => return Some(FieldType::String),
-        super::SANDBOX_NETWORK => return Some(FieldType::Bool),
-        super::SANDBOX_WRITABLE => return Some(FieldType::StringArray),
-        "batch" => return Some(FieldType::Bool),
-        super::BATCH_BY_DIR => return Some(FieldType::Bool),
-        // Near-universal fields from StandardConfig — declared by almost
-        // every processor, so they are validated generically rather than
-        // repeated in every processor-specific arm below.
-        "command" => return Some(FieldType::String),
-        "output_dir" => return Some(FieldType::String),
-        "formats" => return Some(FieldType::StringArray),
+        "enabled"
+        | super::OUTPUT_DEPENDS_ON_INPUT_NAME
+        | super::HASH_PYTHON_ENV
+        | super::SANDBOX_NETWORK
+        | "batch"
+        | super::BATCH_BY_DIR => return Some(FieldType::Bool),
+        // `command` and `output_dir` are near-universal StandardConfig
+        // fields, validated generically like `formats` above.
+        super::ENABLED_IF_DIR_EXISTS | super::EXECUTION_MODEL | "command" | "output_dir" => {
+            return Some(FieldType::String);
+        }
         _ => {}
     }
 
@@ -380,7 +384,7 @@ pub(super) fn validate_dep_auto_exist(
     instances: &[ProcessorInstance],
     build: &BuildConfig,
 ) -> Result<()> {
-    if build.allow_missing_dep_auto {
+    if build.allow_missing_dep_auto == MissingEntry::Skip {
         return Ok(());
     }
     let mut errors = Vec::new();
@@ -439,7 +443,7 @@ pub(super) fn validate_no_dot_src_dirs(
     instances: &[ProcessorInstance],
     build: &BuildConfig,
 ) -> Result<()> {
-    if !build.reject_dot_src_dirs {
+    if build.reject_dot_src_dirs == DotSrcDirs::Allow {
         return Ok(());
     }
     let mut errors = Vec::new();

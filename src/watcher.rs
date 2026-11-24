@@ -194,8 +194,9 @@ pub fn watch(ctx: &crate::build_context::BuildContext, opts: &BuildOptions) -> R
             }
             match rx.recv_timeout(remaining) {
                 Ok(_) => {}
-                Err(mpsc::RecvTimeoutError::Timeout) => break,
-                Err(mpsc::RecvTimeoutError::Disconnected) => break,
+                Err(mpsc::RecvTimeoutError::Timeout | mpsc::RecvTimeoutError::Disconnected) => {
+                    break;
+                }
             }
         }
 

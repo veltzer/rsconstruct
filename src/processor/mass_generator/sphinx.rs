@@ -289,6 +289,7 @@ impl SphinxProcessor {
             output_dir,
         });
         *guard = Some(Arc::clone(&plan));
+        drop(guard);
         Ok(plan)
     }
 
@@ -509,8 +510,7 @@ inventory::submit! {
         defconfig_json: crate::registries::default_config_json::<SphinxConfig>,
         keywords: &["python", "sphinx", "documentation", "rst", "html", "mass", "pip"],
         description: "Build Sphinx HTML documentation; one cached product per file Sphinx writes, planned by Sphinx itself",
-        is_builtin: false,
-        is_rust: false,
+        implementation: crate::registries::Implementation::External,
         supports_batch: false,
         caches_outputs: true,
         sandboxable: true,

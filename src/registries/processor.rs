@@ -19,6 +19,20 @@ use crate::processor::{Processor, ProcessorType};
 /// The framework applies defaults to the TOML before calling `create`.
 /// The `create` function deserializes the TOML and returns a fully configured,
 /// immutable processor.
+/// What a processor's work is done by.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Implementation {
+    /// A builtin (pure Rust) processor: rsconstruct itself does the work.
+    Builtin,
+    /// An external processor whose tool is written in Rust (ruff, taplo,
+    /// rumdl, clippy, cargo, mdbook, pyrefly, rustc).
+    ExternalRust,
+    /// An external processor whose tool is not written in Rust, or that
+    /// runs a user-supplied command (script, explicit, generator, the
+    /// generic mass generator), where the language is unknown.
+    External,
+}
+
 pub struct ProcessorPlugin {
     pub name: &'static str,
     /// Processor type (checker, generator, explicit, mass generator).
@@ -61,17 +75,11 @@ pub struct ProcessorPlugin {
     pub keywords: &'static [&'static str],
     /// Human-readable description (static, no instantiation needed).
     pub description: &'static str,
-    /// Whether this is a builtin (pure Rust) processor.
-    pub is_builtin: bool,
-    /// Whether the code that does the work is written in Rust. Every builtin
-    /// processor is (it is rsconstruct itself); an external processor is only
-    /// when the tool it runs is (ruff, taplo, rumdl, clippy, cargo, mdbook,
-    /// pyrefly, rustc). Processors that run a user-supplied command (script,
-    /// explicit, generator, the generic mass generator) are `false`: the
-    /// language is unknown.
-    /// Shown by `processor list` and `status` so the language of the toolchain
-    /// can be read off the table.
-    pub is_rust: bool,
+    /// Whether this is a builtin (pure Rust) processor, and whether the code
+    /// that does the work is written in Rust: see [`Implementation`]. Read
+    /// through [`ProcessorPlugin::is_builtin`] and
+    /// [`ProcessorPlugin::is_rust`].
+    pub implementation: Implementation,
     /// Whether this processor can execute multiple products in one invocation.
     /// Static capability — if false, the `batch` config field has no effect at runtime.
     pub supports_batch: bool,
@@ -192,6 +200,19 @@ pub fn pname_of(name: &str) -> String {
 }
 
 impl ProcessorPlugin {
+    /// Whether this is a builtin (pure Rust) processor.
+    pub fn is_builtin(&self) -> bool {
+        self.implementation == Implementation::Builtin
+    }
+
+    /// Whether the code that does the work is written in Rust. Every builtin
+    /// processor is (it is rsconstruct itself); an external processor is only
+    /// when the tool it runs is. Shown by `processor list` and `status` so
+    /// the language of the toolchain can be read off the table.
+    pub fn is_rust(&self) -> bool {
+        self.implementation != Implementation::External
+    }
+
     /// The processor's full name, `processor.<type>.<name>` — the name used
     /// in `rsconstruct.toml`, on the command line and in every product.
     pub fn pname(&self) -> String {
@@ -238,13 +259,13 @@ pub fn processor_type_of(name: &str) -> crate::processor::ProcessorType {
 
 /// Return whether a processor is builtin (pure Rust) by instance name.
 pub fn is_builtin(name: &str) -> bool {
-    find_plugin(name).is_some_and(|p| p.is_builtin)
+    find_plugin(name).is_some_and(ProcessorPlugin::is_builtin)
 }
 
 /// Return whether a processor's implementation is written in Rust, by instance
 /// name. See [`ProcessorPlugin::is_rust`].
 pub fn is_rust(name: &str) -> bool {
-    find_plugin(name).is_some_and(|p| p.is_rust)
+    find_plugin(name).is_some_and(ProcessorPlugin::is_rust)
 }
 
 /// Look up a processor's implementation version by instance name.
@@ -464,23 +485,6 @@ mod tests {
         assert!(find_plugin("processor.checker.generic").is_none());
     }
 
-    /// A builtin processor is rsconstruct's own Rust code, so `is_rust` cannot
-    /// be false for it. The two flags are declared separately because the
-    /// reverse does not hold (ruff is external and Rust), and a plugin entry
-    /// that says builtin but not Rust is a copy-paste mistake.
-    #[test]
-    fn builtin_processors_are_rust() {
-        for plugin in all_plugins() {
-            if plugin.is_builtin {
-                assert!(
-                    plugin.is_rust,
-                    "Processor '{}' is builtin (pure Rust) but declares is_rust: false",
-                    plugin.name
-                );
-            }
-        }
-    }
-
     /// Every Rust alternative pairs a non-Rust processor with a Rust one,
     /// both real, and the replaced processor's docs page links its
     /// alternative, so a reader of the old page finds the new one.
@@ -495,12 +499,12 @@ mod tests {
             let by = find_plugin(alt.by)
                 .unwrap_or_else(|| panic!("unknown Rust alternative '{}'", alt.by));
             assert!(
-                by.is_rust,
+                by.is_rust(),
                 "'{}' is named as a Rust alternative but is not Rust",
                 alt.by
             );
             assert!(
-                !replaced.is_rust,
+                !replaced.is_rust(),
                 "'{}' is Rust already, it needs no alternative",
                 alt.replaces
             );

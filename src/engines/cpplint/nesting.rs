@@ -539,12 +539,9 @@ impl FunctionState {
         };
         let trigger = base_trigger * 2u64.pow(sink.verbose_level());
         if self.lines > trigger {
-            // Precision is not a concern: the ratio is a small number and the
-            // result is floored to one of 0..=5.
-            let error_level = {
-                let ratio = self.lines as f64 / base_trigger as f64;
-                (ratio.log2().floor() as u32).min(5)
-            };
+            // The level is floor(log2(lines / base_trigger)), capped at 5,
+            // which is the base-2 logarithm of the integer quotient.
+            let error_level = (self.lines / base_trigger).ilog2().min(5);
             sink.error(
                 linenum,
                 "readability/fn_size",

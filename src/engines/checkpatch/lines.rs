@@ -333,7 +333,7 @@ impl Checker {
         }
 
         if found_file {
-            self.check = self.t(r"^(?:drivers/net/|net/|drivers/staging/)", &p.realfile);
+            self.switches.check = self.t(r"^(?:drivers/net/|net/|drivers/staging/)", &p.realfile);
             p.checklicenseline = 1;
             if !self.t(r"^(MAINTAINERS|dev\/null)", &p.realfile) {
                 let last_binding_patch = p.is_binding_patch;
@@ -397,7 +397,7 @@ impl Checker {
         }
 
         // UTF-8 regex found at http://www.w3.org/International/questions/qa-forms-utf-8.en.php
-        if self.check && (p.realfile.is_empty() || l.line.first() == Some(&b'+')) {
+        if self.switches.check && (p.realfile.is_empty() || l.line.first() == Some(&b'+')) {
             let prefix = utf8_prefix(&l.rawline);
             let whole = prefix == l.rawline.len()
                 || (prefix + 1 == l.rawline.len() && l.rawline[prefix] == b'\n');
@@ -511,11 +511,11 @@ impl Checker {
                 "TRAILING_WHITESPACE",
                 &cat(&[b"trailing whitespace\n", &herevet]),
             );
-            self.rpt_cleaners = true;
+            self.switches.rpt_cleaners = true;
         }
 
         // Check for FSF mailing addresses.
-        if self.check
+        if self.switches.check
             && (self.tf(r"\bwrite to the Free", "i", &l.rawline)
                 || self.tf(r"\b675\s+Mass\s+Ave", "i", &l.rawline)
                 || self.tf(r"\b59\s+Temple\s+Pl", "i", &l.rawline)
@@ -606,7 +606,7 @@ impl Checker {
         }
 
         // line length limit (with some exclusions)
-        if self.check && l.line.first() == Some(&b'+') && p.length > MAX_LINE_LENGTH {
+        if self.switches.check && l.line.first() == Some(&b'+') && p.length > MAX_LINE_LENGTH {
             self.long_line(p, l);
         }
 
@@ -646,7 +646,7 @@ impl Checker {
         // more than $tabsize must use tabs.
         if self.t(r"^\+\s* \t\s*\S", &l.rawline) || self.t(r"^\+\s*        \s*", &l.rawline) {
             let herevet = cat(&[&l.here, b"\n", &self.cat_vet(&l.rawline), b"\n"]);
-            self.rpt_cleaners = true;
+            self.switches.rpt_cleaners = true;
             self.error(
                 "CODE_INDENT",
                 &cat(&[b"code indent should use tabs where possible\n", &herevet]),
@@ -663,7 +663,7 @@ impl Checker {
         }
 
         // check for assignments on the start of a line
-        if self.check
+        if self.switches.check
             && let Some(c) = self.m(r"^\+\s+($Assignment)[^=]", &l.sline)
         {
             let msg = cat(&[
@@ -676,7 +676,7 @@ impl Checker {
         }
 
         // check for && or || at the start of a line
-        if self.check && self.t(r"^\+\s*(&&|\|\|)", &l.rawline) {
+        if self.switches.check && self.t(r"^\+\s*(&&|\|\|)", &l.rawline) {
             let msg = cat(&[
                 b"Logical continuations should be on the previous line\n",
                 &l.hereprev,
@@ -697,12 +697,12 @@ impl Checker {
         }
 
         // check multi-line statement indentation matches previous line
-        if self.check {
+        if self.switches.check {
             self.parenthesis_alignment(p, l);
         }
 
         // check for space after cast like "(int) foo" or "(struct foo) bar"
-        if self.check
+        if self.switches.check
             && let Some(c) = self.m(
                 r"^\+(.*)\(\s*$Type\s*\)([ \t]++)((?![={]|\\$|$Attribute|__attribute__))",
                 &l.line,
@@ -770,7 +770,7 @@ impl Checker {
         }
 
         // check for missing blank lines after struct/union declarations
-        if self.check
+        if self.switches.check
             && self.t(r"^[\+ ]};?\s*$", &p.prevline)
             && l.line.first() == Some(&b'+')
             && !(self.t(r"^\+\s*$", &l.line)
@@ -1133,7 +1133,7 @@ impl Checker {
     /// The C-only checks up to `next if ($line =~ /^[^\+]/)`.
     fn c_checks(&mut self, p: &mut P, l: &mut L) -> bool {
         // check for unusual line ending [ or (
-        if self.check
+        if self.switches.check
             && let Some(c) = self.m(r"^\+.*([\[\(])\s*$", &l.line)
         {
             let msg = cat(&[
@@ -1895,7 +1895,7 @@ impl Checker {
         }
 
         // do not use BUG() or variants
-        if self.check
+        if self.switches.check
             && self.t(
                 r"\b(?!AA_|BUILD_|IDA_|KVM_|RWLOCK_|snd_|SPIN_)(?:[a-zA-Z_]*_)?BUG(?:_ON)?(?:_[A-Z_]+)?\s*\(",
                 &l.line,
@@ -2225,7 +2225,7 @@ impl Checker {
         }
 
         // check for multiple assignments
-        if self.check && self.t(r"^.\s*$Lval\s*=\s*$Lval\s*=(?!=)", &l.line) {
+        if self.switches.check && self.t(r"^.\s*$Lval\s*=\s*$Lval\s*=(?!=)", &l.line) {
             let msg = cat(&[b"multiple assignments should be avoided\n", &l.herecurr]);
             self.chk("MULTIPLE_ASSIGNMENTS", &msg);
         }
@@ -2284,7 +2284,7 @@ impl Checker {
             self.error("SPACING", &msg);
         }
 
-        if self.check {
+        if self.switches.check {
             self.unnecessary_parentheses(p, l);
         }
 
@@ -2642,7 +2642,7 @@ impl Checker {
             .contains(&op.as_slice())
             {
                 // << and >> may either have or not have spaces both sides
-                if self.check {
+                if self.switches.check {
                     if fix_elements.get(idx + 2).is_some_and(Option::is_some)
                         && !ctx_m(self, r"[EW]x[EW]")
                     {
@@ -2832,7 +2832,7 @@ impl Checker {
         }
 
         // Specific variable tests
-        if self.check {
+        if self.switches.check {
             self.camelcase(l);
         }
 
@@ -2968,7 +2968,7 @@ impl Checker {
             self.single_statement_braces(p, l, start);
         }
 
-        if self.check {
+        if self.switches.check {
             // check for single line unbalanced braces
             if self.t(r"^.\s*\}\s*else\s*$", &l.sline) || self.t(r"^.\s*else\s*\{\s*$", &l.sline) {
                 let msg = cat(&[b"Unbalanced braces around else statement\n", &l.herecurr]);
@@ -3424,7 +3424,7 @@ impl Checker {
         }
 
         // concatenated string without spaces between elements
-        if self.check
+        if self.switches.check
             && (self.t(r"$String[A-Z_]", &l.line)
                 || self
                     .m(r"([A-Za-z0-9_]+)$String", &l.line)
@@ -3623,7 +3623,7 @@ impl Checker {
         }
 
         // check for pointer comparisons to NULL
-        if self.check {
+        if self.switches.check {
             for c in self.all(r"\b$LvalOrFunc\s*(==|\!=)\s*NULL\b", "", &l.line) {
                 let val = c.s(1);
                 let equal: &[u8] = if c.s(4) == b"!=" { b"" } else { b"!" };
@@ -3779,7 +3779,7 @@ impl Checker {
         }
 
         // check for spinlock_t definitions without a comment.
-        if self.check
+        if self.switches.check
             && let Some(c) = self
                 .m(r"^.\s*(struct\s+mutex|spinlock_t)\s+\S+;", &l.line)
                 .or_else(|| self.m(r"^.\s*(DEFINE_MUTEX)\s*\(", &l.line))
@@ -3833,7 +3833,7 @@ impl Checker {
         }
 
         // check of hardware specific defines
-        if self.check
+        if self.switches.check
             && self.t(
                 r"^.\s*\#\s*if.*\b(__i386__|__powerpc64__|__sun__|__s390x__)\b",
                 &l.line,
@@ -3999,7 +3999,7 @@ impl Checker {
     /// From the c99 types to the sscanf checks.
     fn call_checks(&mut self, p: &P, l: &L) {
         // check for c99 types like uint8_t used outside of uapi/ and tools/
-        if self.check
+        if self.switches.check
             && !self.t(r"\binclude/uapi/", &p.realfile)
             && !self.t(r"\btools/", &p.realfile)
             && let Some(c) = self.m(r"\b($Declare)\s*$Ident\s*[=;,\[]", &l.line)
@@ -4352,7 +4352,7 @@ impl Checker {
     /// From the extern checks to the end of the loop.
     fn declaration_checks(&mut self, p: &mut P, l: &L) {
         // check for new externs in .h files.
-        if self.check
+        if self.switches.check
             && self.t(r"\.h$", &p.realfile)
             && self.tf(r"^\+\s*(extern\s+)$Type\s*$Ident\s*\(", "s", &l.line)
         {
@@ -4469,7 +4469,7 @@ impl Checker {
         }
 
         // checks for new __setup's
-        if self.check && self.t(r#"\b__setup\("([^"]*)""#, &l.rawline) {
+        if self.switches.check && self.t(r#"\b__setup\("([^"]*)""#, &l.rawline) {
             let msg = cat(&[
                 b"__setup appears un-documented -- check Documentation/admin-guide/kernel-parameters.txt\n",
                 &l.herecurr,
@@ -4487,7 +4487,7 @@ impl Checker {
         }
 
         // alloc style
-        if self.check
+        if self.switches.check
             && let Some(c) = self.m(
                 r"\b($Lval)\s*\=\s*(?:$balanced_parens)?\s*((?:kv|k|v)[mz]alloc(?:_node)?)\s*\(\s*(sizeof\s*\(\s*struct\s+$Lval\s*\))",
                 &l.line,
@@ -4592,7 +4592,7 @@ impl Checker {
         }
 
         // check for #defines like: 1 << <digit> that could be BIT(digit), it is not exported to uapi
-        if self.check
+        if self.switches.check
             && !self.t(r"^include/uapi/", &p.realfile)
             && let Some(c) = self.m(
                 r"#\s*define\s+\w+\s+\(?\s*1\s*([ulUL]*)\s*\<\<\s*(?:\d+|$Ident)\s*\)?",
@@ -4636,7 +4636,7 @@ impl Checker {
         }
 
         // check for /* fallthrough */ like comment, prefer fallthrough;
-        if self.check && !l.raw_comment.is_empty() {
+        if self.switches.check && !l.raw_comment.is_empty() {
             const FALLTHROUGHS: &[&str] = &[
                 r"fallthrough",
                 r"@fallthrough@",
@@ -4701,7 +4701,7 @@ impl Checker {
         }
 
         // check for comparisons against true and false
-        if self.check
+        if self.switches.check
             && let Some(c) = self.mf(
                 r"\+\s*(.*?)\b(true|false|$Lval)\s*(==|\!=)\s*(true|false|$Lval)\b(.*)$",
                 "i",

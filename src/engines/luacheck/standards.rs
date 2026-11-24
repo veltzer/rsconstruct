@@ -252,11 +252,19 @@ pub fn finalize(final_std: &mut Def) {
     infer_deep_read_only_statuses(final_std, true);
 }
 
+/// The bytes of a standards string: the embedded JSON spells each byte as
+/// one Latin-1 character.
+fn latin1_bytes(s: &str) -> Vec<u8> {
+    s.chars()
+        .map(|c| u8::try_from(c).expect("standards strings hold Latin-1 characters"))
+        .collect()
+}
+
 fn json_to_lval(value: &serde_json::Value) -> LVal {
     match value {
         serde_json::Value::Bool(b) => LVal::Bool(*b),
         serde_json::Value::Number(n) => LVal::Num(n.as_f64().unwrap_or(0.0)),
-        serde_json::Value::String(s) => LVal::Str(s.chars().map(|c| c as u32 as u8).collect()),
+        serde_json::Value::String(s) => LVal::Str(latin1_bytes(s)),
         serde_json::Value::Object(map) => {
             let array = map
                 .get("a")
@@ -272,10 +280,7 @@ fn json_to_lval(value: &serde_json::Value) -> LVal {
                         .filter_map(|pair| {
                             let pair = pair.as_array()?;
                             let key = pair.first()?.as_str()?;
-                            Some((
-                                LKey::Str(key.chars().map(|c| c as u32 as u8).collect()),
-                                json_to_lval(pair.get(1)?),
-                            ))
+                            Some((LKey::Str(latin1_bytes(key)), json_to_lval(pair.get(1)?)))
                         })
                         .collect()
                 })

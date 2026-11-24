@@ -73,7 +73,8 @@ pub fn workflow_key_availability(
         | "jobs.<job_id>.runs-on"
         | "jobs.<job_id>.services"
         | "jobs.<job_id>.timeout-minutes"
-        | "jobs.<job_id>.with.<with_id>" => (
+        | "jobs.<job_id>.with.<with_id>"
+        | "jobs.<job_id>.snapshot.if" => (
             &["github", "inputs", "matrix", "needs", "strategy", "vars"],
             &[],
         ),
@@ -86,10 +87,6 @@ pub fn workflow_key_availability(
         "concurrency" | "on.workflow_call.inputs.<inputs_id>.default" | "run-name" => {
             (&["github", "inputs", "vars"], &[])
         }
-        "jobs.<job_id>.snapshot.if" => (
-            &["github", "inputs", "matrix", "needs", "strategy", "vars"],
-            &[],
-        ),
         _ => return None,
     })
 }

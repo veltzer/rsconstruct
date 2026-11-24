@@ -91,15 +91,15 @@ pub struct Node {
     pub start: usize,
     pub end: usize,
     pub ntype: NodeType,
-    pub line: u32,
-    pub column: u32,
+    pub line: i32,
+    pub column: i32,
     pub closed: bool,
     pub implicit: bool,
     pub linebreak: bool,
 }
 
 impl Node {
-    pub const fn new(line: u32, column: u32) -> Self {
+    pub const fn new(line: i32, column: i32) -> Self {
         Self {
             parent: None,
             prev: None,

@@ -93,6 +93,17 @@ impl LevelWork {
     }
 }
 
+/// How a run treats the cache, failures and timing.
+#[derive(Debug, Clone, Copy)]
+pub struct RunFlags {
+    /// Rebuild everything, ignoring the cache.
+    pub force: bool,
+    /// Keep building independent products after a failure.
+    pub keep_going: bool,
+    /// Record per-product timings.
+    pub timings: bool,
+}
+
 /// Options for configuring an Executor instance.
 #[derive(Debug)]
 pub struct ExecutorOptions {
@@ -102,12 +113,7 @@ pub struct ExecutorOptions {
     pub batch_size: Option<usize>,
     pub explain: bool,
     pub retry: usize,
-    /// Rebuild everything, ignoring the cache.
-    pub force: bool,
-    /// Keep building independent products after a failure.
-    pub keep_going: bool,
-    /// Record per-product timings.
-    pub timings: bool,
+    pub run: RunFlags,
     /// Stack size of each worker thread, in bytes (`[build] worker_stack_mib`).
     pub worker_stack_bytes: usize,
     /// What a sandboxed builtin processor's child run needs (see
@@ -331,9 +337,7 @@ pub struct Executor<'a> {
     batch_size: Option<usize>,
     explain: bool,
     retry: usize,
-    force: bool,
-    keep_going: bool,
-    timings: bool,
+    run: RunFlags,
     worker_stack_bytes: usize,
     builtin_setup: crate::sandbox::BuiltinSetup,
     sandbox_builtin_children: usize,
@@ -360,9 +364,7 @@ impl<'a> Executor<'a> {
             batch_size: opts.batch_size,
             explain: opts.explain,
             retry: opts.retry,
-            force: opts.force,
-            keep_going: opts.keep_going,
-            timings: opts.timings,
+            run: opts.run,
             worker_stack_bytes: opts.worker_stack_bytes,
             builtin_setup: opts.builtin_setup,
             sandbox_builtin_children: opts.sandbox_builtin_children,
@@ -379,7 +381,7 @@ impl<'a> Executor<'a> {
     /// done to a product, the removal of its stale outputs included: a
     /// product that is not going to run keeps its outputs.
     fn should_stop(&self, shared: &SharedState) -> bool {
-        self.is_interrupted() || (!self.keep_going && !shared.errors.lock().is_empty())
+        self.is_interrupted() || (!self.run.keep_going && !shared.errors.lock().is_empty())
     }
 
     /// Display a product with the current display options.

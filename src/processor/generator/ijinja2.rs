@@ -14,6 +14,7 @@ use std::fs;
 use std::path::Path;
 
 use anyhow::{Context, Result};
+use minijinja::value::{Kwargs, Value};
 use serde::{Deserialize, Serialize};
 
 use crate::config::{StandardConfig, output_config_hash};
@@ -51,11 +52,27 @@ fn environment() -> Result<minijinja::Environment<'static>> {
     minijinja_contrib::add_to_environment(&mut env);
     env.set_unknown_method_callback(minijinja_contrib::pycompat::unknown_method_callback);
     // Jinja2 filters whose argument lists minijinja does not cover.
-    env.add_filter("truncate", filters::truncate);
+    // minijinja hands `Kwargs` over by value and cannot lend it to a
+    // function (there is no `&Kwargs` argument type), so the two filters
+    // that read keyword arguments are registered through a closure that
+    // owns them and lends them on.
+    env.add_filter(
+        "truncate",
+        |value: &Value,
+         length: Option<usize>,
+         killwords: Option<bool>,
+         end: Option<String>,
+         kwargs: Kwargs| filters::truncate(value, length, killwords, end, &kwargs),
+    );
     env.add_filter("replace", filters::replace);
     env.add_filter("round", filters::round);
     env.add_filter("int", filters::int);
-    env.add_filter("sum", filters::sum);
+    env.add_filter(
+        "sum",
+        |values: &Value, attribute: Option<String>, start: Option<Value>, kwargs: Kwargs| {
+            filters::sum(values, attribute, start, &kwargs)
+        },
+    );
     env.add_filter("center", filters::center);
     env.add_filter("forceescape", filters::forceescape);
     env.set_auto_escape_callback(|_| minijinja::AutoEscape::None);
@@ -93,11 +110,11 @@ mod filters {
     /// `do_truncate(s, length=255, killwords=False, end='...', leeway=5)`;
     /// `leeway` is keyword-only here.
     pub fn truncate(
-        value: Value,
+        value: &Value,
         length: Option<usize>,
         killwords: Option<bool>,
         end: Option<String>,
-        kwargs: Kwargs,
+        kwargs: &Kwargs,
     ) -> Result<Value, Error> {
         let s = value.as_str().unwrap_or_default().to_string();
         let length = match length {
@@ -135,19 +152,19 @@ mod filters {
     }
 
     /// `do_replace(s, old, new, count=None)`.
-    pub fn replace(value: Value, old: String, new: String, count: Option<usize>) -> Value {
+    pub fn replace(value: &Value, old: &str, new: &str, count: Option<usize>) -> Value {
         let s = value.to_string();
         Value::from(match count {
-            Some(n) => s.replacen(&old, &new, n),
-            None => s.replace(&old, &new),
+            Some(n) => s.replacen(old, new, n),
+            None => s.replace(old, new),
         })
     }
 
     /// `do_round(value, precision=0, method='common')`.
     pub fn round(
-        value: Value,
+        value: &Value,
         precision: Option<i32>,
-        method: Option<String>,
+        method: Option<&str>,
     ) -> Result<Value, Error> {
         let x = f64::try_from(value.clone()).map_err(|_| {
             Error::new(
@@ -158,7 +175,7 @@ mod filters {
         let precision = precision.unwrap_or(0);
         let factor = 10f64.powi(precision);
         let scaled = x * factor;
-        let rounded = match method.as_deref().unwrap_or("common") {
+        let rounded = match method.unwrap_or("common") {
             "common" => scaled.round(),
             "ceil" => scaled.ceil(),
             "floor" => scaled.floor(),
@@ -204,7 +221,7 @@ mod filters {
                 .map(|n| if negative { -n } else { n })
                 .or_else(|| {
                     if base == 10 {
-                        t.parse::<f64>().ok().map(|f| f as i64)
+                        t.parse::<f64>().ok().map(crate::numeric::f64_to_i64)
                     } else {
                         None
                     }
@@ -212,7 +229,9 @@ mod filters {
             return Value::from(parsed.unwrap_or(default));
         }
         match value.kind() {
-            ValueKind::Number => Value::from(f64::try_from(value).map_or(0, |f| f as i64)),
+            ValueKind::Number => {
+                Value::from(f64::try_from(value).map_or(0, crate::numeric::f64_to_i64))
+            }
             ValueKind::Bool => Value::from(i64::from(value.is_true())),
             _ => Value::from(default),
         }
@@ -220,10 +239,10 @@ mod filters {
 
     /// `sync_do_sum(iterable, attribute=None, start=0)` over numbers.
     pub fn sum(
-        values: Value,
+        values: &Value,
         attribute: Option<String>,
         start: Option<Value>,
-        kwargs: Kwargs,
+        kwargs: &Kwargs,
     ) -> Result<Value, Error> {
         let attribute = match attribute {
             Some(a) => Some(a),
@@ -267,7 +286,7 @@ mod filters {
     }
 
     /// `do_center(value, width=80)`.
-    pub fn center(value: Value, width: Option<usize>) -> Value {
+    pub fn center(value: &Value, width: Option<usize>) -> Value {
         let s = value.to_string();
         let width = width.unwrap_or(80);
         let len = s.chars().count();
@@ -284,7 +303,7 @@ mod filters {
     }
 
     /// `do_forceescape`: escape even values marked safe.
-    pub fn forceescape(value: Value) -> Value {
+    pub fn forceescape(value: &Value) -> Value {
         let s = value.to_string();
         let mut out = String::with_capacity(s.len());
         for c in s.chars() {
@@ -396,8 +415,7 @@ inventory::submit! {
         defconfig_json: crate::registries::default_config_json::<Ijinja2Config>,
         keywords: &["template", "generator", "jinja", "jinja2", "rust"],
         description: "Render Jinja2 templates into output files (in-process)",
-        is_builtin: true,
-        is_rust: true,
+        implementation: crate::registries::Implementation::Builtin,
         supports_batch: false,
         caches_outputs: true,
         sandboxable: true,

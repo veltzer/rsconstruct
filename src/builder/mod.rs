@@ -325,7 +325,9 @@ impl Builder {
     /// the next rebuild; the context keeps the CLI `--no-mtime-cache`
     /// override separately, so it wins regardless of ordering.
     fn apply_config_to_context(&self, ctx: &crate::build_context::BuildContext) {
-        ctx.set_mtime_check_from_config(self.config.cache.mtime_check);
+        ctx.set_mtime_check_from_config(
+            self.config.cache.mtime_check == crate::config::MtimeCheck::On,
+        );
         ctx.set_webcache_ttl_secs(self.config.cache.webcache_ttl_secs);
     }
 
@@ -672,7 +674,7 @@ impl Builder {
     /// Check whether a processor should run. In the instance-based model,
     /// every declared processor is active unless its stanza says
     /// `enabled = false` — the one way to keep a stanza out of the build.
-    fn is_processor_active(&self, _name: &str, processor: &dyn Processor) -> bool {
+    fn is_processor_active(processor: &dyn Processor) -> bool {
         processor.scan_config().enabled
     }
 
@@ -833,7 +835,8 @@ impl Builder {
             }
         }
         let tolerant = mode != GraphBuildMode::Normal;
-        if tolerant || self.config.build.allow_missing_src_dirs {
+        if tolerant || self.config.build.allow_missing_src_dirs == crate::config::MissingEntry::Skip
+        {
             if debug {
                 for entry in &missing_dirs {
                     eprintln!(
@@ -1043,7 +1046,7 @@ impl Builder {
         // Collect which processors should run
         let active_processors: Vec<&String> = sorted_keys(processors)
             .into_iter()
-            .filter(|name| self.is_processor_active(name, processors[*name].as_ref()))
+            .filter(|name| Self::is_processor_active(processors[*name].as_ref()))
             .collect();
 
         // Phase 1: Discover products

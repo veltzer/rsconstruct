@@ -60,7 +60,7 @@ impl VariableProperties {
 
     /// The members, in no particular order.
     fn members(self) -> impl Iterator<Item = PropSet> {
-        (0..PropSet::COUNT as u8)
+        (0..PropSet::COUNT)
             .filter(move |b| self.0 & (1 << b) != 0)
             .map(PropSet::from_bits)
     }
@@ -586,8 +586,7 @@ const fn merge_numerical_status(a: NumericalStatus, b: NumericalStatus) -> Numer
     use NumericalStatus::{Definitely, Empty, Maybe, Unknown};
     match (a, b) {
         (Definitely, Definitely) => Definitely,
-        (Definitely, _) | (_, Definitely) => Maybe,
-        (Maybe, _) | (_, Maybe) => Maybe,
+        (Definitely | Maybe, _) | (_, Definitely | Maybe) => Maybe,
         (Empty, Empty) => Empty,
         _ => Unknown,
     }
@@ -1548,8 +1547,7 @@ fn append_variable_value(a: &VariableValue, b: &VariableValue) -> VariableValue 
 const fn append_space_status(a: SpaceStatus, b: SpaceStatus) -> SpaceStatus {
     match (a, b) {
         (SpaceStatus::Empty, _) => b,
-        (_, SpaceStatus::Empty) => a,
-        (SpaceStatus::Clean, SpaceStatus::Clean) => a,
+        (_, SpaceStatus::Empty) | (SpaceStatus::Clean, SpaceStatus::Clean) => a,
         _ => SpaceStatus::Dirty,
     }
 }

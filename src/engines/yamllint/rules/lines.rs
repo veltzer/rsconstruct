@@ -109,7 +109,7 @@ fn check_inline_mapping(content: &str) -> bool {
                 };
                 match next.data {
                     TokenData::Scalar { .. } => {
-                        let column = next.start_mark.column as usize;
+                        let column = crate::numeric::u64_to_usize(next.start_mark.column);
                         return !content.chars().skip(column).any(|c| c == ' ');
                     }
                     TokenData::StreamEnd => return false,
@@ -126,7 +126,7 @@ fn check_line_length(conf: &RuleConf, stream: &Stream<'_>, idx: usize, out: &mut
     let buf = stream.bytes();
     let max_length = conf.int_opt("max");
     // yamllint measures the line in characters.
-    let length = line.content(stream.buffer).chars().count() as i64;
+    let length = crate::numeric::to_i64(line.content(stream.buffer).chars().count());
     if length <= max_length {
         return;
     }
@@ -157,7 +157,7 @@ fn check_line_length(conf: &RuleConf, stream: &Stream<'_>, idx: usize, out: &mut
     }
     out.push(Problem::new(
         line.number,
-        (max_length + 1) as usize,
+        usize::try_from(max_length + 1).unwrap_or(0),
         format!("line too long ({length} > {max_length} characters)"),
     ));
 }

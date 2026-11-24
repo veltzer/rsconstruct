@@ -5,7 +5,7 @@ use tempfile::TempDir;
 
 const SCHEMA_URL: &str = "https://example.com/test_schema.json";
 
-/// The schema content for tests. propertyOrdering is ["name", "age"] which
+/// The schema content for tests. propertyOrdering is `["name", "age"]` which
 /// matches the YAML key order in test data (`serde_json` with `preserve_order`
 /// feature preserves insertion order from YAML parsing).
 const SCHEMA: &str = r#"{

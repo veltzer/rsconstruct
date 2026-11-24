@@ -97,8 +97,8 @@ pub struct Args {
 }
 
 impl Args {
-    fn new(kind: ArgsKind, text: String) -> Self {
-        let shell = shell::parse_shell(&text);
+    fn new(kind: ArgsKind, text: &str) -> Self {
+        let shell = shell::parse_shell(text);
         Self { kind, shell }
     }
 }
@@ -908,18 +908,18 @@ impl Parser {
 
     fn arguments(&mut self) -> PResult<Args> {
         if let Ok(h) = self.attempt(Self::heredoc) {
-            return Ok(Args::new(ArgsKind::Text, h));
+            return Ok(Args::new(ArgsKind::Text, &h));
         }
         if let Ok(list) =
             self.attempt(|p| p.brackets(|p| Ok(p.comma_sep(|p| p.quoted_string_escaped('"')))))
         {
-            return Ok(Args::new(ArgsKind::List, list.join(" ")));
+            return Ok(Args::new(ArgsKind::List, &list.join(" ")));
         }
         if let Ok(t) = self.attempt(Self::until_heredoc) {
-            return Ok(Args::new(ArgsKind::Text, t));
+            return Ok(Args::new(ArgsKind::Text, &t));
         }
         let t = self.until_eol("the shell arguments")?;
-        Ok(Args::new(ArgsKind::Text, t))
+        Ok(Args::new(ArgsKind::Text, &t))
     }
 
     // ---- RUN -------------------------------------------------------------------------
@@ -1957,7 +1957,7 @@ impl Parser {
             })
         }) {
             Ok(v) => v,
-            Err(_) => self.natural()? as f64,
+            Err(_) => crate::numeric::i64_to_f64(self.natural()?),
         };
         match self.peek() {
             Some('s') => {
@@ -2115,10 +2115,10 @@ impl Parser {
             let (line, _) = self.line_col(start);
             let instruction = match self.instruction() {
                 Ok(i) => i,
-                Err(e) => return Err(self.error(e)),
+                Err(e) => return Err(self.error(&e)),
             };
             if !self.at_end() && self.eol().is_err() {
-                return Err(self.error(Fail {
+                return Err(self.error(&Fail {
                     pos: self.pos,
                     message: "a new line followed by the next instruction".to_string(),
                 }));
@@ -2128,7 +2128,7 @@ impl Parser {
         Ok(out)
     }
 
-    fn error(&self, f: Fail) -> ParseError {
+    fn error(&self, f: &Fail) -> ParseError {
         let (line, column) = self.line_col(f.pos);
         let found = self
             .chars

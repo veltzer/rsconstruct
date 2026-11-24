@@ -528,13 +528,13 @@ impl Doc {
                 .iter()
                 .rev()
                 .filter(|&&c| self.significant(c))
-                .nth((-index - 1) as usize)
+                .nth(index.unsigned_abs() - 1)
                 .copied()
         } else {
             children
                 .iter()
                 .filter(|&&c| self.significant(c))
-                .nth(index as usize)
+                .nth(index.unsigned_abs())
                 .copied()
         }
     }
@@ -770,8 +770,8 @@ impl Doc {
         let section = quote.sections.get(i)?;
         Some(perl_substr(
             &self.elems[id].content,
-            section.position as isize,
-            Some(section.size as isize),
+            crate::numeric::to_isize(section.position),
+            Some(crate::numeric::to_isize(section.size)),
         ))
     }
 
@@ -789,7 +789,7 @@ impl Doc {
         match self.class(id) {
             Class::QuoteSingle | Class::QuoteDouble => {
                 let s = self.text(id);
-                perl_substr(s, 1, Some(s.len() as isize - 2))
+                perl_substr(s, 1, Some(crate::numeric::to_isize(s.len()) - 2))
             }
             _ => self.section_content(id, 0).unwrap_or_default(),
         }
@@ -1197,10 +1197,10 @@ impl Doc {
                 if let Some(kind) = &s.kind {
                     return kind.clone();
                 }
-                let mut d = perl_substr(content, s.position as isize - 1, Some(1));
+                let mut d = perl_substr(content, crate::numeric::to_isize(s.position) - 1, Some(1));
                 d.extend(perl_substr(
                     content,
-                    (s.position + s.size) as isize,
+                    crate::numeric::to_isize(s.position + s.size),
                     Some(1),
                 ));
                 d
@@ -1236,7 +1236,7 @@ enum Arg {
 /// Perl's `substr($s, $offset, $length)` (no warnings: out of range is
 /// empty).
 pub fn perl_substr(s: &[u8], offset: isize, length: Option<isize>) -> Vec<u8> {
-    let len = s.len() as isize;
+    let len = crate::numeric::to_isize(s.len());
     let start = if offset < 0 {
         (len + offset).max(0)
     } else {
@@ -1253,7 +1253,8 @@ pub fn perl_substr(s: &[u8], offset: isize, length: Option<isize>) -> Vec<u8> {
     if end <= start {
         return Vec::new();
     }
-    s[start as usize..end as usize].to_vec()
+    // `start` is not negative and `end` is past it.
+    s[start.unsigned_abs()..end.unsigned_abs()].to_vec()
 }
 
 /// `split ' ', $s`.

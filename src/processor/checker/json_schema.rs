@@ -15,7 +15,7 @@ impl JsonSchemaProcessor {
         Self { config }
     }
 
-    fn execute_product(&self, product: &Product) -> Result<()> {
+    fn execute_product(product: &Product) -> Result<()> {
         let path = product.primary_input();
         let content = fs::read_to_string(path)
             .with_context(|| format!("Failed to read {}", path.display()))?;
@@ -107,7 +107,7 @@ impl crate::processor::Processor for JsonSchemaProcessor {
     }
 
     fn execute(&self, _ctx: &crate::build_context::BuildContext, product: &Product) -> Result<()> {
-        self.execute_product(product)
+        Self::execute_product(product)
     }
 }
 
@@ -134,8 +134,7 @@ inventory::submit! {
         defaults: None,
         keywords: &["json", "schema", "validator", "checker"],
         description: "Validate propertyOrdering in JSON schema files",
-        is_builtin: true,
-        is_rust: true,
+        implementation: crate::registries::Implementation::Builtin,
         supports_batch: false,
         caches_outputs: true,
         sandboxable: true,

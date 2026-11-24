@@ -68,7 +68,7 @@ impl Doc {
         } else {
             self.report(Some(node), Some(tmp), Code::ReplacingElement);
         }
-        let index = self.tag_index(id);
+        let index = Self::tag_index(id);
         let name = self.tags[index].name.clone();
         let n = self.tree.node_mut(node);
         n.was = n.tag;
@@ -80,7 +80,7 @@ impl Doc {
 
     /// `CanPrune`.
     fn can_prune(&self, element: NodeId) -> bool {
-        if !self.opts.drop_empty_elements {
+        if !self.opts.drop.drop_empty_elements {
             return false;
         }
         if self.is_text(element) {
@@ -100,7 +100,7 @@ impl Doc {
         if self.node_is(element, TagId::A) && has_attrs {
             return false;
         }
-        if self.node_is(element, TagId::P) && !self.opts.drop_empty_paras {
+        if self.node_is(element, TagId::P) && !self.opts.drop.drop_empty_paras {
             return false;
         }
         if (model & CM_ROW) != 0 || (model & CM_EMPTY) != 0 {
@@ -189,7 +189,7 @@ impl Doc {
             self.tree.node_mut(last).end -= 1;
             let model = self.node_model(element);
             if (model & CM_INLINE) != 0 && (model & CM_FIELD) == 0 {
-                self.lexer.insertspace = true;
+                self.lexer.spacing.insertspace = true;
             }
         }
     }
@@ -442,12 +442,12 @@ impl Doc {
         let model = self.tags[tag].model;
         let parser = self.tags[tag].parser;
         if (model & CM_EMPTY) != 0 {
-            self.lexer.waswhite = false;
+            self.lexer.spacing.waswhite = false;
             if parser.is_none() {
                 return;
             }
         } else if (model & CM_INLINE) == 0 {
-            self.lexer.insertspace = false;
+            self.lexer.spacing.insertspace = false;
         }
         let Some(parser) = parser else {
             return;
@@ -523,7 +523,7 @@ impl Doc {
 
     /// `AddClassNoIndent`.
     fn add_class_no_indent(&mut self, node: NodeId) {
-        if !self.opts.decorate_inferred_ul {
+        if !self.opts.markup.decorate_inferred_ul {
             return;
         }
         self.add_style_property(
@@ -608,7 +608,7 @@ impl Doc {
                 {
                     self.unget_token();
                     break;
-                } else if self.lexer.exiled
+                } else if self.lexer.blocks.exiled
                     && (self.node_has_cm(node, CM_TABLE) || self.node_is(node, TagId::Table))
                 {
                     self.unget_token();
@@ -691,11 +691,11 @@ impl Doc {
                         self.unget_token();
                         node = self.inferred_tag(TagId::UL);
                         self.add_class_no_indent(node);
-                        self.lexer.exclude_blocks = true;
+                        self.lexer.blocks.exclude_blocks = true;
                     } else if self.node_has_cm(node, CM_DEFLIST) {
                         self.unget_token();
                         node = self.inferred_tag(TagId::DL);
-                        self.lexer.exclude_blocks = true;
+                        self.lexer.blocks.exclude_blocks = true;
                     }
                     if !self.node_has_cm(node, CM_BLOCK) {
                         self.unget_token();
@@ -703,7 +703,7 @@ impl Doc {
                         return;
                     }
                 } else if self.node_has_cm(node, CM_BLOCK) {
-                    if self.lexer.exclude_blocks {
+                    if self.lexer.blocks.exclude_blocks {
                         if !self.node_has_cm(element, CM_OPT) {
                             self.report(Some(element), Some(node), Code::MissingEndtagBefore);
                         }
@@ -731,7 +731,7 @@ impl Doc {
                         }
                         if self.node_is(node, TagId::TH) {
                             self.report(Some(element), Some(node), Code::DiscardingUnexpected);
-                            let th = self.tag_index(TagId::TH);
+                            let th = Self::tag_index(TagId::TH);
                             let p = self.tree.node_mut(parent);
                             p.element = Some("th".to_string());
                             p.tag = Some(th);
@@ -742,7 +742,7 @@ impl Doc {
                     if !self.node_has_cm(element, CM_OPT) && !self.tree.node(element).implicit {
                         self.report(Some(element), Some(node), Code::MissingEndtagBefore);
                     }
-                    if !self.opts.omit_optional_tags && self.node_has_cm(element, CM_OPT) {
+                    if !self.opts.layout.omit_optional_tags && self.node_has_cm(element, CM_OPT) {
                         self.report(Some(element), Some(node), Code::MissingEndtagOptional);
                     }
 
@@ -768,7 +768,7 @@ impl Doc {
                         }
                         node = self.inferred_tag(TagId::DL);
                     } else if self.node_has_cm(node, CM_TABLE) || self.node_has_cm(node, CM_ROW) {
-                        if self.lexer.exiled {
+                        if self.lexer.blocks.exiled {
                             return;
                         }
                         node = self.inferred_tag(TagId::Table);
@@ -793,7 +793,7 @@ impl Doc {
             {
                 if self.ntype(node) != NodeType::EndTag
                     && self.tree.node(node).attributes.is_empty()
-                    && self.opts.coerce_endtags
+                    && self.opts.markup.coerce_endtags
                 {
                     self.tree.node_mut(node).ntype = NodeType::EndTag;
                     self.report(Some(element), Some(node), Code::CoerceToEndtag);
@@ -1034,7 +1034,7 @@ impl Doc {
                         | TagId::Q
                         | TagId::Span
                 )
-                && self.opts.coerce_endtags
+                && self.opts.markup.coerce_endtags
             {
                 let last = self.tree.last(element);
                 if self.tree.content(element).is_some()
@@ -1095,7 +1095,7 @@ impl Doc {
                     || self.node_is(element, TagId::DT)
                     || self.descendant_of(element, TagId::DT))
             {
-                let br = self.tag_index(TagId::BR);
+                let br = Self::tag_index(TagId::BR);
                 let n = self.tree.node_mut(node);
                 n.tag = Some(br);
                 n.element = Some("br".to_string());
@@ -1172,7 +1172,7 @@ impl Doc {
                     }
                     self.report(Some(element), Some(node), Code::DiscardingUnexpected);
                     continue;
-                } else if self.lexer.exiled
+                } else if self.lexer.blocks.exiled
                     && (self.node_has_cm(node, CM_TABLE) || self.node_is(node, TagId::Table))
                 {
                     self.unget_token();
@@ -1202,7 +1202,7 @@ impl Doc {
             {
                 if self.ntype(node) != NodeType::EndTag
                     && self.tree.node(node).attributes.is_empty()
-                    && self.opts.coerce_endtags
+                    && self.opts.markup.coerce_endtags
                 {
                     self.tree.node_mut(node).ntype = NodeType::EndTag;
                     self.report(Some(element), Some(node), Code::CoerceToEndtag);
@@ -1376,7 +1376,7 @@ impl Doc {
 
     /// `TY_(ParseEmpty)`.
     fn parse_empty(&mut self, element: NodeId, mode: TokenMode) {
-        if self.lexer.isvoyager
+        if self.lexer.document.isvoyager
             && let Some(node) = self.get_token(mode)
             && !(self.ntype(node) == NodeType::EndTag && self.tags_equal(node, element))
         {
@@ -1449,9 +1449,9 @@ impl Doc {
                     self.tree.insert_node_before_element(list, node);
                 }
                 let parent = self.tree.parent(node).expect("the center has a parent");
-                self.lexer.exclude_blocks = false;
+                self.lexer.blocks.exclude_blocks = false;
                 self.parse_tag(node, mode);
-                self.lexer.exclude_blocks = true;
+                self.lexer.blocks.exclude_blocks = true;
                 if self.tree.last(parent) == Some(node) {
                     list = self.inferred_tag(TagId::DL);
                     self.tree.insert_node_after_element(node, list);
@@ -1464,7 +1464,7 @@ impl Doc {
                     self.report(Some(list), Some(node), Code::TagNotAllowedIn);
                     return;
                 }
-                if (self.node_model(node) & CM_INLINE) == 0 && self.lexer.exclude_blocks {
+                if (self.node_model(node) & CM_INLINE) == 0 && self.lexer.blocks.exclude_blocks {
                     return;
                 }
                 node = self.inferred_tag(TagId::DD);
@@ -1562,10 +1562,10 @@ impl Doc {
                 self.tree.insert_node_at_end(list, node);
             } else {
                 self.unget_token();
-                if self.node_has_cm(node, CM_BLOCK) && self.lexer.exclude_blocks {
+                if self.node_has_cm(node, CM_BLOCK) && self.lexer.blocks.exclude_blocks {
                     self.report(Some(list), Some(node), Code::MissingEndtagBefore);
                     return;
-                } else if self.lexer.exiled
+                } else if self.lexer.blocks.exiled
                     && (self.node_has_cm(node, CM_TABLE | CM_ROWGRP | CM_ROW)
                         || self.node_is(node, TagId::Table))
                 {
@@ -1687,14 +1687,14 @@ impl Doc {
             } else if self.is_text(node) || self.node_has_cm(node, CM_BLOCK | CM_INLINE) {
                 self.move_before_table(row, node);
                 self.report(Some(row), Some(node), Code::TagNotAllowedIn);
-                self.lexer.exiled = true;
-                let exclude_state = self.lexer.exclude_blocks;
-                self.lexer.exclude_blocks = false;
+                self.lexer.blocks.exiled = true;
+                let exclude_state = self.lexer.blocks.exclude_blocks;
+                self.lexer.blocks.exclude_blocks = false;
                 if !self.is_text(node) {
                     self.parse_tag(node, TokenMode::IgnoreWhitespace);
                 }
-                self.lexer.exiled = false;
-                self.lexer.exclude_blocks = exclude_state;
+                self.lexer.blocks.exiled = false;
+                self.lexer.blocks.exclude_blocks = exclude_state;
                 continue;
             } else if (self.node_model(node) & CM_HEAD) != 0 {
                 self.report(Some(row), Some(node), Code::TagNotAllowedIn);
@@ -1706,10 +1706,10 @@ impl Doc {
                 continue;
             }
             self.tree.insert_node_at_end(row, node);
-            let exclude_state = self.lexer.exclude_blocks;
-            self.lexer.exclude_blocks = false;
+            let exclude_state = self.lexer.blocks.exclude_blocks;
+            self.lexer.blocks.exclude_blocks = false;
             self.parse_tag(node, TokenMode::IgnoreWhitespace);
-            self.lexer.exclude_blocks = exclude_state;
+            self.lexer.blocks.exclude_blocks = exclude_state;
             while self.lexer.istack.len() > self.lexer.istackbase {
                 self.pop_inline(None);
             }
@@ -1749,11 +1749,11 @@ impl Doc {
                 } else if self.is_text(node) || self.node_has_cm(node, CM_BLOCK | CM_INLINE) {
                     self.move_before_table(rowgroup, node);
                     self.report(Some(rowgroup), Some(node), Code::TagNotAllowedIn);
-                    self.lexer.exiled = true;
+                    self.lexer.blocks.exiled = true;
                     if !self.is_text(node) {
                         self.parse_tag(node, TokenMode::IgnoreWhitespace);
                     }
-                    self.lexer.exiled = false;
+                    self.lexer.blocks.exiled = false;
                     continue;
                 } else if (self.node_model(node) & CM_HEAD) != 0 {
                     self.report(Some(rowgroup), Some(node), Code::TagNotAllowedIn);
@@ -1890,11 +1890,11 @@ impl Doc {
                 } else if self.is_text(node) || self.node_has_cm(node, CM_BLOCK | CM_INLINE) {
                     self.tree.insert_node_before_element(table, node);
                     self.report(Some(table), Some(node), Code::TagNotAllowedIn);
-                    self.lexer.exiled = true;
+                    self.lexer.blocks.exiled = true;
                     if !self.is_text(node) {
                         self.parse_tag(node, TokenMode::IgnoreWhitespace);
                     }
-                    self.lexer.exiled = false;
+                    self.lexer.blocks.exiled = false;
                     continue;
                 } else if (self.node_model(node) & CM_HEAD) != 0 {
                     self.move_to_head(table, node);
@@ -2002,7 +2002,7 @@ impl Doc {
             }
             if !self.pre_content(node) {
                 if self.ntype(node) == NodeType::EndTag {
-                    if self.lexer.exiled
+                    if self.lexer.blocks.exiled
                         && (self.node_has_cm(node, CM_TABLE) || self.node_is(node, TagId::Table))
                     {
                         self.unget_token();
@@ -2014,7 +2014,7 @@ impl Doc {
                 } else if self.node_has_cm(node, CM_TABLE | CM_ROW)
                     || self.node_is(node, TagId::Table)
                 {
-                    if !self.lexer.exiled {
+                    if !self.lexer.blocks.exiled {
                         self.report(Some(pre), Some(node), Code::MissingEndtagBefore);
                     }
                     self.unget_token();
@@ -2178,7 +2178,7 @@ impl Doc {
             };
             if self.tags_equal(node, title)
                 && self.ntype(node) == NodeType::StartTag
-                && self.opts.coerce_endtags
+                && self.opts.markup.coerce_endtags
             {
                 self.report(Some(title), Some(node), Code::CoerceToEndtag);
                 self.tree.node_mut(node).ntype = NodeType::EndTag;
@@ -2258,7 +2258,7 @@ impl Doc {
                 continue;
             }
             if self.is_text(node) {
-                if !self.opts.omit_optional_tags && !self.showing_body_only() {
+                if !self.opts.layout.omit_optional_tags && !self.showing_body_only() {
                     self.report(Some(head), Some(node), Code::TagNotAllowedIn);
                 }
                 self.unget_token();
@@ -2284,7 +2284,7 @@ impl Doc {
                 continue;
             }
             if (self.node_model(node) & CM_HEAD) == 0 {
-                if self.lexer.isvoyager {
+                if self.lexer.document.isvoyager {
                     self.report(Some(head), Some(node), Code::TagNotAllowedIn);
                 }
                 self.unget_token();
@@ -2382,14 +2382,14 @@ impl Doc {
                 continue;
             }
             if self.node_is(node, TagId::Html) {
-                if self.is_element(node) || self.lexer.seen_end_html {
+                if self.is_element(node) || self.lexer.document.seen_end_html {
                     self.report(Some(body), Some(node), Code::DiscardingUnexpected);
                 } else {
-                    self.lexer.seen_end_html = true;
+                    self.lexer.document.seen_end_html = true;
                 }
                 continue;
             }
-            if self.lexer.seen_end_body
+            if self.lexer.document.seen_end_body
                 && matches!(
                     self.ntype(node),
                     NodeType::StartTag | NodeType::EndTag | NodeType::StartEndTag
@@ -2400,7 +2400,7 @@ impl Doc {
             if self.tags_equal(node, body) && self.ntype(node) == NodeType::EndTag {
                 self.tree.node_mut(body).closed = true;
                 self.trim_spaces(body);
-                self.lexer.seen_end_body = true;
+                self.lexer.document.seen_end_body = true;
                 mode = TokenMode::IgnoreWhitespace;
                 if self
                     .tree
@@ -2473,7 +2473,7 @@ impl Doc {
                 continue;
             }
 
-            self.lexer.exclude_blocks = false;
+            self.lexer.blocks.exclude_blocks = false;
 
             if (self.node_is(node, TagId::Input)
                 || (!self.node_has_cm(node, CM_BLOCK) && !self.node_has_cm(node, CM_INLINE)))
@@ -2501,21 +2501,21 @@ impl Doc {
                     self.unget_token();
                     node = self.inferred_tag(TagId::UL);
                     self.add_class_no_indent(node);
-                    self.lexer.exclude_blocks = true;
+                    self.lexer.blocks.exclude_blocks = true;
                 } else if (model & CM_DEFLIST) != 0 {
                     self.unget_token();
                     node = self.inferred_tag(TagId::DL);
-                    self.lexer.exclude_blocks = true;
+                    self.lexer.blocks.exclude_blocks = true;
                 } else if (model & (CM_TABLE | CM_ROWGRP | CM_ROW)) != 0 {
                     if self.ntype(node) != NodeType::EndTag {
                         self.unget_token();
                         node = self.inferred_tag(TagId::Table);
                     }
-                    self.lexer.exclude_blocks = true;
+                    self.lexer.blocks.exclude_blocks = true;
                 } else if self.node_is(node, TagId::Input) {
                     self.unget_token();
                     node = self.inferred_tag(TagId::Form);
-                    self.lexer.exclude_blocks = true;
+                    self.lexer.blocks.exclude_blocks = true;
                 } else {
                     if !self.node_has_cm(node, CM_ROW | CM_FIELD) {
                         self.unget_token();
@@ -2606,7 +2606,7 @@ impl Doc {
                 continue;
             }
             if self.node_is(node, TagId::Body) && self.ntype(node) == NodeType::StartTag {
-                let seen_body = self.lexer.seen_end_body;
+                let seen_body = self.lexer.document.seen_end_body;
                 self.tree.insert_node_at_end(noframes, node);
                 self.parse_tag(node, TokenMode::IgnoreWhitespace);
                 if seen_body && self.find_body() != Some(node) {
@@ -2617,7 +2617,7 @@ impl Doc {
             }
             if self.is_text(node) || (self.has_tag(node) && self.ntype(node) != NodeType::EndTag) {
                 let body = self.find_body();
-                if body.is_some() || self.lexer.seen_end_body {
+                if body.is_some() || self.lexer.document.seen_end_body {
                     let Some(body) = body else {
                         self.report(Some(noframes), Some(node), Code::DiscardingUnexpected);
                         continue;
@@ -2631,7 +2631,7 @@ impl Doc {
                 } else {
                     self.unget_token();
                     node = self.inferred_tag(TagId::Body);
-                    if self.opts.output_xml {
+                    if self.opts.output.output_xml {
                         self.report(Some(noframes), Some(node), Code::InsertingTag);
                     }
                     self.tree.insert_node_at_end(noframes, node);
@@ -2676,7 +2676,7 @@ impl Doc {
             }
             if self.ntype(node) == NodeType::StartTag && (self.node_model(node) & CM_FRAMES) != 0 {
                 self.tree.insert_node_at_end(frameset, node);
-                self.lexer.exclude_blocks = false;
+                self.lexer.blocks.exclude_blocks = false;
                 self.parse_tag(node, TokenMode::MixedContent);
                 continue;
             } else if self.ntype(node) == NodeType::StartEndTag
@@ -2984,10 +2984,10 @@ impl Doc {
                 if let Some(i) = self.tree.attr_by_id(node, known.xmlns)
                     && self.tree.node(node).attributes[i].value_is(XHTML_NAMESPACE)
                 {
-                    let html_out = self.opts.output_html;
-                    self.lexer.isvoyager = true;
-                    self.opts.output_xhtml = !html_out;
-                    self.opts.output_xml = !html_out;
+                    let html_out = self.opts.output.output_html;
+                    self.lexer.document.isvoyager = true;
+                    self.opts.output.output_xhtml = !html_out;
+                    self.opts.output.output_xml = !html_out;
                 }
             }
             let html = if self.ntype(node) != NodeType::StartTag || !self.node_is(node, TagId::Html)
@@ -3043,10 +3043,10 @@ impl Doc {
         self.drop_empty_elements(Some(root));
         self.clean_spaces(Some(root));
 
-        if self.opts.enclose_text {
+        if self.opts.enclose.enclose_text {
             self.enclose_body_text();
         }
-        if self.opts.enclose_block_text {
+        if self.opts.enclose.enclose_block_text {
             self.enclose_block_text(Some(root));
         }
     }

@@ -202,6 +202,7 @@ impl JekyllProcessor {
             relative,
         });
         guard.insert(config_yml.to_path_buf(), (inputs, Arc::clone(&plan)));
+        drop(guard);
         Ok(plan)
     }
 
@@ -430,8 +431,7 @@ inventory::submit! {
         defconfig_json: crate::registries::default_config_json::<JekyllConfig>,
         keywords: &["ruby", "jekyll", "static-site", "html", "markdown", "web", "gem"],
         description: "Build Jekyll sites",
-        is_builtin: false,
-        is_rust: false,
+        implementation: crate::registries::Implementation::External,
         supports_batch: false,
         caches_outputs: true,
         sandboxable: true,

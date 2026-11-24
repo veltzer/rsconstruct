@@ -256,7 +256,7 @@ impl PathInterner {
         if let Some(&id) = self.to_id.get(path) {
             return id;
         }
-        let id = PathId(self.to_id.len() as u32);
+        let id = PathId(crate::numeric::to_u32(self.to_id.len()));
         self.to_id.insert(path.to_path_buf(), id);
         id
     }
@@ -1182,7 +1182,7 @@ impl BuildGraph {
         }
 
         // Check 4: early cycle detection
-        if config.validate_early_cycles
+        if config.validate_early_cycles == crate::config::CycleCheck::Early
             && let Err(e) = self.topological_sort()
         {
             errors.push(format!("{e}"));

@@ -291,7 +291,7 @@ impl Builder {
         opts: &BuildOptions,
     ) {
         // CLI override for zspell and aspell auto_add_words
-        if opts.auto_add_words {
+        if opts.processing.auto_add_words {
             for inst in &mut self.config.processor.instances {
                 if (inst.pname == "processor.checker.zspell"
                     || inst.pname == "processor.checker.aspell")
@@ -303,7 +303,7 @@ impl Builder {
         }
 
         // CLI override for mtime pre-check
-        if opts.no_mtime {
+        if opts.processing.no_mtime {
             ctx.set_mtime_check(false);
         }
 
@@ -391,7 +391,7 @@ impl Builder {
         // stanza instead would demand the tool of a disabled instance, of
         // one excluded with -x, or of one that matched no file — exactly
         // what the preflight above was written not to do.
-        if opts.verify_tool_versions {
+        if opts.config_checks.verify_tool_versions {
             let t = Instant::now();
             self.verify_tool_versions(ctx, &processors, &|name| {
                 with_products.contains(name) && processors[name].scan_config().enabled
@@ -454,7 +454,7 @@ impl Builder {
         // Check for config changes and display diffs. This advances the stored
         // baseline, so it belongs to a real build, not to `plan_build` (which
         // `--dry-run` shares).
-        self.detect_config_changes(&processors, opts.show_all_config_changes);
+        self.detect_config_changes(&processors, opts.config_checks.show_all_config_changes);
 
         // Prepend init timings ahead of create_processors, which plan_build
         // already inserted at the front.
@@ -494,7 +494,7 @@ impl Builder {
             &graph,
             &order,
             &self.object_store,
-            opts.force,
+            opts.run.force,
             effective_parallel,
         );
         // Classify checksummed every input; write those entries before the
@@ -539,10 +539,12 @@ impl Builder {
                 batch_size,
                 explain: opts.explain,
                 retry: opts.retry,
-                force: opts.force,
-                keep_going: opts.keep_going,
-                // Enable timings collection if trace output is requested
-                timings: opts.timings || opts.trace.is_some(),
+                run: crate::executor::RunFlags {
+                    force: opts.run.force,
+                    keep_going: opts.run.keep_going,
+                    // Enable timings collection if trace output is requested
+                    timings: opts.run.timings || opts.trace.is_some(),
+                },
                 worker_stack_bytes: self.config.build.worker_stack_mib * 1024 * 1024,
                 builtin_setup: crate::sandbox::BuiltinSetup::from_config(&self.config),
                 sandbox_builtin_children: self.config.build.sandbox_builtin_children,
@@ -590,14 +592,16 @@ impl Builder {
         // this build read stay put until it is done; skipped when the build
         // stopped on an internal error, and on a narrowed build, which does
         // not see every product.
-        let orphans_dur =
-            if result.is_ok() && self.config.build.remove_orphan_outputs && is_full_build(opts) {
-                let t = Instant::now();
-                remove_orphan_outputs(ctx, &graph, &self.object_store)?;
-                Some(t.elapsed())
-            } else {
-                None
-            };
+        let orphans_dur = if result.is_ok()
+            && self.config.build.remove_orphan_outputs == crate::config::OrphanOutputs::Remove
+            && is_full_build(opts)
+        {
+            let t = Instant::now();
+            remove_orphan_outputs(ctx, &graph, &self.object_store)?;
+            Some(t.elapsed())
+        } else {
+            None
+        };
 
         let mut stats = result?;
         flushed?;
@@ -612,7 +616,7 @@ impl Builder {
         stats.phase_timings = phase_timings;
 
         // Print summary
-        stats.print_summary(opts.summary, opts.timings);
+        stats.print_summary(opts.summary, opts.run.timings);
 
         // Write Chrome trace file if requested
         if let Some(ref trace_path) = opts.trace {
@@ -756,7 +760,7 @@ impl Builder {
             &graph,
             &order,
             &self.object_store,
-            opts.force,
+            opts.run.force,
             self.effective_parallel(opts),
         );
         let entries: Vec<_> = classification
@@ -774,7 +778,7 @@ impl Builder {
                         product,
                         &self.object_store,
                         &c.input_checksum,
-                        opts.force,
+                        opts.run.force,
                     )
                 };
                 (product, action)
@@ -1114,7 +1118,7 @@ fn write_trace_file(path: &str, stats: &BuildStats) -> Result<()> {
     // Phase timings on tid=0
     let mut phase_offset_us = 0i64;
     for (name, dur) in &stats.phase_timings {
-        let dur_us = dur.as_micros() as i64;
+        let dur_us = crate::numeric::duration_micros(*dur);
         events.push(serde_json::json!({
             "name": name,
             "cat": "phase",
@@ -1130,8 +1134,8 @@ fn write_trace_file(path: &str, stats: &BuildStats) -> Result<()> {
     // Product timings
     for cat in &stats.categories {
         for pt in &cat.product_timings {
-            let dur_us = pt.duration.as_micros() as i64;
-            let ts_us = pt.start_offset.map_or(0, |off| off.as_micros() as i64);
+            let dur_us = crate::numeric::duration_micros(pt.duration);
+            let ts_us = pt.start_offset.map_or(0, crate::numeric::duration_micros);
             let name = format!("{}:{}", pt.processor, pt.display);
             events.push(serde_json::json!({
                 "name": name,

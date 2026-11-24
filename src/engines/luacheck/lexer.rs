@@ -24,7 +24,7 @@ pub enum Tok {
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct Sym {
     bytes: [u8; 8],
-    len: u8,
+    len: usize,
 }
 
 impl Sym {
@@ -37,12 +37,12 @@ impl Sym {
         }
         Self {
             bytes,
-            len: text.len() as u8,
+            len: text.len(),
         }
     }
 
     pub fn text(&self) -> &[u8] {
-        &self.bytes[..self.len as usize]
+        &self.bytes[..self.len]
     }
 }
 
@@ -125,22 +125,28 @@ const fn to_dec(b: u32) -> Option<u32> {
     }
 }
 
+/// A value that is a byte by construction: an escape's value (checked to be
+/// at most 255) or a byte of a UTF-8 sequence.
+fn byte(n: u32) -> u8 {
+    u8::try_from(n).expect("the value is below 256")
+}
+
 fn to_utf(codepoint: u32) -> Vec<u8> {
     if codepoint < 0x80 {
-        return vec![codepoint as u8];
+        return vec![byte(codepoint)];
     }
     let mut buf = Vec::new();
     let mut codepoint = codepoint;
     let mut mfb = 0x3Fu32;
     loop {
-        buf.push((codepoint % 0x40 + 0x80) as u8);
+        buf.push(byte(codepoint % 0x40 + 0x80));
         codepoint /= 0x40;
         mfb /= 2;
         if codepoint <= mfb {
             break;
         }
     }
-    buf.push((0xFE - mfb * 2 + codepoint) as u8);
+    buf.push(byte(0xFE - mfb * 2 + codepoint));
     buf.reverse();
     buf
 }
@@ -177,7 +183,7 @@ const fn simple_escape(b: u32) -> Option<u8> {
 /// with an optional start offset relative to the current offset.
 enum Lexed {
     Token(Tok, Option<Vec<u8>>),
-    Error(&'static str, Option<i64>),
+    Error(&'static str, Option<isize>),
 }
 
 impl<'a> Lexer<'a> {
@@ -279,10 +285,7 @@ impl<'a> Lexer<'a> {
         let mut line_start = self.offset;
         loop {
             if is_newline(b) {
-                lines.push(
-                    self.src
-                        .get_substring(line_start as i64, self.offset as i64 - 1),
-                );
+                lines.push(self.src.get_substring(line_start, self.offset - 1));
                 b = self.skip_newline(b);
                 line_start = self.offset;
             } else if b == Some(0x5D) {
@@ -304,10 +307,10 @@ impl<'a> Lexer<'a> {
                 b = self.next_byte();
             }
         }
-        lines.push(self.src.get_substring(
-            line_start as i64,
-            self.offset as i64 - opening_long_bracket as i64 - 2,
-        ));
+        lines.push(
+            self.src
+                .get_substring(line_start, self.offset - opening_long_bracket - 2),
+        );
         self.offset += 1;
         Lexed::Token(
             if is_string {
@@ -328,10 +331,7 @@ impl<'a> Lexer<'a> {
             if b == Some(0x5C) {
                 let chunks_vec = chunks.get_or_insert_with(Vec::new);
                 if chunk_start != self.offset {
-                    chunks_vec.push(
-                        self.src
-                            .get_substring(chunk_start as i64, self.offset as i64 - 1),
-                    );
+                    chunks_vec.push(self.src.get_substring(chunk_start, self.offset - 1));
                 }
                 b = self.next_byte();
                 let mut s: Option<Vec<u8>> = None;
@@ -352,7 +352,7 @@ impl<'a> Lexer<'a> {
                         return Lexed::Error("invalid hexadecimal escape sequence", Some(-3));
                     };
                     b = self.next_byte();
-                    s = Some(vec![(c1 * 16 + c2) as u8]);
+                    s = Some(vec![byte(c1 * 16 + c2)]);
                 } else if b == Some(0x75) {
                     b = self.next_byte();
                     if b != Some(0x7B) {
@@ -362,20 +362,23 @@ impl<'a> Lexer<'a> {
                     let Some(mut codepoint) = b.and_then(to_hex) else {
                         return Lexed::Error("invalid UTF-8 escape sequence", Some(-3));
                     };
-                    let mut hexdigits: i64 = 0;
+                    let mut hexdigits: isize = 0;
                     loop {
                         b = self.next_byte();
                         match b.and_then(to_hex) {
                             Some(hex) => {
                                 hexdigits += 1;
-                                let next = u64::from(codepoint) * 16 + u64::from(hex);
-                                if next > 0x7FFF_FFFF {
+                                let next = codepoint
+                                    .checked_mul(16)
+                                    .and_then(|c| c.checked_add(hex))
+                                    .filter(|&n| n <= 0x7FFF_FFFF);
+                                let Some(next) = next else {
                                     return Lexed::Error(
                                         "invalid UTF-8 escape sequence",
                                         Some(-hexdigits - 3),
                                     );
-                                }
-                                codepoint = next as u32;
+                                };
+                                codepoint = next;
                             }
                             None => break,
                         }
@@ -404,7 +407,7 @@ impl<'a> Lexer<'a> {
                             b = self.next_byte();
                         }
                     }
-                    s = Some(vec![cb as u8]);
+                    s = Some(vec![byte(cb)]);
                 }
                 if let Some(s) = s {
                     chunks.get_or_insert_with(Vec::new).push(s);
@@ -420,16 +423,11 @@ impl<'a> Lexer<'a> {
         let string_value = match chunks {
             Some(mut chunks) => {
                 if chunk_start != self.offset {
-                    chunks.push(
-                        self.src
-                            .get_substring(chunk_start as i64, self.offset as i64 - 1),
-                    );
+                    chunks.push(self.src.get_substring(chunk_start, self.offset - 1));
                 }
                 chunks.concat()
             }
-            None => self
-                .src
-                .get_substring(chunk_start as i64, self.offset as i64 - 1),
+            None => self.src.get_substring(chunk_start, self.offset - 1),
         };
         self.offset += 1;
         Lexed::Token(Tok::String, Some(string_value))
@@ -511,7 +509,7 @@ impl<'a> Lexer<'a> {
         }
         Lexed::Token(
             Tok::Number,
-            Some(self.src.get_substring(start as i64, self.offset as i64 - 1)),
+            Some(self.src.get_substring(start, self.offset - 1)),
         )
     }
 
@@ -521,7 +519,7 @@ impl<'a> Lexer<'a> {
         while b.is_some_and(|c| is_alpha(c) || to_dec(c).is_some()) {
             b = self.next_byte();
         }
-        let ident = self.src.get_substring(start as i64, self.offset as i64 - 1);
+        let ident = self.src.get_substring(start, self.offset - 1);
         match KEYWORDS.iter().find(|k| k.as_bytes() == ident.as_slice()) {
             Some(k) => Lexed::Token(sym(k), None),
             None => Lexed::Token(Tok::Name, Some(ident)),
@@ -543,7 +541,7 @@ impl<'a> Lexer<'a> {
             }
         }
         self.skip_to_newline(b);
-        let comment_value = self.src.get_substring(start as i64, self.offset as i64 - 1);
+        let comment_value = self.src.get_substring(start, self.offset - 1);
         Lexed::Token(Tok::ShortComment, Some(comment_value))
     }
 
@@ -620,15 +618,15 @@ impl<'a> Lexer<'a> {
         offset: usize,
         end_offset: usize,
     ) -> Vec<u8> {
-        let mut end_offset = end_offset as i64;
+        let mut end_offset = end_offset;
         if let Some(line_length) = self.line_length(line) {
-            let line_end_offset = (self.line_offset(line) + line_length) as i64 - 1;
+            let line_end_offset = self.line_offset(line) + line_length - 1;
             if line_end_offset < end_offset {
                 end_offset = line_end_offset;
             }
         }
         let mut out = vec![b'\''];
-        out.extend(self.src.get_printable_substring(offset as i64, end_offset));
+        out.extend(self.src.get_printable_substring(offset, end_offset));
         out.push(b'\'');
         out
     }
@@ -660,7 +658,7 @@ impl<'a> Lexer<'a> {
                 offset: token_offset,
             }),
             Lexed::Error(msg, Some(relative)) => {
-                let error_offset = (self.offset as i64 + relative) as usize;
+                let error_offset = self.offset.saturating_add_signed(relative);
                 let error_end_offset = self.offset.min(self.src.get_length());
                 let mut message = msg.as_bytes().to_vec();
                 message.push(b' ');

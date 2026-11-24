@@ -178,30 +178,6 @@ pub fn get_opts<'a>(
     longopts: &[(&str, bool)],
     args: &'a [Token],
 ) -> Option<Opts<'a>> {
-    let (gnu, arbitrary_long_opts) = config;
-    let mut flag_map: HashMap<String, bool> = HashMap::new();
-    // Map.fromList: later entries win.
-    let mut entries: Vec<(String, bool)> = vec![(String::new(), false)];
-    let chars: Vec<char> = string.chars().collect();
-    let mut i = 0;
-    while i < chars.len() {
-        if i + 1 < chars.len() && chars[i + 1] == ':' {
-            entries.push((chars[i].to_string(), true));
-            i += 2;
-        } else {
-            entries.push((chars[i].to_string(), false));
-            i += 1;
-        }
-    }
-    for (name, takes) in longopts {
-        entries.push(((*name).to_string(), *takes));
-    }
-    for (k, v) in entries {
-        flag_map.insert(k, v);
-    }
-    let list_to_args =
-        |rest: &'a [Token]| -> Opts<'a> { rest.iter().map(|x| (String::new(), (x, x))).collect() };
-
     fn process<'a>(
         args: &'a [Token],
         gnu: bool,
@@ -278,6 +254,30 @@ pub fn get_opts<'a>(
             Some(more)
         }
     }
+
+    let (gnu, arbitrary_long_opts) = config;
+    let mut flag_map: HashMap<String, bool> = HashMap::new();
+    // Map.fromList: later entries win.
+    let mut entries: Vec<(String, bool)> = vec![(String::new(), false)];
+    let chars: Vec<char> = string.chars().collect();
+    let mut i = 0;
+    while i < chars.len() {
+        if i + 1 < chars.len() && chars[i + 1] == ':' {
+            entries.push((chars[i].to_string(), true));
+            i += 2;
+        } else {
+            entries.push((chars[i].to_string(), false));
+            i += 1;
+        }
+    }
+    for (name, takes) in longopts {
+        entries.push(((*name).to_string(), *takes));
+    }
+    for (k, v) in entries {
+        flag_map.insert(k, v);
+    }
+    let list_to_args =
+        |rest: &'a [Token]| -> Opts<'a> { rest.iter().map(|x| (String::new(), (x, x))).collect() };
 
     process(args, gnu, arbitrary_long_opts, &flag_map, &list_to_args)
 }

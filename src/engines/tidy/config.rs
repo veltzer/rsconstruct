@@ -44,117 +44,231 @@ pub enum UppercaseAttrs {
     Preserve,
 }
 
+/// Options about the markup tidy accepts and rewrites.
+#[derive(Clone, Debug)]
+pub struct MarkupOptions {
+    pub anchor_as_name: bool,
+    pub coerce_endtags: bool,
+    pub decorate_inferred_ul: bool,
+}
+
+/// Options that drop what is empty or unknown.
+#[derive(Clone, Debug)]
+pub struct DropOptions {
+    pub drop_empty_elements: bool,
+    pub drop_empty_paras: bool,
+    pub drop_proprietary_attributes: bool,
+}
+
+/// Options that wrap or escape text.
+#[derive(Clone, Debug)]
+pub struct EncloseOptions {
+    pub enclose_block_text: bool,
+    pub enclose_text: bool,
+    pub escape_scripts: bool,
+}
+
+/// Options that repair what is malformed.
+#[derive(Clone, Debug)]
+pub struct FixOptions {
+    pub fix_backslash: bool,
+    pub fix_uri: bool,
+    pub fix_style_tags: bool,
+}
+
+/// Options that merge or join what is repeated.
+#[derive(Clone, Debug)]
+pub struct MergeOptions {
+    pub join_classes: bool,
+    pub join_styles: bool,
+    pub merge_emphasis: bool,
+}
+
+/// Options about attribute values.
+#[derive(Clone, Debug)]
+pub struct AttributeOptions {
+    pub literal_attributes: bool,
+    pub lower_literals: bool,
+    /// `repeated-attributes`: true keeps the last (tidy's default).
+    pub keep_last_attribute: bool,
+}
+
+/// Options about `<meta>` and XML processing instructions.
+#[derive(Clone, Debug)]
+pub struct MetaOptions {
+    pub add_meta_charset: bool,
+    pub show_meta_change: bool,
+    pub assume_xml_procins: bool,
+}
+
+/// Options about character entities.
+#[derive(Clone, Debug)]
+pub struct EntityOptions {
+    pub ncr: bool,
+    pub preserve_entities: bool,
+    pub quote_ampersand: bool,
+}
+
+/// Which markup language the output is.
+#[derive(Clone, Debug)]
+pub struct OutputOptions {
+    pub output_html: bool,
+    pub output_xhtml: bool,
+    pub output_xml: bool,
+}
+
+/// What is reported.
+#[derive(Clone, Debug)]
+pub struct ReportOptions {
+    pub show_info: bool,
+    pub show_warnings: bool,
+    pub quiet: bool,
+}
+
+/// How strictly tags and attributes are checked.
+#[derive(Clone, Debug)]
+pub struct StrictnessOptions {
+    pub strict_tags_attributes: bool,
+    pub warn_proprietary_attributes: bool,
+    pub skip_nested: bool,
+}
+
+/// What a run does with the document.
+#[derive(Clone, Debug)]
+pub struct RunOptions {
+    pub force_output: bool,
+    pub make_clean: bool,
+    pub replace_color: bool,
+}
+
+/// How the document is laid out.
+#[derive(Clone, Debug)]
+pub struct LayoutOptions {
+    pub omit_optional_tags: bool,
+    pub keep_tabs: bool,
+}
+
 /// The options that affect what itidy reports, with tidy's defaults.
 #[derive(Clone, Debug)]
 pub struct Options {
     pub alt_text: Option<String>,
-    pub anchor_as_name: bool,
-    pub coerce_endtags: bool,
+    pub markup: MarkupOptions,
     pub custom_tags: CustomTags,
     pub new_blocklevel_tags: Vec<String>,
     pub new_inline_tags: Vec<String>,
     pub new_empty_tags: Vec<String>,
     pub new_pre_tags: Vec<String>,
-    pub decorate_inferred_ul: bool,
     pub doctype_mode: DoctypeMode,
     pub doctype_user: Option<String>,
-    pub drop_empty_elements: bool,
-    pub drop_empty_paras: bool,
-    pub drop_proprietary_attributes: bool,
-    /// `repeated-attributes`: true keeps the last (tidy's default).
-    pub keep_last_attribute: bool,
-    pub enclose_block_text: bool,
-    pub enclose_text: bool,
-    pub escape_scripts: bool,
-    pub fix_backslash: bool,
+    pub drop: DropOptions,
+    pub attributes: AttributeOptions,
+    pub enclose: EncloseOptions,
+    pub fix: FixOptions,
     pub fix_bad_comments: TriState,
-    pub fix_uri: bool,
-    pub join_classes: bool,
-    pub join_styles: bool,
-    pub literal_attributes: bool,
-    pub lower_literals: bool,
-    pub merge_emphasis: bool,
-    pub add_meta_charset: bool,
-    pub show_meta_change: bool,
-    pub ncr: bool,
-    pub omit_optional_tags: bool,
-    pub output_html: bool,
-    pub output_xhtml: bool,
-    pub output_xml: bool,
-    pub preserve_entities: bool,
-    pub quote_ampersand: bool,
+    pub merge: MergeOptions,
+    pub meta: MetaOptions,
+    pub entities: EntityOptions,
+    pub output: OutputOptions,
     pub show_errors: u32,
-    pub show_info: bool,
-    pub show_warnings: bool,
-    pub quiet: bool,
-    pub skip_nested: bool,
-    pub strict_tags_attributes: bool,
-    pub fix_style_tags: bool,
+    pub report: ReportOptions,
+    pub strictness: StrictnessOptions,
     pub tab_size: u32,
-    pub keep_tabs: bool,
+    pub layout: LayoutOptions,
     pub uppercase_attributes: UppercaseAttrs,
-    pub warn_proprietary_attributes: bool,
-    pub assume_xml_procins: bool,
     pub show_body_only: TriState,
-    pub replace_color: bool,
-    pub force_output: bool,
-    pub make_clean: bool,
+    pub run: RunOptions,
+}
+
+impl Options {
+    /// The defaults with only the reports shown, as `tidy -errors -q` does:
+    /// not the chatter.
+    pub fn quiet() -> Self {
+        let mut opts = Self::default();
+        opts.report.quiet = true;
+        opts
+    }
 }
 
 impl Default for Options {
     fn default() -> Self {
         Self {
             alt_text: None,
-            anchor_as_name: true,
-            coerce_endtags: true,
+            markup: MarkupOptions {
+                anchor_as_name: true,
+                coerce_endtags: true,
+                decorate_inferred_ul: false,
+            },
             custom_tags: CustomTags::No,
             new_blocklevel_tags: Vec::new(),
             new_inline_tags: Vec::new(),
             new_empty_tags: Vec::new(),
             new_pre_tags: Vec::new(),
-            decorate_inferred_ul: false,
             doctype_mode: DoctypeMode::Auto,
             doctype_user: None,
-            drop_empty_elements: true,
-            drop_empty_paras: true,
-            drop_proprietary_attributes: false,
-            keep_last_attribute: true,
-            enclose_block_text: false,
-            enclose_text: false,
-            escape_scripts: true,
-            fix_backslash: true,
+            drop: DropOptions {
+                drop_empty_elements: true,
+                drop_empty_paras: true,
+                drop_proprietary_attributes: false,
+            },
+            attributes: AttributeOptions {
+                literal_attributes: false,
+                lower_literals: true,
+                keep_last_attribute: true,
+            },
+            enclose: EncloseOptions {
+                enclose_block_text: false,
+                enclose_text: false,
+                escape_scripts: true,
+            },
+            fix: FixOptions {
+                fix_backslash: true,
+                fix_uri: true,
+                fix_style_tags: true,
+            },
             fix_bad_comments: TriState::Auto,
-            fix_uri: true,
-            join_classes: false,
-            join_styles: true,
-            literal_attributes: false,
-            lower_literals: true,
-            merge_emphasis: true,
-            add_meta_charset: false,
-            show_meta_change: false,
-            ncr: true,
-            omit_optional_tags: false,
-            output_html: false,
-            output_xhtml: false,
-            output_xml: false,
-            preserve_entities: false,
-            quote_ampersand: true,
+            merge: MergeOptions {
+                join_classes: false,
+                join_styles: true,
+                merge_emphasis: true,
+            },
+            meta: MetaOptions {
+                add_meta_charset: false,
+                show_meta_change: false,
+                assume_xml_procins: false,
+            },
+            entities: EntityOptions {
+                ncr: true,
+                preserve_entities: false,
+                quote_ampersand: true,
+            },
+            output: OutputOptions {
+                output_html: false,
+                output_xhtml: false,
+                output_xml: false,
+            },
             show_errors: 6,
-            show_info: true,
-            show_warnings: true,
-            quiet: false,
-            skip_nested: true,
-            strict_tags_attributes: false,
-            fix_style_tags: true,
+            report: ReportOptions {
+                show_info: true,
+                show_warnings: true,
+                quiet: false,
+            },
+            strictness: StrictnessOptions {
+                strict_tags_attributes: false,
+                warn_proprietary_attributes: true,
+                skip_nested: true,
+            },
             tab_size: 8,
-            keep_tabs: false,
+            layout: LayoutOptions {
+                omit_optional_tags: false,
+                keep_tabs: false,
+            },
             uppercase_attributes: UppercaseAttrs::No,
-            warn_proprietary_attributes: true,
-            assume_xml_procins: false,
             show_body_only: TriState::No,
-            replace_color: false,
-            force_output: false,
-            make_clean: false,
+            run: RunOptions {
+                force_output: false,
+                make_clean: false,
+                replace_color: false,
+            },
         }
     }
 }
@@ -486,8 +600,8 @@ impl Options {
                 let s = as_str(&parsed);
                 self.alt_text = if s.is_empty() { None } else { Some(s) };
             }
-            "anchor-as-name" => self.anchor_as_name = as_bool(&parsed),
-            "coerce-endtags" => self.coerce_endtags = as_bool(&parsed),
+            "anchor-as-name" => self.markup.anchor_as_name = as_bool(&parsed),
+            "coerce-endtags" => self.markup.coerce_endtags = as_bool(&parsed),
             "custom-tags" => {
                 self.custom_tags = match parsed {
                     Value::Pick(0) => CustomTags::No,
@@ -501,12 +615,12 @@ impl Options {
             "new-inline-tags" => self.new_inline_tags = as_list(&parsed),
             "new-empty-tags" => self.new_empty_tags = as_list(&parsed),
             "new-pre-tags" => self.new_pre_tags = as_list(&parsed),
-            "new-custom-tags" => {
+            "new-custom-tags" | "mute" => {
                 if !as_list(&parsed).is_empty() {
                     return unsupported("a list");
                 }
             }
-            "decorate-inferred-ul" => self.decorate_inferred_ul = as_bool(&parsed),
+            "decorate-inferred-ul" => self.markup.decorate_inferred_ul = as_bool(&parsed),
             "doctype" | "doctype-mode" => match parsed {
                 Value::DoctypeFpi(fpi) => {
                     self.doctype_mode = DoctypeMode::User;
@@ -524,46 +638,48 @@ impl Options {
                 }
                 _ => {}
             },
-            "drop-empty-elements" => self.drop_empty_elements = as_bool(&parsed),
-            "drop-empty-paras" => self.drop_empty_paras = as_bool(&parsed),
-            "drop-proprietary-attributes" => self.drop_proprietary_attributes = as_bool(&parsed),
-            "repeated-attributes" => self.keep_last_attribute = parsed == Value::Pick(1),
-            "enclose-block-text" => self.enclose_block_text = as_bool(&parsed),
-            "enclose-text" => self.enclose_text = as_bool(&parsed),
-            "escape-scripts" => self.escape_scripts = as_bool(&parsed),
-            "fix-backslash" => self.fix_backslash = as_bool(&parsed),
+            "drop-empty-elements" => self.drop.drop_empty_elements = as_bool(&parsed),
+            "drop-empty-paras" => self.drop.drop_empty_paras = as_bool(&parsed),
+            "drop-proprietary-attributes" => {
+                self.drop.drop_proprietary_attributes = as_bool(&parsed);
+            }
+            "repeated-attributes" => self.attributes.keep_last_attribute = parsed == Value::Pick(1),
+            "enclose-block-text" => self.enclose.enclose_block_text = as_bool(&parsed),
+            "enclose-text" => self.enclose.enclose_text = as_bool(&parsed),
+            "escape-scripts" => self.enclose.escape_scripts = as_bool(&parsed),
+            "fix-backslash" => self.fix.fix_backslash = as_bool(&parsed),
             "fix-bad-comments" => self.fix_bad_comments = as_tri(&parsed),
-            "fix-uri" => self.fix_uri = as_bool(&parsed),
-            "force-output" => self.force_output = as_bool(&parsed),
-            "join-classes" => self.join_classes = as_bool(&parsed),
-            "join-styles" => self.join_styles = as_bool(&parsed),
-            "keep-tabs" => self.keep_tabs = as_bool(&parsed),
-            "literal-attributes" => self.literal_attributes = as_bool(&parsed),
-            "lower-literals" => self.lower_literals = as_bool(&parsed),
-            "merge-emphasis" => self.merge_emphasis = as_bool(&parsed),
-            "add-meta-charset" => self.add_meta_charset = as_bool(&parsed),
-            "show-meta-change" => self.show_meta_change = as_bool(&parsed),
-            "ncr" => self.ncr = as_bool(&parsed),
-            "omit-optional-tags" => self.omit_optional_tags = as_bool(&parsed),
-            "output-html" => self.output_html = as_bool(&parsed),
+            "fix-uri" => self.fix.fix_uri = as_bool(&parsed),
+            "force-output" => self.run.force_output = as_bool(&parsed),
+            "join-classes" => self.merge.join_classes = as_bool(&parsed),
+            "join-styles" => self.merge.join_styles = as_bool(&parsed),
+            "keep-tabs" => self.layout.keep_tabs = as_bool(&parsed),
+            "literal-attributes" => self.attributes.literal_attributes = as_bool(&parsed),
+            "lower-literals" => self.attributes.lower_literals = as_bool(&parsed),
+            "merge-emphasis" => self.merge.merge_emphasis = as_bool(&parsed),
+            "add-meta-charset" => self.meta.add_meta_charset = as_bool(&parsed),
+            "show-meta-change" => self.meta.show_meta_change = as_bool(&parsed),
+            "ncr" => self.entities.ncr = as_bool(&parsed),
+            "omit-optional-tags" => self.layout.omit_optional_tags = as_bool(&parsed),
+            "output-html" => self.output.output_html = as_bool(&parsed),
             "output-xhtml" => {
-                self.output_xhtml = as_bool(&parsed);
-                if self.output_xhtml {
-                    self.output_xml = true;
+                self.output.output_xhtml = as_bool(&parsed);
+                if self.output.output_xhtml {
+                    self.output.output_xml = true;
                 }
             }
-            "output-xml" => self.output_xml = as_bool(&parsed),
-            "preserve-entities" => self.preserve_entities = as_bool(&parsed),
-            "quiet" => self.quiet = as_bool(&parsed),
-            "quote-ampersand" => self.quote_ampersand = as_bool(&parsed),
-            "replace-color" => self.replace_color = as_bool(&parsed),
+            "output-xml" => self.output.output_xml = as_bool(&parsed),
+            "preserve-entities" => self.entities.preserve_entities = as_bool(&parsed),
+            "quiet" => self.report.quiet = as_bool(&parsed),
+            "quote-ampersand" => self.entities.quote_ampersand = as_bool(&parsed),
+            "replace-color" => self.run.replace_color = as_bool(&parsed),
             "show-errors" => self.show_errors = as_int(&parsed),
-            "show-info" => self.show_info = as_bool(&parsed),
-            "show-warnings" => self.show_warnings = as_bool(&parsed),
+            "show-info" => self.report.show_info = as_bool(&parsed),
+            "show-warnings" => self.report.show_warnings = as_bool(&parsed),
             "show-body-only" => self.show_body_only = as_tri(&parsed),
-            "skip-nested" => self.skip_nested = as_bool(&parsed),
-            "strict-tags-attributes" => self.strict_tags_attributes = as_bool(&parsed),
-            "fix-style-tags" => self.fix_style_tags = as_bool(&parsed),
+            "skip-nested" => self.strictness.skip_nested = as_bool(&parsed),
+            "strict-tags-attributes" => self.strictness.strict_tags_attributes = as_bool(&parsed),
+            "fix-style-tags" => self.fix.fix_style_tags = as_bool(&parsed),
             "tab-size" => self.tab_size = as_int(&parsed),
             "uppercase-attributes" => {
                 self.uppercase_attributes = match parsed {
@@ -572,8 +688,10 @@ impl Options {
                     _ => UppercaseAttrs::No,
                 }
             }
-            "warn-proprietary-attributes" => self.warn_proprietary_attributes = as_bool(&parsed),
-            "assume-xml-procins" => self.assume_xml_procins = as_bool(&parsed),
+            "warn-proprietary-attributes" => {
+                self.strictness.warn_proprietary_attributes = as_bool(&parsed);
+            }
+            "assume-xml-procins" => self.meta.assume_xml_procins = as_bool(&parsed),
             // Options whose "yes" rewrites the document in ways itidy does
             // not follow.
             "clean" | "gdoc" | "bare" | "word-2000" | "logical-emphasis" | "input-xml" => {
@@ -581,17 +699,12 @@ impl Options {
                     return unsupported("yes");
                 }
                 if option == "clean" {
-                    self.make_clean = false;
+                    self.run.make_clean = false;
                 }
             }
             "accessibility-check" => {
                 if parsed != Value::Pick(0) {
                     return unsupported("a level above 0");
-                }
-            }
-            "mute" => {
-                if !as_list(&parsed).is_empty() {
-                    return unsupported("a list");
                 }
             }
             "output-encoding" | "char-encoding" | "input-encoding" if as_str(&parsed) != "utf8" => {

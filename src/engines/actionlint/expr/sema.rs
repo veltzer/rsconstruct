@@ -413,7 +413,7 @@ impl SemanticsChecker {
         self.vars.insert("inputs".to_string(), merged);
     }
 
-    pub fn update_dispatch_inputs(&mut self, ty: ObjectType) {
+    pub fn update_dispatch_inputs(&mut self, ty: &ObjectType) {
         self.update_inputs(ty.clone());
         // `github.event.inputs.*` are always strings.
         let props = ty

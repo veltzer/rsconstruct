@@ -80,13 +80,14 @@ fn effective_max_jobs(name: &str, proc: &dyn crate::processor::Processor) -> Opt
 fn effective_supports_batch(name: &str, proc: &dyn crate::processor::Processor) -> bool {
     let plugin_ok =
         crate::registries::processor::find_plugin(name).is_some_and(|p| p.supports_batch);
-    plugin_ok && (proc.scan_config().batch || proc.scan_config().batch_by_dir)
+    let batching = proc.scan_config().batching;
+    plugin_ok && (batching.batch || batching.batch_by_dir)
 }
 
 /// Whether a processor instance batches per directory (`batch_by_dir`): the
 /// plugin can batch and the user config asks for it.
 fn effective_batch_by_dir(name: &str, proc: &dyn crate::processor::Processor) -> bool {
-    effective_supports_batch(name, proc) && proc.scan_config().batch_by_dir
+    effective_supports_batch(name, proc) && proc.scan_config().batching.batch_by_dir
 }
 
 /// Split `items` into one group per directory that directly contains the
@@ -212,6 +213,7 @@ impl WorkQueue {
                     .running
                     .entry(unit.processor().to_string())
                     .or_insert(0) += 1;
+                drop(state);
                 return Some(unit);
             }
             self.changed.wait(&mut state);
@@ -509,7 +511,7 @@ impl Executor<'_> {
         refresh: Option<&mut GraphRefresh<'_>>,
     ) -> Result<BuildStats> {
         let build_start = Instant::now();
-        let keep_going = self.keep_going;
+        let keep_going = self.run.keep_going;
         let predicted: HashMap<usize, ProductAction> = classification
             .products
             .iter()
@@ -571,7 +573,7 @@ impl Executor<'_> {
         let lctx = LevelContext {
             graph: &graph_lock,
             object_store,
-            timings: self.timings,
+            timings: self.run.timings,
             shared: &shared,
             pb: &pb,
             build_start,
@@ -675,11 +677,17 @@ impl Executor<'_> {
         if !shared.failed_products.lock().is_empty() || !shared.errors.lock().is_empty() {
             return Ok(());
         }
-        let attempted = shared.attempted.lock();
-        for c in &classification.products {
-            if c.action == ProductAction::Skip || attempted.contains(&c.id) {
-                continue;
-            }
+        // Pick the products first, so the lock on `attempted` is not held
+        // across the file removals.
+        let never_rebuilt: Vec<_> = {
+            let attempted = shared.attempted.lock();
+            classification
+                .products
+                .iter()
+                .filter(|c| c.action != ProductAction::Skip && !attempted.contains(&c.id))
+                .collect()
+        };
+        for c in never_rebuilt {
             let product = graph.get_product(c.id).expect(errors::INVALID_PRODUCT_ID);
             remove_stale_outputs(product, object_store, &c.input_checksum)?;
         }
@@ -773,8 +781,8 @@ impl Executor<'_> {
                 if stuck.is_empty() {
                     return Ok(());
                 }
-                let g = graph.read();
-                let names: Vec<String> = g
+                let names: Vec<String> = graph
+                    .read()
                     .products()
                     .iter()
                     .filter(|product| stuck.contains(&product.id))
@@ -821,6 +829,7 @@ impl Executor<'_> {
                     g.topological_sort()?;
                     tracker.recount(&g);
                 }
+                drop(g);
             }
         }
     }
@@ -1052,7 +1061,7 @@ impl Executor<'_> {
                 product,
                 lctx.object_store,
                 &item.input_checksum,
-                self.force,
+                self.run.force,
             );
             self.print_explain(product, &action);
         }
@@ -1253,8 +1262,12 @@ impl Executor<'_> {
                     } else {
                         if result.is_ok() && attempt > 1 {
                             // Passed on a retry: report flaky, like the non-batch path.
-                            let mut stats = lctx.shared.stats.lock();
-                            stats.entry(proc_name.to_string()).or_default().flaky += 1;
+                            lctx.shared
+                                .stats
+                                .lock()
+                                .entry(proc_name.to_string())
+                                .or_default()
+                                .flaky += 1;
                             crate::output::info(&format!(
                                 "[{}] {} {} (passed on attempt {})",
                                 proc_name,
@@ -1314,6 +1327,7 @@ impl Executor<'_> {
                 let proc_stats = stats.entry(proc_name.to_string()).or_default();
                 proc_stats.duration += batch_duration;
                 proc_stats.product_timings.push(timing);
+                drop(stats);
             }
         }
     }
@@ -1351,12 +1365,11 @@ impl Executor<'_> {
                 };
 
                 // Update progress counter
-                let current = {
-                    let mut current_guard = current_per_processor.lock();
-                    let c = current_guard.entry(product.processor.clone()).or_insert(0);
-                    *c += 1;
-                    *c
-                };
+                let current = *current_per_processor
+                    .lock()
+                    .entry(product.processor.clone())
+                    .and_modify(|c| *c += 1)
+                    .or_insert(1);
                 let total = total_per_processor
                     .get(&product.processor)
                     .copied()
@@ -1430,10 +1443,12 @@ impl Executor<'_> {
 
                             // Mark as flaky if it passed on a retry
                             if attempt > 1 {
-                                let mut stats = lctx.shared.stats.lock();
-                                let proc_stats =
-                                    stats.entry(product.processor.clone()).or_default();
-                                proc_stats.flaky += 1;
+                                lctx.shared
+                                    .stats
+                                    .lock()
+                                    .entry(product.processor.clone())
+                                    .or_default()
+                                    .flaky += 1;
                                 crate::output::info(&format!(
                                     "[{}] {} {} (passed on attempt {})",
                                     product.processor,
@@ -1459,6 +1474,7 @@ impl Executor<'_> {
                                         ),
                                     });
                                 }
+                                drop(stats);
                             }
                             break;
                         }
@@ -1558,7 +1574,7 @@ impl Executor<'_> {
         object_store: &ObjectStore,
         shared: &SharedState,
     ) -> LevelWork {
-        let keep_going = self.keep_going;
+        let keep_going = self.run.keep_going;
         let mut work_items: Vec<WorkItem> = Vec::new();
 
         // First pass: identify products with failed dependencies
@@ -1592,7 +1608,9 @@ impl Executor<'_> {
 
         // Second pass: determine work items for non-skipped products
         {
-            let fp_guard = shared.failed_processors.lock();
+            // A snapshot, so the lock is not held across the checksums and
+            // classification below.
+            let failed_processors = shared.failed_processors.lock().clone();
             for &id in level {
                 if skipped_ids.contains(&id) {
                     continue;
@@ -1602,7 +1620,7 @@ impl Executor<'_> {
 
                 // In non-keep-going mode, silently skip products from a
                 // processor that failed in a previous level
-                if !keep_going && fp_guard.contains(&product.processor) {
+                if !keep_going && failed_processors.contains(&product.processor) {
                     if shared.failed_products.lock().insert(id) {
                         shared.blocked.fetch_add(1, Ordering::Relaxed);
                     }
@@ -1642,7 +1660,7 @@ impl Executor<'_> {
                     product,
                     object_store,
                     &input_checksum,
-                    self.force,
+                    self.run.force,
                 );
                 work_items.push(WorkItem {
                     product_id: id,

@@ -96,7 +96,10 @@ fn char_name(c: u16) -> String {
 /// `NoViableAltForCharException.getMessage()`.
 fn unexpected_char(c: u16) -> String {
     if (0x20..=0x7E).contains(&c) {
-        format!("unexpected char: '{}'", char::from(c as u8))
+        format!(
+            "unexpected char: '{}'",
+            char::from(crate::numeric::low_byte(u32::from(c)))
+        )
     } else {
         format!("unexpected char: 0x{c:X}")
     }
@@ -1051,7 +1054,6 @@ impl Lexer<'_> {
     /// `NUM_INT`: the first literal rule whose lookahead and syntactic
     /// predicate hold, in the grammar's order.
     fn num_int(&mut self) -> LexResult<Token> {
-        let (c1, c2, c3, c4) = (self.la(1), self.la(2), self.la(3), self.la(4));
         /// One alternative: its lookahead test, then its rule as a guess.
         fn attempt<'s>(
             input: &'s [u16],
@@ -1065,6 +1067,8 @@ impl Lexer<'_> {
             let mut cur = Cur { input, pos };
             rule(&mut cur).then_some(cur.pos)
         }
+
+        let (c1, c2, c3, c4) = (self.la(1), self.la(2), self.la(3), self.la(4));
         let (input, pos) = (self.input, self.pos);
         let hex_pre =
             is(c1, b'0') && one_of(c2, b"Xx") && CHARS_10.contains(c3) && CHARS_11.contains(c4);

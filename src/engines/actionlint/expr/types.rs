@@ -124,11 +124,10 @@ impl ExprType {
     /// Whether a value of `other` can be assigned where `self` is expected.
     pub fn assignable(&self, other: &Self) -> bool {
         match self {
-            Self::Any => true,
+            // Anything converts to bool: `if: ${{ steps.foo }}`.
+            Self::Any | Self::Bool => true,
             Self::Null => matches!(other, Self::Null | Self::Any),
             Self::Number => matches!(other, Self::Number | Self::Any),
-            // Anything converts to bool: `if: ${{ steps.foo }}`.
-            Self::Bool => true,
             Self::String => matches!(other, Self::String | Self::Number | Self::Any),
             Self::Object(ty) => match other {
                 Self::Any => true,

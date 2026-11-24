@@ -4,10 +4,7 @@
 use super::{Options, check};
 
 fn run(input: &str) -> (Vec<String>, u32, u32) {
-    let opts = Options {
-        quiet: true,
-        ..Options::default()
-    };
+    let opts = Options::quiet();
     let report = check(input.as_bytes(), &opts).expect("input is UTF-8");
     (report.lines, report.warnings, report.errors)
 }
@@ -90,10 +87,7 @@ fn options_change_the_checks() {
     );
     assert_eq!(errors, 1);
 
-    let mut opts = Options {
-        quiet: true,
-        ..Options::default()
-    };
+    let mut opts = Options::quiet();
     opts.set("custom-tags", "blocklevel")
         .expect("a valid option");
     let report = check(input.as_bytes(), &opts).expect("input is UTF-8");
@@ -103,10 +97,7 @@ fn options_change_the_checks() {
 
 #[test]
 fn config_text_follows_tidy_grammar() {
-    let mut opts = Options {
-        quiet: true,
-        ..Options::default()
-    };
+    let mut opts = Options::quiet();
     opts.apply_config_text(
         "# a comment\nnew-blocklevel-tags: foo,\n  bar\ndrop-empty-elements: no\n",
     )

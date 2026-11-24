@@ -17,6 +17,11 @@ fn regex(cell: &'static OnceLock<Regex>, pattern: &str) -> &'static Regex {
 // ─── float-values ────────────────────────────────────────────────────────────
 
 fn check_float_values(conf: &RuleConf, ctx: &Ctx<'_, '_>, _: &mut States, out: &mut Vec<Problem>) {
+    static NAN: OnceLock<Regex> = OnceLock::new();
+    static INF: OnceLock<Regex> = OnceLock::new();
+    static SCIENTIFIC: OnceLock<Regex> = OnceLock::new();
+    static NO_NUMERAL: OnceLock<Regex> = OnceLock::new();
+
     if ctx.prev().is_some_and(super::super::parser::Token::is_tag) {
         return;
     }
@@ -27,10 +32,6 @@ fn check_float_values(conf: &RuleConf, ctx: &Ctx<'_, '_>, _: &mut States, out: &
     if token.is_styled_scalar() {
         return;
     }
-    static NAN: OnceLock<Regex> = OnceLock::new();
-    static INF: OnceLock<Regex> = OnceLock::new();
-    static SCIENTIFIC: OnceLock<Regex> = OnceLock::new();
-    static NO_NUMERAL: OnceLock<Regex> = OnceLock::new();
     let at = |desc: String| Problem::new(token.start.line + 1, token.start.column + 1, desc);
 
     if conf.bool_opt("forbid-nan") && regex(&NAN, r"^(\.nan|\.NaN|\.NAN)$").is_match(value) {

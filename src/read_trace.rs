@@ -117,6 +117,8 @@ pub struct Trace {
 /// Wrap `cmd` in strace for the product running on this thread, or return
 /// `None` when no product is watched.
 pub fn prepare(cmd: &Command) -> Result<Option<Trace>> {
+    static NEXT_RUN: AtomicU64 = AtomicU64::new(0);
+
     let Some(spec) = SPEC.with(|s| s.borrow().clone()) else {
         return Ok(None);
     };
@@ -125,7 +127,6 @@ pub fn prepare(cmd: &Command) -> Result<Option<Trace>> {
     let dir = root.join(TRACE_DIR);
     fs::create_dir_all(&dir)
         .with_context(|| format!("Failed to create read-trace directory {}", dir.display()))?;
-    static NEXT_RUN: AtomicU64 = AtomicU64::new(0);
     let log = dir.join(format!(
         "{}-{}.log",
         std::process::id(),

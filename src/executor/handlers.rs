@@ -51,7 +51,7 @@ impl Executor<'_> {
         crate::checksum::forget_in_session(self.build_ctx, &product.outputs, &product.output_dirs);
 
         let msg = self.failure_message(product, error);
-        if self.keep_going {
+        if self.run.keep_going {
             // stderr: errors must survive --json, and must not corrupt the
             // JSON event stream on stdout.
             crate::output::error(&msg);

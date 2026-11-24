@@ -25,6 +25,44 @@ fn default_config_file() -> String {
     ".luacheckrc".to_string()
 }
 
+/// The options that allow defining globals (`allow_defined`,
+/// `allow_defined_top`, `module`). Flattened into the config: the keys sit
+/// directly under the processor's table.
+#[derive(Debug, Default, Deserialize, Serialize, Clone)]
+pub struct AllowOptions {
+    #[serde(default)]
+    pub allow_defined: bool,
+    #[serde(default)]
+    pub allow_defined_top: bool,
+    #[serde(default)]
+    pub module: bool,
+}
+
+/// The options that turn off whole groups of checks (`--no-global`,
+/// `--no-unused`, `--no-redefined`). Flattened into the config.
+#[derive(Debug, Default, Deserialize, Serialize, Clone)]
+pub struct DisabledChecks {
+    #[serde(default)]
+    pub no_global: bool,
+    #[serde(default)]
+    pub no_unused: bool,
+    #[serde(default)]
+    pub no_redefined: bool,
+}
+
+/// The options that turn off checks of variables of one kind
+/// (`--no-unused-args`, `--no-unused-secondaries`, `--no-self`). Flattened
+/// into the config.
+#[derive(Debug, Default, Deserialize, Serialize, Clone)]
+pub struct DisabledVariableChecks {
+    #[serde(default)]
+    pub no_unused_args: bool,
+    #[serde(default)]
+    pub no_unused_secondaries: bool,
+    #[serde(default)]
+    pub no_self: bool,
+}
+
 #[derive(Debug, Deserialize, Serialize, Clone)]
 pub struct IluacheckConfig {
     /// The configuration file, looked up from the project root upwards, as
@@ -53,24 +91,12 @@ pub struct IluacheckConfig {
     pub only: Option<Vec<String>>,
     #[serde(default)]
     pub operators: Option<Vec<String>>,
-    #[serde(default)]
-    pub allow_defined: bool,
-    #[serde(default)]
-    pub allow_defined_top: bool,
-    #[serde(default)]
-    pub module: bool,
-    #[serde(default)]
-    pub no_global: bool,
-    #[serde(default)]
-    pub no_unused: bool,
-    #[serde(default)]
-    pub no_redefined: bool,
-    #[serde(default)]
-    pub no_unused_args: bool,
-    #[serde(default)]
-    pub no_unused_secondaries: bool,
-    #[serde(default)]
-    pub no_self: bool,
+    #[serde(flatten)]
+    pub allow: AllowOptions,
+    #[serde(flatten)]
+    pub disabled_checks: DisabledChecks,
+    #[serde(flatten)]
+    pub disabled_variable_checks: DisabledVariableChecks,
     #[serde(default)]
     pub max_line_length: Option<u64>,
     #[serde(default)]
@@ -99,15 +125,9 @@ impl Default for IluacheckConfig {
             enable: None,
             only: None,
             operators: None,
-            allow_defined: false,
-            allow_defined_top: false,
-            module: false,
-            no_global: false,
-            no_unused: false,
-            no_redefined: false,
-            no_unused_args: false,
-            no_unused_secondaries: false,
-            no_self: false,
+            allow: AllowOptions::default(),
+            disabled_checks: DisabledChecks::default(),
+            disabled_variable_checks: DisabledVariableChecks::default(),
             max_line_length: None,
             max_code_line_length: None,
             max_string_line_length: None,
@@ -119,11 +139,11 @@ impl Default for IluacheckConfig {
 }
 
 /// A limit field: a number, with 0 meaning no limit (`--no-max-...`).
-const fn limit(n: u64) -> Limit {
+fn limit(n: u64) -> Limit {
     if n == 0 {
         Limit::Unlimited
     } else {
-        Limit::Value(n as f64)
+        Limit::Value(crate::numeric::u64_to_f64(n))
     }
 }
 
@@ -131,12 +151,15 @@ impl IluacheckConfig {
     fn cli_options(&self) -> CliOptions {
         let mut disabled = Vec::new();
         for (set, name) in [
-            (self.no_global, "global"),
-            (self.no_unused, "unused"),
-            (self.no_redefined, "redefined"),
-            (self.no_unused_args, "unused_args"),
-            (self.no_unused_secondaries, "unused_secondaries"),
-            (self.no_self, "self"),
+            (self.disabled_checks.no_global, "global"),
+            (self.disabled_checks.no_unused, "unused"),
+            (self.disabled_checks.no_redefined, "redefined"),
+            (self.disabled_variable_checks.no_unused_args, "unused_args"),
+            (
+                self.disabled_variable_checks.no_unused_secondaries,
+                "unused_secondaries",
+            ),
+            (self.disabled_variable_checks.no_self, "self"),
         ] {
             if set {
                 disabled.push(name);
@@ -162,9 +185,9 @@ impl IluacheckConfig {
             enable: self.enable.clone(),
             only: self.only.clone(),
             operators: self.operators.clone(),
-            allow_defined: self.allow_defined,
-            allow_defined_top: self.allow_defined_top,
-            module: self.module,
+            allow_defined: self.allow.allow_defined,
+            allow_defined_top: self.allow.allow_defined_top,
+            module: self.allow.module,
             disabled,
             max_line_length: self.max_line_length.map(limit),
             max_code_line_length: self.max_code_line_length.map(limit),
@@ -400,8 +423,7 @@ inventory::submit! {
         defaults: Some(crate::config::ProcessorDefaults { dep_auto: &[".luacheckrc"], output_depends_on_input_name: true, ..crate::config::ProcessorDefaults::EMPTY }),
         keywords: &["lua", "linter", "checker", "luacheck", "rust"],
         description: "Lint Lua files with luacheck's analysis (in-process)",
-        is_builtin: true,
-        is_rust: true,
+        implementation: crate::registries::Implementation::Builtin,
         supports_batch: false,
         caches_outputs: true,
         sandboxable: true,

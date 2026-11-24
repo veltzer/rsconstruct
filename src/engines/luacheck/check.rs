@@ -18,6 +18,30 @@ pub enum IndexKey {
     Str(Vec<u8>),
 }
 
+/// What an unused-variable warning says about the variable.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct UnusedKind {
+    pub is_self: bool,
+    pub secondary: bool,
+    pub useless: bool,
+}
+
+/// What an unused-function warning says about the function.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct FunctionKind {
+    pub func: bool,
+    pub recursive: bool,
+    pub mutually_recursive: bool,
+}
+
+/// What a global-access warning says about the access.
+#[derive(Clone, Copy, Debug, Default)]
+pub struct GlobalKind {
+    pub top: bool,
+    pub indirect: bool,
+    pub module: bool,
+}
+
 /// A warning or error. luacheck keeps these as tables with per-code fields;
 /// every field any code uses is here, unset by default.
 #[derive(Clone, Debug, Default)]
@@ -31,20 +55,14 @@ pub struct Warning {
     pub prev_line: Option<usize>,
     pub prev_column: Option<usize>,
     pub prev_end_column: Option<usize>,
-    pub is_self: bool,
-    pub func: bool,
-    pub secondary: bool,
-    pub useless: bool,
-    pub recursive: bool,
-    pub mutually_recursive: bool,
+    pub unused: UnusedKind,
+    pub function: FunctionKind,
     pub overwritten_line: Option<usize>,
     pub overwritten_column: Option<usize>,
     pub overwritten_end_column: Option<usize>,
     pub indexing: Option<Vec<IndexKey>>,
     pub previous_indexing_len: Option<usize>,
-    pub top: bool,
-    pub indirect: bool,
-    pub module: bool,
+    pub global: GlobalKind,
     pub field: Option<Vec<u8>>,
     pub index: bool,
     pub operator: Option<Vec<u8>>,
@@ -93,6 +111,13 @@ impl VarType {
     }
 }
 
+/// How a variable has been used so far.
+#[derive(Clone, Copy, Default)]
+pub struct VarUse {
+    pub accessed: bool,
+    pub mutated: bool,
+}
+
 pub struct Var {
     pub name: Vec<u8>,
     pub node: NodeId,
@@ -103,8 +128,7 @@ pub struct Var {
     pub scope_start: usize,
     pub scope_end: usize,
     pub values: Vec<ValueId>,
-    pub accessed: bool,
-    pub mutated: bool,
+    pub usage: VarUse,
 }
 
 /// `value.overwriting_item`: unset, `false`, or an item.
@@ -222,10 +246,11 @@ impl CheckState {
     /// The column of a character given its offset, never past the line end.
     pub fn offset_to_column(&self, line: usize, offset: usize) -> usize {
         let line_offset = self.line_offsets[line].expect("line offset known");
-        let column = offset as i64 - line_offset as i64 + 1;
+        // `offset - line_offset + 1`, as far as it is not negative.
+        let column = (offset + 1).saturating_sub(line_offset);
         match self.line_length(line) {
-            None => column.max(0) as usize,
-            Some(line_length) => column.min(line_length as i64).max(1) as usize,
+            None => column,
+            Some(line_length) => column.min(line_length).max(1),
         }
     }
 

@@ -656,7 +656,7 @@ fn tools_stats_json() {
     // Verify consistency: total_tools == tools.len()
     let total_tools = summary["total_tools"].as_u64().unwrap();
     assert_eq!(
-        total_tools as usize,
+        usize::try_from(total_tools).unwrap(),
         tools.len(),
         "summary.total_tools should match tools array length"
     );
@@ -678,20 +678,6 @@ fn tools_stats_json() {
 /// "unknown install method" failure at the worst possible moment.
 #[test]
 fn tools_list_uses_only_implemented_install_methods() {
-    let temp_dir = setup_test_project();
-    let project_path = temp_dir.path();
-
-    let output = run_rsconstruct_with_env(
-        project_path,
-        &["--json", "tool", "list"],
-        &[("NO_COLOR", "1")],
-    );
-    assert!(
-        output.status.success(),
-        "tool list --json failed: {}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-
     // Kept in sync with the `match method` arms in tools::run().
     const IMPLEMENTED: &[&str] = &[
         "apt",
@@ -707,6 +693,20 @@ fn tools_list_uses_only_implemented_install_methods() {
         "binary",
         "manual",
     ];
+
+    let temp_dir = setup_test_project();
+    let project_path = temp_dir.path();
+
+    let output = run_rsconstruct_with_env(
+        project_path,
+        &["--json", "tool", "list"],
+        &[("NO_COLOR", "1")],
+    );
+    assert!(
+        output.status.success(),
+        "tool list --json failed: {}",
+        String::from_utf8_lossy(&output.stderr)
+    );
 
     let parsed: Value =
         serde_json::from_slice(&output.stdout).expect("tool list --json should emit valid JSON");

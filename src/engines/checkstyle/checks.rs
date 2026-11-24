@@ -116,7 +116,7 @@ impl Ctx<'_> {
         let line = self.contents.line(i64::from(line_no) - 1)?;
         let mut len = 0;
         for idx in 0..col.max(0) {
-            let Some(&c) = line.get(idx as usize) else {
+            let Some(&c) = usize::try_from(idx).ok().and_then(|idx| line.get(idx)) else {
                 return Err(format!(
                     "java.lang.StringIndexOutOfBoundsException: Index {idx} out of bounds for length {}",
                     line.len()
@@ -1358,7 +1358,8 @@ fn has_fall_through_comment(
     while i > i64::from(start_line) - 1 {
         let line = lines.get(i)?;
         if !is_blank(line) {
-            return Ok(matches_comment(ctx, relief, line, (i + 1) as i32));
+            let line_no = i32::try_from(i + 1).map_err(|e| e.to_string())?;
+            return Ok(matches_comment(ctx, relief, line, line_no));
         }
         i -= 1;
     }
@@ -1371,7 +1372,7 @@ fn matches_comment(ctx: &Ctx, relief: &Regex, line: &[u16], line_no: i32) -> boo
     let Some(m) = relief.find(&text) else {
         return false;
     };
-    let utf16 = |byte: usize| text[..byte].encode_utf16().count() as i64;
+    let utf16 = |byte: usize| crate::numeric::to_i64(text[..byte].encode_utf16().count());
     ctx.contents.has_intersection_with_comment(
         i64::from(line_no),
         utf16(m.start()),

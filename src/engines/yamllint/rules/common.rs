@@ -17,7 +17,7 @@ pub fn spaces_after(
     if token.end.line != next.start.line {
         return None;
     }
-    let spaces = next.start.index as i64 - token.end.index as i64;
+    let spaces = crate::numeric::to_i64(next.start.index) - crate::numeric::to_i64(token.end.index);
     if max != -1 && spaces > max {
         Some(Problem::new(
             token.start.line + 1,
@@ -54,7 +54,7 @@ pub fn spaces_before(
     if prev.end.index != 0 && stream.bytes()[prev.end.index - 1] == b'\n' {
         return None;
     }
-    let spaces = token.start.index as i64 - prev.end.index as i64;
+    let spaces = crate::numeric::to_i64(token.start.index) - crate::numeric::to_i64(prev.end.index);
     if max != -1 && spaces > max {
         Some(Problem::new(
             token.start.line + 1,

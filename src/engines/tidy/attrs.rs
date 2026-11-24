@@ -428,7 +428,7 @@ impl Doc {
                     continue;
                 }
                 if first_av.dict == Some(known.class)
-                    && self.opts.join_classes
+                    && self.opts.merge.join_classes
                     && first_av.has_value()
                     && second_av.has_value()
                 {
@@ -441,7 +441,7 @@ impl Doc {
                     self.report_attr(Some(node), Some(&second_av), Code::JoiningAttribute);
                     self.remove_attribute(node, second);
                 } else if first_av.dict == Some(known.style)
-                    && self.opts.join_styles
+                    && self.opts.merge.join_styles
                     && first_av.has_value()
                     && second_av.has_value()
                 {
@@ -452,7 +452,7 @@ impl Doc {
                     self.tree.node_mut(node).attributes[first].value = Some(merged);
                     self.report_attr(Some(node), Some(&second_av), Code::JoiningAttribute);
                     self.remove_attribute(node, second);
-                } else if self.opts.keep_last_attribute {
+                } else if self.opts.attributes.keep_last_attribute {
                     self.report_attr(Some(node), Some(&first_av), Code::RepeatedAttribute);
                     self.remove_attribute(node, first);
                     first_redefined = true;
@@ -480,10 +480,10 @@ impl Doc {
         };
         let known = tables::tables().known;
         if dict == known.xml_lang || dict == known.xml_space {
-            self.lexer.isvoyager = true;
-            if !self.opts.output_html {
-                self.opts.output_xhtml = true;
-                self.opts.output_xml = true;
+            self.lexer.document.isvoyager = true;
+            if !self.opts.output.output_html {
+                self.opts.output.output_xhtml = true;
+                self.opts.output.output_xml = true;
             }
         }
         let versions = self.attribute_versions(node, &av);
@@ -583,10 +583,10 @@ impl Doc {
             return;
         };
         if value.chars().any(|c| is_upper(c as u32)) {
-            if self.lexer.isvoyager {
+            if self.lexer.document.isvoyager {
                 self.report_attr(Some(node), Some(&av), Code::AttrValueNotLcase);
             }
-            if self.lexer.isvoyager || self.opts.lower_literals {
+            if self.lexer.document.isvoyager || self.opts.attributes.lower_literals {
                 let lowered = value.to_ascii_lowercase();
                 self.set_attr_value(node, index, lowered);
             }
@@ -621,7 +621,7 @@ impl Doc {
             let c = *ch as u32;
             if *ch == '\\' {
                 backslash_count += 1;
-                if self.opts.fix_backslash && !is_javascript {
+                if self.opts.fix.fix_backslash && !is_javascript {
                     *ch = '/';
                 }
             } else if c > 0x7e || c <= 0x20 || *ch == '<' || *ch == '>' {
@@ -630,7 +630,7 @@ impl Doc {
         }
         let bad_codepoint_count = value.chars().filter(|&c| !is_url_code_point(c)).count();
         let mut new_value: String = fixed.iter().collect();
-        if self.opts.fix_uri && escape_count > 0 {
+        if self.opts.fix.fix_uri && escape_count > 0 {
             let mut dest = String::new();
             let mut hadnonspace = false;
             for ch in new_value.chars() {
@@ -659,14 +659,14 @@ impl Doc {
         }
         let av = self.attr(node, index);
         if backslash_count > 0 {
-            if self.opts.fix_backslash && !is_javascript {
+            if self.opts.fix.fix_backslash && !is_javascript {
                 self.report_attr(Some(node), Some(&av), Code::FixedBackslash);
             } else {
                 self.report_attr(Some(node), Some(&av), Code::BackslashInUri);
             }
         }
         if escape_count > 0 {
-            if self.opts.fix_uri {
+            if self.opts.fix.fix_uri {
                 self.report_attr(Some(node), Some(&av), Code::EscapedIllegalUri);
             } else if (self.html_version() & tables::VERS_HTML5) == 0 {
                 self.report_attr(Some(node), Some(&av), Code::IllegalUriReference);
@@ -686,7 +686,7 @@ impl Doc {
             return;
         };
         if self.is_anchor_element(node) {
-            if self.opts.output_xml && !is_valid_nmtoken(&value) {
+            if self.opts.output.output_xml && !is_valid_nmtoken(&value) {
                 self.report_attr(Some(node), Some(&av), Code::BadAttributeValue);
             }
             match self.get_node_by_anchor(&value) {
@@ -710,7 +710,7 @@ impl Doc {
             return;
         };
         if !is_valid_html_id(&value) {
-            if self.lexer.isvoyager && Self::is_valid_xml_id(&value) {
+            if self.lexer.document.isvoyager && Self::is_valid_xml_id(&value) {
                 self.report_attr(Some(node), Some(&av), Code::XmlIdSyntax);
             } else {
                 self.report_attr(Some(node), Some(&av), Code::BadAttributeValue);
@@ -907,7 +907,7 @@ impl Doc {
         if !valid && given.starts_with('#') {
             valid = is_valid_color_code(&given[1..]);
         }
-        if valid && given.starts_with('#') && self.opts.replace_color {
+        if valid && given.starts_with('#') && self.opts.run.replace_color {
             let name = COLORS
                 .iter()
                 .find(|(_, hex)| hex.eq_ignore_ascii_case(&given))
@@ -1213,7 +1213,7 @@ impl Doc {
             self.bad_access |= BA_MISSING_SUMMARY;
             self.report_missing_attr(node, "summary");
         }
-        if self.opts.output_xml
+        if self.opts.output.output_xml
             && let Some(index) = self.tree.attr_by_id(node, known.border)
             && self.tree.node(node).attributes[index].value.is_none()
         {

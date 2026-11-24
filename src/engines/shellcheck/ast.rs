@@ -255,10 +255,6 @@ impl Token {
 
     pub fn for_each_child<'a>(&'a self, visit: &mut dyn FnMut(&'a Self)) {
         match &self.inner {
-            TaBinary(_, a, b) | TaAssignment(_, a, b) => {
-                visit(a);
-                visit(b);
-            }
             TaVariable(_, l)
             | TaExpansion(l)
             | TaSequence(l)
@@ -305,7 +301,9 @@ impl Token {
                 visit(b);
                 visit(c);
             }
-            TcAnd(_, _, a, b)
+            TaBinary(_, a, b)
+            | TaAssignment(_, a, b)
+            | TcAnd(_, _, a, b)
             | TcBinary(_, _, a, b)
             | TcOr(_, _, a, b)
             | TAndIf(a, b)
@@ -408,10 +406,6 @@ impl Token {
     /// Mutable children, in the same order.
     pub fn for_each_child_mut(&mut self, visit: &mut dyn FnMut(&mut Self)) {
         match &mut self.inner {
-            TaBinary(_, a, b) | TaAssignment(_, a, b) => {
-                visit(a);
-                visit(b);
-            }
             TaVariable(_, l)
             | TaExpansion(l)
             | TaSequence(l)
@@ -458,7 +452,9 @@ impl Token {
                 visit(b);
                 visit(c);
             }
-            TcAnd(_, _, a, b)
+            TaBinary(_, a, b)
+            | TaAssignment(_, a, b)
+            | TcAnd(_, _, a, b)
             | TcBinary(_, _, a, b)
             | TcOr(_, _, a, b)
             | TAndIf(a, b)

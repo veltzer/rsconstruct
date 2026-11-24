@@ -48,7 +48,7 @@ fn mdl_valid_file() {
 /// With `[build] allow_missing_src_dirs = true` a missing entry is skipped
 /// without disturbing the entries beside it:
 ///   [processor.checker.mdl]
-///   `src_dirs` = ["config", "processor.checker.script"]
+///   `src_dirs` = `["config", "processor.checker.script"]`
 /// where `script/` doesn't exist on disk — `config/` must still be scanned.
 #[test]
 fn mdl_missing_src_dir_skips_without_affecting_others_when_allowed() {

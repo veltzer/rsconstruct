@@ -179,9 +179,6 @@ mod processor {
 /// `tests_mod/`, and `processor/` with one block per type directory.
 #[test]
 fn every_test_file_is_registered() {
-    let this = include_str!("main.rs");
-    let mut missing: Vec<String> = Vec::new();
-
     fn rs_stems(dir: &str) -> Vec<String> {
         let mut stems = Vec::new();
         for entry in std::fs::read_dir(dir).unwrap() {
@@ -195,6 +192,9 @@ fn every_test_file_is_registered() {
         }
         stems
     }
+
+    let this = include_str!("main.rs");
+    let mut missing: Vec<String> = Vec::new();
 
     for stem in rs_stems("tests/tests_mod") {
         if !this.contains(&format!("tests_mod/{stem}.rs"))

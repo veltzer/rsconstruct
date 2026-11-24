@@ -154,27 +154,30 @@ fn add_section(table: &mut toml_edit::Table, section: &str, name: &str) -> Resul
     Ok(true)
 }
 
+/// Remove the table at `path` below `table`, then every parent table it left
+/// empty. Returns whether anything was removed.
+fn remove_at(table: &mut dyn toml_edit::TableLike, path: &[String]) -> bool {
+    let Some((first, rest)) = path.split_first() else {
+        return false;
+    };
+    if rest.is_empty() {
+        return table.remove(first).is_some();
+    }
+    let Some(child) = table.get_mut(first).and_then(|t| t.as_table_like_mut()) else {
+        return false;
+    };
+    let removed = remove_at(child, rest);
+    if removed && child.is_empty() {
+        table.remove(first);
+    }
+    removed
+}
+
 /// Remove the section for `name` below `table`, then every parent table it
 /// left empty, so a removed `processor.checker.ruff` does not leave a bare
 /// `[processor.checker]` behind. Returns whether anything was removed.
 fn remove_section(table: &mut toml_edit::Table, section: &str, name: &str) -> bool {
     let path = key_path(section, name);
-    fn remove_at(table: &mut dyn toml_edit::TableLike, path: &[String]) -> bool {
-        let Some((first, rest)) = path.split_first() else {
-            return false;
-        };
-        if rest.is_empty() {
-            return table.remove(first).is_some();
-        }
-        let Some(child) = table.get_mut(first).and_then(|t| t.as_table_like_mut()) else {
-            return false;
-        };
-        let removed = remove_at(child, rest);
-        if removed && child.is_empty() {
-            table.remove(first);
-        }
-        removed
-    }
     remove_at(table, &path)
 }
 

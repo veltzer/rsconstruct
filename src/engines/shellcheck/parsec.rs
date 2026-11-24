@@ -238,10 +238,10 @@ impl P {
 
     pub fn file_index(&mut self, name: &str) -> u32 {
         if let Some(i) = self.files.iter().position(|f| f == name) {
-            return i as u32;
+            return crate::numeric::to_u32(i);
         }
         self.files.push(name.to_string());
-        (self.files.len() - 1) as u32
+        crate::numeric::to_u32(self.files.len() - 1)
     }
 
     pub fn mark(&self) -> Mark {

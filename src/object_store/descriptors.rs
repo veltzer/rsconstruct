@@ -72,6 +72,7 @@ impl ObjectStore {
         } else {
             sync.unsynced = true;
         }
+        drop(sync);
         Ok(())
     }
 
@@ -97,6 +98,7 @@ impl ObjectStore {
         crate::errors::ctx(txn.commit(), "Failed to persist cache descriptors")?;
         sync.last_durable = Some(Instant::now());
         sync.unsynced = false;
+        drop(sync);
         Ok(())
     }
 

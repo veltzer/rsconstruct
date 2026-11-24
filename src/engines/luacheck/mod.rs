@@ -63,7 +63,9 @@ pub fn tables() -> &'static Tables {
             .as_array()
             .expect("boundaries array")
             .iter()
-            .map(|n| n.as_u64().expect("boundary") as u32)
+            .map(|n| {
+                u32::try_from(n.as_u64().expect("boundary")).expect("a boundary is a codepoint")
+            })
             .collect();
         Tables {
             standards,

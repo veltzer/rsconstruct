@@ -59,8 +59,7 @@ fn with_db<T>(f: impl FnOnce(&Database) -> Result<T>) -> Result<T> {
             .with_context(|| format!("Failed to open webcache database {}", path.display()))?;
         *guard = Some(db);
     }
-    let db = guard.as_ref().expect("webcache database just opened");
-    f(db)
+    f(guard.as_ref().expect("webcache database just opened"))
 }
 
 /// Whether the webcache database exists on disk. Read-only callers use this

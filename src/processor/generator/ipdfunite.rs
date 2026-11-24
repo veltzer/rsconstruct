@@ -154,8 +154,8 @@ fn merge_pdfs(inputs: &[PathBuf], output: &Path) -> Result<()> {
                     ));
                 }
             }
-            Some(b"Page") => {}                  // handled separately
-            Some(b"Outlines" | b"Outline") => {} // not supported
+            // `Page` is handled separately; `Outlines` is not supported.
+            Some(b"Page" | b"Outlines" | b"Outline") => {}
             _ => {
                 document.objects.insert(*object_id, object.clone());
             }
@@ -179,7 +179,7 @@ fn merge_pdfs(inputs: &[PathBuf], output: &Path) -> Result<()> {
     // Build new Pages object with all kids
     if let Ok(dictionary) = pages_object.1.as_dict() {
         let mut dictionary = dictionary.clone();
-        dictionary.set("Count", documents_pages.len() as u32);
+        dictionary.set("Count", crate::numeric::to_u32(documents_pages.len()));
         dictionary.set(
             "Kids",
             documents_pages
@@ -348,8 +348,7 @@ inventory::submit! {
         defconfig_json: crate::registries::default_config_json::<IpdfuniteConfig>,
         keywords: &["pdf", "merger", "generator"],
         description: "Merge PDFs from subdirectories into course bundles (in-process)",
-        is_builtin: true,
-        is_rust: true,
+        implementation: crate::registries::Implementation::Builtin,
         supports_batch: false,
         caches_outputs: true,
         sandboxable: true,

@@ -8,7 +8,7 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 use super::ast::{Item, Node, NodeId, Range, Tag};
 use super::check::{
     CheckState, ItemId, ItemTag, LItem, Line, LineId, Overwriting, Secondaries, Value, ValueId,
-    Var, VarId, VarType, Warning,
+    Var, VarId, VarType, VarUse, Warning,
 };
 use super::parser::{SyntaxError, syntax_error};
 
@@ -123,7 +123,7 @@ impl LinState<'_> {
         let prev_node = self.st.vars[prev_var].node;
         let prev_range = self.st.ast.range(prev_node);
         let mut warning = Warning::new(&code);
-        warning.is_self = self.st.vars[var].is_self && self.st.vars[prev_var].is_self;
+        warning.unused.is_self = self.st.vars[var].is_self && self.st.vars[prev_var].is_self;
         warning.prev_line = Some(prev_range.line);
         warning.prev_column = Some(self.st.offset_to_column(prev_range.line, prev_range.offset));
         warning.prev_end_column = Some(
@@ -149,8 +149,7 @@ impl LinState<'_> {
             scope_start: self.items_size() + 1,
             scope_end: 0,
             values: Vec::new(),
-            accessed: false,
-            mutated: false,
+            usage: VarUse::default(),
         };
         self.st.vars.push(var);
         let var = self.st.vars.len() - 1;
@@ -514,7 +513,7 @@ impl LinState<'_> {
 
     fn mark_access(&mut self, item: ItemId, node: NodeId) {
         let var = self.st.ast.nodes[node].var.expect("resolved variable");
-        self.st.vars[var].accessed = true;
+        self.st.vars[var].usage.accessed = true;
         self.st.items[item]
             .accesses
             .as_mut()
@@ -527,7 +526,7 @@ impl LinState<'_> {
 
     fn mark_mutation(&mut self, item: ItemId, node: NodeId) {
         let var = self.st.ast.nodes[node].var.expect("resolved variable");
-        self.st.vars[var].mutated = true;
+        self.st.vars[var].usage.mutated = true;
         self.st.items[item]
             .mutations
             .as_mut()

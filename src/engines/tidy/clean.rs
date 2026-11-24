@@ -19,7 +19,7 @@ impl Doc {
     /// `tidyDocCleanAndRepair`.
     pub(crate) fn clean_and_repair(&mut self) {
         self.clean_style();
-        if self.opts.merge_emphasis {
+        if self.opts.merge.merge_emphasis {
             self.nested_emphasis(Some(0));
         }
         self.list2bq(Some(0));
@@ -34,14 +34,14 @@ impl Doc {
         }
 
         if self.tree.content(0).is_some() {
-            if self.opts.output_html
-                && self.lexer.isvoyager
+            if self.opts.output.output_html
+                && self.lexer.document.isvoyager
                 && let Some(doctype) = self.find_doctype()
             {
                 self.tree.remove_node(doctype);
             }
-            let want_name = self.opts.anchor_as_name;
-            if self.opts.output_xhtml && !self.opts.output_html {
+            let want_name = self.opts.markup.anchor_as_name;
+            if self.opts.output.output_xhtml && !self.opts.output.output_html {
                 self.set_xhtml_doctype();
                 self.fix_anchors(Some(0), want_name, true);
                 self.fix_xhtml_namespace(true);
@@ -58,7 +58,7 @@ impl Doc {
             self.check_html5(Some(0));
         }
         self.check_html_tags_attribs_versions(Some(0));
-        if !self.lexer.isvoyager && self.xml_detected {
+        if !self.lexer.document.isvoyager && self.xml_detected {
             let decl = self.find_xml_decl();
             self.report(None, decl, Code::XmlDeclarationDetected);
         }
@@ -87,7 +87,7 @@ impl Doc {
 
     /// `TY_(CleanStyle)`.
     fn clean_style(&mut self) {
-        let fix = self.opts.fix_style_tags;
+        let fix = self.opts.fix.fix_style_tags;
         if let (Some(head), Some(body)) = (self.find_head(), self.find_body()) {
             self.style_to_head(head, Some(body), fix);
         }
@@ -154,7 +154,7 @@ impl Doc {
 
     /// `RenameElem`.
     fn rename_elem(&mut self, node: NodeId, id: TagId) {
-        let index = self.tag_index(id);
+        let index = Self::tag_index(id);
         let name = self.tags[index].name.clone();
         let n = self.tree.node_mut(node);
         n.element = Some(name);
@@ -353,7 +353,7 @@ impl Doc {
                     };
                     continue;
                 } else {
-                    if self.opts.show_meta_change {
+                    if self.opts.meta.show_meta_change {
                         let av = self.tree.node(node).attributes[ci].clone();
                         self.report_attr(Some(node), Some(&av), Code::AttributeValueReplaced);
                     }
@@ -373,7 +373,7 @@ impl Doc {
                 None => self.tree.content(head),
             };
         }
-        if self.opts.add_meta_charset && !charset_found {
+        if self.opts.meta.add_meta_charset && !charset_found {
             let meta = self.inferred_tag(TagId::Meta);
             match self.html_version() {
                 HT50 | XH50 => {
@@ -515,7 +515,7 @@ impl Doc {
         }
         if dtmode == DoctypeMode::Auto
             && (self.lexer.versions & self.lexer.doctype) != 0
-            && ((VERS_XHTML & self.lexer.doctype) == 0 || self.lexer.isvoyager)
+            && ((VERS_XHTML & self.lexer.doctype) == 0 || self.lexer.document.isvoyager)
             && doctype.is_some()
         {
             self.lexer.version_emitted = self.lexer.doctype;
@@ -528,7 +528,7 @@ impl Doc {
             self.lexer.version_emitted = self.apparent_version();
             return true;
         }
-        if self.opts.output_xml {
+        if self.opts.output.output_xml {
             return true;
         }
         let had_si = doctype.is_some_and(|d| self.tree.attr_by_name(d, "SYSTEM").is_some());
@@ -678,7 +678,6 @@ impl Doc {
                 let lang = self.tree.attr_by_id(n, known.lang);
                 let xml_lang = self.tree.attr_by_id(n, known.xml_lang);
                 match (lang, xml_lang) {
-                    (Some(_), Some(_)) => {}
                     (Some(li), None) if want_xml_lang => {
                         if (self.node_attribute_versions(n, known.xml_lang)
                             & self.lexer.version_emitted)
@@ -697,6 +696,7 @@ impl Doc {
                         let value = self.tree.node(n).attributes[xi].value.clone();
                         self.repair_attr_value(n, "lang", value.as_deref());
                     }
+                    // Both attributes present, or nothing to repair.
                     _ => {}
                 }
                 if !want_lang && let Some(i) = self.tree.attr_by_id(n, known.lang) {
@@ -719,7 +719,7 @@ impl Doc {
     /// `--strict-tags-attributes` would otherwise report.
     fn check_html5(&mut self, mut node: Option<NodeId>) {
         let known = tables::tables().known;
-        let already_strict = self.opts.strict_tags_attributes;
+        let already_strict = self.opts.strictness.strict_tags_attributes;
         let body = self.find_body();
         while let Some(n) = node {
             if let Some(ai) = self.tree.attr_by_id(n, known.align)
@@ -804,7 +804,7 @@ impl Doc {
         } else {
             Code::MismatchedAttributeWarn
         };
-        let check_versions = self.opts.strict_tags_attributes;
+        let check_versions = self.opts.strictness.strict_tags_attributes;
         let html_is5 = (self.lexer.doctype & VERS_HTML5) != 0;
         while let Some(n) = node {
             if self.tree.node(n).is_element()
@@ -814,7 +814,7 @@ impl Doc {
                 if check_versions && (versions & version) == 0 {
                     self.report(None, Some(n), tag_report);
                 } else if (versions & VERS_PROPRIETARY) != 0
-                    && (!self.opts.make_clean
+                    && (!self.opts.run.make_clean
                         || (!self.node_is(n, TagId::Nobr) && !self.node_is(n, TagId::Wbr)))
                 {
                     let looks_custom = self.node_is_autonomous_custom_format(n);
@@ -841,7 +841,7 @@ impl Doc {
                         false
                     };
                     if proprietary {
-                        if self.opts.warn_proprietary_attributes {
+                        if self.opts.strictness.warn_proprietary_attributes {
                             self.report_attr(Some(n), Some(&av), Code::ProprietaryAttribute);
                         }
                     } else if mismatched {
@@ -856,7 +856,7 @@ impl Doc {
                             self.report_attr(Some(n), Some(&av), attr_report);
                         }
                     }
-                    if (proprietary || mismatched) && self.opts.drop_proprietary_attributes {
+                    if (proprietary || mismatched) && self.opts.drop.drop_proprietary_attributes {
                         self.remove_attribute(n, i);
                         continue;
                     }

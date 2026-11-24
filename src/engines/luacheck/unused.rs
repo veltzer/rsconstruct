@@ -19,10 +19,10 @@ fn warn_unused_var(st: &mut CheckState, value: ValueId, is_useless: bool) {
     let var = st.values[value].var;
     let code = format!("21{}", st.vars[var].ty.code());
     let mut warning = Warning::new(&code);
-    warning.secondary = is_secondary(st, value);
-    warning.func = st.values[value].ty == VarType::Func;
-    warning.is_self = st.vars[var].is_self;
-    warning.useless = st.vars[var].name == b"_" && is_useless;
+    warning.unused.secondary = is_secondary(st, value);
+    warning.function.func = st.values[value].ty == VarType::Func;
+    warning.unused.is_self = st.vars[var].is_self;
+    warning.unused.useless = st.vars[var].name == b"_" && is_useless;
     st.warn_value(warning, value);
 }
 
@@ -37,7 +37,7 @@ fn warn_unaccessed_var(st: &mut CheckState, var: VarId, is_mutated: bool) {
         st.vars[var].ty.code()
     );
     let mut warning = Warning::new(&code);
-    warning.secondary = secondary;
+    warning.unused.secondary = secondary;
     st.warn_var(warning, var);
 }
 
@@ -48,7 +48,7 @@ fn warn_unused_value(st: &mut CheckState, value: ValueId, overwriting_node: Opti
         st.values[value].ty.code()
     );
     let mut warning = Warning::new(&code);
-    warning.secondary = is_secondary(st, value);
+    warning.unused.secondary = is_secondary(st, value);
     if let Some(node) = overwriting_node {
         let range = st.ast.range(node);
         warning.overwritten_line = Some(range.line);
@@ -144,12 +144,12 @@ fn detect_unused_local(st: &mut CheckState, var: VarId) {
         } else if v.empty {
             st.warn_var(Warning::new("221"), var);
         }
-    } else if !st.vars[var].accessed && !st.vars[var].mutated {
+    } else if !st.vars[var].usage.accessed && !st.vars[var].usage.mutated {
         warn_unaccessed_var(st, var, false);
     } else {
         let no_values_externally_accessible =
             !values.iter().any(|&v| is_externally_accessible(st, v));
-        if !st.vars[var].accessed && no_values_externally_accessible {
+        if !st.vars[var].usage.accessed && no_values_externally_accessible {
             warn_unaccessed_var(st, var, true);
         }
         for &value in &values {
@@ -172,7 +172,7 @@ fn detect_unused_local(st: &mut CheckState, var: VarId) {
                 };
                 warn_unused_value(st, value, overwriting_node);
             } else if !is_externally_accessible(st, value)
-                && (st.vars[var].accessed || !no_values_externally_accessible)
+                && (st.vars[var].usage.accessed || !no_values_externally_accessible)
             {
                 warn_unused_value(st, value, None);
             }
@@ -291,9 +291,9 @@ fn detect_unused_rec_funcs(st: &mut CheckState) {
             let var = st.values[value].var;
             if is_function_var(st, var) {
                 let mut warning = Warning::new("211");
-                warning.func = true;
-                warning.mutually_recursive = !is_self_recursive;
-                warning.recursive = is_self_recursive;
+                warning.function.func = true;
+                warning.function.mutually_recursive = !is_self_recursive;
+                warning.function.recursive = is_self_recursive;
                 st.warn_value(warning, value);
             } else {
                 st.warn_value(Warning::new("311"), value);

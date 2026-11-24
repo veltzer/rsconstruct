@@ -1,5 +1,6 @@
 use crate::common::{run_rsconstruct, run_rsconstruct_with_env, setup_test_project};
 use std::fs;
+use std::process::Command;
 use tempfile::TempDir;
 
 #[test]
@@ -663,7 +664,6 @@ fn tera_git_count_files_invalidates_when_file_committed() {
 
     // Add a new file and commit it — `git ls-files` will now return 3.
     fs::write(p.join("data/c.md"), "c").unwrap();
-    use std::process::Command;
     Command::new("git")
         .current_dir(p)
         .args(["add", "data/c.md"])

@@ -194,6 +194,7 @@ impl MassGeneratorProcessor {
             .with_context(|| invalid_manifest_context(instance_name, &cmd))?;
         let entries = Arc::new(entries);
         *guard = Some((inputs, Arc::clone(&entries)));
+        drop(guard);
         Ok(entries)
     }
 
@@ -544,8 +545,7 @@ inventory::submit! {
         defconfig_json: crate::registries::default_config_json::<MassGeneratorConfig>,
         keywords: &["mass", "generator", "predict", "manifest", "site", "transparent", "creator"],
         description: "Run a tool that enumerates its outputs in advance; one cached product per predicted file",
-        is_builtin: false,
-        is_rust: false,
+        implementation: crate::registries::Implementation::External,
         supports_batch: false,
         caches_outputs: true,
         sandboxable: true,

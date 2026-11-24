@@ -17,10 +17,29 @@ use std::cell::RefCell;
 use std::collections::HashSet;
 use std::fmt;
 
+/// Whether letters match regardless of case: the `/i` flag.
+#[derive(Clone, Copy, Default, Debug, PartialEq, Eq)]
+pub enum Case {
+    #[default]
+    Sensitive,
+    Insensitive,
+}
+
+impl Case {
+    const fn from_flag(on: bool) -> Self {
+        if on {
+            Self::Insensitive
+        } else {
+            Self::Sensitive
+        }
+    }
+}
+
 /// Pattern flags: `/i`, `/x`, `/s`, `/m`.
 #[derive(Clone, Copy, Default, Debug, PartialEq, Eq)]
 pub struct Flags {
-    pub i: bool,
+    /// `/i`.
+    pub case: Case,
     pub x: bool,
     pub s: bool,
     pub m: bool,
@@ -32,7 +51,7 @@ impl Flags {
         let mut f = Self::default();
         for c in s.chars() {
             match c {
-                'i' => f.i = true,
+                'i' => f.case = Case::Insensitive,
                 'x' => f.x = true,
                 's' => f.s = true,
                 'm' => f.m = true,
@@ -558,7 +577,7 @@ impl Parser<'_> {
         let mut any = self.i > start;
         while let Some(c) = self.peek() {
             match c {
-                b'i' => f.i = on,
+                b'i' => f.case = Case::from_flag(on),
                 b'x' => f.x = on,
                 b's' => f.s = on,
                 b'm' => f.m = on,
@@ -673,12 +692,12 @@ impl Parser<'_> {
             b'{' if self.p.get(self.i).is_some_and(u8::is_ascii_digit) => {
                 self.err("quantifier follows nothing")
             }
-            _ => Ok(self.lit(c, flags)),
+            _ => Ok(Self::lit(c, flags)),
         }
     }
 
-    fn lit(&self, c: u8, flags: Flags) -> Node {
-        if flags.i && c.is_ascii_alphabetic() {
+    fn lit(c: u8, flags: Flags) -> Node {
+        if flags.case == Case::Insensitive && c.is_ascii_alphabetic() {
             Node::Lit(vec![c.to_ascii_lowercase()], true)
         } else {
             Node::Lit(vec![c], false)
@@ -883,7 +902,7 @@ impl Parser<'_> {
                     self.i += 1;
                     k += 1;
                 }
-                v as u8
+                crate::numeric::low_byte(v)
             }
             b'x' => {
                 let braced = self.eat(b'{');
@@ -896,7 +915,7 @@ impl Parser<'_> {
                         .trim()
                         .to_string();
                     self.i += 1;
-                    u32::from_str_radix(&hex, 16).unwrap_or(0) as u8
+                    crate::numeric::low_byte(u32::from_str_radix(&hex, 16).unwrap_or(0))
                 } else {
                     while self.i - st < 2 && self.peek().is_some_and(|d| d.is_ascii_hexdigit()) {
                         self.i += 1;
@@ -936,7 +955,10 @@ impl Parser<'_> {
                 let st = self.i;
                 let n = self.digits();
                 if n < 10 || n <= self.ngroups {
-                    return Ok(Node::Backref(self.reference(n), flags.i));
+                    return Ok(Node::Backref(
+                        self.reference(n),
+                        flags.case == Case::Insensitive,
+                    ));
                 }
                 self.i = st;
                 let mut v = 0u32;
@@ -944,7 +966,7 @@ impl Parser<'_> {
                     v = v * 8 + u32::from(self.peek().expect("digit") - b'0');
                     self.i += 1;
                 }
-                Ok(self.lit(v as u8, flags))
+                Ok(Self::lit(crate::numeric::low_byte(v), flags))
             }
             b'g' => {
                 let braced = self.eat(b'{');
@@ -960,7 +982,10 @@ impl Parser<'_> {
                 } else {
                     n
                 };
-                Ok(Node::Backref(self.reference(n), flags.i))
+                Ok(Node::Backref(
+                    self.reference(n),
+                    flags.case == Case::Insensitive,
+                ))
             }
             b'k' => {
                 let close = match self.peek() {
@@ -975,11 +1000,11 @@ impl Parser<'_> {
                 }
                 let name = String::from_utf8_lossy(&self.p[st..self.i]).into_owned();
                 self.i += 1;
-                Ok(Node::NamedBackref(name, flags.i))
+                Ok(Node::NamedBackref(name, flags.case == Case::Insensitive))
             }
             _ => {
                 let b = self.byte_escape(c);
-                Ok(self.lit(b, flags))
+                Ok(Self::lit(b, flags))
             }
         }
     }
@@ -1042,7 +1067,7 @@ impl Parser<'_> {
             }
             set.add(lo);
         }
-        if flags.i {
+        if flags.case == Case::Insensitive {
             set.fold();
         }
         if negate {
@@ -1452,7 +1477,7 @@ impl Regex {
             }
             Node::Repeat(inner, min, max, greed) => {
                 if let Some(set) = single_byte(inner) {
-                    return self.repeat_simple(&set, pos, (*min, *max), *greed, st, k);
+                    return Self::repeat_simple(&set, pos, (*min, *max), *greed, st, k);
                 }
                 let memo = RefCell::new(FastSet::default());
                 let lp = Loop {
@@ -1668,7 +1693,6 @@ impl Regex {
 
     /// `bounds` is the repeat's `(min, max)` count.
     fn repeat_simple<'h>(
-        &self,
         set: &Set,
         pos: usize,
         bounds: (usize, Option<usize>),

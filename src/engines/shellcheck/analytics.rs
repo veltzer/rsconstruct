@@ -92,7 +92,7 @@ pub fn is_condition(path: &[&Token]) -> bool {
 
 /// The number of tokens on the path from this id to the root.
 fn depth(params: &Parameters<'_>, id: Id) -> i64 {
-    1 + get_parents_of_id(&params.parent_map, id).len() as i64
+    1 + crate::numeric::to_i64(get_parents_of_id(&params.parent_map, id).len())
 }
 
 /// `replaceStart`.
@@ -2362,7 +2362,7 @@ pub fn check_lonely_dot_dash(_: &Parameters<'_>, t: &Token, out: &mut Out) {
 }
 
 pub fn check_spurious_exec(params: &Parameters<'_>, t: &Token, out: &mut Out) {
-    if params.has_execfail {
+    if params.features.has_execfail {
         return;
     }
     let cleanup = |c: &Token| match &c.inner {

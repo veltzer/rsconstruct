@@ -33,7 +33,7 @@ impl MarkdownDepAnalyzer {
     /// missing — a reference to a file that does not exist yet must be
     /// picked up once it does. A reference resolves to a file on disk or to
     /// one another product will generate (in `file_index`).
-    fn scan_references(&self, source: &Path, file_index: &FileIndex) -> Result<ScanResult> {
+    fn scan_references(source: &Path, file_index: &FileIndex) -> Result<ScanResult> {
         let content = crate::errors::ctx(
             fs::read_to_string(source),
             &format!("Failed to read markdown: {}", source.display()),
@@ -181,7 +181,7 @@ impl DepAnalyzer for MarkdownDepAnalyzer {
         source: &Path,
         file_index: &FileIndex,
     ) -> Result<ScanResult> {
-        self.scan_references(source, file_index)
+        Self::scan_references(source, file_index)
     }
 
     fn fingerprint_parts(&self, _ctx: &crate::build_context::BuildContext) -> Result<Vec<String>> {

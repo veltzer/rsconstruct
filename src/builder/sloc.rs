@@ -301,7 +301,7 @@ pub fn run_sloc(file_index: &FileIndex, cocomo: bool, salary: u64) -> Result<()>
 
     // COCOMO
     let cocomo_estimate = if cocomo {
-        let ksloc = total_code as f64 / 1000.0;
+        let ksloc = crate::numeric::usize_to_f64(total_code) / 1000.0;
         let effort = 2.4 * ksloc.powf(1.05);
         let schedule = 2.5 * effort.powf(0.38);
         let people = if schedule > 0.0 {
@@ -309,7 +309,7 @@ pub fn run_sloc(file_index: &FileIndex, cocomo: bool, salary: u64) -> Result<()>
         } else {
             0.0
         };
-        let cost = effort * (salary as f64 / 12.0);
+        let cost = effort * (crate::numeric::u64_to_f64(salary) / 12.0);
         Some(SlocCocomoEstimate {
             effort_person_months: effort,
             schedule_months: schedule,

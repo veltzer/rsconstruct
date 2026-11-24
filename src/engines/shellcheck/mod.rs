@@ -171,10 +171,10 @@ pub fn decode_string(bytes: &[u8]) -> String {
             continue;
         }
         let (init, n) = match byte {
-            0xF8..=0xFF => (0, usize::MAX),
             0xF0..=0xF7 => (u32::from(byte & 0x07), 3),
             0xE0..=0xEF => (u32::from(byte & 0x0F), 2),
             0xC0..=0xDF => (u32::from(byte & 0x1F), 1),
+            // 0xF8..=0xFF and continuation or invalid lead bytes: no sequence.
             _ => (0, usize::MAX),
         };
         let mut decoded = None;
@@ -458,11 +458,11 @@ pub fn format_gcc(comments: &[PositionedComment], read: &dyn Fn(&str) -> String)
         let lines: Vec<&str> = parser::haskell_lines(&contents);
         for c in &comments[i..j] {
             let line_no = c.start.line;
-            let col = if line_no > 0 && (line_no as usize) <= lines.len() {
-                real_column(lines[line_no as usize - 1], c.start.column)
-            } else {
-                c.start.column
-            };
+            let line = usize::try_from(line_no)
+                .ok()
+                .and_then(|n| n.checked_sub(1))
+                .and_then(|index| lines.get(index));
+            let col = line.map_or(c.start.column, |line| real_column(line, c.start.column));
             let message: String = parser::haskell_lines(&c.comment.message).concat();
             out.push(format!(
                 "{}:{}:{}: {}: {} [SC{}]",

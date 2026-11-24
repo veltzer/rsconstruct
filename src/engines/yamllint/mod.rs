@@ -178,8 +178,8 @@ fn syntax_error(buffer: &str) -> Option<Problem> {
             Err(e) => {
                 let mark = e.problem_mark().unwrap_or_default();
                 return Some(Problem {
-                    line: mark.line as usize + 1,
-                    column: mark.column as usize + 1,
+                    line: crate::numeric::u64_to_usize(mark.line) + 1,
+                    column: crate::numeric::u64_to_usize(mark.column) + 1,
                     desc: format!("syntax error: {} (syntax)", e.problem()),
                     rule: None,
                     level: Level::Error,
@@ -273,13 +273,14 @@ fn cosmetic_problems(buffer: &str, conf: &Config, filepath: Option<&Path>) -> Ve
 /// Mirrors `linter._run`: lint one buffer. `filepath` is the file's path
 /// relative to the project, matched against the config's `ignore` patterns.
 pub fn lint(buffer: &str, conf: &Config, filepath: Option<&Path>) -> Vec<Problem> {
+    static DISABLE_FILE: OnceLock<Regex> = OnceLock::new();
+
     if let Some(path) = filepath
         && conf.is_file_ignored(path)
     {
         return Vec::new();
     }
 
-    static DISABLE_FILE: OnceLock<Regex> = OnceLock::new();
     let first_line = buffer
         .split('\n')
         .next()

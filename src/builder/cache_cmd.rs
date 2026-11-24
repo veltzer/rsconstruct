@@ -11,7 +11,7 @@ use crate::cli::CacheAction;
 use crate::{checksum, color, json_output, webcache};
 
 /// Handle every `rsconstruct cache <action>` subcommand.
-pub fn handle(ctx: &crate::build_context::BuildContext, action: CacheAction) -> Result<()> {
+pub fn handle(ctx: &crate::build_context::BuildContext, action: &CacheAction) -> Result<()> {
     match action {
         CacheAction::Clear => {
             // Delete .rsconstruct directly — must work even if the database

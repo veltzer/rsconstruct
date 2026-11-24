@@ -24,7 +24,7 @@ fn cat(parts: &[&[u8]]) -> Vec<u8> {
 }
 
 fn prefix_if_indirect(w: &Warning, message: Vec<u8>) -> Vec<u8> {
-    if w.indirect {
+    if w.global.indirect {
         cat(&[b"indirectly ", &message])
     } else {
         message
@@ -60,7 +60,7 @@ pub fn message(w: &Warning) -> Vec<u8> {
             w.operator.as_deref().unwrap_or_default(),
         ]),
         "111" => {
-            if w.module {
+            if w.global.module {
                 cat(&[b"setting non-module global variable ", &name(w)])
             } else {
                 cat(&[b"setting non-standard global variable ", &name(w)])
@@ -98,10 +98,10 @@ pub fn message(w: &Warning) -> Vec<u8> {
             ]),
         ),
         "211" => {
-            if w.func {
-                if w.recursive {
+            if w.function.func {
+                if w.function.recursive {
                     cat(&[b"unused recursive function ", &name(w)])
-                } else if w.mutually_recursive {
+                } else if w.function.mutually_recursive {
                     cat(&[b"unused mutually recursive function ", &name(w)])
                 } else {
                     cat(&[b"unused function ", &name(w)])

@@ -122,6 +122,7 @@ impl ZolaProcessor {
             output_dir,
         });
         *guard = Some(Arc::clone(&plan));
+        drop(guard);
         Ok(plan)
     }
 
@@ -314,6 +315,26 @@ struct MarkdownConfig {
     highlighting: Option<HighlightingConfig>,
 }
 
+/// The site-wide files `config.toml` switches on and off. Flattened into
+/// [`SiteConfig`]: the keys sit at the top level of `config.toml`.
+#[derive(Debug, Deserialize)]
+#[serde(default)]
+struct SiteFiles {
+    compile_sass: bool,
+    generate_sitemap: bool,
+    generate_robots_txt: bool,
+}
+
+impl Default for SiteFiles {
+    fn default() -> Self {
+        Self {
+            compile_sass: false,
+            generate_sitemap: true,
+            generate_robots_txt: true,
+        }
+    }
+}
+
 #[derive(Debug, Deserialize)]
 #[serde(default)]
 struct SiteConfig {
@@ -324,9 +345,8 @@ struct SiteConfig {
     taxonomies: Vec<TaxonomyConfig>,
     build_search_index: bool,
     taxonomy_root: Option<String>,
-    compile_sass: bool,
-    generate_sitemap: bool,
-    generate_robots_txt: bool,
+    #[serde(flatten)]
+    files: SiteFiles,
     output_dir: String,
     slugify: SlugifyConfig,
     search: SearchConfig,
@@ -346,9 +366,7 @@ impl Default for SiteConfig {
             taxonomies: Vec::new(),
             build_search_index: false,
             taxonomy_root: None,
-            compile_sass: false,
-            generate_sitemap: true,
-            generate_robots_txt: true,
+            files: SiteFiles::default(),
             output_dir: "public".to_string(),
             slugify: SlugifyConfig::default(),
             search: SearchConfig::default(),
@@ -427,12 +445,32 @@ impl Default for PageMeta {
     }
 }
 
+/// Whether a page or section is built, drawn from the front matter.
+/// Flattened into [`SectionMeta`]: the keys sit at the top of the front
+/// matter.
 #[derive(Debug, Deserialize, Clone)]
 #[serde(default)]
-struct SectionMeta {
+struct SectionStatus {
     draft: bool,
     render: bool,
     transparent: bool,
+}
+
+impl Default for SectionStatus {
+    fn default() -> Self {
+        Self {
+            draft: false,
+            render: true,
+            transparent: false,
+        }
+    }
+}
+
+#[derive(Debug, Deserialize, Clone)]
+#[serde(default)]
+struct SectionMeta {
+    #[serde(flatten)]
+    status: SectionStatus,
     hidden: Option<bool>,
     sort_by: String,
     paginate_by: Option<usize>,
@@ -444,9 +482,7 @@ struct SectionMeta {
 impl Default for SectionMeta {
     fn default() -> Self {
         Self {
-            draft: false,
-            render: true,
-            transparent: false,
+            status: SectionStatus::default(),
             hidden: None,
             sort_by: "none".to_string(),
             paginate_by: None,
@@ -747,7 +783,7 @@ impl Site {
                 let name = file.file_name().unwrap_or_default().to_string_lossy();
                 if let Some(lang) = index_names.get(name.as_ref()) {
                     let meta: SectionMeta = parse_front_matter(file)?;
-                    if meta.draft {
+                    if meta.status.draft {
                         skip_below = true;
                         continue;
                     }
@@ -966,7 +1002,7 @@ impl Site {
                     section.pages.push(index);
                 }
                 page.in_a_section = true;
-                if !section.meta.transparent {
+                if !section.meta.status.transparent {
                     break;
                 }
                 match section_file.parent().and_then(Path::parent) {
@@ -997,10 +1033,10 @@ impl Site {
         };
 
         rendered(&mut plan, "404.html".to_string());
-        if self.config.generate_sitemap {
+        if self.config.files.generate_sitemap {
             rendered(&mut plan, "sitemap.xml".to_string());
         }
-        if self.config.generate_robots_txt {
+        if self.config.files.generate_robots_txt {
             rendered(&mut plan, "robots.txt".to_string());
         }
 
@@ -1043,7 +1079,7 @@ impl Site {
                         .insert(asset.clone());
                 }
             }
-            if !section.meta.render {
+            if !section.meta.status.render {
                 continue;
             }
             match section.meta.paginate_by {
@@ -1261,7 +1297,7 @@ impl Site {
     /// directory starting with `_` is skipped) compiles to a `.css` at the
     /// same relative path. Any file of the tree can be imported by any other.
     fn plan_sass(&self, plan: &mut PlanMap) -> Result<()> {
-        if !self.config.compile_sass {
+        if !self.config.files.compile_sass {
             return Ok(());
         }
         let sass_dir = self.root.join("sass");
@@ -1501,8 +1537,7 @@ inventory::submit! {
         defconfig_json: crate::registries::default_config_json::<ZolaConfig>,
         keywords: &["zola", "static-site", "site", "html", "blog", "mass", "rust"],
         description: "Build a zola site; one cached product per file zola writes, planned natively",
-        is_builtin: false,
-        is_rust: true,
+        implementation: crate::registries::Implementation::ExternalRust,
         supports_batch: false,
         caches_outputs: true,
         sandboxable: true,

@@ -68,13 +68,25 @@ pub enum StackData<'a> {
     Reference(ReferenceData<'a>),
 }
 
+/// Shell options that change how commands run.
+#[derive(Clone, Copy)]
+pub struct ShellFeatures {
+    pub has_lastpipe: bool,
+    pub has_execfail: bool,
+}
+
+/// Shell options that decide whether a failure ends the script.
+#[derive(Clone, Copy)]
+pub struct ErrExit {
+    pub has_set_e: bool,
+    pub has_inherit_errexit: bool,
+    pub has_pipefail: bool,
+}
+
 /// `Parameters`.
 pub struct Parameters<'a> {
-    pub has_lastpipe: bool,
-    pub has_inherit_errexit: bool,
-    pub has_set_e: bool,
-    pub has_pipefail: bool,
-    pub has_execfail: bool,
+    pub features: ShellFeatures,
+    pub errexit: ErrExit,
     pub variable_flow: Vec<StackData<'a>>,
     pub id_map: Tree<'a>,
     pub parent_map: Tree<'a>,
@@ -174,11 +186,15 @@ pub fn make_parameters<'a>(spec: &AnalysisSpec<'a>) -> Parameters<'a> {
     };
     let has_execfail = shell_type == Shell::Bash && is_option_set("execfail", root);
     let mut params = Parameters {
-        has_lastpipe,
-        has_inherit_errexit,
-        has_set_e: contains_set_e(root),
-        has_pipefail,
-        has_execfail,
+        features: ShellFeatures {
+            has_lastpipe,
+            has_execfail,
+        },
+        errexit: ErrExit {
+            has_set_e: contains_set_e(root),
+            has_inherit_errexit,
+            has_pipefail,
+        },
         variable_flow: Vec::new(),
         id_map: get_token_map(root),
         parent_map: get_parent_tree(root),
@@ -506,7 +522,8 @@ pub fn lead_type(params: &Parameters<'_>, t: &Token) -> Scope {
             let causes_subshell = match params.parent_map.get(&t.id).map(|p| &p.inner) {
                 Some(TPipeline(_, list)) => {
                     list.len() >= 2
-                        && (!params.has_lastpipe || list.last().map(|l| l.id) != Some(t.id))
+                        && (!params.features.has_lastpipe
+                            || list.last().map(|l| l.id) != Some(t.id))
                 }
                 _ => false,
             };
@@ -673,6 +690,22 @@ fn mark_checked<'a>(place: &'a Token, token: &'a Token) -> Vec<AssignmentData<'a
 
 /// `getReferencedVariableCommand`.
 pub fn get_referenced_variable_command(base: &Token) -> Vec<ReferenceData<'_>> {
+    fn get_reference(t: &Token) -> Vec<ReferenceData<'_>> {
+        match &t.inner {
+            TAssignment(_, name, _, _) => vec![(b(t), b(t), name.clone())],
+            TNormalWord(p) => match p.as_slice() {
+                [
+                    Token {
+                        inner: TLiteral(name),
+                        ..
+                    },
+                ] if !name.starts_with('-') => vec![(b(t), b(t), name.clone())],
+                _ => Vec::new(),
+            },
+            _ => Vec::new(),
+        }
+    }
+
     let TSimpleCommand(_, words) = &base.inner else {
         return Vec::new();
     };
@@ -690,21 +723,6 @@ pub fn get_referenced_variable_command(base: &Token) -> Vec<ReferenceData<'_>> {
     };
     let flags: Vec<String> = get_all_flags(base).into_iter().map(|(_, f)| f).collect();
     let has = |f: &str| flags.iter().any(|x| x == f);
-    fn get_reference(t: &Token) -> Vec<ReferenceData<'_>> {
-        match &t.inner {
-            TAssignment(_, name, _, _) => vec![(b(t), b(t), name.clone())],
-            TNormalWord(p) => match p.as_slice() {
-                [
-                    Token {
-                        inner: TLiteral(name),
-                        ..
-                    },
-                ] if !name.starts_with('-') => vec![(b(t), b(t), name.clone())],
-                _ => Vec::new(),
-            },
-            _ => Vec::new(),
-        }
-    }
     let rest_refs = || -> Vec<ReferenceData<'_>> { rest.iter().flat_map(get_reference).collect() };
     match x.as_str() {
         "declare" | "typeset" => {

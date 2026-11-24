@@ -114,7 +114,7 @@ impl Doc {
         let mut root = Node::new(1, 1);
         root.ntype = NodeType::Root;
         tree.alloc(root);
-        let stream = Stream::new(input, opts.tab_size, opts.keep_tabs);
+        let stream = Stream::new(input, opts.tab_size, opts.layout.keep_tabs);
         let mut doc = Self {
             opts,
             tree,
@@ -144,8 +144,8 @@ impl Doc {
         if !self.stream.errors.is_empty() {
             let errors = std::mem::take(&mut self.stream.errors);
             for e in errors {
-                self.lexer.lines = e.line as u32;
-                self.lexer.columns = e.column as u32;
+                self.lexer.lines = e.line;
+                self.lexer.columns = e.column;
                 self.report_encoding(message::Code::InvalidUtf8, e.code, false);
             }
         }
@@ -159,7 +159,7 @@ impl Doc {
     // ---- tag dictionary -------------------------------------------------
 
     /// The dictionary index of a built-in tag.
-    pub(crate) fn tag_index(&self, id: TagId) -> usize {
+    pub(crate) fn tag_index(id: TagId) -> usize {
         tables::tables().tag_index(id)
     }
 
@@ -280,29 +280,29 @@ impl Doc {
     /// `TY_(ResetTags)`: the HTML5 shape of the tags that differ between
     /// HTML4 and HTML5.
     pub(crate) fn reset_tags(&mut self) {
-        let a = self.tag_index(TagId::A);
+        let a = Self::tag_index(TagId::A);
         self.tags[a].parser = Some(tables::ParserKind::ParseBlock);
         self.tags[a].model = tables::CM_INLINE | tables::CM_BLOCK | tables::CM_MIXED;
-        let caption = self.tag_index(TagId::Caption);
+        let caption = Self::tag_index(TagId::Caption);
         self.tags[caption].parser = Some(tables::ParserKind::ParseBlock);
-        let object = self.tag_index(TagId::Object);
+        let object = Self::tag_index(TagId::Object);
         self.tags[object].model =
             tables::CM_OBJECT | tables::CM_IMG | tables::CM_INLINE | tables::CM_PARAM;
-        let button = self.tag_index(TagId::Button);
+        let button = Self::tag_index(TagId::Button);
         self.tags[button].parser = Some(tables::ParserKind::ParseInline);
         self.html5_mode = true;
     }
 
     /// `TY_(AdjustTags)`: back to the HTML4 shape.
     pub(crate) fn adjust_tags(&mut self) {
-        let a = self.tag_index(TagId::A);
+        let a = Self::tag_index(TagId::A);
         self.tags[a].parser = Some(tables::ParserKind::ParseInline);
         self.tags[a].model = tables::CM_INLINE;
-        let caption = self.tag_index(TagId::Caption);
+        let caption = Self::tag_index(TagId::Caption);
         self.tags[caption].parser = Some(tables::ParserKind::ParseInline);
-        let object = self.tag_index(TagId::Object);
+        let object = Self::tag_index(TagId::Object);
         self.tags[object].model |= tables::CM_HEAD;
-        let button = self.tag_index(TagId::Button);
+        let button = Self::tag_index(TagId::Button);
         self.tags[button].parser = Some(tables::ParserKind::ParseBlock);
         self.html5_mode = false;
     }

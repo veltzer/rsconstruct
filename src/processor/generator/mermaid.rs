@@ -95,8 +95,7 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     defconfig_json: crate::registries::default_config_json::<crate::config::StandardConfig>,
     keywords: &["diagram", "mermaid", "svg", "png", "generator", "node", "npm"],
     description: "Render Mermaid diagrams to images",
-    is_builtin: false,
-    is_rust: false,
+    implementation: crate::registries::Implementation::External,
     supports_batch: false,
     caches_outputs: true,
     // Chromium-based; sandboxed runs pass a no-sandbox puppeteer config

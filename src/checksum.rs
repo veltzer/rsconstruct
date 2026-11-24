@@ -70,12 +70,7 @@ impl MtimeState {
 /// re-hashed and the entry rewritten. Any other storage error is reported
 /// rather than turning the mtime cache off without a word.
 fn load_mtime_table(ctx: &BuildContext) -> Result<HashMap<String, MtimeEntry>> {
-    let db_guard = get_mtime_db(ctx)?;
-    let db = crate::errors::ctx_opt(db_guard.as_ref(), "Mtime database not available")?;
-    let read_txn = crate::errors::ctx(
-        db.begin_read(),
-        "Failed to begin read transaction for mtime cache",
-    )?;
+    let read_txn = begin_mtime_read(ctx)?;
     let table = match read_txn.open_table(MTIME_TABLE) {
         Ok(table) => table,
         Err(redb::TableError::TableDoesNotExist(_)) => return Ok(HashMap::new()),
@@ -127,6 +122,17 @@ fn get_mtime_db(ctx: &BuildContext) -> Result<std::sync::MutexGuard<'_, Option<r
         *guard = Some(db);
     }
     Ok(guard)
+}
+
+/// Begin a read transaction on the mtime database. The transaction is a
+/// snapshot that outlives the lock on the database handle, so the lock is
+/// held only to begin it.
+fn begin_mtime_read(ctx: &BuildContext) -> Result<redb::ReadTransaction> {
+    let db_guard = get_mtime_db(ctx)?;
+    crate::errors::ctx(
+        crate::errors::ctx_opt(db_guard.as_ref(), "Mtime database not available")?.begin_read(),
+        "Failed to begin read transaction for the mtime cache",
+    )
 }
 
 /// Calculate SHA-256 checksum of a file's contents, using the `BuildContext`'s
@@ -423,15 +429,8 @@ pub fn prune_mtime_cache(ctx: &BuildContext) -> Result<usize> {
         return Ok(0);
     }
 
+    let read_txn = begin_mtime_read(ctx)?;
     let stale: Vec<String> = {
-        let db_guard = get_mtime_db(ctx)?;
-        let Some(db) = db_guard.as_ref() else {
-            return Ok(0);
-        };
-        let read_txn = crate::errors::ctx(
-            db.begin_read(),
-            "Failed to begin read transaction for mtime prune",
-        )?;
         let Ok(table) = read_txn.open_table(MTIME_TABLE) else {
             return Ok(0);
         };
@@ -682,8 +681,14 @@ mod tests {
             "the staged entry is used before the flush"
         );
         let stored = |ctx: &BuildContext| -> Option<String> {
-            let guard = ctx.mtime_db.lock().unwrap();
-            let txn = guard.as_ref().unwrap().begin_read().unwrap();
+            let txn = ctx
+                .mtime_db
+                .lock()
+                .unwrap()
+                .as_ref()
+                .unwrap()
+                .begin_read()
+                .unwrap();
             let table = txn.open_table(MTIME_TABLE).ok()?;
             let data = table.get(key.as_str()).unwrap()?;
             Some(
@@ -734,10 +739,17 @@ mod tests {
             checksum_fast(&ctx, &path).unwrap(),
             ("from-db".to_string(), ChecksumPath::MtimeShortcut)
         );
-        let state = ctx.mtime_state.read().unwrap();
-        let stored = state.stored.as_ref().expect("loaded by the first lookup");
-        assert!(stored.contains_key(&key));
-        assert!(!stored.contains_key("garbage"));
+        let loaded_has = |k: &str| {
+            ctx.mtime_state
+                .read()
+                .unwrap()
+                .stored
+                .as_ref()
+                .expect("loaded by the first lookup")
+                .contains_key(k)
+        };
+        assert!(loaded_has(&key));
+        assert!(!loaded_has("garbage"));
     }
 
     /// A file whose ctime is recent counts as just changed even when its
@@ -757,7 +769,7 @@ mod tests {
     }
 
     /// Length-prefixing exists precisely so element boundaries can't be
-    /// forged: ["a:b", "c"] and ["a", "b:c"] concatenate identically under
+    /// forged: `["a:b", "c"]` and `["a", "b:c"]` concatenate identically under
     /// a plain `:` join.
     #[test]
     fn hash_checksums_is_injection_proof() {

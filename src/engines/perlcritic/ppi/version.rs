@@ -259,7 +259,7 @@ pub fn number_literal(class: Class, text: &[u8]) -> Option<Vec<u8>> {
             return Some(
                 body.split(|&c| c == b'.')
                     .filter_map(|p| std::str::from_utf8(p).ok()?.parse::<u32>().ok())
-                    .map(|n| n as u8)
+                    .filter_map(|n| u8::try_from(n & 0xFF).ok())
                     .collect(),
             );
         }
@@ -273,9 +273,9 @@ pub fn number_literal(class: Class, text: &[u8]) -> Option<Vec<u8>> {
                 .take_while(|c| c.is_ascii_hexdigit())
                 .map(|&c| c as char)
                 .collect();
-            signed(
-                u64::from_str_radix(if digits.is_empty() { "0" } else { &digits }, 16).ok()? as f64,
-            )
+            signed(crate::numeric::u64_to_f64(
+                u64::from_str_radix(if digits.is_empty() { "0" } else { &digits }, 16).ok()?,
+            ))
         }
         Class::NumberBinary => {
             let digits = body
@@ -289,7 +289,7 @@ pub fn number_literal(class: Class, text: &[u8]) -> Option<Vec<u8>> {
             signed(if digits.is_empty() {
                 0.0
             } else {
-                u64::from_str_radix(digits, 2).ok()? as f64
+                crate::numeric::u64_to_f64(u64::from_str_radix(digits, 2).ok()?)
             })
         }
         Class::NumberOctal => {
@@ -308,7 +308,7 @@ pub fn number_literal(class: Class, text: &[u8]) -> Option<Vec<u8>> {
             signed(if digits.is_empty() {
                 0.0
             } else {
-                u64::from_str_radix(&digits, 8).ok()? as f64
+                crate::numeric::u64_to_f64(u64::from_str_radix(&digits, 8).ok()?)
             })
         }
         Class::NumberExp => {
@@ -341,11 +341,11 @@ pub fn number_literal(class: Class, text: &[u8]) -> Option<Vec<u8>> {
 fn perl_number(v: f64) -> String {
     // An exact integer test, as Perl's is.
     if v.trunc().partial_cmp(&v) == Some(Ordering::Equal) && v.abs() < 1e15 {
-        return format!("{}", v as i64);
+        return format!("{}", crate::numeric::f64_to_i64(v));
     }
-    let exp = v.abs().log10().floor() as i32;
+    let exp = crate::numeric::f64_to_i32(v.abs().log10().floor());
     if (-5..15).contains(&exp) {
-        let decimals = (14 - exp).max(0) as usize;
+        let decimals = usize::try_from((14 - exp).max(0)).unwrap_or(0);
         let s = format!("{v:.decimals$}");
         let s = s.trim_end_matches('0');
         return s.strip_suffix('.').unwrap_or(s).to_string();
@@ -380,11 +380,11 @@ pub fn numeric_literal(text: &[u8]) -> Option<f64> {
         None => (false, s),
     };
     let value = if let Some(hex) = s.strip_prefix(b"0x").or_else(|| s.strip_prefix(b"0X")) {
-        u64::from_str_radix(std::str::from_utf8(hex).ok()?, 16).ok()? as f64
+        crate::numeric::u64_to_f64(u64::from_str_radix(std::str::from_utf8(hex).ok()?, 16).ok()?)
     } else if let Some(bin) = s.strip_prefix(b"0b").or_else(|| s.strip_prefix(b"0B")) {
-        u64::from_str_radix(std::str::from_utf8(bin).ok()?, 2).ok()? as f64
+        crate::numeric::u64_to_f64(u64::from_str_radix(std::str::from_utf8(bin).ok()?, 2).ok()?)
     } else if s.len() > 1 && s[0] == b'0' && s.iter().all(u8::is_ascii_digit) {
-        u64::from_str_radix(std::str::from_utf8(&s[1..]).ok()?, 8).ok()? as f64
+        crate::numeric::u64_to_f64(u64::from_str_radix(std::str::from_utf8(&s[1..]).ok()?, 8).ok()?)
     } else {
         std::str::from_utf8(s).ok()?.parse::<f64>().ok()?
     };

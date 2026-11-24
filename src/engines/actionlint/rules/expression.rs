@@ -538,7 +538,7 @@ impl<'a> RuleExpression<'a> {
             c.update_inputs(i.clone());
         }
         if let Some(d) = &self.dispatch_inputs_ty {
-            c.update_dispatch_inputs(d.clone());
+            c.update_dispatch_inputs(d);
         }
         if let Some(j) = &self.jobs_ty {
             c.update_jobs(j.clone());

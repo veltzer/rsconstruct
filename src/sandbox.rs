@@ -23,9 +23,11 @@
 use anyhow::{Context, Result};
 use std::cell::RefCell;
 use std::fs;
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Mutex, PoisonError};
 
 use crate::config::{ExecutionModel, StandardConfig};
 
@@ -741,7 +743,6 @@ pub fn sandbox_run(ctx: &crate::build_context::BuildContext) -> Result<()> {
         fetched: crate::webcache::take_fetched(),
     };
     let encoded = serde_json::to_string(&results).context("Failed to encode the results")?;
-    use std::io::Write;
     let mut out = std::io::stdout().lock();
     writeln!(out, "{RESULTS_MARKER}{encoded}")
         .and_then(|()| out.flush())
@@ -765,6 +766,8 @@ pub struct Run {
 /// Wrap `cmd` for the product running on this thread, or return `None`
 /// when no product is running or its processor runs natively.
 pub fn prepare(cmd: &Command) -> Result<Option<Run>> {
+    static NEXT_RUN: AtomicU64 = AtomicU64::new(0);
+
     let Some(mut spec) = current_spec() else {
         return Ok(None);
     };
@@ -783,7 +786,6 @@ pub fn prepare(cmd: &Command) -> Result<Option<Run>> {
         .map(|entry| Writable::parse(entry).map_err(|e| anyhow::anyhow!("[{}] {e}", spec.label)))
         .collect::<Result<Vec<_>>>()?;
 
-    static NEXT_RUN: AtomicU64 = AtomicU64::new(0);
     let dir = root.join(SANDBOX_DIR).join(format!(
         "{}-{}",
         std::process::id(),
@@ -919,6 +921,10 @@ impl Change {
     }
 }
 
+/// Held while a run's changes are compared with and applied to the real
+/// tree: see [`Run::finish`].
+static SETTLING: Mutex<()> = Mutex::new(());
+
 impl Run {
     /// Settle the run: on success apply the declared changes (or fail on
     /// undeclared ones), on failure discard everything; then remove the
@@ -928,14 +934,33 @@ impl Run {
             return remove_run_dir(&self.dir);
         }
         let mut journal = Journal::new(self.dir.join("replaced"));
-        let Err(error) = self.apply(&mut journal) else {
-            clear_stale();
-            return remove_run_dir(&self.dir);
+        let applied = {
+            // Runs settle one at a time. Runs alongside each other may have
+            // written the same file of shared state (every run that imports
+            // a module writes its `__pycache__/*.pyc`), and comparing that
+            // file with the real tree while another run is setting the real
+            // one aside fails on a file that was there a moment ago (CI,
+            // web-schemas, 2026-11-23). Settling is only renames, so holding
+            // the lock costs nothing measurable. The lock guards no data, so
+            // a run that panicked while holding it leaves nothing to distrust.
+            let _settling = SETTLING.lock().unwrap_or_else(PoisonError::into_inner);
+            match self.apply(&mut journal) {
+                Ok(()) => Ok(()),
+                // Applying failed part-way: put back what was already
+                // changed, so the tree is as the tool found it.
+                Err(error) => Err((error, journal.undo())),
+            }
         };
-        // Applying failed part-way: put back what was already changed, so
-        // the tree is as the tool found it. When even that fails the run's
-        // directory is kept, since it holds the files that were set aside.
-        if let Err(undo) = journal.undo() {
+        let (error, undone) = match applied {
+            Ok(()) => {
+                clear_stale();
+                return remove_run_dir(&self.dir);
+            }
+            Err(failure) => failure,
+        };
+        // When even undoing failed the run's directory is kept, since it
+        // holds the files that were set aside.
+        if let Err(undo) = undone {
             anyhow::bail!(
                 "{error:#}\n[{}] the tree could not be put back as it was: {undo:#}\n\
                  What this run replaced is kept in {}",

@@ -8,25 +8,46 @@ use std::sync::OnceLock;
 /// Runtime flags set once at startup from CLI arguments.
 #[derive(Debug)]
 pub struct RuntimeFlags {
+    /// What to print about the build's own working.
+    pub diagnostics: Diagnostics,
+    /// How output is produced.
+    pub output: OutputFlags,
+    /// What tables show.
+    pub tables: TableFlags,
+    /// Whether to emit ANSI color escape sequences.
+    /// Resolved from --color (auto/always/never) and the `NO_COLOR` env var.
+    pub color_enabled: bool,
+}
+
+/// Diagnostic output about the build's own working.
+#[derive(Debug, Clone, Copy)]
+pub struct Diagnostics {
     /// Print each child process command before execution (--show-child-processes)
     pub show_child_processes: bool,
-    /// Show tool output even on success (--show-output)
-    pub show_output: bool,
     /// Print phase messages during graph building (--phases)
     pub phases_debug: bool,
     /// Print graph size at each major build stage (--graph-stats)
     pub graph_stats: bool,
+}
+
+/// How output is produced.
+#[derive(Debug, Clone, Copy)]
+pub struct OutputFlags {
+    /// Show tool output even on success (--show-output)
+    pub show_output: bool,
     /// Output JSON instead of human-readable text (--json)
     pub json_mode: bool,
     /// Suppress all output except errors (--quiet)
     pub quiet: bool,
+}
+
+/// What tables show.
+#[derive(Debug, Clone, Copy)]
+pub struct TableFlags {
     /// Show every column of every table (--all)
     pub all_fields: bool,
     /// Print each table's name and column names only, no data (--fields)
     pub fields_only: bool,
-    /// Whether to emit ANSI color escape sequences.
-    /// Resolved from --color (auto/always/never) and the `NO_COLOR` env var.
-    pub color_enabled: bool,
 }
 
 static FLAGS: OnceLock<RuntimeFlags> = OnceLock::new();
@@ -42,14 +63,20 @@ pub fn init(flags: RuntimeFlags) {
 #[cfg(test)]
 pub fn init_for_test() {
     let _ = FLAGS.set(RuntimeFlags {
-        show_child_processes: false,
-        show_output: false,
-        phases_debug: false,
-        graph_stats: false,
-        json_mode: false,
-        quiet: true,
-        all_fields: false,
-        fields_only: false,
+        diagnostics: Diagnostics {
+            show_child_processes: false,
+            phases_debug: false,
+            graph_stats: false,
+        },
+        output: OutputFlags {
+            show_output: false,
+            json_mode: false,
+            quiet: true,
+        },
+        tables: TableFlags {
+            all_fields: false,
+            fields_only: false,
+        },
         color_enabled: false,
     });
 }
@@ -60,38 +87,38 @@ fn get() -> &'static RuntimeFlags {
 }
 
 pub fn show_child_processes() -> bool {
-    get().show_child_processes
+    get().diagnostics.show_child_processes
 }
 
 pub fn show_output() -> bool {
-    get().show_output
+    get().output.show_output
 }
 
 pub fn phases_debug() -> bool {
-    get().phases_debug
+    get().diagnostics.phases_debug
 }
 
 pub fn graph_stats() -> bool {
-    get().graph_stats
+    get().diagnostics.graph_stats
 }
 
 pub fn json_mode() -> bool {
-    get().json_mode
+    get().output.json_mode
 }
 
 pub fn quiet() -> bool {
-    get().quiet
+    get().output.quiet
 }
 
 /// `--all`: every table shows every column it has. Safe before `init()`
 /// (false), since tables print only after startup.
 pub fn all_fields() -> bool {
-    FLAGS.get().is_some_and(|f| f.all_fields)
+    FLAGS.get().is_some_and(|f| f.tables.all_fields)
 }
 
 /// `--fields`: every table prints its name and column names only.
 pub fn fields_only() -> bool {
-    FLAGS.get().is_some_and(|f| f.fields_only)
+    FLAGS.get().is_some_and(|f| f.tables.fields_only)
 }
 
 pub fn color_enabled() -> bool {
@@ -104,10 +131,10 @@ pub fn color_enabled() -> bool {
 /// final exit-status line in `main()`, which can run even when CLI parsing
 /// failed before flags were set up.
 pub fn quiet_or_default() -> bool {
-    FLAGS.get().is_some_and(|f| f.quiet)
+    FLAGS.get().is_some_and(|f| f.output.quiet)
 }
 
 /// Non-panicking read of `json_mode`. Same rationale as `quiet_or_default`.
 pub fn json_mode_or_default() -> bool {
-    FLAGS.get().is_some_and(|f| f.json_mode)
+    FLAGS.get().is_some_and(|f| f.output.json_mode)
 }

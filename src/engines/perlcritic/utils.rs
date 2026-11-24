@@ -30,9 +30,11 @@ impl Node {
     pub fn string(&self, doc: &Doc) -> Vec<u8> {
         match self {
             Self::Elem(id) => doc.quote_string(*id),
-            Self::QwWord { content, .. } => {
-                perl_substr(content, 1, Some(content.len() as isize - 2))
-            }
+            Self::QwWord { content, .. } => perl_substr(
+                content,
+                1,
+                Some(crate::numeric::to_isize(content.len()) - 2),
+            ),
         }
     }
 
@@ -366,7 +368,13 @@ pub fn split_nodes_on_comma(doc: &Doc, nodes: &[Node]) -> Vec<Arg> {
                 .quote
                 .as_ref()
                 .and_then(|q| q.sections.first())
-                .map(|s| perl_substr(&content, s.position as isize, Some(s.size as isize)))
+                .map(|s| {
+                    perl_substr(
+                        &content,
+                        crate::numeric::to_isize(s.position),
+                        Some(crate::numeric::to_isize(s.size)),
+                    )
+                })
                 .unwrap_or_default();
             for word in split_whitespace(&words) {
                 let mut quoted = vec![b'\''];

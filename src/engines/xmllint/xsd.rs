@@ -599,7 +599,7 @@ impl Loader<'_> {
         )
     }
 
-    fn xsd_children<'e>(&self, element: &'e Element) -> Vec<&'e Element> {
+    fn xsd_children(element: &Element) -> Vec<&Element> {
         element
             .child_elements()
             .filter(|c| c.namespace.as_deref() == Some(XSD_NS) && c.local != "annotation")
@@ -629,7 +629,7 @@ impl Loader<'_> {
     /// The `xs:schema` children; returns the `include`d schema locations.
     fn schema_children(&mut self, root: &Element) -> Result<Vec<String>> {
         let mut includes = Vec::new();
-        for child in self.xsd_children(root) {
+        for child in Self::xsd_children(root) {
             match child.local.as_str() {
                 "element" => {
                     let decl = self.element_decl(child, true)?;
@@ -721,7 +721,7 @@ impl Loader<'_> {
             Some(type_name) => self.type_ref(element, type_name)?,
             None => TypeRef::AnyType,
         };
-        for child in self.xsd_children(element) {
+        for child in Self::xsd_children(element) {
             match child.local.as_str() {
                 "complexType" => type_ref = TypeRef::Complex(Box::new(self.complex_type(child)?)),
                 "simpleType" => type_ref = TypeRef::Simple(Box::new(self.simple_type(child)?)),
@@ -779,7 +779,7 @@ impl Loader<'_> {
             Some(type_name) => self.simple_ref(element, type_name)?,
             None => SimpleRef::Builtin(Builtin::AnySimpleType),
         };
-        for child in self.xsd_children(element) {
+        for child in Self::xsd_children(element) {
             match child.local.as_str() {
                 "simpleType" => type_ref = SimpleRef::Inline(Box::new(self.simple_type(child)?)),
                 other => {
@@ -830,7 +830,7 @@ impl Loader<'_> {
             any_attribute: false,
             extends: None,
         };
-        for child in self.xsd_children(element) {
+        for child in Self::xsd_children(element) {
             match child.local.as_str() {
                 "sequence" | "choice" | "all" => {
                     ty.content = Content::Particle(self.particle(child)?);
@@ -848,7 +848,7 @@ impl Loader<'_> {
     }
 
     fn simple_content(&self, element: &Element, ty: &mut ComplexType) -> Result<()> {
-        for child in self.xsd_children(element) {
+        for child in Self::xsd_children(element) {
             match child.local.as_str() {
                 "extension" => {
                     let base = self.required(child, "base")?;
@@ -867,7 +867,7 @@ impl Loader<'_> {
         if matches!(attr(element, "mixed"), Some("true" | "1")) {
             ty.mixed = true;
         }
-        for child in self.xsd_children(element) {
+        for child in Self::xsd_children(element) {
             match child.local.as_str() {
                 "extension" => {
                     let base = self.required(child, "base")?;
@@ -881,7 +881,7 @@ impl Loader<'_> {
                     } else {
                         ty.extends = Some(base);
                     }
-                    for part in self.xsd_children(child) {
+                    for part in Self::xsd_children(child) {
                         match part.local.as_str() {
                             "sequence" | "choice" | "all" => {
                                 ty.content = Content::Particle(self.particle(part)?);
@@ -908,7 +908,7 @@ impl Loader<'_> {
 
     /// `attribute`/`anyAttribute` children of an extension.
     fn attributes_of(&self, element: &Element, ty: &mut ComplexType) -> Result<()> {
-        for child in self.xsd_children(element) {
+        for child in Self::xsd_children(element) {
             match child.local.as_str() {
                 "attribute" => ty.attributes.push(self.attribute_use(child)?),
                 "anyAttribute" => ty.any_attribute = true,
@@ -938,7 +938,7 @@ impl Loader<'_> {
     }
 
     fn particles(&self, element: &Element) -> Result<Vec<Particle>> {
-        self.xsd_children(element)
+        Self::xsd_children(element)
             .into_iter()
             .map(|child| self.particle(child))
             .collect()
@@ -972,7 +972,7 @@ impl Loader<'_> {
     }
 
     fn simple_type(&self, element: &Element) -> Result<SimpleType> {
-        let children = self.xsd_children(element);
+        let children = Self::xsd_children(element);
         let [derivation] = children.as_slice() else {
             bail!(
                 "{}:{}: xs:simpleType needs exactly one of restriction, list or union",
@@ -987,7 +987,7 @@ impl Loader<'_> {
                     Some(base) => Some(self.simple_ref(derivation, base)?),
                     None => None,
                 };
-                for facet in self.xsd_children(derivation) {
+                for facet in Self::xsd_children(derivation) {
                     if facet.local == "simpleType" {
                         base = Some(SimpleRef::Inline(Box::new(self.simple_type(facet)?)));
                     } else {
@@ -1009,7 +1009,7 @@ impl Loader<'_> {
             "list" => {
                 let item = match attr(derivation, "itemType") {
                     Some(item) => self.simple_ref(derivation, item)?,
-                    None => match self.xsd_children(derivation).as_slice() {
+                    None => match Self::xsd_children(derivation).as_slice() {
                         [inline] if inline.local == "simpleType" => {
                             SimpleRef::Inline(Box::new(self.simple_type(inline)?))
                         }
@@ -1032,7 +1032,7 @@ impl Loader<'_> {
                         members.push(self.simple_ref(derivation, name)?);
                     }
                 }
-                for inline in self.xsd_children(derivation) {
+                for inline in Self::xsd_children(derivation) {
                     if inline.local != "simpleType" {
                         return Err(
                             self.unsupported(inline, &format!("xs:{} in xs:union", inline.local))
@@ -1355,8 +1355,9 @@ impl Validator<'_> {
                 max: Some(1),
                 term: Term::Sequence(vec![b, own]),
             }),
-            (Content::Empty, own) | (own, Content::Empty) => own,
-            (Content::Simple(_), own @ Content::Simple(_)) => own,
+            (Content::Empty, own)
+            | (own, Content::Empty)
+            | (Content::Simple(_), own @ Content::Simple(_)) => own,
             (Content::Simple(_), Content::Particle(_))
             | (Content::Particle(_), Content::Simple(_)) => {
                 bail!(
@@ -1609,10 +1610,10 @@ impl Validator<'_> {
         trace: &mut Trace,
     ) -> Result<BTreeSet<usize>> {
         Ok(match term {
-            Term::Element(decl) => self.element_step(&decl.name, names, position, trace),
+            Term::Element(decl) => Self::element_step(&decl.name, names, position, trace),
             Term::ElementRef(name) => {
                 let decl = self.global_element(name)?;
-                self.element_step(&decl.name, names, position, trace)
+                Self::element_step(&decl.name, names, position, trace)
             }
             Term::Any(wildcard) => {
                 trace.expect(position, "##any".to_string());
@@ -1655,7 +1656,6 @@ impl Validator<'_> {
     }
 
     fn element_step(
-        &self,
         expected: &QName,
         names: &[QName],
         position: usize,

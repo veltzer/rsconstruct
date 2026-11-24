@@ -129,20 +129,19 @@ fn warn_global(
         warning.indexing = Some(
             keys.iter()
                 .map(|key| match key {
-                    Resolution::Unknown => IndexKey::Unknown,
                     Resolution::NotString => IndexKey::NotString,
                     Resolution::Str(node) => {
                         IndexKey::Str(st.ast.str(*node, 1).unwrap_or_default().to_vec())
                     }
-                    Resolution::Index { .. } => IndexKey::Unknown,
+                    Resolution::Unknown | Resolution::Index { .. } => IndexKey::Unknown,
                 })
                 .collect(),
         );
     }
     warning.name = st.ast.str(*global, 1).map(<[u8]>::to_vec);
     warning.previous_indexing_len = *previous_indexing_len;
-    warning.top = is_top_line && action == '1';
-    warning.indirect = node != *global;
+    warning.global.top = is_top_line && action == '1';
+    warning.global.indirect = node != *global;
     st.warn_node(warning, node);
 }
 

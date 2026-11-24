@@ -557,7 +557,7 @@ pub fn go_format_float(v: f64) -> String {
             "0".to_string()
         };
     }
-    let exponent = v.abs().log10().floor() as i32;
+    let exponent = crate::numeric::f64_to_i32(v.abs().log10().floor());
     if (-4..21).contains(&exponent) {
         let s = format!("{v}");
         return s

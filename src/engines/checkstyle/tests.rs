@@ -56,7 +56,8 @@ impl Lcg {
     }
 
     fn below(&mut self, n: usize) -> usize {
-        (self.next() % n.max(1) as u64) as usize
+        let bound = u64::try_from(n.max(1)).expect("a usize fits a u64");
+        usize::try_from(self.next() % bound).expect("a remainder below a usize bound")
     }
 }
 

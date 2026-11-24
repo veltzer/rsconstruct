@@ -79,8 +79,6 @@ thread_local! {
 }
 
 pub fn check_quotes_in_literals(params: &Parameters<'_>, _: &Token) -> Out {
-    let parents = &params.parent_map;
-    let contains_quotes = |s: &str| QUOTE_RE.with(|re| re.is_match(s));
     fn for_token(
         map: &BTreeMap<String, Id>,
         t: &Token,
@@ -100,6 +98,9 @@ pub fn check_quotes_in_literals(params: &Parameters<'_>, _: &Token) -> Out {
             }
         }
     }
+
+    let parents = &params.parent_map;
+    let contains_quotes = |s: &str| QUOTE_RE.with(|re| re.is_match(s));
     let squashes_quotes = |t: &Token| matches!(&t.inner, TDollarBraced(_, l) if concat_oversimplify(l).starts_with('#'));
     let suggestion = if supports_arrays(params.shell_type) {
         "Use an array."
@@ -156,6 +157,13 @@ pub fn check_quotes_in_literals(params: &Parameters<'_>, _: &Token) -> Out {
 }
 
 pub fn check_functions_used_externally(params: &Parameters<'_>, t: &Token) -> Out {
+    fn drop_flags<'t>(l: &[(String, &'t Token)]) -> Vec<(String, &'t Token)> {
+        l.iter()
+            .skip_while(|x| x.0.starts_with('-'))
+            .cloned()
+            .collect()
+    }
+
     let mut functions_and_aliases = functions(t);
     for (k, v) in aliases(t) {
         functions_and_aliases.entry(k).or_insert(v);
@@ -181,12 +189,6 @@ pub fn check_functions_used_externally(params: &Parameters<'_>, t: &Token) -> Ou
         };
         let arg_strings: Vec<(String, &Token)> =
             rest.iter().map(|a| (only_literal_string(a), *a)).collect();
-        fn drop_flags<'t>(l: &[(String, &'t Token)]) -> Vec<(String, &'t Token)> {
-            l.iter()
-                .skip_while(|x| x.0.starts_with('-'))
-                .cloned()
-                .collect()
-        }
         let candidates: Vec<(String, &Token)> = match name.as_str() {
             "chroot" | "screen" | "sudo" | "doas" | "run0" | "xargs" | "tmux" => {
                 drop_flags(&arg_strings).into_iter().take(1).collect()
@@ -506,7 +508,7 @@ pub fn check_unpassed_in_functions(params: &Parameters<'_>, root: &Token) -> Out
 }
 
 pub fn check_unchecked_cd_pushd_popd(params: &Parameters<'_>, root: &Token) -> Out {
-    if params.has_set_e {
+    if params.errexit.has_set_e {
         return Vec::new();
     }
     let mut out = Vec::new();
@@ -737,6 +739,8 @@ pub fn check_alias_used_in_same_parsing_unit(params: &Parameters<'_>, root: &Tok
 }
 
 pub fn check_array_value_used_as_index(params: &Parameters<'_>, _: &Token) -> Out {
+    type Loops = BTreeMap<String, (Id, Vec<(Id, String)>)>;
+
     let parents = &params.parent_map;
     let get_array_name = |t: &Token| -> Option<String> {
         let parts = get_word_parts(t);
@@ -832,7 +836,6 @@ pub fn check_array_value_used_as_index(params: &Parameters<'_>, _: &Token) -> Ou
             _ => None,
         }
     };
-    type Loops = BTreeMap<String, (Id, Vec<(Id, String)>)>;
     let mut state: Loops = BTreeMap::new();
     do_variable_flow_analysis(
         &mut |m: &mut Loops, _base, t, name| {
@@ -882,12 +885,6 @@ pub fn check_array_value_used_as_index(params: &Parameters<'_>, _: &Token) -> Ou
 // ----- optional checks
 
 pub fn check_require_double_bracket(params: &Parameters<'_>, t: &Token) -> Out {
-    if !matches!(
-        params.shell_type,
-        Shell::Bash | Shell::Ksh | Shell::BusyboxSh
-    ) {
-        return Vec::new();
-    }
     fn is_simple(t: &Token) -> bool {
         match &t.inner {
             TCondition(_, s) => is_simple(s),
@@ -895,6 +892,13 @@ pub fn check_require_double_bracket(params: &Parameters<'_>, t: &Token) -> Out {
             TcUnary(..) | TcNullary(..) => true,
             _ => false,
         }
+    }
+
+    if !matches!(
+        params.shell_type,
+        Shell::Bash | Shell::Ksh | Shell::BusyboxSh
+    ) {
+        return Vec::new();
     }
     let mut out = Vec::new();
     do_analysis(t, &mut |x| {
@@ -920,7 +924,7 @@ pub fn check_require_double_bracket(params: &Parameters<'_>, t: &Token) -> Out {
 }
 
 pub fn check_set_e_suppressed(params: &Parameters<'_>, t: &Token) -> Out {
-    if !params.has_set_e {
+    if !params.errexit.has_set_e {
         return Vec::new();
     }
     let functions_ = functions(t);
@@ -952,7 +956,7 @@ pub fn check_set_e_suppressed(params: &Parameters<'_>, t: &Token) -> Out {
             );
         };
         let errexit_enabled =
-            |t: &Token| params.has_inherit_errexit || super::analyzerlib::contains_set_e(t);
+            |t: &Token| params.errexit.has_inherit_errexit || super::analyzerlib::contains_set_e(t);
         for w in path.windows(2) {
             let (child, parent) = (w[0], w[1]);
             let is_in = |cmds: &[&Token]| cmds.iter().any(|c| c.id == child.id);
@@ -998,17 +1002,6 @@ pub fn check_set_e_suppressed(params: &Parameters<'_>, t: &Token) -> Out {
 }
 
 pub fn check_extra_masked_returns(params: &Parameters<'_>, t: &Token) -> Out {
-    let is_transparent_command = |t: &Token| get_command_basename(t).as_deref() == Some("time");
-    let mut transformed = t.clone();
-    do_transform(&mut transformed, &mut |x| {
-        if let TSimpleCommand(_, words) = &x.inner
-            && !words.is_empty()
-            && is_transparent_command(x)
-            && let TSimpleCommand(_, words) = &mut x.inner
-        {
-            words.remove(0);
-        }
-    });
     fn contains_simple_command(t: &Token) -> bool {
         let mut found = false;
         do_analysis(t, &mut |x| {
@@ -1026,6 +1019,18 @@ pub fn check_extra_masked_returns(params: &Parameters<'_>, t: &Token) -> Out {
             simple[..simple.len() - 1].to_vec()
         }
     }
+
+    let is_transparent_command = |t: &Token| get_command_basename(t).as_deref() == Some("time");
+    let mut transformed = t.clone();
+    do_transform(&mut transformed, &mut |x| {
+        if let TSimpleCommand(_, words) = &x.inner
+            && !words.is_empty()
+            && is_transparent_command(x)
+            && let TSimpleCommand(_, words) = &mut x.inner
+        {
+            words.remove(0);
+        }
+    });
     let ancestors = |t: &Token| get_parents_of_id(&params.parent_map, t.id);
     let is_mask_deliberate = |t: &Token| -> bool {
         // NE.init of the path: the token and its ancestors, without the root.
@@ -1102,7 +1107,7 @@ pub fn check_extra_masked_returns(params: &Parameters<'_>, t: &Token) -> Out {
             find_masked_in_list(&list.iter().collect::<Vec<_>>(), &mut out);
         }
         THereString(word) => find_masked_in_list(&[word], &mut out),
-        TPipeline(_, cmds) if !params.has_pipefail => {
+        TPipeline(_, cmds) if !params.errexit.has_pipefail => {
             find_masked_in_list(&all_but_last_simple_commands(cmds), &mut out);
         }
         TSimpleCommand(assigns, words) if !words.is_empty() => {

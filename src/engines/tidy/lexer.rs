@@ -48,15 +48,32 @@ impl TokenMode {
     }
 }
 
-pub struct Lexer {
-    pub lines: u32,
-    pub columns: u32,
+/// Where the lexer is in the white space it reads.
+pub struct Spacing {
     pub waswhite: bool,
     pub pushed: bool,
     pub insertspace: bool,
+}
+
+/// Whether block-level content is being kept out of, or moved out of, the
+/// current element.
+pub struct BlockState {
     pub exclude_blocks: bool,
     pub exiled: bool,
+}
+
+/// What the lexer has found out about the document as a whole.
+pub struct DocumentState {
     pub isvoyager: bool,
+    pub seen_end_body: bool,
+    pub seen_end_html: bool,
+}
+
+pub struct Lexer {
+    pub lines: i32,
+    pub columns: i32,
+    pub spacing: Spacing,
+    pub blocks: BlockState,
     pub versions: u32,
     pub doctype: u32,
     pub version_emitted: u32,
@@ -66,8 +83,7 @@ pub struct Lexer {
     pub token: Option<NodeId>,
     pub itoken: Option<NodeId>,
     pub parent: Option<NodeId>,
-    pub seen_end_body: bool,
-    pub seen_end_html: bool,
+    pub document: DocumentState,
     /// The text of every text node (`lexbuf`). Bytes beyond `lexsize` are
     /// stale but still readable, as in tidy, whose code occasionally looks
     /// at the byte just past a node it emptied.
@@ -84,12 +100,15 @@ impl Lexer {
         Self {
             lines: 1,
             columns: 1,
-            waswhite: false,
-            pushed: false,
-            insertspace: false,
-            exclude_blocks: false,
-            exiled: false,
-            isvoyager: false,
+            spacing: Spacing {
+                waswhite: false,
+                pushed: false,
+                insertspace: false,
+            },
+            blocks: BlockState {
+                exclude_blocks: false,
+                exiled: false,
+            },
             versions: tables::VERS_ALL | VERS_PROPRIETARY,
             doctype: tables::VERS_UNKNOWN,
             version_emitted: 0,
@@ -99,8 +118,11 @@ impl Lexer {
             token: None,
             itoken: None,
             parent: None,
-            seen_end_body: false,
-            seen_end_html: false,
+            document: DocumentState {
+                isvoyager: false,
+                seen_end_body: false,
+                seen_end_html: false,
+            },
             lexbuf: Vec::new(),
             lexsize: 0,
             inode: None,
@@ -636,8 +658,8 @@ impl Doc {
     }
 
     pub(crate) const fn set_lexer_locus(&mut self) {
-        self.lexer.lines = self.stream.curline as u32;
-        self.lexer.columns = self.stream.curcol as u32;
+        self.lexer.lines = self.stream.curline;
+        self.lexer.columns = self.stream.curcol;
     }
 
     /// `TY_(NewNode)` with the lexer's position.
@@ -745,7 +767,7 @@ impl Doc {
 
     /// `TY_(InferredTag)`.
     pub(crate) fn inferred_tag(&mut self, id: TagId) -> NodeId {
-        let index = self.tag_index(id);
+        let index = Self::tag_index(id);
         let name = self.tags[index].name.clone();
         let node = self.new_node();
         let n = self.tree.node_mut(node);
@@ -788,13 +810,13 @@ impl Doc {
         })
     }
 
-    pub(crate) fn is_url_attr(&self, name: &str) -> bool {
+    pub(crate) fn is_url_attr(name: &str) -> bool {
         let t = tables::tables();
         t.attr_index(name)
             .is_some_and(|i| t.attributes[i].check == Some(AttrCheck::CheckUrl))
     }
 
-    fn is_script_attr(&self, name: &str) -> bool {
+    fn is_script_attr(name: &str) -> bool {
         let t = tables::tables();
         t.attr_index(name)
             .is_some_and(|i| t.attributes[i].check == Some(AttrCheck::CheckScript))
@@ -882,11 +904,11 @@ impl Doc {
             NumHex,
         }
         let start = self.lexer.lexsize() - 1;
-        let startcol = (self.stream.curcol - 1) as u32;
+        let startcol = self.stream.curcol - 1;
         let mut state = EntState::Default;
         let mut char_read = 0;
         let mut semicolon = false;
-        let mut preserve_entities = self.opts.preserve_entities;
+        let mut preserve_entities = self.opts.entities.preserve_entities;
         let mut c;
         loop {
             c = self.read_char();
@@ -899,7 +921,7 @@ impl Doc {
             }
             char_read += 1;
             if char_read == 1 && c == u32::from(b'#') {
-                if !self.opts.ncr {
+                if !self.opts.entities.ncr {
                     self.unget_char(u32::from(b'#'));
                     return;
                 }
@@ -928,9 +950,9 @@ impl Doc {
         }
 
         if self.lexer.from(start) == b"&apos"
-            && !self.opts.output_xml
-            && !self.lexer.isvoyager
-            && !self.opts.output_xhtml
+            && !self.opts.output.output_xml
+            && !self.lexer.document.isvoyager
+            && !self.opts.output.output_xhtml
             && self.html_version() != tables::HT50
         {
             let name = self.lexbuf_string(start);
@@ -1006,7 +1028,7 @@ impl Doc {
                     ch = u32::from(b' ');
                 }
                 self.add_char_to_lexer(ch);
-                if ch == u32::from(b'&') && !self.opts.quote_ampersand {
+                if ch == u32::from(b'&') && !self.opts.entities.quote_ampersand {
                     self.add_string_to_lexer("amp;");
                 }
             }
@@ -1019,7 +1041,7 @@ impl Doc {
     fn parse_tag_name(&mut self) -> u32 {
         let first = self.lexer.lexbuf[self.lexer.txtstart];
         if is_upper(u32::from(first)) {
-            self.lexer.lexbuf[self.lexer.txtstart] = to_lower(u32::from(first)) as u8;
+            self.lexer.lexbuf[self.lexer.txtstart] = first.to_ascii_lowercase();
         }
         let mut c;
         loop {
@@ -1051,7 +1073,7 @@ impl Doc {
         let mut i = self.lexer.lexsize() - 1;
         loop {
             let byte = self.lexer.lexbuf[i];
-            self.unget_char(i32::from(byte as i8) as u32);
+            self.unget_char(i32::from(byte.cast_signed()).cast_unsigned());
             if i == start {
                 break;
             }
@@ -1072,7 +1094,7 @@ impl Doc {
         let has_src = self.tree.attr_by_id(container, known.src).is_some();
         let nonested = (self.node_is(container, TagId::Script)
             || self.node_is(container, TagId::Style))
-            && self.opts.skip_nested;
+            && self.opts.strictness.skip_nested;
         let container_name = self
             .tree
             .node(container)
@@ -1080,7 +1102,7 @@ impl Doc {
             .clone()
             .unwrap_or_default();
         self.set_lexer_locus();
-        self.lexer.waswhite = false;
+        self.lexer.spacing.waswhite = false;
         let size = self.lexer.lexsize();
         self.lexer.txtstart = size;
         self.lexer.txtend = size;
@@ -1182,9 +1204,9 @@ impl Doc {
                         break;
                     } else if start < 2 || self.lexer.lexbuf[start - 2] != b'\\' {
                         self.set_lexer_locus();
-                        self.lexer.columns = self.lexer.columns.saturating_sub(3);
+                        self.lexer.columns = (self.lexer.columns - 3).max(0);
                         if self.is_javascript(container)
-                            && self.opts.escape_scripts
+                            && self.opts.enclose.escape_scripts
                             && !self.html5_mode
                         {
                             self.report(None, None, Code::BadCdataContent);
@@ -1227,20 +1249,20 @@ impl Doc {
 
     /// `TY_(UngetToken)`.
     pub(crate) const fn unget_token(&mut self) {
-        self.lexer.pushed = true;
+        self.lexer.spacing.pushed = true;
     }
 
     /// `TY_(GetToken)`.
     pub(crate) fn get_token(&mut self, mode: TokenMode) -> Option<NodeId> {
-        if self.lexer.pushed || self.lexer.itoken.is_some() {
+        if self.lexer.spacing.pushed || self.lexer.itoken.is_some() {
             if self.lexer.itoken.is_some() {
-                if self.lexer.pushed {
-                    self.lexer.pushed = false;
+                if self.lexer.spacing.pushed {
+                    self.lexer.spacing.pushed = false;
                     return self.lexer.itoken;
                 }
                 self.lexer.itoken = None;
             }
-            self.lexer.pushed = false;
+            self.lexer.spacing.pushed = false;
             let token = self.lexer.token;
             let is_text = token.is_some_and(|t| self.tree.node(t).ntype == NodeType::Text);
             if !is_text || !(self.lexer.insert.is_some() || self.lexer.inode.is_some()) {
@@ -1295,7 +1317,7 @@ impl Doc {
 
         self.lexer.token = None;
         self.set_lexer_locus();
-        self.lexer.waswhite = false;
+        self.lexer.spacing.waswhite = false;
         let size = self.lexer.lexsize();
         self.lexer.txtstart = size;
         self.lexer.txtend = size;
@@ -1306,10 +1328,10 @@ impl Doc {
             if c == END_OF_STREAM {
                 break;
             }
-            if self.lexer.insertspace {
+            if self.lexer.spacing.insertspace {
                 self.add_char_to_lexer(u32::from(b' '));
-                self.lexer.waswhite = true;
-                self.lexer.insertspace = false;
+                self.lexer.spacing.waswhite = true;
+                self.lexer.spacing.insertspace = false;
             }
             if c == 160 && mode == TokenMode::Preformatted {
                 c = u32::from(b' ');
@@ -1324,7 +1346,7 @@ impl Doc {
                     {
                         let s = self.lexer.lexsize() - 1;
                         self.lexer.truncate(s);
-                        self.lexer.waswhite = false;
+                        self.lexer.spacing.waswhite = false;
                         self.set_lexer_locus();
                         continue;
                     }
@@ -1333,14 +1355,14 @@ impl Doc {
                         continue;
                     }
                     if is_white(c) {
-                        if self.lexer.waswhite {
+                        if self.lexer.spacing.waswhite {
                             if mode != TokenMode::Preformatted && mode != TokenMode::IgnoreMarkup {
                                 let s = self.lexer.lexsize() - 1;
                                 self.lexer.truncate(s);
                                 self.set_lexer_locus();
                             }
                         } else {
-                            self.lexer.waswhite = true;
+                            self.lexer.spacing.waswhite = true;
                             if mode != TokenMode::Preformatted
                                 && mode != TokenMode::IgnoreMarkup
                                 && c != u32::from(b' ')
@@ -1355,7 +1377,7 @@ impl Doc {
                     if mode == TokenMode::IgnoreWhitespace {
                         mode = TokenMode::MixedContent;
                     }
-                    self.lexer.waswhite = false;
+                    self.lexer.spacing.waswhite = false;
                 }
                 LexState::Gt => {
                     if c == u32::from(b'/') {
@@ -1386,12 +1408,12 @@ impl Doc {
                             }
                             continue;
                         }
-                        self.lexer.waswhite = false;
+                        self.lexer.spacing.waswhite = false;
                         self.lexer.state = LexState::Content;
                         continue;
                     }
                     if mode == TokenMode::IgnoreMarkup {
-                        self.lexer.waswhite = false;
+                        self.lexer.spacing.waswhite = false;
                         self.lexer.state = LexState::Content;
                         continue;
                     }
@@ -1521,7 +1543,7 @@ impl Doc {
                     let s = self.lexer.lexsize() - 1;
                     self.lexer.truncate(s);
                     self.lexer.state = LexState::Content;
-                    self.lexer.waswhite = false;
+                    self.lexer.spacing.waswhite = false;
                 }
                 LexState::EndTag => {
                     self.lexer.txtstart = self.lexer.lexsize() - 1;
@@ -1539,12 +1561,12 @@ impl Doc {
                         continue;
                     }
                     self.lexer.state = LexState::Content;
-                    self.lexer.waswhite = false;
+                    self.lexer.spacing.waswhite = false;
                     return Some(token);
                 }
                 LexState::StartTag => {
                     c = self.read_char();
-                    self.change_char(c as u8);
+                    self.change_char(crate::numeric::low_byte(c));
                     self.lexer.txtstart = self.lexer.lexsize() - 1;
                     c = self.parse_tag_name();
                     isempty = false;
@@ -1584,9 +1606,9 @@ impl Doc {
                         if !swallow {
                             self.unget_char(c);
                         }
-                        self.lexer.waswhite = true;
+                        self.lexer.spacing.waswhite = true;
                     } else {
-                        self.lexer.waswhite = false;
+                        self.lexer.spacing.waswhite = false;
                     }
 
                     self.lexer.state = LexState::Content;
@@ -1646,7 +1668,7 @@ impl Doc {
                             self.lexer.truncate(s);
                             self.lexer.txtend = s;
                             self.lexer.state = LexState::Content;
-                            self.lexer.waswhite = false;
+                            self.lexer.spacing.waswhite = false;
                             let token = self.new_token(NodeType::Comment);
                             self.lexer.token = Some(token);
                             c = self.read_char();
@@ -1659,7 +1681,7 @@ impl Doc {
                         }
                         if badcomment == 0 {
                             self.set_lexer_locus();
-                            self.lexer.columns = self.lexer.columns.saturating_sub(3);
+                            self.lexer.columns = (self.lexer.columns - 3).max(0);
                         }
                         badcomment += 1;
                         if fix_comments {
@@ -1685,7 +1707,7 @@ impl Doc {
                     self.lexer.token = token;
                     self.lexer.txtend = self.lexer.lexsize();
                     self.lexer.state = LexState::Content;
-                    self.lexer.waswhite = false;
+                    self.lexer.spacing.waswhite = false;
                     if self.lexer.doctype == tables::VERS_UNKNOWN
                         && let Some(t) = token
                     {
@@ -1712,7 +1734,7 @@ impl Doc {
                         attributes.clear();
                         continue;
                     }
-                    if self.opts.assume_xml_procins || self.lexer.isvoyager {
+                    if self.opts.meta.assume_xml_procins || self.lexer.document.isvoyager {
                         if c != u32::from(b'?') {
                             continue;
                         }
@@ -1759,7 +1781,7 @@ impl Doc {
                     }
                     self.lexer.token = Some(token);
                     self.lexer.state = LexState::Content;
-                    self.lexer.waswhite = false;
+                    self.lexer.spacing.waswhite = false;
                     return Some(token);
                 }
                 LexState::Asp => {
@@ -1775,7 +1797,7 @@ impl Doc {
                     self.lexer.truncate(s);
                     self.lexer.txtend = s;
                     self.lexer.state = LexState::Content;
-                    self.lexer.waswhite = false;
+                    self.lexer.spacing.waswhite = false;
                     let token = self.new_token(NodeType::Asp);
                     self.lexer.token = Some(token);
                     return Some(token);
@@ -1793,7 +1815,7 @@ impl Doc {
                     self.lexer.truncate(s);
                     self.lexer.txtend = s;
                     self.lexer.state = LexState::Content;
-                    self.lexer.waswhite = false;
+                    self.lexer.spacing.waswhite = false;
                     let token = self.new_token(NodeType::Jste);
                     self.lexer.token = Some(token);
                     return Some(token);
@@ -1811,7 +1833,7 @@ impl Doc {
                     self.lexer.truncate(s);
                     self.lexer.txtend = s;
                     self.lexer.state = LexState::Content;
-                    self.lexer.waswhite = false;
+                    self.lexer.spacing.waswhite = false;
                     let token = self.new_token(NodeType::Php);
                     self.lexer.token = Some(token);
                     return Some(token);
@@ -1839,7 +1861,7 @@ impl Doc {
                             self.lexer.truncate(s);
                             self.lexer.txtend = self.lexer.txtstart;
                             self.lexer.state = LexState::Content;
-                            self.lexer.waswhite = false;
+                            self.lexer.spacing.waswhite = false;
                             let token = self.new_token(NodeType::XmlDecl);
                             self.tree.node_mut(token).attributes = std::mem::take(&mut attributes);
                             self.lexer.token = Some(token);
@@ -1863,7 +1885,7 @@ impl Doc {
                     self.lexer.truncate(s);
                     self.lexer.txtend = self.lexer.txtstart;
                     self.lexer.state = LexState::Content;
-                    self.lexer.waswhite = false;
+                    self.lexer.spacing.waswhite = false;
                     let token = self.new_token(NodeType::XmlDecl);
                     self.tree.node_mut(token).attributes = std::mem::take(&mut attributes);
                     self.lexer.token = Some(token);
@@ -1911,7 +1933,7 @@ impl Doc {
                     self.lexer.truncate(s);
                     self.lexer.txtend = s;
                     self.lexer.state = LexState::Content;
-                    self.lexer.waswhite = false;
+                    self.lexer.spacing.waswhite = false;
                     let token = self.new_token(NodeType::Section);
                     self.lexer.token = Some(token);
                     return Some(token);
@@ -1935,7 +1957,7 @@ impl Doc {
                     self.lexer.truncate(s);
                     self.lexer.txtend = s;
                     self.lexer.state = LexState::Content;
-                    self.lexer.waswhite = false;
+                    self.lexer.spacing.waswhite = false;
                     let token = self.new_token(NodeType::Cdata);
                     self.lexer.token = Some(token);
                     return Some(token);
@@ -1962,7 +1984,7 @@ impl Doc {
             }
             self.lexer.txtend = self.lexer.lexsize();
             self.lexer.state = LexState::Content;
-            self.lexer.waswhite = false;
+            self.lexer.spacing.waswhite = false;
             let token = self.new_token(NodeType::Comment);
             self.lexer.token = Some(token);
             return Some(token);
@@ -2216,7 +2238,7 @@ impl Doc {
         pdelim: &mut u32,
     ) -> Option<String> {
         let token = self.lexer.token;
-        let munge = !self.opts.literal_attributes;
+        let munge = !self.opts.attributes.literal_attributes;
         *pdelim = u32::from(b'"');
         let mut c;
         loop {
@@ -2299,7 +2321,7 @@ impl Doc {
                 }
                 if c == u32::from(b'/') {
                     c = self.read_char();
-                    if c == u32::from(b'>') && !self.is_url_attr(name) {
+                    if c == u32::from(b'>') && !Self::is_url_attr(name) {
                         *isempty = true;
                         self.unget_char(c);
                         break;
@@ -2338,13 +2360,13 @@ impl Doc {
                     break;
                 }
                 if munge {
-                    if c == u32::from(b'\n') && self.is_url_attr(name) {
+                    if c == u32::from(b'\n') && Self::is_url_attr(name) {
                         self.report_attr(token, None, Code::NewlineInUri);
                         continue;
                     }
                     c = u32::from(b' ');
                     if lastc == u32::from(b' ') {
-                        if self.is_url_attr(name) {
+                        if Self::is_url_attr(name) {
                             self.report_attr(token, None, Code::WhiteInUri);
                         }
                         continue;
@@ -2358,8 +2380,8 @@ impl Doc {
 
         if quotewarning > 10 && seen_gt && munge {
             let value = self.lexer.from(start);
-            let exempt = self.is_script_attr(name)
-                || (self.is_url_attr(name) && value.starts_with(b"javascript:"))
+            let exempt = Self::is_script_attr(name)
+                || (Self::is_url_attr(name) && value.starts_with(b"javascript:"))
                 || value.starts_with(b"<xml ");
             if !exempt {
                 self.report(None, None, Code::SuspectedMissingQuote);
@@ -2479,7 +2501,7 @@ impl Doc {
             n.start = self.lexer.txtstart;
             n.end = self.lexer.txtend;
         }
-        self.lexer.waswhite = false;
+        self.lexer.spacing.waswhite = false;
         loop {
             let mut c = self.read_char();
             if c == END_OF_STREAM {
@@ -2489,14 +2511,14 @@ impl Doc {
                 c = u32::from(b' ');
             }
             if is_white(c) && state != State::IntSubset {
-                if self.lexer.waswhite {
+                if self.lexer.spacing.waswhite {
                     continue;
                 }
                 self.add_char_to_lexer(c);
-                self.lexer.waswhite = true;
+                self.lexer.spacing.waswhite = true;
             } else {
                 self.add_char_to_lexer(c);
-                self.lexer.waswhite = false;
+                self.lexer.spacing.waswhite = false;
             }
             match state {
                 State::Intermediate => {
@@ -2603,9 +2625,9 @@ impl Doc {
         };
         let vers = tables::vers_from_fpi(&fpi);
         if (VERS_XHTML & vers) != 0 {
-            self.opts.output_xml = true;
-            self.opts.output_xhtml = true;
-            self.lexer.isvoyager = true;
+            self.opts.output.output_xml = true;
+            self.opts.output.output_xhtml = true;
+            self.lexer.document.isvoyager = true;
         }
         let repaired = tables::fpi_from_vers(vers).map(str::to_string);
         if let Some(i) = self.tree.attr_by_name(doctype, "PUBLIC") {

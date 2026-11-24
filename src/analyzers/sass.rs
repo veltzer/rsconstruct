@@ -131,9 +131,11 @@ impl SassDepAnalyzer {
 /// in order. Built-in modules, URLs and plain-CSS imports are left out: they
 /// load no file of the project.
 fn load_urls(content: &str, indented: bool) -> Vec<String> {
-    // SCSS rules end at `;`; the indented syntax ends them at the line end.
     static SCSS_RULE_RE: OnceLock<Regex> = OnceLock::new();
     static SASS_RULE_RE: OnceLock<Regex> = OnceLock::new();
+    static QUOTED_RE: OnceLock<Regex> = OnceLock::new();
+
+    // SCSS rules end at `;`; the indented syntax ends them at the line end.
     let rule_re = if indented {
         SASS_RULE_RE.get_or_init(|| {
             Regex::new(r"@(use|forward|import)\b([^\n]*)").expect(errors::INVALID_REGEX)
@@ -143,7 +145,6 @@ fn load_urls(content: &str, indented: bool) -> Vec<String> {
             Regex::new(r"@(use|forward|import)\b([^;{}]*)").expect(errors::INVALID_REGEX)
         })
     };
-    static QUOTED_RE: OnceLock<Regex> = OnceLock::new();
     let quoted_re = QUOTED_RE
         .get_or_init(|| Regex::new(r#""([^"]*)"|'([^']*)'"#).expect(errors::INVALID_REGEX));
 

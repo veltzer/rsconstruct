@@ -44,41 +44,17 @@ pub struct Cli {
     #[arg(short = 'P', long, global = true, value_enum, default_value = "path")]
     pub path_format: PathFormat,
 
-    /// Print each child process command before it is executed
-    #[arg(long, global = true)]
-    pub show_child_processes: bool,
+    #[command(flatten)]
+    pub tool_output: ToolOutputArgs,
 
-    /// Show tool output even on success (default: only show on failure)
-    #[arg(long, global = true)]
-    pub show_output: bool,
+    #[command(flatten)]
+    pub format: FormatArgs,
 
-    /// Output in JSON Lines format (machine-readable)
-    #[arg(long, global = true)]
-    pub json: bool,
+    #[command(flatten)]
+    pub tables: TableArgs,
 
-    /// Suppress all output except errors (useful for CI)
-    #[arg(short, long, global = true)]
-    pub quiet: bool,
-
-    /// Show every column of every table, including the ones hidden by
-    /// default and the ones the user config leaves out. (On `tool install`
-    /// and `tool list-configured`, which have their own `--all`, this flag
-    /// goes before the command name: `rsconstruct --all tool ...`.)
-    #[arg(long, global = true)]
-    pub all: bool,
-
-    /// Print each table's name and column names only, no data: the names to
-    /// use under `[tables]` in the user config to choose its columns
-    #[arg(long, global = true)]
-    pub fields: bool,
-
-    /// Show build phase messages (discover, `add_dependencies`, etc.)
-    #[arg(long, global = true)]
-    pub phases: bool,
-
-    /// Print graph size (product and edge counts) at each major build stage
-    #[arg(long, global = true)]
-    pub graph_stats: bool,
+    #[command(flatten)]
+    pub debug: DebugArgs,
 
     /// Disable persistent mtime checksum cache (useful for CI/CD where the
     /// cache won't survive the build and the write overhead isn't worth it)
@@ -92,6 +68,59 @@ pub struct Cli {
 
     #[command(subcommand)]
     pub command: Commands,
+}
+
+/// Global flags about what the tools print (flattened into [`Cli`]).
+#[derive(Args)]
+pub struct ToolOutputArgs {
+    /// Print each child process command before it is executed
+    #[arg(long, global = true)]
+    pub show_child_processes: bool,
+
+    /// Show tool output even on success (default: only show on failure)
+    #[arg(long, global = true)]
+    pub show_output: bool,
+}
+
+/// Global flags about the form of rsconstruct's own output (flattened into
+/// [`Cli`]).
+#[derive(Args)]
+pub struct FormatArgs {
+    /// Output in JSON Lines format (machine-readable)
+    #[arg(long, global = true)]
+    pub json: bool,
+
+    /// Suppress all output except errors (useful for CI)
+    #[arg(short, long, global = true)]
+    pub quiet: bool,
+}
+
+/// Global flags about what tables show (flattened into [`Cli`]).
+#[derive(Args)]
+pub struct TableArgs {
+    /// Show every column of every table, including the ones hidden by
+    /// default and the ones the user config leaves out. (On `tool install`
+    /// and `tool list-configured`, which have their own `--all`, this flag
+    /// goes before the command name: `rsconstruct --all tool ...`.)
+    #[arg(long, global = true)]
+    pub all: bool,
+
+    /// Print each table's name and column names only, no data: the names to
+    /// use under `[tables]` in the user config to choose its columns
+    #[arg(long, global = true)]
+    pub fields: bool,
+}
+
+/// Global flags about the build's own working (flattened into [`Cli`]).
+#[derive(Args)]
+pub struct DebugArgs {
+    /// Show build phase messages (discover, `add_dependencies`, etc.)
+    #[arg(long, global = true)]
+    pub phases: bool,
+
+    /// Print graph size (product and edge counts) at each major build stage
+    #[arg(long, global = true)]
+    pub graph_stats: bool,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, clap::ValueEnum)]
@@ -859,13 +888,10 @@ pub enum TagAction {
     Validate,
 }
 
-/// CLI arguments shared between Build and Watch commands.
+/// How a build proceeds and what it reports (flattened into
+/// [`SharedBuildArgs`]).
 #[derive(Args, Clone)]
-pub struct SharedBuildArgs {
-    /// Number of parallel jobs (overrides config file)
-    #[arg(short, long)]
-    pub jobs: Option<usize>,
-
+pub struct BuildFlowArgs {
     /// Show per-product and total build timing information
     #[arg(long)]
     pub timings: bool,
@@ -877,6 +903,38 @@ pub struct SharedBuildArgs {
     /// Suppress the build summary
     #[arg(long)]
     pub no_summary: bool,
+}
+
+/// How products are checked and re-checked (flattened into
+/// [`SharedBuildArgs`]).
+#[derive(Args, Clone)]
+pub struct CheckingArgs {
+    /// Automatically add misspelled words to words files instead of failing (zspell + aspell)
+    #[arg(long)]
+    pub auto_add_words: bool,
+
+    /// Show why each product is skipped, restored, or rebuilt
+    #[arg(long)]
+    pub explain: bool,
+
+    /// Retry failed products up to N times to detect flakiness
+    #[arg(long, value_name = "N", default_value = "0")]
+    pub retry: usize,
+
+    /// Disable mtime pre-check (always compute full checksums)
+    #[arg(long)]
+    pub no_mtime: bool,
+}
+
+/// CLI arguments shared between Build and Watch commands.
+#[derive(Args, Clone)]
+pub struct SharedBuildArgs {
+    /// Number of parallel jobs (overrides config file)
+    #[arg(short, long)]
+    pub jobs: Option<usize>,
+
+    #[command(flatten)]
+    pub flow: BuildFlowArgs,
 
     /// Batch size for batch-capable processors (0 = no limit, -1 = disable, omit to use config)
     #[arg(long, allow_negative_numbers = true)]
@@ -893,21 +951,8 @@ pub struct SharedBuildArgs {
     #[arg(short = 'x', long = "exclude-processor", value_delimiter = ',')]
     pub exclude_processor: Option<Vec<String>>,
 
-    /// Automatically add misspelled words to words files instead of failing (zspell + aspell)
-    #[arg(long)]
-    pub auto_add_words: bool,
-
-    /// Show why each product is skipped, restored, or rebuilt
-    #[arg(long)]
-    pub explain: bool,
-
-    /// Retry failed products up to N times to detect flakiness
-    #[arg(long, value_name = "N", default_value = "0")]
-    pub retry: usize,
-
-    /// Disable mtime pre-check (always compute full checksums)
-    #[arg(long)]
-    pub no_mtime: bool,
+    #[command(flatten)]
+    pub checking: CheckingArgs,
 
     /// Only build products matching these file patterns (glob syntax, repeatable)
     #[arg(short, long = "target")]
@@ -978,28 +1023,34 @@ impl SharedBuildArgs {
             }
         };
         BuildOptions {
-            force,
+            run: crate::executor::RunFlags {
+                force,
+                keep_going: self.flow.keep_going,
+                timings: self.flow.timings,
+            },
             verbose: cli.verbose,
             display_opts: cli.display_options(),
             jobs: self.jobs,
-            timings: self.timings,
-            keep_going: self.keep_going,
-            summary: !self.no_summary,
+            summary: !self.flow.no_summary,
             batch_size: self.batch_size.map(|n| match usize::try_from(n) {
                 Ok(size) => BatchSizeOverride::Size(size),
                 Err(_) => BatchSizeOverride::Disabled,
             }),
             stop_after,
-            verify_tool_versions,
             processor_filter: self.processor.clone(),
             exclude_filter: self.exclude_processor.clone(),
-            auto_add_words: self.auto_add_words,
-            explain: self.explain,
-            no_mtime: self.no_mtime,
-            retry: self.retry,
+            processing: ProcessingOptions {
+                auto_add_words: self.checking.auto_add_words,
+                no_mtime: self.checking.no_mtime,
+            },
+            explain: self.checking.explain,
+            retry: self.checking.retry,
             targets,
             trace: self.trace.clone(),
-            show_all_config_changes: self.show_all_config_changes,
+            config_checks: ConfigChecks {
+                verify_tool_versions,
+                show_all_config_changes: self.show_all_config_changes,
+            },
             iset: self.iset.clone(),
             pset: self.pset.clone(),
         }
@@ -1018,32 +1069,43 @@ pub enum BatchSizeOverride {
 /// Options shared by build and watch commands.
 #[derive(Clone)]
 pub struct BuildOptions {
-    pub force: bool,
+    /// Rebuild everything, keep going after failures, record timings.
+    pub run: crate::executor::RunFlags,
     pub verbose: bool,
     pub display_opts: DisplayOptions,
     pub jobs: Option<usize>,
-    pub timings: bool,
-    pub keep_going: bool,
     pub summary: bool,
     /// `None` = not set on the CLI (fall back to `[build] batch_size`),
     /// otherwise what `--batch-size` said.
     pub batch_size: Option<BatchSizeOverride>,
     pub stop_after: BuildPhase,
+    pub processor_filter: Option<Vec<String>>,
+    pub exclude_filter: Option<Vec<String>>,
+    pub processing: ProcessingOptions,
+    pub explain: bool,
+    pub retry: usize,
+    pub targets: Option<Vec<String>>,
+    pub trace: Option<String>,
+    pub config_checks: ConfigChecks,
+    pub iset: Vec<String>,
+    pub pset: Vec<String>,
+}
+
+/// How a build handles words files and the mtime pre-check.
+#[derive(Clone, Copy)]
+pub struct ProcessingOptions {
+    pub auto_add_words: bool,
+    pub no_mtime: bool,
+}
+
+/// What a build checks about the configuration and the tools.
+#[derive(Clone, Copy)]
+pub struct ConfigChecks {
     /// Check rsconstruct.lock for the processors that build, after
     /// discovery and the `-p`/`-x` selection (`--verify-tool-versions`, or
     /// `CI=true`).
     pub verify_tool_versions: bool,
-    pub processor_filter: Option<Vec<String>>,
-    pub exclude_filter: Option<Vec<String>>,
-    pub auto_add_words: bool,
-    pub explain: bool,
-    pub no_mtime: bool,
-    pub retry: usize,
-    pub targets: Option<Vec<String>>,
-    pub trace: Option<String>,
     pub show_all_config_changes: bool,
-    pub iset: Vec<String>,
-    pub pset: Vec<String>,
 }
 
 /// Parse a shell name string into a Shell enum

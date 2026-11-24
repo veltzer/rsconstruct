@@ -17,10 +17,10 @@ pub struct CppAnalyzerConfig {
     /// pkg-config packages to query for include paths
     #[serde(default)]
     pub pkg_config: Vec<String>,
-    /// Commands that output include paths (e.g., ["gcc -print-file-name=plugin"])
+    /// Commands that output include paths (e.g., `["gcc -print-file-name=plugin"]`)
     #[serde(default)]
     pub include_path_commands: Vec<String>,
-    /// Directory path segments to exclude from analysis (e.g., ["/kernel/", "/vendor/"])
+    /// Directory path segments to exclude from analysis (e.g., `["/kernel/", "/vendor/"]`)
     #[serde(default)]
     pub src_exclude_dirs: Vec<String>,
     /// C compiler (for -MM scanning)
@@ -71,7 +71,7 @@ pub struct IcppAnalyzerConfig {
     /// pkg-config packages to query for include paths (optional; invokes pkg-config if set)
     #[serde(default)]
     pub pkg_config: Vec<String>,
-    /// Commands that output include paths (e.g., ["gcc -print-file-name=plugin"])
+    /// Commands that output include paths (e.g., `["gcc -print-file-name=plugin"]`)
     /// Each command is run via `sh -c` and its stdout is added to the include search paths.
     #[serde(default)]
     pub include_path_commands: Vec<String>,

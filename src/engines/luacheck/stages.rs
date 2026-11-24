@@ -653,12 +653,13 @@ pub fn format_g(n: f64, precision: usize) -> String {
             s
         }
     };
-    if exp < -4 || exp >= precision as i32 {
+    let precision_digits = i32::try_from(precision).expect("a %g precision is small");
+    if exp < -4 || exp >= precision_digits {
         let mantissa = strip(mantissa.to_string());
         let sign = if exp < 0 { '-' } else { '+' };
         format!("{mantissa}e{sign}{:02}", exp.abs())
     } else {
-        let decimals = (precision as i32 - 1 - exp).max(0) as usize;
+        let decimals = usize::try_from((precision_digits - 1 - exp).max(0)).unwrap_or(0);
         strip(format!("{n:.decimals$}"))
     }
 }

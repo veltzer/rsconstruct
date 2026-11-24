@@ -6,6 +6,7 @@ use super::super::Problem;
 use super::super::config::RuleConf;
 use super::super::parser::{Kind, Style, Token};
 use super::{Alt, Check, Ctx, Default, OptKind, OptSpec, RuleSpec, States};
+use crate::numeric::to_i64;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum ParentType {
@@ -158,15 +159,15 @@ fn check_scalar_indentation(token: &Token, st: &mut Inner, buffer: &str, out: &m
         if line_start + indent >= bytes.len() || bytes[line_start + indent] == b'\n' {
             continue;
         }
-        let indent = indent as i64;
+        let found = to_i64(indent);
 
         let expected =
-            *expected_indent.get_or_insert_with(|| compute_expected_indent(token, st, indent));
-        if indent != expected {
+            *expected_indent.get_or_insert_with(|| compute_expected_indent(token, st, found));
+        if found != expected {
             out.push(Problem::new(
                 line_no,
-                (indent + 1) as usize,
-                format!("wrong indentation: expected {expected} but found {indent}"),
+                indent + 1,
+                format!("wrong indentation: expected {expected} but found {found}"),
             ));
         }
     }
@@ -174,7 +175,7 @@ fn check_scalar_indentation(token: &Token, st: &mut Inner, buffer: &str, out: &m
 
 /// Mirrors the inner `compute_expected_indent` of `check_scalar_indentation`.
 fn compute_expected_indent(token: &Token, st: &mut Inner, found_indent: i64) -> i64 {
-    let column = token.start.column as i64;
+    let column = to_i64(token.start.column);
     let detect = |st: &mut Inner, base_indent: i64| -> i64 {
         if st.spaces == Spaces::Consistent {
             st.spaces = Spaces::Width(found_indent - base_indent);
@@ -193,16 +194,16 @@ fn compute_expected_indent(token: &Token, st: &mut Inner, found_indent: i64) -> 
                 // - >
                 //     multi
                 //     line
-                ParentType::BEnt => detect(st, column),
+                //
                 // - ? >
                 //       multi-line
                 //       key
                 //   : >
                 //       multi-line
                 //       value
-                ParentType::Key => detect(st, column),
+                ParentType::BEnt | ParentType::Key => detect(st, column),
                 ParentType::Val => {
-                    if token.start.line as i64 + 1 > st.cur_line {
+                    if to_i64(token.start.line) + 1 > st.cur_line {
                         // - key:
                         //     >
                         //       multi
@@ -248,18 +249,18 @@ fn check_inner(
         token.kind,
         Kind::StreamStart | Kind::StreamEnd | Kind::BlockEnd
     ) && token.scalar_value() != Some("");
-    let first_in_line = is_visible && token.start.line as i64 + 1 > st.cur_line;
+    let first_in_line = is_visible && to_i64(token.start.line) + 1 > st.cur_line;
 
     let mut found_indentation = 0;
     if first_in_line {
-        found_indentation = token.start.column as i64;
+        found_indentation = to_i64(token.start.column);
         let last = st.last();
         let mut expected = last.indent;
 
         if matches!(token.kind, Kind::FlowMappingEnd | Kind::FlowSequenceEnd) {
             expected = last.line_indent.unwrap_or(-1);
         } else if last.ty == ParentType::Key && last.explicit_key && token.kind != Kind::Value {
-            expected = st.detect_indent(expected, token.start.column as i64);
+            expected = st.detect_indent(expected, to_i64(token.start.column));
         }
 
         if found_indentation != expected {
@@ -273,7 +274,7 @@ fn check_inner(
             };
             out.push(Problem::new(
                 token.start.line + 1,
-                (found_indentation + 1) as usize,
+                token.start.column + 1,
                 message,
             ));
         }
@@ -286,7 +287,7 @@ fn check_inner(
     // Step 2.a:
 
     if is_visible {
-        st.cur_line = token.real_end_line(buffer) as i64;
+        st.cur_line = to_i64(token.real_end_line(buffer));
         if first_in_line {
             st.cur_line_indent = found_indentation;
         }
@@ -309,19 +310,19 @@ fn check_inner(
                 return Err(());
             }
             st.stack
-                .push(Parent::new(ParentType::BMap, token.start.column as i64));
+                .push(Parent::new(ParentType::BMap, to_i64(token.start.column)));
         }
         Kind::FlowMappingStart => {
             let next = next.ok_or(())?;
             let indent = if next.start.line == token.start.line {
                 //   - {a: 1, b: 2}
-                next.start.column as i64
+                to_i64(next.start.column)
             } else {
                 //   - {
                 //     a: 1, b: 2
                 //   }
                 let base = st.cur_line_indent;
-                st.detect_indent(base, next.start.column as i64)
+                st.detect_indent(base, to_i64(next.start.column))
             };
             let mut parent = Parent::new(ParentType::FMap, indent);
             parent.line_indent = Some(st.cur_line_indent);
@@ -335,7 +336,7 @@ fn check_inner(
                 return Err(());
             }
             st.stack
-                .push(Parent::new(ParentType::BSeq, token.start.column as i64));
+                .push(Parent::new(ParentType::BSeq, to_i64(token.start.column)));
         }
         Kind::BlockEntry
             if !next.is_some_and(|n| matches!(n.kind, Kind::BlockEntry | Kind::BlockEnd)) =>
@@ -345,7 +346,7 @@ fn check_inner(
             // pyyaml issues no BlockSequenceStartToken when the list is not
             // indented; compensate.
             if st.last().ty != ParentType::BSeq {
-                let mut parent = Parent::new(ParentType::BSeq, token.start.column as i64);
+                let mut parent = Parent::new(ParentType::BSeq, to_i64(token.start.column));
                 parent.implicit_block_seq = true;
                 st.stack.push(parent);
             }
@@ -353,18 +354,18 @@ fn check_inner(
             let indent = if next.start.line == token.end.line {
                 //   - item 1
                 //   - item 2
-                next.start.column as i64
+                to_i64(next.start.column)
             } else if next.start.column == token.start.column {
                 //   -
                 //   key: value
-                next.start.column as i64
+                to_i64(next.start.column)
             } else {
                 //   -
                 //     item 1
                 //   -
                 //     key:
                 //       value
-                st.detect_indent(token.start.column as i64, next.start.column as i64)
+                st.detect_indent(to_i64(token.start.column), to_i64(next.start.column))
             };
             st.stack.push(Parent::new(ParentType::BEnt, indent));
         }
@@ -372,13 +373,13 @@ fn check_inner(
             let next = next.ok_or(())?;
             let indent = if next.start.line == token.start.line {
                 //   - [a, b]
-                next.start.column as i64
+                to_i64(next.start.column)
             } else {
                 //   - [
                 //   a, b
                 // ]
                 let base = st.cur_line_indent;
-                st.detect_indent(base, next.start.column as i64)
+                st.detect_indent(base, to_i64(next.start.column))
             };
             let mut parent = Parent::new(ParentType::FSeq, indent);
             parent.line_indent = Some(st.cur_line_indent);
@@ -420,7 +421,7 @@ fn check_inner(
                 )
             {
                 let last = st.last();
-                let n_col = n.start.column as i64;
+                let n_col = to_i64(n.start.column);
                 let indent = if last.explicit_key {
                     //   ? k
                     //   : value

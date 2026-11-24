@@ -69,7 +69,7 @@ impl LTable {
             .array
             .iter()
             .enumerate()
-            .map(|(i, v)| (LKey::Num((i + 1) as f64), v.clone()))
+            .map(|(i, v)| (LKey::Num(crate::numeric::usize_to_f64(i + 1)), v.clone()))
             .collect();
         out.extend(self.hash.iter().cloned());
         out

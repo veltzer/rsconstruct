@@ -456,15 +456,6 @@ fn check_unused_echo_escapes(params: &Parameters<'_>, cmd: &Token, out: &mut Out
 }
 
 fn check_injectable_find_sh(_: &Parameters<'_>, t: &Token, out: &mut Out) {
-    let id_strings: Vec<(Id, String)> = arguments(t)
-        .iter()
-        .map(|x| (x.id, only_literal_string(x)))
-        .collect();
-    let patterns: [&dyn Fn(&str) -> bool; 3] = [
-        &|s| s == "-exec" || s == "-execdir",
-        &|s| ["sh", "bash", "dash", "ksh"].contains(&s),
-        &|s| s == "-c",
-    ];
     fn walk(patterns: &[&dyn Fn(&str) -> bool], args: &[(Id, String)], out: &mut Out) {
         let Some((next, rest)) = args.split_first() else {
             return;
@@ -489,6 +480,16 @@ fn check_injectable_find_sh(_: &Parameters<'_>, t: &Token, out: &mut Out) {
             }
         }
     }
+
+    let id_strings: Vec<(Id, String)> = arguments(t)
+        .iter()
+        .map(|x| (x.id, only_literal_string(x)))
+        .collect();
+    let patterns: [&dyn Fn(&str) -> bool; 3] = [
+        &|s| s == "-exec" || s == "-execdir",
+        &|s| ["sh", "bash", "dash", "ksh"].contains(&s),
+        &|s| s == "-c",
+    ];
     walk(&patterns, &id_strings, out);
 }
 
@@ -892,15 +893,6 @@ fn check_unset_globs(_: &Parameters<'_>, t: &Token, out: &mut Out) {
 }
 
 fn check_find_without_path(_: &Parameters<'_>, t: &Token, out: &mut Out) {
-    let TSimpleCommand(_, words) = &t.inner else {
-        return;
-    };
-    let Some((cmd, args)) = words.split_first() else {
-        return;
-    };
-    let is_leading_flag = |flag: &str| {
-        flag.chars().count() <= 2 || flag.chars().all(|c| "-EHLPXdfsxO0123456789".contains(c))
-    };
     fn has_path(args: &[Token], is_leading_flag: &dyn Fn(&str) -> bool) -> bool {
         match args.split_first() {
             None => false,
@@ -911,6 +903,16 @@ fn check_find_without_path(_: &Parameters<'_>, t: &Token, out: &mut Out) {
             }
         }
     }
+
+    let TSimpleCommand(_, words) = &t.inner else {
+        return;
+    };
+    let Some((cmd, args)) = words.split_first() else {
+        return;
+    };
+    let is_leading_flag = |flag: &str| {
+        flag.chars().count() <= 2 || flag.chars().all(|c| "-EHLPXdfsxO0123456789".contains(c))
+    };
     if !(has_flag(t, "help") || has_path(args, &is_leading_flag)) {
         info(
             out,
@@ -1033,6 +1035,15 @@ fn check_deprecated_fgrep(_: &Parameters<'_>, t: &Token, out: &mut Out) {
 }
 
 fn check_while_getopts_case(params: &Parameters<'_>, t: &Token, out: &mut Out) {
+    fn find_case(t: &Token) -> Option<&Token> {
+        match &t.inner {
+            TAnnotation(_, x) => find_case(x),
+            TPipeline(_, l) if l.len() == 1 => find_case(&l[0]),
+            TRedirecting(_, x) if matches!(x.inner, TCaseExpression(..)) => Some(x),
+            _ => None,
+        }
+    }
+
     let TSimpleCommand(_, words) = &t.inner else {
         return;
     };
@@ -1059,14 +1070,6 @@ fn check_while_getopts_case(params: &Parameters<'_>, t: &Token, out: &mut Out) {
     let TWhileExpression(_, body) = &w.inner else {
         return;
     };
-    fn find_case(t: &Token) -> Option<&Token> {
-        match &t.inner {
-            TAnnotation(_, x) => find_case(x),
-            TPipeline(_, l) if l.len() == 1 => find_case(&l[0]),
-            TRedirecting(_, x) if matches!(x.inner, TCaseExpression(..)) => Some(x),
-            _ => None,
-        }
-    }
     let Some(case) = body.iter().find_map(find_case) else {
         return;
     };

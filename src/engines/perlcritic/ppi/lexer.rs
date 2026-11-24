@@ -585,7 +585,7 @@ impl Parser {
             position += 1;
             if position >= 3 {
                 delayed.push(next);
-                self.buffer_front(delayed);
+                self.buffer_front(&delayed);
                 return Ok(self.curly_default(parent));
             }
             let class = match (position, self.text(next)) {
@@ -595,12 +595,12 @@ impl Parser {
             };
             if let Some(class) = class {
                 delayed.push(next);
-                self.buffer_front(delayed);
+                self.buffer_front(&delayed);
                 return Ok(class);
             }
             delayed.push(next);
         }
-        self.buffer_front(delayed);
+        self.buffer_front(&delayed);
         Ok(self.curly_default(parent))
     }
 
@@ -703,7 +703,7 @@ impl Parser {
     }
 
     /// `_buffer(@tokens)`.
-    fn buffer_front(&mut self, tokens: Vec<Id>) {
+    fn buffer_front(&mut self, tokens: &[Id]) {
         for &t in tokens.iter().rev() {
             self.buffer.push_front(t);
         }

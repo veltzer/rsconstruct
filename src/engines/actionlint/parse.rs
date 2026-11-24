@@ -552,7 +552,7 @@ impl Parser {
         WebhookEventFilter { name, values }
     }
 
-    fn parse_webhook_event(&mut self, name: Str, n: &Node) -> WebhookEvent {
+    fn parse_webhook_event(&mut self, name: &Str, n: &Node) -> WebhookEvent {
         let mut ret = WebhookEvent {
             pos: name.pos,
             hook: name.clone(),
@@ -611,7 +611,7 @@ impl Parser {
     fn parse_workflow_call_event_input(
         &mut self,
         id: String,
-        name: Str,
+        name: &Str,
         n: &Node,
     ) -> WorkflowCallEventInput {
         let mut ret = WorkflowCallEventInput {
@@ -684,7 +684,11 @@ impl Parser {
         ret
     }
 
-    fn parse_workflow_call_event_output(&mut self, name: Str, n: &Node) -> WorkflowCallEventOutput {
+    fn parse_workflow_call_event_output(
+        &mut self,
+        name: &Str,
+        n: &Node,
+    ) -> WorkflowCallEventOutput {
         let mut output = WorkflowCallEventOutput {
             name: name.clone(),
             description: None,
@@ -724,7 +728,7 @@ impl Parser {
             match e.id.as_str() {
                 "inputs" => {
                     for i in self.parse_section_mapping("inputs", e.val, true, false) {
-                        let input = self.parse_workflow_call_event_input(i.id, i.key, i.val);
+                        let input = self.parse_workflow_call_event_input(i.id, &i.key, i.val);
                         ret.inputs.push(input);
                     }
                 }
@@ -738,7 +742,7 @@ impl Parser {
                 }
                 "outputs" => {
                     for o in self.parse_section_mapping("outputs", e.val, true, false) {
-                        let output = self.parse_workflow_call_event_output(o.key, o.val);
+                        let output = self.parse_workflow_call_event_output(&o.key, o.val);
                         ret.outputs.insert(o.id, output);
                     }
                 }
@@ -847,7 +851,7 @@ impl Parser {
                             ret.push(Event::ImageVersion(self.parse_image_version_event(e.val)));
                         }
                         _ => ret.push(Event::Webhook(Box::new(
-                            self.parse_webhook_event(e.key, e.val),
+                            self.parse_webhook_event(&e.key, e.val),
                         ))),
                     }
                 }
@@ -1391,6 +1395,13 @@ impl Parser {
     }
 
     fn parse_step(&mut self, n: &Node) -> Step {
+        #[derive(PartialEq, Eq, Clone, Copy)]
+        enum StepKind {
+            Unknown,
+            Action,
+            Docker,
+            Run,
+        }
         let mut ret = Step {
             id: None,
             if_cond: None,
@@ -1400,13 +1411,6 @@ impl Parser {
             continue_on_error: None,
             timeout_minutes: None,
         };
-        #[derive(PartialEq, Eq, Clone, Copy)]
-        enum StepKind {
-            Unknown,
-            Action,
-            Docker,
-            Run,
-        }
         let mut kind = StepKind::Unknown;
         let entries = self.parse_mapping("element of \"steps\" section", n, false, true);
         for e in &entries {
@@ -1539,7 +1543,7 @@ impl Parser {
         }
     }
 
-    fn parse_job(&mut self, id: Str, n: &Node) -> Job {
+    fn parse_job(&mut self, id: &Str, n: &Node) -> Job {
         let mut ret = Job {
             pos: id.pos,
             id: id.clone(),
@@ -1736,7 +1740,7 @@ impl Parser {
     fn parse_jobs(&mut self, n: &Node) -> BTreeMap<String, Job> {
         let mut ret = BTreeMap::new();
         for e in self.parse_section_mapping("jobs", n, false, false) {
-            let job = self.parse_job(e.key, e.val);
+            let job = self.parse_job(&e.key, e.val);
             ret.insert(e.id, job);
         }
         ret

@@ -267,7 +267,9 @@ pub fn apply_processor_defaults(
             FieldProvenance::ProcessorDefault,
         );
     }
-    if defaults.sandbox_network && !table.contains_key(SANDBOX_NETWORK) {
+    if defaults.sandbox_network == super::DefaultNetwork::Allowed
+        && !table.contains_key(SANDBOX_NETWORK)
+    {
         table.insert(SANDBOX_NETWORK.into(), toml::Value::Boolean(true));
         provenance::record_if_absent(
             provenance,

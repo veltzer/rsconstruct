@@ -122,12 +122,13 @@ impl IcppDepAnalyzer {
         source: &Path,
         file_index: &FileIndex,
     ) -> Result<(Vec<PathBuf>, Vec<PathBuf>)> {
+        static INCLUDE_RE: OnceLock<Regex> = OnceLock::new();
+
         let content = errors::ctx(
             fs::read_to_string(source),
             &format!("Failed to read {}", source.display()),
         )?;
 
-        static INCLUDE_RE: OnceLock<Regex> = OnceLock::new();
         let re = INCLUDE_RE.get_or_init(|| {
             // Capture group 1: opening delimiter ("" or "<"), group 2: include path
             Regex::new(r#"^\s*#\s*include\s*(["<])([^>"]+)[>"]"#).expect(errors::INVALID_REGEX)

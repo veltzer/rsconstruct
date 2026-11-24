@@ -76,25 +76,18 @@ fn codepoints_and_byte_offsets(bytes: &[u8]) -> Option<Unicode> {
                 return None;
             }
         }
-        codepoints.push(codepoint as u32);
+        codepoints.push(u32::try_from(codepoint).ok()?);
     }
 }
 
-/// `string.sub(s, i, j)` for positive or negative 1-based indexes.
-pub fn lua_sub(s: &[u8], i: i64, j: i64) -> &[u8] {
-    let len = s.len() as i64;
-    let mut i = if i < 0 { (len + i + 1).max(0) } else { i };
-    let mut j = if j < 0 { len + j + 1 } else { j };
-    if i < 1 {
-        i = 1;
-    }
-    if j > len {
-        j = len;
-    }
+/// `string.sub(s, i, j)` for 1-based indexes, clamped to the string.
+pub fn lua_sub(s: &[u8], i: usize, j: usize) -> &[u8] {
+    let i = i.max(1);
+    let j = j.min(s.len());
     if i > j {
         return &[];
     }
-    &s[(i - 1) as usize..j as usize]
+    &s[i - 1..j]
 }
 
 fn printability_boundaries() -> &'static [u32] {
@@ -154,13 +147,13 @@ impl Chars {
     }
 
     /// The bytes of characters `from..=to`.
-    pub fn get_substring(&self, from: i64, to: i64) -> Vec<u8> {
+    pub fn get_substring(&self, from: usize, to: usize) -> Vec<u8> {
         match &self.unicode {
             None => lua_sub(&self.bytes, from, to).to_vec(),
             Some(u) => {
                 // byte_offsets[from] .. byte_offsets[to + 1] - 1, 1-based.
-                let start = u.byte_offsets[(from - 1) as usize] as i64;
-                let end = u.byte_offsets[to as usize] as i64 - 1;
+                let start = u.byte_offsets[from - 1];
+                let end = u.byte_offsets[to] - 1;
                 lua_sub(&self.bytes, start, end).to_vec()
             }
         }
@@ -168,7 +161,7 @@ impl Chars {
 
     /// Like `get_substring`, with characters that are not printable escaped
     /// (`\xNN`, or `\u{N}` above 255).
-    pub fn get_printable_substring(&self, from: i64, to: i64) -> Vec<u8> {
+    pub fn get_printable_substring(&self, from: usize, to: usize) -> Vec<u8> {
         match &self.unicode {
             None => {
                 let mut out = Vec::new();
@@ -185,7 +178,7 @@ impl Chars {
                 let mut out = Vec::new();
                 let mut index = from;
                 while index <= to {
-                    let codepoint = u.codepoints[(index - 1) as usize];
+                    let codepoint = u.codepoints[index - 1];
                     if is_printable(codepoint) {
                         out.extend(self.get_substring(index, index));
                     } else if codepoint > 255 {
@@ -206,12 +199,12 @@ impl Chars {
             None => from,
             Some(u) => u.byte_offsets[from - 1],
         };
-        pattern::find(&self.bytes, pattern, init as i64)
+        pattern::find(&self.bytes, pattern, crate::numeric::to_i64(init))
     }
 }
 
 /// `decoder.decode(s)` followed by `get_printable_substring(1, length)`.
 pub fn printable(bytes: &[u8]) -> Vec<u8> {
     let chars = Chars::decode(bytes.to_vec());
-    chars.get_printable_substring(1, chars.get_length() as i64)
+    chars.get_printable_substring(1, chars.get_length())
 }

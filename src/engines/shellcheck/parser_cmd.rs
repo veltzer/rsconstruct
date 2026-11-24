@@ -811,8 +811,8 @@ impl P {
     }
 
     fn read_pipe_sequence(&mut self) -> R<Token> {
-        let start = self.start_span();
         type Acc = (Vec<Token>, Vec<Token>);
+        let start = self.start_span();
         let (cmds, pipes) = self.chainl1(
             |p| {
                 p.read_banged(Self::read_command)

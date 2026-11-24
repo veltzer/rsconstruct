@@ -31,7 +31,7 @@ impl DuplicateFilesProcessor {
         resolve_extra_inputs(&names)
     }
 
-    fn check_files(&self, files: &[&Path]) -> Result<()> {
+    fn check_files(files: &[&Path]) -> Result<()> {
         let mut checksums: HashMap<Vec<u8>, Vec<&Path>> = HashMap::new();
 
         for &file in files {
@@ -113,7 +113,7 @@ impl crate::processor::Processor for DuplicateFilesProcessor {
                 files.push(input.as_path());
             }
         }
-        self.check_files(&files)
+        Self::check_files(&files)
     }
 }
 
@@ -142,8 +142,7 @@ inventory::submit! {
         defaults: None,
         keywords: &["checker", "duplicates", "files"],
         description: "Detect duplicate files by content (SHA-256)",
-        is_builtin: true,
-        is_rust: true,
+        implementation: crate::registries::Implementation::Builtin,
         supports_batch: false,
         caches_outputs: true,
         sandboxable: true,

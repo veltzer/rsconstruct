@@ -376,8 +376,9 @@ stop a violation.
 - **No macros** in `src/`. No `#[cfg(...)]` anywhere. OS calls only in
   `platform.rs`.
 - **Lints are errors**: `#![deny(warnings)]`, `clippy::all` denied,
-  pedantic and nursery on. The crate-level allow list in `main.rs` is
-  closed; a new allow goes at the call site with a reason.
+  pedantic and nursery on. There is no crate-level allow list at all
+  (`[lints.clippy]` in `Cargo.toml` only sets levels); fix the code, do not
+  suppress the lint.
 - **Error context** on every IO `?` (`.with_context(...)`). `errors::ctx()`
   is `#[track_caller]`.
 - **Strict, no fallbacks**: a missing tool, a named config file that does
@@ -392,7 +393,6 @@ stop a violation.
 - **A command invoked without its required subcommand lists the choices**,
   one line each and no flags (the user's global rule for every CLI). Keep
   it true when adding a command group to `cli.rs`.
-- **Edit Rust by hand.** No sed, awk or scripts over `src/`.
 - **No back-compat obligations**: there are no external users; changing an
   on-disk format or a config name is fine, clean-and-rebuild is acceptable.
 - **`ci.yml` and `scripts/ci-install-tools.sh` are fleet-shared and

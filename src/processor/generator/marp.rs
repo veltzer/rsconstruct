@@ -226,8 +226,7 @@ inventory::submit! { crate::registries::ProcessorPlugin {
     defconfig_json: crate::registries::default_config_json::<MarpConfig>,
     keywords: &["markdown", "presentation", "slides", "pdf", "html"],
     description: "Convert Marp Markdown presentations to PDF/HTML",
-    is_builtin: false,
-    is_rust: false,
+    implementation: crate::registries::Implementation::External,
     supports_batch: false,
     caches_outputs: true,
     // Chromium-based; sandboxed runs set CHROME_NO_SANDBOX (docs/src/internal/sandbox-chromium.md).

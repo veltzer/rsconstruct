@@ -21,8 +21,8 @@ impl MarpImagesProcessor {
         Self { config }
     }
 
-    fn execute_product(&self, product: &Product) -> Result<()> {
-        self.check_files(&[product.primary_input()])
+    fn execute_product(product: &Product) -> Result<()> {
+        Self::check_files(&[product.primary_input()])
     }
 
     /// The local image references of a markdown text, as (1-based line,
@@ -44,7 +44,7 @@ impl MarpImagesProcessor {
         refs
     }
 
-    fn check_files(&self, files: &[&Path]) -> Result<()> {
+    fn check_files(files: &[&Path]) -> Result<()> {
         let mut errors = Vec::new();
 
         for &file in files {
@@ -139,7 +139,7 @@ impl crate::processor::Processor for MarpImagesProcessor {
     }
 
     fn execute(&self, _ctx: &crate::build_context::BuildContext, product: &Product) -> Result<()> {
-        self.execute_product(product)
+        Self::execute_product(product)
     }
 
     fn execute_batch(
@@ -147,7 +147,9 @@ impl crate::processor::Processor for MarpImagesProcessor {
         _ctx: &crate::build_context::BuildContext,
         products: &[&Product],
     ) -> Vec<Result<()>> {
-        crate::processor::execute_checker_batch_per_file(products, |file| self.check_files(&[file]))
+        crate::processor::execute_checker_batch_per_file(products, |file| {
+            Self::check_files(&[file])
+        })
     }
 }
 
@@ -167,8 +169,7 @@ inventory::submit! {
         defconfig_json: crate::registries::default_config_json::<crate::config::CheckerConfig>,
         keywords: &["markdown", "marp", "images", "checker", "presentation"],
         description: "Validate image references in Marp markdown presentations",
-        is_builtin: true,
-        is_rust: true,
+        implementation: crate::registries::Implementation::Builtin,
         supports_batch: true,
         caches_outputs: true,
         sandboxable: true,

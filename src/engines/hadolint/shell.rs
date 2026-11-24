@@ -429,11 +429,7 @@ impl Reader {
                 self.skip_heredoc_bodies();
                 Token::Op("\n".to_string())
             }
-            ';' | '&' | '|' | '(' | ')' => {
-                self.pos += 1;
-                self.op_token(&c.to_string())
-            }
-            '<' | '>' => {
+            ';' | '&' | '|' | '(' | ')' | '<' | '>' => {
                 self.pos += 1;
                 self.op_token(&c.to_string())
             }

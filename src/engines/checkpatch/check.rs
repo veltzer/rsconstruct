@@ -42,6 +42,15 @@ pub enum Outcome {
     Fatal(String),
 }
 
+/// The switches checkpatch.pl's globals `$check` and `$rpt_cleaners` are.
+#[derive(Clone, Copy, Default)]
+pub struct Switches {
+    /// Whether the file is under a tree whose `CHECK` messages are shown.
+    pub check: bool,
+    /// Whether a cleanup report is still to be made.
+    pub rpt_cleaners: bool,
+}
+
 pub struct Checker {
     pub(super) v: Vars,
     /// The generation of the type patterns: bumped when `possible()`
@@ -67,11 +76,10 @@ pub struct Checker {
     pub(super) cnt_warn: u64,
     pub(super) cnt_chk: u64,
     pub(super) cnt_lines: u64,
-    pub(super) check: bool,
+    pub(super) switches: Switches,
     pub(super) emitted_corrupt: u64,
     pub(super) camelcase: HashSet<Vec<u8>>,
     pub(super) maybe_linker_symbol: HashMap<Vec<u8>, u64>,
-    pub(super) rpt_cleaners: bool,
     pub(super) rawlines: Vec<Vec<u8>>,
     pub(super) lines: Vec<Vec<u8>>,
 }
@@ -97,11 +105,10 @@ impl Checker {
             cnt_warn: 0,
             cnt_chk: 0,
             cnt_lines: 0,
-            check: false,
+            switches: Switches::default(),
             emitted_corrupt: 0,
             camelcase: HashSet::new(),
             maybe_linker_symbol: HashMap::new(),
-            rpt_cleaners: false,
             rawlines: Vec::new(),
             lines: Vec::new(),
         }
@@ -164,7 +171,7 @@ impl Checker {
                 "total: {} errors, {} warnings, {}{} lines checked\n",
                 self.cnt_error,
                 self.cnt_warn,
-                if self.check {
+                if self.switches.check {
                     format!("{} checks, ", self.cnt_chk)
                 } else {
                     String::new()
@@ -178,8 +185,8 @@ impl Checker {
                 b"\nNOTE: For some of the reported defects, checkpatch may be able to\n      mechanically convert to the typical style using --fix or --fix-inplace.\n",
             );
         }
-        if self.rpt_cleaners {
-            self.rpt_cleaners = false;
+        if self.switches.rpt_cleaners {
+            self.switches.rpt_cleaners = false;
             out.extend_from_slice(
                 b"\nNOTE: Whitespace errors detected.\n      You may wish to use scripts/cleanpatch or scripts/cleanfile\n",
             );
@@ -218,7 +225,7 @@ impl Checker {
     }
 
     pub(super) fn chk(&mut self, _type: &str, msg: &[u8]) -> bool {
-        if !self.check {
+        if !self.switches.check {
             return false;
         }
         self.report("CHECK", msg);

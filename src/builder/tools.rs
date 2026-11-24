@@ -744,7 +744,7 @@ fn run_tools_command(
                     .is_some_and(|b| b.config.dependencies.eatmydata)
                     || (all && crate::config::running_in_ci());
                 let flags = InstallFlags {
-                    interactive,
+                    confirmation: Confirmation::from_interactive(interactive),
                     use_eatmydata: !no_eatmydata
                         && config_enables_eatmydata
                         && which::which("eatmydata").is_ok(),
@@ -768,7 +768,7 @@ fn run_tools_command(
                     )
                 })?;
                 let flags = InstallFlags {
-                    interactive,
+                    confirmation: Confirmation::from_interactive(interactive),
                     use_eatmydata: false,
                     verbose,
                     // A project install is from the lock and nothing else.
@@ -789,11 +789,30 @@ fn run_tools_command(
     Ok(())
 }
 
+/// Whether an install asks before it changes anything.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Confirmation {
+    /// Show the plan and ask (`-i`).
+    Ask,
+    /// Go ahead without asking: CI and scripts are the common callers and
+    /// neither can answer a prompt.
+    Proceed,
+}
+
+impl Confirmation {
+    const fn from_interactive(interactive: bool) -> Self {
+        if interactive {
+            Self::Ask
+        } else {
+            Self::Proceed
+        }
+    }
+}
+
 /// How an install runs, from the command line.
 struct InstallFlags {
-    /// Ask before installing (`-i`). Off by default: CI and scripts are the
-    /// common callers and neither can answer a prompt.
-    interactive: bool,
+    /// Ask before installing (`-i`). Off by default.
+    confirmation: Confirmation,
     /// Wrap the system package manager in `eatmydata`.
     use_eatmydata: bool,
     verbose: bool,
@@ -857,7 +876,7 @@ fn tool_error(message: String) -> anyhow::Error {
 /// Ask before installing when `-i` was given. True to go ahead; declining is
 /// a normal outcome, not an error — the user saw the plan and said no.
 fn go_ahead(flags: &InstallFlags) -> Result<bool> {
-    if flags.interactive && !confirm()? {
+    if flags.confirmation == Confirmation::Ask && !confirm()? {
         println!("Aborted.");
         return Ok(false);
     }

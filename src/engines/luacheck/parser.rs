@@ -159,7 +159,9 @@ struct OpeningToken {
     token: Tok,
     closing_token: Option<Tok>,
     eligible: bool,
-    indentation: i64,
+    /// `None` where the line has no indentation to measure (it orders
+    /// before every measured one, as `-1` did).
+    indentation: Option<usize>,
     error_token: Option<Tok>,
     error_range: Option<Range>,
 }
@@ -310,11 +312,14 @@ impl<'a> Parser<'a> {
         Ok(false)
     }
 
-    fn get_indentation(&self, line: usize) -> i64 {
+    /// The end of the leading whitespace of `line` relative to its start;
+    /// `None` when the line has none (an empty match ends before it starts)
+    /// or the match failed.
+    fn get_indentation(&self, line: usize) -> Option<usize> {
         let offset = self.lexer.line_offset(line);
         match self.lexer.src.find(b"^[ \t\x0b\x0c]*", offset) {
-            Ok(Some(m)) => m.end as i64 - m.start as i64,
-            _ => -1,
+            Ok(Some(m)) => m.end.checked_sub(m.start),
+            _ => None,
         }
     }
 

@@ -22,11 +22,11 @@ pub struct Mark {
 }
 
 impl Mark {
-    const fn from_lib(mark: libyaml_safer::Mark) -> Self {
+    fn from_lib(mark: libyaml_safer::Mark) -> Self {
         Self {
-            index: mark.index as usize,
-            line: mark.line as usize,
-            column: mark.column as usize,
+            index: crate::numeric::u64_to_usize(mark.index),
+            line: crate::numeric::u64_to_usize(mark.line),
+            column: crate::numeric::u64_to_usize(mark.column),
         }
     }
 }
@@ -143,15 +143,14 @@ impl Token {
             return end_line;
         }
         let bytes = buffer.as_bytes();
-        let mut pos = self.end.index as isize - 1;
-        while pos >= self.start.index as isize - 1
-            && pos >= 0
-            && is_python_whitespace(bytes[pos as usize])
-        {
-            if bytes[pos as usize] == b'\n' {
+        // `after` is one past the byte being looked at, so that stepping
+        // back past the start of the buffer needs no negative number.
+        let mut after = self.end.index;
+        while after > 0 && after >= self.start.index && is_python_whitespace(bytes[after - 1]) {
+            if bytes[after - 1] == b'\n' {
                 end_line -= 1;
             }
-            pos -= 1;
+            after -= 1;
         }
         end_line
     }

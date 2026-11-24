@@ -167,12 +167,11 @@ fn source_line(doc: &Doc, element: usize) -> Vec<u8> {
     let statement = doc.statement(element).unwrap_or(element);
     let code = doc.content(statement);
     let lines: Vec<&[u8]> = code.split(|&c| c == b'\n').collect();
-    let line = |e: usize| doc.location(e).map_or(0, |l| l.line) as isize;
-    let index = line(element) - line(statement);
-    if index < 0 || index as usize >= lines.len() {
-        return Vec::new();
-    }
-    lines[index as usize].to_vec()
+    let line = |e: usize| crate::numeric::to_isize(doc.location(e).map_or(0, |l| l.line));
+    let row = usize::try_from(line(element) - line(statement))
+        .ok()
+        .and_then(|index| lines.get(index));
+    row.map_or_else(Vec::new, |row| row.to_vec())
 }
 
 /// `Violation::to_string`: `String::Format`'s `stringf` over the format.

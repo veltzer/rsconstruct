@@ -361,7 +361,7 @@ mod tests {
         store.store_blob_descriptor(&ctx, "0bcdbeef", &out).unwrap();
         store.store_marker(&ctx, "0marker0").unwrap();
 
-        let uploads = uploads.lock();
+        let uploads = uploads.lock().clone();
         assert!(
             uploads.iter().any(|key| key.starts_with("objects/")),
             "the object push was attempted: {uploads:?}"

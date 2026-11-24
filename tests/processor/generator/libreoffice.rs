@@ -71,10 +71,10 @@ fn stored_zip(entries: &[(&str, &[u8])]) -> Vec<u8> {
     let mut out: Vec<u8> = Vec::new();
     let mut central: Vec<u8> = Vec::new();
     for (name, data) in entries {
-        let offset = out.len() as u32;
+        let offset = u32::try_from(out.len()).unwrap();
         let crc = crc32(data);
-        let size = data.len() as u32;
-        let name_len = name.len() as u16;
+        let size = u32::try_from(data.len()).unwrap();
+        let name_len = u16::try_from(name.len()).unwrap();
         // Local file header.
         out.extend_from_slice(&0x0403_4b50u32.to_le_bytes());
         out.extend_from_slice(&20u16.to_le_bytes()); // version needed
@@ -109,9 +109,9 @@ fn stored_zip(entries: &[(&str, &[u8])]) -> Vec<u8> {
         central.extend_from_slice(&offset.to_le_bytes());
         central.extend_from_slice(name.as_bytes());
     }
-    let central_offset = out.len() as u32;
-    let central_size = central.len() as u32;
-    let count = entries.len() as u16;
+    let central_offset = u32::try_from(out.len()).unwrap();
+    let central_size = u32::try_from(central.len()).unwrap();
+    let count = u16::try_from(entries.len()).unwrap();
     out.extend_from_slice(&central);
     // End of central directory record.
     out.extend_from_slice(&0x0605_4b50u32.to_le_bytes());

@@ -1,7 +1,7 @@
 use super::Builder;
 use crate::cli::DisplayOptions;
 use crate::color;
-use crate::executor::{Executor, ExecutorOptions};
+use crate::executor::{Executor, ExecutorOptions, RunFlags};
 use anyhow::{Context, Result, bail};
 use std::collections::HashSet;
 use std::fmt::Write;
@@ -38,9 +38,11 @@ impl Builder {
             batch_size: None,
             explain: false,
             retry: 0,
-            force: false,
-            keep_going: false,
-            timings: false,
+            run: RunFlags {
+                force: false,
+                keep_going: false,
+                timings: false,
+            },
             worker_stack_bytes: self.config.build.worker_stack_mib * 1024 * 1024,
             // Cleaning executes no product.
             builtin_setup: crate::sandbox::BuiltinSetup::default(),
@@ -283,7 +285,7 @@ impl Builder {
     }
 
     /// Hard clean using `git clean -qffxd`. Requires a git repository.
-    pub fn hardclean(&self, ctx: &crate::build_context::BuildContext) -> Result<()> {
+    pub fn hardclean(ctx: &crate::build_context::BuildContext) -> Result<()> {
         use std::process::Command;
 
         if !std::path::Path::new(".git").exists() {

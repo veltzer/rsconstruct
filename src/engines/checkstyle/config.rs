@@ -512,7 +512,7 @@ fn check_module(element: Element, inherited: &Common) -> Result<CheckModule> {
         let accepted = super::checks::tokens(&kind);
         for token in value.split(',').map(str::trim).filter(|t| !t.is_empty()) {
             let ty = super::tables::TOKEN_NAMES.iter().position(|n| *n == token);
-            let known = ty.is_some_and(|t| accepted.contains(&(t as u16)))
+            let known = ty.is_some_and(|t| u16::try_from(t).is_ok_and(|t| accepted.contains(&t)))
                 || token_type_name_matches(token, accepted);
             if !known {
                 bail!(

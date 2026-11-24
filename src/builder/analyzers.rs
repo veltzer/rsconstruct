@@ -267,7 +267,7 @@ impl Builder {
                 // Phase 1: Discover products (fixed-point loop for cross-processor deps)
                 let active: Vec<String> = sorted_keys(&processors)
                     .into_iter()
-                    .filter(|name| self.is_processor_active(name, processors[*name].as_ref()))
+                    .filter(|name| Self::is_processor_active(processors[*name].as_ref()))
                     .cloned()
                     .collect();
                 let file_index = self.discover_products(

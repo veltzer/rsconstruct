@@ -227,13 +227,13 @@ fn convert(value: &Value, seen: &mut HashSet<usize>) -> Result<LVal> {
     Ok(match value {
         Value::Nil => LVal::Other("nil"),
         Value::Boolean(b) => LVal::Bool(*b),
-        Value::Integer(i) => LVal::Num(*i as f64),
+        Value::Integer(i) => LVal::Num(crate::numeric::i64_to_f64(*i)),
         Value::Number(n) => LVal::Num(*n),
         Value::String(s) => LVal::Str(s.as_bytes().to_vec()),
         Value::Table(t) => convert_table(t, seen)?,
         Value::Function(_) => LVal::Other("function"),
         Value::Thread(_) => LVal::Other("thread"),
-        Value::UserData(_) | Value::LightUserData(_) => LVal::Other("userdata"),
+        // Userdata, light userdata and any other Lua value kind.
         _ => LVal::Other("userdata"),
     })
 }
@@ -241,7 +241,7 @@ fn convert(value: &Value, seen: &mut HashSet<usize>) -> Result<LVal> {
 fn convert_key(value: &Value) -> LKey {
     match value {
         Value::Boolean(b) => LKey::Bool(*b),
-        Value::Integer(i) => LKey::Num(*i as f64),
+        Value::Integer(i) => LKey::Num(crate::numeric::i64_to_f64(*i)),
         Value::Number(n) => LKey::Num(*n),
         Value::String(s) => LKey::Str(s.as_bytes().to_vec()),
         Value::Table(_) => LKey::Other("table"),
@@ -269,13 +269,15 @@ fn convert_table(table: &Table, seen: &mut HashSet<usize>) -> Result<LVal> {
         array.push(convert(&value, seen)?);
         index += 1;
     }
-    let n = array.len() as i64;
+    let n = crate::numeric::to_i64(array.len());
     let mut hash = Vec::new();
     for pair in table.clone().pairs::<Value, Value>() {
         let (key, value) = pair.context("Failed to iterate a configuration table")?;
         let in_array = match &key {
             Value::Integer(i) => (1..=n).contains(i),
-            Value::Number(f) => f.fract() == 0.0 && (1.0..=n as f64).contains(f),
+            Value::Number(f) => {
+                f.fract() == 0.0 && (1.0..=crate::numeric::i64_to_f64(n)).contains(f)
+            }
             _ => false,
         };
         if in_array {

@@ -12,8 +12,15 @@ use std::fmt;
 const L_ESC: u8 = b'%';
 const SPECIALS: &[u8] = b"^$*+?.([%-";
 const MAX_CAPTURES: usize = 32;
-const CAP_UNFINISHED: isize = -1;
-const CAP_POSITION: isize = -2;
+
+/// The length of a capture in the match state: Lua's `CAP_UNFINISHED` (-1)
+/// and `CAP_POSITION` (-2) markers, or the length of a finished capture.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum CapLen {
+    Unfinished,
+    Position,
+    Len(usize),
+}
 
 /// A malformed pattern, with Lua's message.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -65,7 +72,7 @@ struct MatchState<'a> {
     src: &'a [u8],
     pat: &'a [u8],
     level: usize,
-    capture: [(usize, isize); MAX_CAPTURES],
+    capture: [(usize, CapLen); MAX_CAPTURES],
 }
 
 fn err(msg: &str) -> PatternError {
@@ -119,12 +126,11 @@ impl MatchState<'_> {
     }
 
     fn check_capture(&self, l: u8) -> Result<usize, PatternError> {
-        let l = isize::from(l) - isize::from(b'1');
-        if l < 0 {
+        let Some(l) = l.checked_sub(b'1') else {
             return Err(err("invalid capture index"));
-        }
-        let l = l as usize;
-        if l >= self.level || self.capture[l].1 == CAP_UNFINISHED {
+        };
+        let l = usize::from(l);
+        if l >= self.level || self.capture[l].1 == CapLen::Unfinished {
             return Err(err("invalid capture index"));
         }
         Ok(l)
@@ -133,7 +139,7 @@ impl MatchState<'_> {
     fn capture_to_close(&self) -> Result<usize, PatternError> {
         (0..self.level)
             .rev()
-            .find(|&level| self.capture[level].1 == CAP_UNFINISHED)
+            .find(|&level| self.capture[level].1 == CapLen::Unfinished)
             .ok_or_else(|| err("invalid pattern capture"))
     }
 
@@ -275,7 +281,7 @@ impl MatchState<'_> {
         &mut self,
         s: usize,
         p: usize,
-        what: isize,
+        what: CapLen,
     ) -> Result<Option<usize>, PatternError> {
         let level = self.level;
         if level >= MAX_CAPTURES {
@@ -292,10 +298,10 @@ impl MatchState<'_> {
 
     fn end_capture(&mut self, s: usize, p: usize) -> Result<Option<usize>, PatternError> {
         let l = self.capture_to_close()?;
-        self.capture[l].1 = (s - self.capture[l].0) as isize;
+        self.capture[l].1 = CapLen::Len(s - self.capture[l].0);
         let res = self.do_match(s, p)?;
         if res.is_none() {
-            self.capture[l].1 = CAP_UNFINISHED;
+            self.capture[l].1 = CapLen::Unfinished;
         }
         Ok(res)
     }
@@ -303,7 +309,11 @@ impl MatchState<'_> {
     fn match_capture(&self, s: usize, l: u8) -> Result<Option<usize>, PatternError> {
         let l = self.check_capture(l)?;
         let (init, len) = self.capture[l];
-        let len = len as usize;
+        // A position capture has no length: Lua compares against a huge
+        // unsigned value there, so nothing matches.
+        let CapLen::Len(len) = len else {
+            return Ok(None);
+        };
         if self.src.len() - s >= len && self.src[init..init + len] == self.src[s..s + len] {
             Ok(Some(s + len))
         } else {
@@ -316,9 +326,9 @@ impl MatchState<'_> {
             match self.p(p) {
                 b'(' => {
                     return if self.p(p + 1) == b')' {
-                        self.start_capture(s, p + 2, CAP_POSITION)
+                        self.start_capture(s, p + 2, CapLen::Position)
                     } else {
-                        self.start_capture(s, p + 1, CAP_UNFINISHED)
+                        self.start_capture(s, p + 1, CapLen::Unfinished)
                     };
                 }
                 b')' => return self.end_capture(s, p + 1),
@@ -407,13 +417,10 @@ impl MatchState<'_> {
                 continue;
             }
             let (init, len) = self.capture[i];
-            if len == CAP_UNFINISHED {
-                return Err(err("unfinished capture"));
-            }
-            if len == CAP_POSITION {
-                out.push(Capture::Pos(init + 1));
-            } else {
-                out.push(Capture::Str(init, init + len as usize));
+            match len {
+                CapLen::Unfinished => return Err(err("unfinished capture")),
+                CapLen::Position => out.push(Capture::Pos(init + 1)),
+                CapLen::Len(len) => out.push(Capture::Str(init, init + len)),
             }
         }
         Ok(out)
@@ -432,17 +439,12 @@ fn mem_find(haystack: &[u8], needle: &[u8]) -> Option<usize> {
 
 /// The start offset (0-based) of a 1-based, possibly negative `init`, as
 /// `str_find_aux` clamps it.
-const fn start_offset(init: i64, len: usize) -> usize {
-    let len_i = len as i64;
+fn start_offset(init: i64, len: usize) -> usize {
+    let len_i = crate::numeric::to_i64(len);
     let mut init = if init < 0 { len_i + init + 1 } else { init };
     init -= 1;
-    if init < 0 {
-        0
-    } else if init > len_i {
-        len
-    } else {
-        init as usize
-    }
+    // Clamped to `0..=len_i`, so it converts to a `usize`.
+    usize::try_from(init.clamp(0, len_i)).unwrap_or(len)
 }
 
 fn search(
@@ -468,7 +470,7 @@ fn search(
         src: subject,
         pat,
         level: 0,
-        capture: [(0, 0); MAX_CAPTURES],
+        capture: [(0, CapLen::Len(0)); MAX_CAPTURES],
     };
     let mut s1 = init;
     loop {
@@ -525,7 +527,7 @@ pub fn gsub(
         src: subject,
         pat,
         level: 0,
-        capture: [(0, 0); MAX_CAPTURES],
+        capture: [(0, CapLen::Len(0)); MAX_CAPTURES],
     };
     let mut out = Vec::with_capacity(subject.len());
     let mut src = 0usize;

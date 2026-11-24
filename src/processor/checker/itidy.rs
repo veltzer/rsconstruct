@@ -49,10 +49,7 @@ impl ItidyProcessor {
 
     fn build_options(&self) -> Result<Options> {
         // What `tidy -errors -q` prints: the reports, not the chatter.
-        let mut opts = Options {
-            quiet: true,
-            ..Options::default()
-        };
+        let mut opts = Options::quiet();
         if !self.config.config_file.is_empty() {
             let path = Path::new(&self.config.config_file);
             let text = std::fs::read_to_string(path)
@@ -191,8 +188,7 @@ inventory::submit! {
         defaults: None,
         keywords: &["html", "validator", "web", "tidy", "rust"],
         description: "Check HTML the way tidy -errors does (in-process)",
-        is_builtin: true,
-        is_rust: true,
+        implementation: crate::registries::Implementation::Builtin,
         supports_batch: true,
         caches_outputs: true,
         sandboxable: true,

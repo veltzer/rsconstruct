@@ -356,9 +356,9 @@ fn get_scalar_opt(opts_stack: &OptionStack, option: &str) -> Option<LVal> {
 }
 
 /// A limit option: a number, or `false` for no limit.
-fn limit(value: Option<LVal>) -> Option<f64> {
+const fn limit(value: Option<&LVal>) -> Option<f64> {
     match value {
-        Some(LVal::Num(n)) => Some(n),
+        Some(LVal::Num(n)) => Some(*n),
         _ => None,
     }
 }
@@ -471,6 +471,13 @@ fn get_operators(opts_stack: &OptionStack) -> Option<Vec<Vec<u8>>> {
     operators
 }
 
+/// Whether defining a global is allowed (`allow_defined`), or only at the
+/// top level (`allow_defined_top`).
+pub struct AllowDefined {
+    pub allow_defined: bool,
+    pub allow_defined_top: bool,
+}
+
 /// Normalized options for a line of a file.
 pub struct Normalized {
     pub std: Def,
@@ -478,8 +485,7 @@ pub struct Normalized {
     pub unused_secondaries: bool,
     pub is_self: bool,
     pub module: bool,
-    pub allow_defined: bool,
-    pub allow_defined_top: bool,
+    pub allow: AllowDefined,
     pub max_cyclomatic_complexity: Option<f64>,
     pub max_code_line_length: Option<f64>,
     pub max_string_line_length: Option<f64>,
@@ -501,11 +507,11 @@ pub fn normalize(opts_stack: &OptionStack, stds: &Stds) -> Normalized {
     ];
     for opts in opts_stack {
         if let Some(value) = opts.get("max_line_length") {
-            subs = [limit(Some(value.clone())); 3];
+            subs = [limit(Some(value)); 3];
         }
         for (i, name) in sub_names.iter().enumerate() {
             if let Some(value) = opts.get(name) {
-                subs[i] = limit(Some(value.clone()));
+                subs[i] = limit(Some(value));
             }
         }
     }
@@ -515,9 +521,13 @@ pub fn normalize(opts_stack: &OptionStack, stds: &Stds) -> Normalized {
         unused_secondaries: scalar_bool(opts_stack, "unused_secondaries", true),
         is_self: scalar_bool(opts_stack, "self", true),
         module: scalar_bool(opts_stack, "module", false),
-        allow_defined: scalar_bool(opts_stack, "allow_defined", false),
-        allow_defined_top: scalar_bool(opts_stack, "allow_defined_top", false),
-        max_cyclomatic_complexity: limit(get_scalar_opt(opts_stack, "max_cyclomatic_complexity")),
+        allow: AllowDefined {
+            allow_defined: scalar_bool(opts_stack, "allow_defined", false),
+            allow_defined_top: scalar_bool(opts_stack, "allow_defined_top", false),
+        },
+        max_cyclomatic_complexity: limit(
+            get_scalar_opt(opts_stack, "max_cyclomatic_complexity").as_ref(),
+        ),
         max_code_line_length: subs[0],
         max_string_line_length: subs[1],
         max_comment_line_length: subs[2],

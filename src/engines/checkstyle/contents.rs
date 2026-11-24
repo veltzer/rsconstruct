@@ -29,10 +29,10 @@ pub fn index_error(index: i64, len: usize) -> String {
 /// `String.substring(begin, end)` on UTF-16 units.
 pub fn substring(s: &[u16], begin: i64, end: i64) -> Result<&[u16], String> {
     let len = s.len();
-    if begin < 0 || end < begin || end > len as i64 {
-        return Err(range_error(begin, end, len));
+    match (usize::try_from(begin), usize::try_from(end)) {
+        (Ok(from), Ok(to)) if from <= to && to <= len => Ok(&s[from..to]),
+        _ => Err(range_error(begin, end, len)),
     }
-    Ok(&s[begin as usize..end as usize])
 }
 
 /// `Character.isWhitespace(int)`.
@@ -110,10 +110,12 @@ impl FileText {
 
     /// `FileText.get(index)`, which throws past the end.
     pub fn get(&self, index: i64) -> Result<&[u16], String> {
-        if index < 0 || index >= self.lines.len() as i64 {
+        let Some(&(start, end)) = usize::try_from(index)
+            .ok()
+            .and_then(|index| self.lines.get(index))
+        else {
             return Err(index_error(index, self.lines.len()));
-        }
-        let (start, end) = self.lines[index as usize];
+        };
         Ok(&self.full[start..end])
     }
 }
@@ -129,8 +131,8 @@ pub struct Comment {
 }
 
 impl Comment {
-    const fn new(text: Vec<Vec<u16>>, first_col: i64, last_line: i64, last_col: i64) -> Self {
-        let start_line = last_line - text.len() as i64 + 1;
+    fn new(text: Vec<Vec<u16>>, first_col: i64, last_line: i64, last_col: i64) -> Self {
+        let start_line = last_line - crate::numeric::to_i64(text.len()) + 1;
         Self {
             text,
             start_line,
@@ -178,7 +180,7 @@ impl Comments {
         col_no: i32,
     ) -> Result<(), String> {
         let line = text.get(i64::from(line_no) - 1)?;
-        let len = line.len() as i64;
+        let len = crate::numeric::to_i64(line.len());
         let content = substring(line, i64::from(col_no), len)?.to_vec();
         let comment = Comment::new(
             vec![content],
@@ -209,7 +211,8 @@ impl Comments {
             vec![substring(text.get(sl - 1)?, sc, ec + 1)?.to_vec()]
         } else {
             let first = text.get(sl - 1)?;
-            let mut lines = vec![substring(first, sc, first.len() as i64)?.to_vec()];
+            let mut lines =
+                vec![substring(first, sc, crate::numeric::to_i64(first.len()))?.to_vec()];
             for i in sl..el {
                 lines.push(text.get(i)?.to_vec());
             }

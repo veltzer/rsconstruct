@@ -4,6 +4,7 @@ use super::super::Problem;
 use super::super::config::RuleConf;
 use super::super::parser::{Kind, Stream};
 use super::{Check, Default, OptKind, OptSpec, RuleSpec};
+use crate::numeric::to_i64;
 
 fn check_comments(conf: &RuleConf, stream: &Stream<'_>, idx: usize, out: &mut Vec<Problem>) {
     let comment = stream.comments[idx];
@@ -11,7 +12,7 @@ fn check_comments(conf: &RuleConf, stream: &Stream<'_>, idx: usize, out: &mut Ve
     let min_spaces = conf.int_opt("min-spaces-from-content");
     if min_spaces != -1 && stream.comment_is_inline(&comment) {
         let before = &stream.tokens[comment.token_before];
-        if (comment.pointer as i64 - before.end.index as i64) < min_spaces {
+        if (to_i64(comment.pointer) - to_i64(before.end.index)) < min_spaces {
             out.push(Problem::new(
                 comment.line_no,
                 comment.column_no,

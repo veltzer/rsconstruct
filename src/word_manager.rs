@@ -77,6 +77,8 @@ impl WordManager {
         let words_path = Path::new(&self.words_file);
         flush_words(&custom_words, &words_to_add, words_path, self.header_line)?;
         custom_words.extend(words_to_add.drain());
+        drop(custom_words);
+        drop(words_to_add);
         Ok(())
     }
 

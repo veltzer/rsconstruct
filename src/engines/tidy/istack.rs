@@ -159,8 +159,8 @@ impl Doc {
             return node;
         };
         if self.lexer.inode.is_none() {
-            self.lexer.lines = self.stream.curline as u32;
-            self.lexer.columns = self.stream.curcol as u32;
+            self.lexer.lines = self.stream.curline;
+            self.lexer.columns = self.stream.curcol;
         }
         let mut node = Node::new(self.lexer.lines, self.lexer.columns);
         node.ntype = NodeType::StartTag;
@@ -197,21 +197,15 @@ impl Doc {
         }
         // tidy indexes from the top of the frame down to entry 0, not to
         // the frame base.
-        let mut i = (self.lexer.istack.len() - self.lexer.istackbase) as isize - 1;
-        while i >= 0 {
-            let iu = i as usize;
-            if self.lexer.istack[iu].tag == etag {
-                let mut j = i - 1;
-                while j >= 0 {
-                    let ju = j as usize;
-                    if self.lexer.istack[ju].tag == ntag {
-                        self.lexer.istack.swap(iu, ju);
+        for i in (0..self.lexer.istack.len() - self.lexer.istackbase).rev() {
+            if self.lexer.istack[i].tag == etag {
+                for j in (0..i).rev() {
+                    if self.lexer.istack[j].tag == ntag {
+                        self.lexer.istack.swap(i, j);
                         return true;
                     }
-                    j -= 1;
                 }
             }
-            i -= 1;
         }
         false
     }

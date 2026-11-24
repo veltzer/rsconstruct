@@ -179,7 +179,7 @@ fn severity_to_number(s: &str) -> Result<u8> {
         if n == 0 {
             return Ok(5);
         }
-        return Ok(n.clamp(1, 5) as u8);
+        return Ok(u8::try_from(n.clamp(1, 5)).expect("clamped to 1..=5"));
     }
     Ok(match s.to_ascii_lowercase().as_str() {
         "gentle" => 5,
@@ -528,11 +528,16 @@ pub fn load(text: &str) -> Result<Profile> {
     let top = match get("top") {
         None => None,
         Some(t) if !truthy(t) => None,
-        Some(t) => Some(parse_integer(t).filter(|n| *n > 0).with_context(|| {
-            format!(
-                "The value for the global \"top\" option (\"{t}\") is not one of the valid values"
-            )
-        })? as usize),
+        Some(t) => Some(
+            parse_integer(t)
+                .filter(|n| *n > 0)
+                .and_then(|n| usize::try_from(n).ok())
+                .with_context(|| {
+                    format!(
+                        "The value for the global \"top\" option (\"{t}\") is not one of the valid values"
+                    )
+                })?,
+        ),
     };
     let include: Vec<Regex> = get("include")
         .unwrap_or("")
@@ -553,7 +558,7 @@ pub fn load(text: &str) -> Result<Profile> {
             let n = if verbose == "4" {
                 5
             } else {
-                n.unsigned_abs() as u32
+                u32::try_from(n.unsigned_abs()).unwrap_or(u32::MAX)
             };
             numeric_format(n)
                 .unwrap_or_else(|| numeric_format(4).expect("format 4"))
@@ -613,8 +618,9 @@ pub fn load(text: &str) -> Result<Profile> {
             Some(m) if !m.is_empty() && !m.eq_ignore_ascii_case("no_limit") => {
                 let n = parse_integer(m)
                     .filter(|n| *n >= 0)
+                    .and_then(|n| usize::try_from(n).ok())
                     .with_context(|| format!("The value for the {name} \"maximum_violations_per_document\" option (\"{m}\") is not an integer greater than or equal to zero"))?;
-                Some(n as usize)
+                Some(n)
             }
             _ => policy.default_maximum_violations(),
         };

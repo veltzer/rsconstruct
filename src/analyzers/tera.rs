@@ -46,7 +46,6 @@ impl TeraDepAnalyzer {
     /// A referenced file resolves when it is on disk or in `file_index`,
     /// which also holds the outputs other products declare.
     pub(crate) fn scan_template(
-        &self,
         ctx: &crate::build_context::BuildContext,
         source: &Path,
         file_index: &FileIndex,
@@ -279,6 +278,8 @@ fn scan_template_recursive(
     hash_pieces: &mut Vec<String>,
     scanned: &mut HashSet<PathBuf>,
 ) -> Result<()> {
+    static INCLUDE_RE: OnceLock<Regex> = OnceLock::new();
+
     let canonical = source
         .canonicalize()
         .unwrap_or_else(|_| source.to_path_buf());
@@ -305,7 +306,6 @@ fn scan_template_recursive(
     )?;
 
     // {% include "path" %}, {% import "path" %}, {% extends "path" %}
-    static INCLUDE_RE: OnceLock<Regex> = OnceLock::new();
     let include_re = INCLUDE_RE.get_or_init(|| {
         Regex::new(r#"\{%[-~]?\s*(?:include|import|extends)\s+["']([^"']+)["']"#)
             .expect(errors::INVALID_REGEX)
@@ -560,7 +560,7 @@ impl DepAnalyzer for TeraDepAnalyzer {
         source: &Path,
         file_index: &FileIndex,
     ) -> Result<ScanResult> {
-        self.scan_template(ctx, source, file_index)
+        Self::scan_template(ctx, source, file_index)
     }
 
     /// The hash pieces (glob results, command text) depend on filesystem
@@ -583,7 +583,7 @@ impl DepAnalyzer for TeraDepAnalyzer {
         // against the disk alone yields the pieces the build used.
         let disk_only = FileIndex::from_paths(Vec::new());
         Ok(Some(
-            self.scan_template(ctx, source, &disk_only)?.hash_pieces,
+            Self::scan_template(ctx, source, &disk_only)?.hash_pieces,
         ))
     }
 }
@@ -700,9 +700,7 @@ mod tests {
         fs::write(&source, template).unwrap();
         let file_index = FileIndex::from_paths(index.iter().map(PathBuf::from).collect());
         let ctx = crate::build_context::BuildContext::new();
-        TeraDepAnalyzer::new(TeraAnalyzerConfig::default())
-            .scan_template(&ctx, &source, &file_index)
-            .unwrap()
+        TeraDepAnalyzer::scan_template(&ctx, &source, &file_index).unwrap()
     }
 
     /// A template calling `copyright_years()` is made from the current
@@ -793,10 +791,9 @@ mod tests {
         let source = dir.join("main.tera");
         let ctx = crate::build_context::BuildContext::new();
         let index = FileIndex::from_paths(Vec::new());
-        let analyzer = TeraDepAnalyzer::new(TeraAnalyzerConfig::default());
 
         fs::write(&source, "{{ shell_output(command=\"date\") }}").unwrap();
-        let err = analyzer.scan_template(&ctx, &source, &index).unwrap_err();
+        let err = TeraDepAnalyzer::scan_template(&ctx, &source, &index).unwrap_err();
         assert!(
             err.to_string().contains("is missing depends_on=[...]"),
             "{err}"
@@ -807,7 +804,7 @@ mod tests {
             "{{ shell_output(command=\"date\", depends_on=deps) }}",
         )
         .unwrap();
-        let err = analyzer.scan_template(&ctx, &source, &index).unwrap_err();
+        let err = TeraDepAnalyzer::scan_template(&ctx, &source, &index).unwrap_err();
         assert!(
             err.to_string()
                 .contains("depends_on must be a literal list"),

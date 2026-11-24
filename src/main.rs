@@ -18,6 +18,7 @@ mod file_index;
 mod graph;
 mod graph_render;
 mod json_output;
+mod numeric;
 mod object_store;
 mod orphans;
 mod output;
@@ -109,7 +110,7 @@ fn run() -> (Result<()>, bool) {
     let t = Instant::now();
     // JSON mode never emits color: stdout must be machine-readable, and
     // --color=always must not smuggle ANSI escapes into it.
-    let color_enabled = !cli.json
+    let color_enabled = !cli.format.json
         && match cli.color {
             cli::ColorMode::Always => true,
             cli::ColorMode::Never => false,
@@ -122,14 +123,20 @@ fn run() -> (Result<()>, bool) {
             }
         };
     runtime_flags::init(runtime_flags::RuntimeFlags {
-        show_child_processes: cli.show_child_processes,
-        show_output: cli.show_output,
-        phases_debug: cli.phases,
-        graph_stats: cli.graph_stats,
-        json_mode: cli.json,
-        quiet: cli.quiet,
-        all_fields: cli.all,
-        fields_only: cli.fields,
+        diagnostics: runtime_flags::Diagnostics {
+            show_child_processes: cli.tool_output.show_child_processes,
+            phases_debug: cli.debug.phases,
+            graph_stats: cli.debug.graph_stats,
+        },
+        output: runtime_flags::OutputFlags {
+            show_output: cli.tool_output.show_output,
+            json_mode: cli.format.json,
+            quiet: cli.format.quiet,
+        },
+        tables: runtime_flags::TableFlags {
+            all_fields: cli.tables.all,
+            fields_only: cli.tables.fields,
+        },
         color_enabled,
     });
     // Which columns each table shows, from the user config. Read here, once,
@@ -226,7 +233,7 @@ fn run() -> (Result<()>, bool) {
                 }
             }
             Commands::Cache { action } => {
-                builder::cache_cmd::handle(&ctx, action)?;
+                builder::cache_cmd::handle(&ctx, &action)?;
             }
             Commands::Clean { action } => match action {
                 CleanAction::Outputs {
@@ -260,8 +267,10 @@ fn run() -> (Result<()>, bool) {
                     }
                 }
                 CleanAction::Git => {
-                    let builder = Builder::new(&ctx)?;
-                    builder.hardclean(&ctx)?;
+                    // Constructing the builder validates the config, as every
+                    // other clean action does; the clean itself needs no state.
+                    Builder::new(&ctx)?;
+                    Builder::hardclean(&ctx)?;
                 }
                 CleanAction::Unknown {
                     dry_run,
