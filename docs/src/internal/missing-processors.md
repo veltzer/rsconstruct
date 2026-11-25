@@ -15,14 +15,14 @@ Organized by category, with priority based on breadth of usage.
 ### jshint
 
 - **What it does:** JavaScript linter — detects errors and potential problems.
-- **Projects:** demos-lang-js, gcp-gemini-cli, gcp-machines, gcp-miflaga, gcp-nikuda, gcp-randomizer, web-schemas, veltzer.github.io
+- **Projects:** demos-lang-js, gcp-gemini, gcp-machines, gcp-miflaga, gcp-nikuda, gcp-randomizer, web-schemas, veltzer.github.io
 - **Invocation:** `node_modules/.bin/jshint $<`
 - **Processor type:** Checker
 
 ### tidy (HTML Tidy)
 
 - **What it does:** HTML/XHTML validator and formatter.
-- **Projects:** demos-lang-js, gcp-gemini-cli, gcp-machines, gcp-miflaga, gcp-nikuda, gcp-randomizer, book-openbook, book-riddles
+- **Projects:** demos-lang-js, gcp-gemini, gcp-machines, gcp-miflaga, gcp-nikuda, gcp-randomizer, book-openbook, book-riddles
 - **Invocation:** `tidy -errors -quiet -config .tidy.config $<`
 - **Processor type:** Checker
 
