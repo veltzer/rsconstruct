@@ -122,3 +122,17 @@ src_dirs = [".github/workflows"]
 # quiet (undocumented permissions, template expansion of any context,
 # unnamed jobs, ...). --offline and --no-progress are the default args.
 args = ["--offline", "--no-progress", "--persona=pedantic"]
+
+# every lint suppression names a rule and says why (see the fleet's CLAUDE.md)
+# Two instances. The crate's own code: only the Rust files under src/, which
+# also holds the test data of the linter ports, files full of other linters'
+# directives that are there to be parsed.
+[processor.checker.suppressions.rust]
+src_dirs = ["src"]
+src_files = ["build.rs"]
+src_extensions = [".rs"]
+
+# everything else the repo wrote
+[processor.checker.suppressions.other]
+src_dirs = [".github", "config", "doc", "docs/src", "scripts"]
+src_files = [".yamllint.yaml", "README.md"]
