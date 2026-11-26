@@ -284,6 +284,17 @@ impl Doc {
         {
             return XH50 | HT50;
         }
+        // Not in tidy: an attribute of the HTML Living Standard that tidy's
+        // tables are too old to hold is an HTML5 attribute.
+        if let Some(name) = av.attribute.as_deref()
+            && let Some(tag) = self.tree.node(node).tag
+            && super::html5::is_living_standard_attribute(
+                &self.tags[tag].name,
+                &name.to_ascii_lowercase(),
+            )
+        {
+            return XH50 | HT50;
+        }
         let Some(dict) = av.dict else {
             return VERS_UNKNOWN;
         };
@@ -614,17 +625,23 @@ impl Doc {
             return;
         };
         let is_javascript = value.starts_with("javascript:");
+        // Not in tidy, which escapes every character above 0x7e: HTML5 takes
+        // a URL with non-ASCII URL code points as written.
+        let html5 = (self.html_version() & tables::VERS_HTML5) != 0;
+        let needs_escape = |ch: char| {
+            let c = ch as u32;
+            c <= 0x20 || ch == '<' || ch == '>' || (c > 0x7e && !(html5 && is_url_code_point(ch)))
+        };
         let mut escape_count = 0;
         let mut backslash_count = 0;
         let mut fixed: Vec<char> = value.chars().collect();
         for ch in &mut fixed {
-            let c = *ch as u32;
             if *ch == '\\' {
                 backslash_count += 1;
                 if self.opts.fix.fix_backslash && !is_javascript {
                     *ch = '/';
                 }
-            } else if c > 0x7e || c <= 0x20 || *ch == '<' || *ch == '>' {
+            } else if needs_escape(*ch) {
                 escape_count += 1;
             }
         }
@@ -634,9 +651,8 @@ impl Doc {
             let mut dest = String::new();
             let mut hadnonspace = false;
             for ch in new_value.chars() {
-                let c = ch as u32;
-                if c > 0x7e || c <= 0x20 || ch == '<' || ch == '>' {
-                    if c == 0x20 {
+                if needs_escape(ch) {
+                    if ch == ' ' {
                         if hadnonspace {
                             dest.push_str("%20");
                         }

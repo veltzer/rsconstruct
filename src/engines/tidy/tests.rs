@@ -169,3 +169,55 @@ fn non_ascii_byte_after_unmatched_cdata_end_tag_matches_tidy() {
     );
     assert_eq!((warnings, errors), (4, 0));
 }
+
+/// Not what tidy 5.8.0 prints: it reports each of these attributes as
+/// proprietary. They are attributes of the HTML Living Standard and of
+/// WAI-ARIA 1.2 (see `html5.rs`).
+#[test]
+fn living_standard_attributes_are_not_proprietary() {
+    let (lines, warnings, errors) = run(
+        "<!DOCTYPE html>\n<html><head><title>t</title></head>\n<body><p><span aria-current=\"page\">x</span></p>\n<picture><source sizes=\"100vw\" srcset=\"a.avif 1x\" type=\"image/avif\"><img alt=\"a\" src=\"a.jpg\" decoding=\"async\" loading=\"lazy\"></picture>\n</body></html>\n",
+    );
+    assert_eq!(lines, Vec::<String>::new());
+    assert_eq!((warnings, errors), (0, 0));
+}
+
+/// An attribute no standard has is still proprietary, and one of the
+/// added attributes is still proprietary on an element that does not take it.
+#[test]
+fn unknown_attributes_stay_proprietary() {
+    let (lines, warnings, errors) = run(
+        "<!DOCTYPE html>\n<html><head><title>t</title></head>\n<body><p layout=\"row\" decoding=\"async\">x</p></body></html>\n",
+    );
+    assert_eq!(
+        lines,
+        vec![
+            "line 3 column 7 - Warning: <p> proprietary attribute \"layout\"",
+            "line 3 column 7 - Warning: <p> proprietary attribute \"decoding\"",
+        ]
+    );
+    assert_eq!((warnings, errors), (2, 0));
+}
+
+/// Not what tidy 5.8.0 prints: it escapes the Hebrew letters and warns
+/// "escaping malformed URI reference". HTML5 takes them as written. A
+/// space is still not part of a URL.
+#[test]
+fn non_ascii_url_is_valid_in_html5() {
+    let (lines, warnings, errors) = run(
+        "<!DOCTYPE html>\n<html><head><title>t</title></head>\n<body><p><a href=\"/tags/\u{5e9}\u{5dc}\u{5d5}\u{5dd}/\">x</a></p></body></html>\n",
+    );
+    assert_eq!(lines, Vec::<String>::new());
+    assert_eq!((warnings, errors), (0, 0));
+    let (lines, warnings, errors) = run(
+        "<!DOCTYPE html>\n<html><head><title>t</title></head>\n<body><p><a href=\"/a b/\">x</a></p></body></html>\n",
+    );
+    assert_eq!(
+        lines,
+        vec![
+            "line 3 column 10 - Warning: <a> escaping malformed URI reference",
+            "line 3 column 10 - Warning: <a> illegal characters found in URI",
+        ]
+    );
+    assert_eq!((warnings, errors), (2, 0));
+}

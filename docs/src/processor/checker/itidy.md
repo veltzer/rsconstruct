@@ -36,6 +36,15 @@ Input is UTF-8 (a UTF-8 byte order mark is accepted; a UTF-16 one is an error na
 
 Checked against `tidy -errors -q` 5.8.0 over the fleet's 599 tracked HTML files and 6000 mutated copies of them (dropped and swapped tags, unquoted and duplicated attributes, bad entities, truncated files, control characters, invalid UTF-8, deprecated elements, misplaced list items and table cells): identical report lines, in the same order, for every file, under the default options and under the fleet's option sets (`custom-tags`, `drop-empty-elements`, `new-blocklevel-tags`, `drop-empty-paras`, `warn-proprietary-attributes`). The quirks this required are documented in the source: tidy treats an empty attribute value as absent, does not count an ESC character as a column, and reads a byte past the end of an emptied text node to decide whether it was blank.
 
+### Where it departs from tidy
+
+tidy 5.8.0's tables stop at the HTML5 of 2014, and two of its reports are wrong about a page written against the HTML Living Standard. itidy does not make them:
+
+- An attribute of the HTML Living Standard or of WAI-ARIA 1.2 that tidy's tables lack is not `proprietary attribute`: `decoding`, `fetchpriority` and `loading` on `<img>`, `sizes` and `srcset` on `<source>`, `integrity` and `as` on `<link>`, `aria-current`, `inert`, `popover`, the microdata attributes and the rest of the list in `src/engines/tidy/html5.rs`. Each is accepted on the elements that take it and still reported elsewhere, and an attribute no standard has (`layout`, `ng-model`) is reported as before.
+- In an HTML5 document a URL with non-ASCII characters (`/tags/שלום/`) is not `escaping malformed URI reference`. HTML5 takes such a URL as written. A space, a control character, `<` or `>` in a URL is reported as before.
+
+So `warn-proprietary-attributes: no` and `fix-uri: no` are not needed to get a valid HTML5 page through. Everything else follows tidy, and the comparison above was made before these two departures: on a file that triggers neither, the report lines are tidy's.
+
 ## Source Files
 
 - Input: `.html` and `.htm` files under `src_dirs`

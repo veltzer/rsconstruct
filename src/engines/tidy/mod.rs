@@ -12,6 +12,7 @@
 mod attrs;
 mod clean;
 mod config;
+mod html5;
 mod istack;
 mod lexer;
 mod message;
