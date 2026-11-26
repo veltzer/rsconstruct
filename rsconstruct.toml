@@ -87,6 +87,10 @@ dep_inputs = ["target/debug/rsconstruct"]
 # No doctest instance: nextest does not run doctests, but `cargo test --doc`
 # errors outright on a binary-only crate, and this crate has no src/lib.rs.
 
+# lint the JSON files with jsonlint
+[processor.checker.ijsonlint]
+src_files = ["src/engines/actionlint/popular_actions.json", "src/engines/luacheck/tables.json", "src/engines/tidy/tables.json"]
+
 # lint the TOML files of the repo with taplo
 [processor.checker.taplo]
 src_files = [".cargo/config.toml", ".config/nextest.toml", ".rumdl.toml", "Cargo.toml", "deny.toml", "docs/book.toml", "release.toml", "rsconstruct.toml", "rust-toolchain.toml"]
