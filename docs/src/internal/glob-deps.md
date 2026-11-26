@@ -168,8 +168,8 @@ The change is backwards-incompatible for `shell_output` calls without
 We pick option 1. The library is pre-1.0 and the existing `shell_output`
 is the source of incremental-build bugs we're fixing — making it loud is
 the point. Per
-[`feedback_no_backcompat`](../../../.claude/projects/-home-mark-git-veltzer-rsconstruct/memory/feedback_no_backcompat.md)
-in our memory, on-disk and config back-compat aren't a concern at this
+the no-backward-compatibility rule (`feedback_no_backcompat`
+in our memory), on-disk and config back-compat aren't a concern at this
 stage.
 
 ## Lower-effort fallback (not chosen)
