@@ -70,6 +70,7 @@ mod markdownlint;
 mod marp_images;
 mod mdl;
 mod script;
+mod suppressions;
 pub mod terms;
 mod zizmor;
 mod zspell;

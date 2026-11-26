@@ -88,6 +88,7 @@
         - [Svglint](processor/checker/svglint.md)
         - [Svgo](processor/checker/svgo.md)
         - [Taplo](processor/checker/taplo.md)
+        - [Suppressions](processor/checker/suppressions.md)
         - [Terms](processor/checker/terms.md)
         - [Tidy](processor/checker/tidy.md)
         - [Vnu](processor/checker/vnu.md)

@@ -117,6 +117,7 @@ mod processor {
         pub mod slidev;
         pub mod standard;
         pub mod stylelint;
+        pub mod suppressions;
         pub mod svglint;
         pub mod svgo;
         pub mod taplo;
