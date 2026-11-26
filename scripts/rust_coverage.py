@@ -35,7 +35,7 @@ def main() -> None:
         repo = os.path.basename(os.path.dirname(path))
         with open(path, encoding="utf-8") as f:
             text = f.read()
-        for m in re.finditer(r"^\[processor\.([a-z_]+\.[a-z0-9_]+)", text, re.M):
+        for m in re.finditer(r"^\[processor\.([a-z_]+\.[a-z0-9_]+)", text, re.MULTILINE):
             usage.setdefault("processor." + m.group(1), set()).add(repo)
 
     rust = {name for name, e in by_name.items() if e["rust"]}

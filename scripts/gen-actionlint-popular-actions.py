@@ -33,7 +33,9 @@ def main() -> int:
     lines = Path(sys.argv[1]).read_text(encoding="utf-8").splitlines()
     actions: dict[str, dict] = {}
     outdated: list[str] = []
-    cur = None
+    cur: dict[str, object] | None = None
+    inputs: dict[str, dict[str, object]] = {}
+    outputs: dict[str, str] = {}
     section = None  # "inputs" / "outputs"
     in_outdated = False
     for line in lines:
@@ -49,7 +51,9 @@ def main() -> int:
             continue
         m = ENTRY.match(line)
         if m:
-            cur = {"name": "", "inputs": {}, "outputs": {}, "skip_inputs": False, "skip_outputs": False}
+            inputs = {}
+            outputs = {}
+            cur = {"name": "", "inputs": inputs, "outputs": outputs, "skip_inputs": False, "skip_outputs": False}
             actions[m["spec"]] = cur
             section = None
             continue
@@ -74,7 +78,7 @@ def main() -> int:
         if section == "inputs":
             m = INPUT.match(line)
             if m:
-                cur["inputs"][m["id"]] = {
+                inputs[m["id"]] = {
                     "name": m["name"],
                     "required": m["req"] == "true",
                     "deprecated": m["dep"] == "true",
@@ -84,7 +88,7 @@ def main() -> int:
         if section == "outputs":
             m = OUTPUT.match(line)
             if m:
-                cur["outputs"][m["id"]] = m["name"]
+                outputs[m["id"]] = m["name"]
                 continue
         if line == "\t\t},":
             section = None

@@ -27,12 +27,22 @@ def preprocess(root: Path, name: str) -> str:
     return subprocess.run(cmd, check=True, capture_output=True, text=True).stdout
 
 
+def attrvers_name(attrs: str) -> str:
+    """The table name in a tag's `&prvTidyW3CAttrsFor_NAME[0]` initializer."""
+    m = re.fullmatch(r"&prvTidyW3CAttrsFor_(\w+)\[0\]", attrs)
+    if m is None:
+        raise ValueError(f"unexpected attribute-version table: {attrs!r}")
+    return m.group(1)
+
+
 def bits(expr: str) -> int:
     """Evaluate a preprocessed C bit expression such as (1u|2u|(1 << 4))."""
     cleaned = re.sub(r"(\d)u\b", r"\1", expr)
     if not re.fullmatch(r"[\d\s()|<]+", cleaned):
         raise ValueError(f"unexpected bit expression: {expr!r}")
-    return eval(cleaned)  # noqa: S307 - digits and operators only, checked above
+    # digits and operators only, checked above
+    value: int = eval(cleaned)
+    return value
 
 
 def initializer_rows(text: str, name: str) -> list[str]:
@@ -118,7 +128,7 @@ def main() -> None:
             "id": strip_prefix(ident, "TidyTag_"),
             "name": name.strip('"'),
             "versions": bits(vers),
-            "attrvers": None if attrs == "((void *)0)" else re.fullmatch(r"&prvTidyW3CAttrsFor_(\w+)\[0\]", attrs).group(1),
+            "attrvers": None if attrs == "((void *)0)" else attrvers_name(attrs),
             "model": bits(model),
             "parser": None if parser == "((void *)0)" else strip_prefix(parser, "prvTidy"),
             "check": None if chk == "((void *)0)" else chk,

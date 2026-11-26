@@ -46,7 +46,7 @@ def token_names(java: str) -> list[str]:
 def long_arrays(java: str) -> dict[int, list[int]]:
     """The long[] data of each mk_tokenSet_N(), as unsigned words."""
     sets = {}
-    for m in re.finditer(r"mk_tokenSet_(\d+)\(\) \{(.*?)return data;", java, re.S):
+    for m in re.finditer(r"mk_tokenSet_(\d+)\(\) \{(.*?)return data;", java, re.DOTALL):
         body = m.group(2)
         size_m = re.search(r"new long\[(\d+)\]", body)
         if size_m:
@@ -57,8 +57,10 @@ def long_arrays(java: str) -> dict[int, list[int]]:
                 for i in range(int(lo), int(hi) + 1):
                     data[i] = int(v) & (2**64 - 1)
         else:
-            init = re.search(r"long\[\] data = \{([^}]*)\}", body).group(1)
-            data = [int(v.strip().rstrip("L")) & (2**64 - 1) for v in init.split(",")]
+            init = re.search(r"long\[\] data = \{([^}]*)\}", body)
+            if init is None:
+                raise ValueError(f"mk_tokenSet_{m.group(1)}: no long[] data")
+            data = [int(v.strip().rstrip("L")) & (2**64 - 1) for v in init.group(1).split(",")]
         sets[int(m.group(1))] = data
     return sets
 
@@ -113,8 +115,8 @@ def main() -> None:
         words = (parser_sets[i] + [0] * 4)[:4]
         if any(parser_sets[i][4:]):
             raise ValueError(f"parser token set {i} has types above 255")
-        hex = [f"0x{x >> 48:04x}_{(x >> 32) & 0xFFFF:04x}_{(x >> 16) & 0xFFFF:04x}_{x & 0xFFFF:04x}" for x in words]
-        w(f"pub const SET_{i}: TokenSet = TokenSet([{', '.join(hex)}]);\n")
+        words_hex = [f"0x{x >> 48:04x}_{(x >> 32) & 0xFFFF:04x}_{(x >> 16) & 0xFFFF:04x}_{x & 0xFFFF:04x}" for x in words]
+        w(f"pub const SET_{i}: TokenSet = TokenSet([{', '.join(words_hex)}]);\n")
     w("\n")
     for i in sorted(lexer_sets):
         ranges = char_ranges(lexer_sets[i])
