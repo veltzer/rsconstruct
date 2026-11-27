@@ -34,6 +34,7 @@ struct CtxPtr(*const crate::build_context::BuildContext);
 
 // SAFETY: BuildContext is Sync + Send; the pointer is only live while render_template runs.
 unsafe impl Send for CtxPtr {}
+// SAFETY: as for Send above; the pointee is only ever read.
 unsafe impl Sync for CtxPtr {}
 
 impl CtxPtr {

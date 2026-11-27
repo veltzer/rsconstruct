@@ -12,6 +12,9 @@
 
 /// Reset SIGPIPE to default behavior so piping to head/less doesn't cause errors.
 pub fn reset_sigpipe() {
+    // SAFETY: signal(2) with SIG_DFL installs no handler, so there is no
+    // callback to be sound about; it runs first thing in main(), before any
+    // thread exists.
     unsafe {
         libc::signal(libc::SIGPIPE, libc::SIG_DFL);
     }
@@ -39,6 +42,7 @@ pub fn needs_sudo() -> bool {
 
 /// Whether the current process runs as root (effective uid 0).
 pub fn is_root() -> bool {
+    // SAFETY: geteuid(2) takes no arguments, touches no memory and cannot fail.
     (unsafe { libc::geteuid() }) == 0
 }
 
@@ -50,6 +54,8 @@ pub fn path_is_writable(path: &std::path::Path) -> bool {
     let Ok(cpath) = std::ffi::CString::new(path.as_os_str().as_bytes()) else {
         return false;
     };
+    // SAFETY: `cpath` is a NUL-terminated string that outlives the call, and
+    // access(2) only reads it.
     unsafe { libc::access(cpath.as_ptr(), libc::W_OK) == 0 }
 }
 
@@ -60,6 +66,8 @@ pub fn path_is_writable(path: &std::path::Path) -> bool {
 /// is the PATH augmentation at the top of `main()`, before any thread —
 /// tokio's included — exists. Do not call this after startup.
 pub fn set_env(key: &str, value: &std::ffi::OsStr) {
+    // SAFETY: the caller runs before any thread exists (see above), so no
+    // other thread can be reading the environment.
     unsafe { std::env::set_var(key, value) }
 }
 
