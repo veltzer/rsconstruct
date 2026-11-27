@@ -184,7 +184,10 @@ impl Processor for TeraProcessor {
         )?;
 
         // Capture the includable-template set for execute (see the field doc).
-        *self.includable_templates.lock().unwrap() = file_index
+        *self
+            .includable_templates
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = file_index
             .files()
             .iter()
             .filter(|p| p.to_string_lossy().ends_with(".tera"))
@@ -214,7 +217,11 @@ impl Processor for TeraProcessor {
             product.primary_input().to_path_buf(),
             product.primary_output().to_path_buf(),
         );
-        let includable = self.includable_templates.lock().unwrap().clone();
+        let includable = self
+            .includable_templates
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clone();
         render_template(ctx, &item, &includable)
     }
 }

@@ -48,7 +48,9 @@ fn now_secs() -> u64 {
 /// Run `f` with the process-wide database handle, opening it on first use.
 fn with_db<T>(f: impl FnOnce(&Database) -> Result<T>) -> Result<T> {
     let cell = DB.get_or_init(|| Mutex::new(None));
-    let mut guard = cell.lock().unwrap();
+    let mut guard = cell
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     if guard.is_none() {
         let path = Path::new(DB_PATH);
         if let Some(parent) = path.parent() {
@@ -103,19 +105,30 @@ fn child_mode() -> bool {
 
 /// In a child: the downloads made so far, to report to the build.
 pub fn take_fetched() -> Vec<Download> {
-    std::mem::take(&mut *FETCHED.lock().unwrap())
+    std::mem::take(
+        &mut *FETCHED
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner),
+    )
 }
 
 /// In the build: entries a child downloaded, stored by [`store_pending`].
 pub fn defer_store(entries: Vec<Download>) {
-    FETCHED.lock().unwrap().extend(entries);
+    FETCHED
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .extend(entries);
 }
 
 /// In the build, after the products ran: store what the sandboxed children
 /// downloaded, then close the database, so the children of a later build
 /// in this process (`watch`) can open it again.
 pub fn store_pending() -> Result<()> {
-    let pending = std::mem::take(&mut *FETCHED.lock().unwrap());
+    let pending = std::mem::take(
+        &mut *FETCHED
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner),
+    );
     if pending.is_empty() {
         return Ok(());
     }
@@ -151,7 +164,9 @@ pub fn store_pending() -> Result<()> {
 /// Drop the process-wide handle, releasing the database's lock.
 fn close() {
     if let Some(cell) = DB.get() {
-        *cell.lock().unwrap() = None;
+        *cell
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
     }
 }
 
@@ -222,11 +237,14 @@ pub fn fetch(url: &str, ttl_secs: u64) -> Result<String> {
         return Ok(body);
     }
     if child_mode() {
-        FETCHED.lock().unwrap().push(Download {
-            url: url.to_string(),
-            fetched_at_secs: now_secs(),
-            body: body.clone(),
-        });
+        FETCHED
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .push(Download {
+                url: url.to_string(),
+                fetched_at_secs: now_secs(),
+                body: body.clone(),
+            });
         return Ok(body);
     }
 

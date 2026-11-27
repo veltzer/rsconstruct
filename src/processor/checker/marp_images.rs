@@ -13,7 +13,8 @@ pub struct MarpImagesProcessor {
 static IMAGE_RE: LazyLock<Regex> = LazyLock::new(|| {
     // The path capture must stop before whitespace, or `![alt](img.png "Title")`
     // captures "img.png " (trailing space) and the file check always fails.
-    Regex::new(r#"!\[[^\]]*\]\(\s*([^)"\s]+)(?:\s+"[^"]*")?\s*\)"#).unwrap()
+    Regex::new(r#"!\[[^\]]*\]\(\s*([^)"\s]+)(?:\s+"[^"]*")?\s*\)"#)
+        .expect("the image pattern is a valid regex")
 });
 
 impl MarpImagesProcessor {

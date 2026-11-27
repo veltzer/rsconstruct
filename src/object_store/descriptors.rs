@@ -51,7 +51,10 @@ impl ObjectStore {
             self.db.begin_write(),
             "Failed to begin a write to the cache database",
         )?;
-        let mut sync = self.descriptor_sync.lock().unwrap();
+        let mut sync = self
+            .descriptor_sync
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         let durable = sync
             .last_durable
             .is_none_or(|at| at.elapsed() >= DURABLE_COMMIT_INTERVAL);
@@ -79,7 +82,12 @@ impl ObjectStore {
     /// Make every descriptor write so far durable. A no-op when they all are
     /// already, so a command that wrote nothing costs no fsync.
     pub fn persist(&self) -> Result<()> {
-        if !self.descriptor_sync.lock().unwrap().unsynced {
+        if !self
+            .descriptor_sync
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .unsynced
+        {
             return Ok(());
         }
         // The write transaction first, then the lock: the order
@@ -88,7 +96,10 @@ impl ObjectStore {
             self.db.begin_write(),
             "Failed to begin a write to the cache database",
         )?;
-        let mut sync = self.descriptor_sync.lock().unwrap();
+        let mut sync = self
+            .descriptor_sync
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         if !sync.unsynced {
             // A durable write landed meanwhile; dropping `txn` aborts it.
             return Ok(());

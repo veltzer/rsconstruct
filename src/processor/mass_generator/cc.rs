@@ -670,7 +670,13 @@ impl Processor for CcProcessor {
             self.config.cxx.clone(),
             "ar".to_string(),
         ];
-        tools.extend(self.manifest_compilers.lock().unwrap().iter().cloned());
+        tools.extend(
+            self.manifest_compilers
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .iter()
+                .cloned(),
+        );
         crate::processor::with_declared_tools(tools, &self.config.standard)
     }
 
@@ -699,7 +705,10 @@ impl Processor for CcProcessor {
             };
 
             {
-                let mut compilers = self.manifest_compilers.lock().unwrap();
+                let mut compilers = self
+                    .manifest_compilers
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner);
                 compilers.insert(manifest.cc.clone());
                 compilers.insert(manifest.cxx.clone());
             }

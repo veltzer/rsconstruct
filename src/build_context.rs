@@ -105,8 +105,14 @@ impl BuildContext {
     /// be executed. Replaces any earlier set: a context outlives one graph
     /// in watch mode.
     pub(crate) fn set_declared_outputs(&self, paths: HashSet<PathBuf>, dirs: Vec<PathBuf>) {
-        *self.declared_outputs.lock().unwrap() = paths;
-        *self.declared_output_dirs.lock().unwrap() = dirs;
+        *self
+            .declared_outputs
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = paths;
+        *self
+            .declared_output_dirs
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = dirs;
     }
 
     /// Whether some product of the current graph declares `path` as an output.
@@ -116,12 +122,17 @@ impl BuildContext {
     /// in it, so a mass generator sharing `_site/` must not report them as
     /// written off its plan when the two run at the same time.
     pub fn is_declared_output(&self, path: &std::path::Path) -> bool {
-        if self.declared_outputs.lock().unwrap().contains(path) {
+        if self
+            .declared_outputs
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .contains(path)
+        {
             return true;
         }
         self.declared_output_dirs
             .lock()
-            .unwrap()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
             .iter()
             .any(|dir| path.starts_with(dir))
     }
@@ -218,8 +229,15 @@ impl BuildContext {
     /// entries stay: they are validated against the file stamp on every
     /// lookup, so an edited file misses them and is re-hashed.
     pub(crate) fn clear_session_caches(&self) {
-        self.checksum_cache.write().unwrap().clear();
-        *self.combined_memo.lock().unwrap() = crate::checksum::CombinedMemo::default();
+        self.checksum_cache
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .clear();
+        *self
+            .combined_memo
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) =
+            crate::checksum::CombinedMemo::default();
     }
 
     pub(crate) fn set_max_arg_len(&self, n: usize) {

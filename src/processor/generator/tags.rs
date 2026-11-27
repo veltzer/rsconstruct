@@ -1673,7 +1673,10 @@ pub fn load_tags_dir(dir: &Path) -> Result<HashSet<String>> {
     let mut duplicates: Vec<(String, String, String)> = Vec::new(); // (tag, file1, file2)
 
     for path in tag_list_files(dir)? {
-        let filename = path.file_name().unwrap().to_string_lossy().to_string();
+        let Some(filename) = path.file_name() else {
+            continue;
+        };
+        let filename = filename.to_string_lossy().to_string();
         let category = path
             .file_stem()
             .and_then(|s| s.to_str())
@@ -1744,8 +1747,8 @@ pub fn merge_tags(tags_dir: &str, source_dir: &str) -> Result<()> {
         if path.extension().is_none_or(|e| e != "txt") {
             continue;
         }
-        let filename = path.file_name().unwrap();
-        let dest_path = dest.join(filename);
+        let filename = entry.file_name();
+        let dest_path = dest.join(&filename);
 
         let source_content = crate::errors::ctx(
             fs::read_to_string(&path),
@@ -1812,8 +1815,8 @@ pub fn merge_tags(tags_dir: &str, source_dir: &str) -> Result<()> {
         if path.extension().is_none_or(|e| e != "txt") {
             continue;
         }
-        let filename = path.file_name().unwrap();
-        let src_path = src.join(filename);
+        let filename = entry.file_name();
+        let src_path = src.join(&filename);
         if !src_path.exists() {
             crate::errors::ctx(
                 fs::copy(&path, &src_path),
@@ -1849,7 +1852,7 @@ fn find_similar_tag(tag: &str, allowed: &HashSet<String>) -> Option<String> {
             continue;
         }
         let dist = levenshtein(tag, candidate);
-        if dist > 0 && dist <= max_dist && (best.is_none() || dist < best.as_ref().unwrap().1) {
+        if dist > 0 && dist <= max_dist && best.as_ref().is_none_or(|b| dist < b.1) {
             best = Some((candidate.clone(), dist));
         }
     }

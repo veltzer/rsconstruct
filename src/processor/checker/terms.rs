@@ -235,7 +235,7 @@ pub fn load_terms(dir_path: &str) -> Result<HashSet<String>> {
     for entry in &entries {
         let path = entry.path();
         if path.extension().is_some_and(|e| e == "txt") {
-            let filename = path.file_name().unwrap().to_string_lossy().to_string();
+            let filename = entry.file_name().to_string_lossy().to_string();
             let content = crate::errors::ctx(
                 fs::read_to_string(&path),
                 &format!("Failed to read terms file: {}", path.display()),
@@ -932,8 +932,8 @@ pub fn merge_terms(config: &TermsConfig, source_dir: &str) -> Result<()> {
         if path.extension().is_none_or(|e| e != "txt") {
             continue;
         }
-        let filename = path.file_name().unwrap();
-        let dest_path = dest.join(filename);
+        let filename = entry.file_name();
+        let dest_path = dest.join(&filename);
 
         let source_content = crate::errors::ctx(
             fs::read_to_string(&path),
@@ -1007,8 +1007,8 @@ pub fn merge_terms(config: &TermsConfig, source_dir: &str) -> Result<()> {
         if path.extension().is_none_or(|e| e != "txt") {
             continue;
         }
-        let filename = path.file_name().unwrap();
-        let src_path = src.join(filename);
+        let filename = entry.file_name();
+        let src_path = src.join(&filename);
         if !src_path.exists() {
             crate::errors::ctx(
                 fs::copy(&path, &src_path),

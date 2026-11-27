@@ -92,12 +92,18 @@ fn load_mtime_table(ctx: &BuildContext) -> Result<HashMap<String, MtimeEntry>> {
 /// first use.
 fn lookup_mtime_entry(ctx: &BuildContext, path_str: &str) -> Result<Option<MtimeEntry>> {
     {
-        let state = ctx.mtime_state.read().unwrap();
+        let state = ctx
+            .mtime_state
+            .read()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         if state.stored.is_some() {
             return Ok(state.get(path_str).cloned());
         }
     }
-    let mut state = ctx.mtime_state.write().unwrap();
+    let mut state = ctx
+        .mtime_state
+        .write()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     // Another thread may have loaded it while this one waited.
     if state.stored.is_none() {
         state.stored = Some(load_mtime_table(ctx)?);
@@ -111,7 +117,10 @@ const RECENT_CHANGE_SECS: i64 = 2;
 
 /// Open or get the mtime database from the `BuildContext`.
 fn get_mtime_db(ctx: &BuildContext) -> Result<std::sync::MutexGuard<'_, Option<redb::Database>>> {
-    let mut guard = ctx.mtime_db.lock().unwrap();
+    let mut guard = ctx
+        .mtime_db
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     if guard.is_none() {
         let dir = PathBuf::from(".rsconstruct");
         crate::errors::ctx(
@@ -166,13 +175,17 @@ pub fn file_checksum(ctx: &BuildContext, path: &Path) -> Result<String> {
 /// that its inputs were not edited while the tool ran; it calls
 /// [`fresh_combined_input_checksum`].
 fn session_checksum(ctx: &BuildContext, path: &Path) -> Option<String> {
-    ctx.checksum_cache.read().unwrap().get(path).cloned()
+    ctx.checksum_cache
+        .read()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .get(path)
+        .cloned()
 }
 
 fn remember_in_session(ctx: &BuildContext, path: &Path, checksum: &str) {
     ctx.checksum_cache
         .write()
-        .unwrap()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
         .insert(path.to_path_buf(), checksum.to_string());
 }
 
@@ -187,7 +200,10 @@ fn remember_in_session(ctx: &BuildContext, path: &Path, checksum: &str) {
 pub fn forget_in_session(ctx: &BuildContext, paths: &[PathBuf], dirs: &[std::sync::Arc<PathBuf>]) {
     let under_a_dir = |path: &Path| dirs.iter().any(|d| path.starts_with(d.as_path()));
     {
-        let mut cache = ctx.checksum_cache.write().unwrap();
+        let mut cache = ctx
+            .checksum_cache
+            .write()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         for path in paths {
             cache.remove(path);
         }
@@ -195,7 +211,10 @@ pub fn forget_in_session(ctx: &BuildContext, paths: &[PathBuf], dirs: &[std::syn
             cache.retain(|path, _| !under_a_dir(path));
         }
     }
-    let mut memo = ctx.combined_memo.lock().unwrap();
+    let mut memo = ctx
+        .combined_memo
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     if paths.iter().any(|p| memo.covered.contains(p))
         || (!dirs.is_empty() && memo.covered.iter().any(|p| under_a_dir(p)))
     {
@@ -329,7 +348,11 @@ fn stage_mtime_entries(ctx: &BuildContext, dirty: Vec<DirtyMtimeEntry>) {
     if dirty.is_empty() {
         return;
     }
-    ctx.mtime_state.write().unwrap().pending.extend(dirty);
+    ctx.mtime_state
+        .write()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .pending
+        .extend(dirty);
 }
 
 /// Write every staged mtime entry in a single write transaction, then move
@@ -342,7 +365,7 @@ pub fn flush_mtime_cache(ctx: &BuildContext) -> Result<()> {
     let dirty: Vec<DirtyMtimeEntry> = ctx
         .mtime_state
         .read()
-        .unwrap()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
         .pending
         .iter()
         .map(|(k, v)| (k.clone(), v.clone()))
@@ -369,7 +392,10 @@ pub fn flush_mtime_cache(ctx: &BuildContext) -> Result<()> {
     }
     crate::errors::ctx(write_txn.commit(), "Failed to commit mtime cache entries")?;
     drop(db_guard);
-    let mut state = ctx.mtime_state.write().unwrap();
+    let mut state = ctx
+        .mtime_state
+        .write()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     for (path_str, entry) in dirty {
         if state
             .pending
@@ -467,7 +493,13 @@ pub fn prune_mtime_cache(ctx: &BuildContext) -> Result<usize> {
     }
     crate::errors::ctx(write_txn.commit(), "Failed to commit mtime cache prune")?;
     drop(db_guard);
-    if let Some(stored) = ctx.mtime_state.write().unwrap().stored.as_mut() {
+    if let Some(stored) = ctx
+        .mtime_state
+        .write()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .stored
+        .as_mut()
+    {
         for path_str in &stale {
             stored.remove(path_str);
         }
@@ -509,14 +541,20 @@ pub fn checksum_output(ctx: &BuildContext, path: &Path) -> Result<(String, Check
 /// pre-check to avoid re-reading unchanged files across builds.
 pub fn combined_input_checksum(ctx: &BuildContext, inputs: &[PathBuf]) -> Result<String> {
     let memoize = inputs.len() >= MEMO_MIN_INPUTS;
-    if memoize && let Some(combined) = ctx.combined_memo.lock().unwrap().get(inputs) {
+    if memoize
+        && let Some(combined) = ctx
+            .combined_memo
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .get(inputs)
+    {
         return Ok(combined);
     }
     let combined = compute_combined_input_checksum(ctx, inputs, Session::Trust)?;
     if memoize {
         ctx.combined_memo
             .lock()
-            .unwrap()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
             .insert(inputs, combined.clone());
     }
     Ok(combined)

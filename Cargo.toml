@@ -101,6 +101,7 @@ dbg_macro = "warn"
 todo = "warn"
 undocumented_unsafe_blocks = "warn"
 unimplemented = "warn"
+unwrap_used = "warn"
 # The pedantic/nursery allow list. Every entry below is a decision, not a
 # backlog item: each was measured, the alternative was written out, and the
 # alternative lost. Lints that were merely noisy have already been removed

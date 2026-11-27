@@ -48,13 +48,18 @@ static INTERPRETER: std::sync::LazyLock<std::sync::RwLock<String>> =
 
 /// The Python interpreter to run and require (`[build] python`).
 pub fn interpreter() -> String {
-    INTERPRETER.read().unwrap().clone()
+    INTERPRETER
+        .read()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+        .clone()
 }
 
 /// Record `[build] python`. Called on every config load, so a config edit
 /// under `rsconstruct watch` takes effect on the next rebuild.
 pub fn set_interpreter(name: &str) {
-    *INTERPRETER.write().unwrap() = name.to_string();
+    *INTERPRETER
+        .write()
+        .unwrap_or_else(std::sync::PoisonError::into_inner) = name.to_string();
 }
 
 /// How many bytes of a tool file are read to find its shebang line. A

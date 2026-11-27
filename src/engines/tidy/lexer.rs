@@ -1612,25 +1612,23 @@ impl Doc {
                     }
 
                     self.lexer.state = LexState::Content;
-                    if self.tree.node(token).tag.is_none() {
-                        if mode != TokenMode::OtherNamespace {
-                            let looks_custom = (self.lexer.doctype & VERS_HTML5) != 0
-                                && self
-                                    .tree
-                                    .node(token)
-                                    .element
-                                    .as_deref()
-                                    .is_some_and(Self::element_is_autonomous_custom_format);
-                            if looks_custom {
-                                self.report(None, Some(token), Code::UnknownElementLooksCustom);
-                            } else {
-                                self.report(None, Some(token), Code::UnknownElement);
-                            }
-                        }
-                    } else {
-                        let versions = self.tags[self.tree.node(token).tag.unwrap()].versions;
+                    if let Some(tag) = self.tree.node(token).tag {
+                        let versions = self.tags[tag].versions;
                         self.constrain_version(versions);
                         self.repair_duplicate_attributes(token);
+                    } else if mode != TokenMode::OtherNamespace {
+                        let looks_custom = (self.lexer.doctype & VERS_HTML5) != 0
+                            && self
+                                .tree
+                                .node(token)
+                                .element
+                                .as_deref()
+                                .is_some_and(Self::element_is_autonomous_custom_format);
+                        if looks_custom {
+                            self.report(None, Some(token), Code::UnknownElementLooksCustom);
+                        } else {
+                            self.report(None, Some(token), Code::UnknownElement);
+                        }
                     }
                     return Some(token);
                 }
