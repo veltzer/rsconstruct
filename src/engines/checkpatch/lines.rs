@@ -540,6 +540,33 @@ impl Checker {
             self.switches.rpt_cleaners = true;
         }
 
+        self.any_file_checks(p, l);
+
+        // check we are in a valid source file if not then ignore this hunk
+        if !self.t(r"\.(h|c|rs|s|S|sh|dtsi|dts)$", &p.realfile) {
+            return false;
+        }
+
+        self.source_file_checks(p, l);
+
+        // check we are in a valid source file C or perl if not then ignore this hunk
+        if !self.t(r"\.(h|c|pl|dtsi|dts)$", &p.realfile) {
+            return false;
+        }
+
+        self.indentation_checks(p, l);
+
+        self.block_comment_checks(p, l);
+
+        self.blank_line_checks(p, l);
+
+        // check we are in a valid C source file if not then ignore this hunk
+        self.t(r"\.(h|c)$", &p.realfile)
+    }
+
+    /// The checks on a line of any file: FSF addresses, Kconfig help,
+    /// `MAINTAINERS` entries, RGMII delays, SPDX tags and embedded filenames.
+    fn any_file_checks(&mut self, p: &mut P, l: &L) {
         // Check for FSF mailing addresses.
         if self.switches.check
             && (self.tf(r"\bwrite to the Free", "i", &l.rawline)
@@ -605,12 +632,11 @@ impl Checker {
             ]);
             self.warn("EMBEDDED_FILENAME", &msg);
         }
+    }
 
-        // check we are in a valid source file if not then ignore this hunk
-        if !self.t(r"\.(h|c|rs|s|S|sh|dtsi|dts)$", &p.realfile) {
-            return false;
-        }
-
+    /// The checks on a line of a source file: SPDX placement and tags, line
+    /// length, a missing final newline and `.L` symbols.
+    fn source_file_checks(&mut self, p: &P, l: &L) {
         // check for using SPDX-License-Identifier on the wrong line number
         if p.realline != p.checklicenseline && self.t(r"\bSPDX-License-Identifier:", &l.rawline) {
             let msg = cat(&[
@@ -662,12 +688,11 @@ impl Checker {
             ]);
             self.warn("AVOID_L_PREFIX", &msg);
         }
+    }
 
-        // check we are in a valid source file C or perl if not then ignore this hunk
-        if !self.t(r"\.(h|c|pl|dtsi|dts)$", &p.realfile) {
-            return false;
-        }
-
+    /// Leading white space, operators at the start of a line, and the space
+    /// after a cast.
+    fn indentation_checks(&mut self, p: &P, l: &L) {
         // at the beginning of a line any tabs must come first and anything
         // more than $tabsize must use tabs.
         if self.t(r"^\+\s* \t\s*\S", &l.rawline) || self.t(r"^\+\s*        \s*", &l.rawline) {
@@ -738,7 +763,10 @@ impl Checker {
             let msg = cat(&[b"No space is necessary after a cast\n", &l.herecurr]);
             self.chk("SPACING", &msg);
         }
+    }
 
+    /// The shape of block comments.
+    fn block_comment_checks(&mut self, p: &P, l: &L) {
         // Block comments use * on subsequent lines
         if self.t(r"$;[ \t]*$", &p.prevline)
             && self.t(r"^\+.*?\/\*", &p.prevrawline)
@@ -770,16 +798,17 @@ impl Checker {
             && ((self.t(r"^\+.*?\/\*", &p.prevrawline) && !self.t(r"\*\/[ \t]*$", &p.prevrawline))
                 || self.t(r"^\+[ \t]*\*", &p.prevrawline))
         {
-            let oldindent = if let Some(c) = self.m(r"^\+([ \t]*/?)\*", &p.prevrawline) {
-                expand_tabs(&c.s(1))
-            } else {
-                expand_tabs(
-                    &self
-                        .m(r"^\+(.*/?)\*", &p.prevrawline)
-                        .map(|c| c.s(1))
-                        .unwrap_or_default(),
-                )
-            };
+            let oldindent = self.m(r"^\+([ \t]*/?)\*", &p.prevrawline).map_or_else(
+                || {
+                    expand_tabs(
+                        &self
+                            .m(r"^\+(.*/?)\*", &p.prevrawline)
+                            .map(|c| c.s(1))
+                            .unwrap_or_default(),
+                    )
+                },
+                |c| expand_tabs(&c.s(1)),
+            );
             let newindent = expand_tabs(
                 &self
                     .m(r"^\+([ \t]*)\*", &l.rawline)
@@ -794,7 +823,11 @@ impl Checker {
                 self.warn("BLOCK_COMMENT_STYLE", &msg);
             }
         }
+    }
 
+    /// Blank lines after declarations, doubled blank lines, and spaces at
+    /// the start of a line.
+    fn blank_line_checks(&mut self, p: &mut P, l: &L) {
         // check for missing blank lines after struct/union declarations
         if self.switches.check
             && self.t(r"^[\+ ]};?\s*$", &p.prevline)
@@ -845,9 +878,6 @@ impl Checker {
                 &cat(&[b"please, no spaces at the start of a line\n", &herevet]),
             );
         }
-
-        // check we are in a valid C source file if not then ignore this hunk
-        self.t(r"\.(h|c)$", &p.realfile)
     }
 
     fn kconfig_help(&mut self, l: &L) {
@@ -1585,6 +1615,22 @@ impl Checker {
             }
         }
 
+        self.line_form_checks(p, l);
+
+        self.initialiser_and_int_checks(p, l);
+
+        self.const_and_static_checks(l);
+
+        self.declaration_style_checks(l);
+
+        self.printk_checks(l);
+
+        self.brace_placement_checks(p, l);
+    }
+
+    /// Dereferences over two lines, `signed` without `int`, braces of
+    /// initialisers, `#include` paths, C99 comments and `EXPORT_SYMBOL`.
+    fn line_form_checks(&mut self, p: &mut P, l: &mut L) {
         // check for dereferences that span multiple lines
         if self.t(r"^\+.*$Lval\s*(?:\.|->)\s*$", &p.prevline)
             && self.t(r"^\+\s*(?!\#\s*(?!define\s+|if))\s*$Lval", &l.line)
@@ -1675,7 +1721,11 @@ impl Checker {
         // EXPORT_SYMBOL should immediately follow the thing it is exporting, consider
         // the whole statement.
         self.export_symbol(p, l);
+    }
 
+    /// Global and static initialisers, and the order and the redundant `int`
+    /// of integer declarations.
+    fn initialiser_and_int_checks(&mut self, p: &P, l: &L) {
         // check for global initialisers.
         if let Some(c) = self.m(
             r"^\+$Type\s*$Ident(?:\s+$Modifier)*\s*=\s*($zero_initializer)\s*;",
@@ -1758,7 +1808,10 @@ impl Checker {
             ]);
             self.warn("UNNECESSARY_INT", &msg);
         }
+    }
 
+    /// `static` and `const` on arrays and strings, and `ARRAY_SIZE`.
+    fn const_and_static_checks(&mut self, l: &L) {
         // check for static const char * arrays.
         if self.t(
             r"\bstatic\s+const\s+char\s*\*\s*(\w+)\s*\[\s*\]\s*=\s*",
@@ -1854,7 +1907,11 @@ impl Checker {
                 self.warn("ARRAY_SIZE", &msg);
             }
         }
+    }
 
+    /// Empty argument lists, new typedefs, where the `*` of a pointer goes,
+    /// and `BUG()`.
+    fn declaration_style_checks(&mut self, l: &L) {
         // check for function declarations without arguments like "int foo()"
         if let Some(c) = self.m(r"(\b$Type\s*$Ident)\s*\(\s*\)", &l.line) {
             let f = c.s(1);
@@ -1939,7 +1996,10 @@ impl Checker {
             ]);
             self.chk("AVOID_BUG", &msg);
         }
+    }
 
+    /// `LINUX_VERSION_CODE`, the `printk` family and `ENOSYS`.
+    fn printk_checks(&mut self, l: &L) {
         // avoid LINUX_VERSION_CODE
         if self.t(r"\bLINUX_VERSION_CODE\b", &l.line) {
             let msg = cat(&[
@@ -2043,7 +2103,11 @@ impl Checker {
             ]);
             self.warn("ENOSYS", &msg);
         }
+    }
 
+    /// Where the open brace of a function, enum, union or struct goes, and
+    /// function pointer declarations.
+    fn brace_placement_checks(&mut self, p: &P, l: &L) {
         // function brace can't be on same line, except for #defines of do while,
         // or if closed on same line
         if self.t(r"$Type\s*$Ident\s*$balanced_parens\s*\{", &l.sline)
@@ -2250,6 +2314,45 @@ impl Checker {
             self.operator_spacing(p, l);
         }
 
+        self.punctuation_spacing(p, l);
+
+        // check that goto labels aren't indented (allow a single space indentation)
+        // and ignore bitfield definitions like foo:1
+        if self.t(r"^.\s+[A-Za-z_][A-Za-z\d_]*:(?!\s*\d+)", &l.sline)
+            && !self.t(r"^. [A-Za-z\d_][A-Za-z\d_]*:", &l.sline)
+            && !self.t(r"^.\s+default:", &l.sline)
+        {
+            let msg = cat(&[b"labels should not be indented\n", &l.herecurr]);
+            self.warn("INDENTED_LABEL", &msg);
+        }
+
+        // check if a statement with a comma should be two statements like:
+        if let Some(stat) = l.stat.clone()
+            && self.t(
+                r"^\+\s*(?:$Lval\s*$Assignment\s*)?$FuncArg\s*,\s*(?:$Lval\s*$Assignment\s*)?$FuncArg\s*;\s*$",
+                &stat,
+            )
+        {
+            let cnt = count(&stat, b'\n') + 1;
+            let herectx = self.get_stat_here(l.linenr, cnt, &l.here);
+            let msg = cat(&[b"Possible comma where semicolon could be used\n", &herectx]);
+            self.warn("SUSPECT_COMMA_SEMICOLON", &msg);
+        }
+
+        self.return_and_comparison_checks(p, l);
+
+        // Need a space before open parenthesis after if, while etc
+        if self.t(r"\b(if|while|for|switch)\(", &l.line) {
+            let msg = cat(&[
+                b"space required before the open parenthesis '('\n",
+                &l.herecurr,
+            ]);
+            self.error("SPACING", &msg);
+        }
+    }
+
+    /// Spaces around semicolons, braces, square brackets and parentheses.
+    fn punctuation_spacing(&mut self, p: &P, l: &L) {
         // check for whitespace before a non-naked semicolon
         if self.t(r"^\+.*\S\s+;\s*$", &l.line) {
             let msg = cat(&[b"space prohibited before semicolon\n", &l.herecurr]);
@@ -2319,30 +2422,11 @@ impl Checker {
         if self.switches.check {
             self.unnecessary_parentheses(p, l);
         }
+    }
 
-        // check that goto labels aren't indented (allow a single space indentation)
-        // and ignore bitfield definitions like foo:1
-        if self.t(r"^.\s+[A-Za-z_][A-Za-z\d_]*:(?!\s*\d+)", &l.sline)
-            && !self.t(r"^. [A-Za-z\d_][A-Za-z\d_]*:", &l.sline)
-            && !self.t(r"^.\s+default:", &l.sline)
-        {
-            let msg = cat(&[b"labels should not be indented\n", &l.herecurr]);
-            self.warn("INDENTED_LABEL", &msg);
-        }
-
-        // check if a statement with a comma should be two statements like:
-        if let Some(stat) = l.stat.clone()
-            && self.t(
-                r"^\+\s*(?:$Lval\s*$Assignment\s*)?$FuncArg\s*,\s*(?:$Lval\s*$Assignment\s*)?$FuncArg\s*;\s*$",
-                &stat,
-            )
-        {
-            let cnt = count(&stat, b'\n') + 1;
-            let herectx = self.get_stat_here(l.linenr, cnt, &l.here);
-            let msg = cat(&[b"Possible comma where semicolon could be used\n", &herectx]);
-            self.warn("SUSPECT_COMMA_SEMICOLON", &msg);
-        }
-
+    /// `return` written as a function or with a positive errno, doubled
+    /// parentheses in an `if`, and comparisons with the constant on the left.
+    fn return_and_comparison_checks(&mut self, p: &P, l: &L) {
         // return is not a function
         if let Some(stat) = l.stat.clone()
             && let Some(c) = self.mf(r"^.\s*return(\s*)\(", "s", &stat)
@@ -2430,15 +2514,6 @@ impl Checker {
                 ]);
                 self.warn("USE_NEGATIVE_ERRNO", &msg);
             }
-        }
-
-        // Need a space before open parenthesis after if, while etc
-        if self.t(r"\b(if|while|for|switch)\(", &l.line) {
-            let msg = cat(&[
-                b"space required before the open parenthesis '('\n",
-                &l.herecurr,
-            ]);
-            self.error("SPACING", &msg);
         }
     }
 
@@ -3453,6 +3528,24 @@ impl Checker {
             self.warn("SPLIT_STRING", &msg);
         }
 
+        self.string_literal_checks(p, l);
+
+        self.format_and_if_checks(l);
+
+        self.logging_checks(p, l);
+
+        self.null_and_init_section_checks(l);
+
+        self.delay_and_jiffies_checks(p, l);
+
+        self.uncommented_primitive_checks(p, l);
+
+        self.storage_and_attribute_checks(p, l);
+    }
+
+    /// What is inside string literals: concatenations, function names,
+    /// tracing messages, spaces before a newline and split strings.
+    fn string_literal_checks(&mut self, p: &P, l: &L) {
         // check for missing a space in a string concatenation
         if self.t(r#"[^\\]\w"$"#, &p.prevrawline) && self.t(r#"^\+[\t ]+"\w"#, &l.rawline) {
             let msg = cat(&[b"break quoted strings at a space character\n", &l.hereprev]);
@@ -3520,7 +3613,10 @@ impl Checker {
             ]);
             self.warn("STRING_FRAGMENTS", &msg);
         }
+    }
 
+    /// `printf` formats, continuations inside strings, and `#if 0` and `#if 1`.
+    fn format_and_if_checks(&mut self, l: &L) {
         // check for non-standard and hex prefixed decimal printf formats
         let mut show_l = true;
         let mut show_z = true;
@@ -3590,7 +3686,11 @@ impl Checker {
             let msg = cat(&[b"Consider removing the #if 1 and its #endif\n", &l.herecurr]);
             self.warn("IF_1", &msg);
         }
+    }
 
+    /// Needless tests before a call, out-of-memory messages, and the logging
+    /// functions.
+    fn logging_checks(&mut self, p: &P, l: &L) {
         // check for needless "if (<foo>) fn(<foo>)" uses
         if let Some(c) = self.m(r"\bif\s*\(\s*($Lval)\s*\)", &p.prevline) {
             let tested = quotemeta_bytes(&c.s(1));
@@ -3685,7 +3785,11 @@ impl Checker {
                 self.warn("UNNECESSARY_MODIFIER", &msg);
             }
         }
+    }
 
+    /// A mask before a shift, comparisons with `NULL`, and the init section
+    /// attributes.
+    fn null_and_init_section_checks(&mut self, l: &L) {
         // check for mask then right shift without a parentheses
         if let Some(c) = self.m(r"$LvalOrFunc\s*\&\s*($LvalOrFunc)\s*>>", &l.line)
             && !self.t(r"^\&", &c.s(4))
@@ -3777,7 +3881,11 @@ impl Checker {
             ]);
             self.error("CONST_READ_MOSTLY", &msg);
         }
+    }
 
+    /// `__constant_` functions, delays, comparisons of jiffies, and the
+    /// spacing of `#ifdef`.
+    fn delay_and_jiffies_checks(&mut self, p: &P, l: &L) {
         // don't use __constant_<foo> functions outside of include/uapi/
         if !self.t(r"^include/uapi/", &p.realfile)
             && let Some(c) = self.m(
@@ -3852,7 +3960,11 @@ impl Checker {
             ]);
             self.error("SPACING", &msg);
         }
+    }
 
+    /// Locks, barriers and their relatives that need a comment, and the
+    /// hardware specific defines.
+    fn uncommented_primitive_checks(&mut self, p: &P, l: &L) {
         // check for spinlock_t definitions without a comment.
         if self.switches.check
             && let Some(c) = self
@@ -3921,7 +4033,11 @@ impl Checker {
             ]);
             self.chk("ARCH_DEFINES", &msg);
         }
+    }
 
+    /// The place of the storage class and of `inline`, and the compiler
+    /// attributes.
+    fn storage_and_attribute_checks(&mut self, p: &P, l: &L) {
         // check that the storage class is not after a type
         if let Some(c) = self.m(r"\b($Type)\s+($Storage)\b", &l.line) {
             let msg = cat(&[
@@ -4101,6 +4217,18 @@ impl Checker {
             self.chk("PREFER_KERNEL_TYPES", &msg);
         }
 
+        self.sizeof_and_format_checks(l);
+
+        self.string_function_checks(p, l);
+
+        self.min_max_and_usleep_checks(l);
+
+        self.naked_sscanf(l);
+    }
+
+    /// Casts of constants, `sizeof`, `struct spinlock`, `seq_printf` and the
+    /// `%p` extensions.
+    fn sizeof_and_format_checks(&mut self, l: &L) {
         // check for cast of C90 native int or longer types constants
         if let Some(c) = self.m(r"(\(\s*$C90_int_types\s*\)\s*)($Constant)\b", &l.line) {
             let cast = c.s(1);
@@ -4170,7 +4298,10 @@ impl Checker {
         {
             self.vsprintf_extensions(l, &stat);
         }
+    }
 
+    /// `memset` arguments and the string copy functions.
+    fn string_function_checks(&mut self, p: &P, l: &L) {
         // Check for misused memsets
         if let Some(stat) = l.stat.clone()
             && let Some(c) = self.m(
@@ -4251,7 +4382,10 @@ impl Checker {
             ]);
             self.warn("PREFER_ETHTOOL_PUTS", &msg);
         }
+    }
 
+    /// Casts inside `min()` and `max()`, and the arguments of `usleep_range`.
+    fn min_max_and_usleep_checks(&mut self, l: &L) {
         // typecasts on min/max could be min_t/max_t
         if let Some(stat) = l.stat.clone()
             && let Some(c) = self.m(
@@ -4320,7 +4454,10 @@ impl Checker {
                 self.warn("USLEEP_RANGE", &msg);
             }
         }
+    }
 
+    /// A `sscanf` whose result is not used.
+    fn naked_sscanf(&mut self, l: &L) {
         // check for naked sscanf
         if let Some(stat) = l.stat.clone()
             && self.t(r"\bsscanf\b", &l.line)
@@ -4441,6 +4578,25 @@ impl Checker {
             self.chk("AVOID_EXTERNS", &msg);
         }
 
+        self.extern_and_prototype_checks(p, l);
+
+        self.function_definition_checks(p, l);
+
+        self.alloc_checks(l);
+
+        self.realloc_and_config_checks(p, l);
+
+        self.fallthrough_and_builtin_checks(l);
+
+        self.deprecated_api_checks(l);
+
+        self.kernel_idiom_checks(p, l);
+
+        self.attribute_and_table_checks(l);
+    }
+
+    /// New externs in C files, and prototypes whose arguments have no names.
+    fn extern_and_prototype_checks(&mut self, p: &P, l: &L) {
         // check for new externs in .c files.
         if self.t(r"\.c$", &p.realfile)
             && let Some(stat) = l.stat.clone()
@@ -4509,7 +4665,10 @@ impl Checker {
                 }
             }
         }
+    }
 
+    /// Function definitions, and new `__setup` entries.
+    fn function_definition_checks(&mut self, p: &mut P, l: &L) {
         // check for function definitions
         if let Some(stat) = l.stat.clone()
             && let Some(c) = self.mf(
@@ -4554,7 +4713,11 @@ impl Checker {
             ]);
             self.chk("UNDOCUMENTED_SETUP", &msg);
         }
+    }
 
+    /// Calls of the allocation functions: casts, `sizeof` style and the
+    /// object forms that replace them.
+    fn alloc_checks(&mut self, l: &L) {
         // check for pointless casting of alloc functions
         if self.t(r"\*\s*\)\s*$allocFunctions\b", &l.line) {
             let msg = cat(&[
@@ -4636,7 +4799,11 @@ impl Checker {
                 self.warn("ALLOC_WITH_MULTIPLY", &msg);
             }
         }
+    }
 
+    /// `krealloc` and allocation arguments, doubled semicolons, `BIT()`, and
+    /// the tests of `CONFIG_` symbols.
+    fn realloc_and_config_checks(&mut self, p: &P, l: &L) {
         // check for krealloc arg reuse
         if let Some(c) = self.m(
             r"\b($Lval)\s*\=\s*(?:$balanced_parens)?\s*krealloc\s*\(\s*($Lval)\s*,",
@@ -4712,7 +4879,11 @@ impl Checker {
             ]);
             self.warn("PREFER_IS_ENABLED", &msg);
         }
+    }
 
+    /// Fallthrough comments, `switch` defaults, `__FUNCTION__` and its
+    /// relatives, `yield()`, comparisons with booleans and locked semaphores.
+    fn fallthrough_and_builtin_checks(&mut self, l: &L) {
         // check for /* fallthrough */ like comment, prefer fallthrough;
         if self.switches.check && !l.raw_comment.is_empty() {
             const FALLTHROUGHS: &[&str] = &[
@@ -4808,7 +4979,11 @@ impl Checker {
             let msg = cat(&[b"consider using a completion\n", &l.herecurr]);
             self.warn("CONSIDER_COMPLETION", &msg);
         }
+    }
 
+    /// Calls and symbols the kernel has moved away from, and comparisons of
+    /// `likely()`.
+    fn deprecated_api_checks(&mut self, l: &L) {
         // recommend kstrto* over simple_strto* and strict_strto*
         if let Some(c) = self.m(r"\b((simple|strict)_(strto(l|ll|ul|ull)))\s*\(", &l.line) {
             let msg = cat(&[
@@ -4901,7 +5076,11 @@ impl Checker {
             ]);
             self.warn("LIKELY_MISUSE", &msg);
         }
+    }
 
+    /// `sysfs_emit` formats, flexible arrays, nested `likely()`, `in_atomic()`,
+    /// RCU Tasks Trace and lockdep classes.
+    fn kernel_idiom_checks(&mut self, p: &P, l: &L) {
         // return sysfs_emit(foo, fmt, ...) fmt without newline
         if let Some(c) = self.m(
             r"\breturn\s+sysfs_emit\s*\(\s*$FuncArg\s*,\s*($String)",
@@ -5000,7 +5179,11 @@ impl Checker {
             ]);
             self.warn("EXPORTED_WORLD_WRITABLE", &msg);
         }
+    }
 
+    /// `DEVICE_ATTR`, file modes, `MODULE_LICENSE`, sysctl constants, device
+    /// id tables and `__free` pointers.
+    fn attribute_and_table_checks(&mut self, l: &L) {
         // check for DEVICE_ATTR uses that could be DEVICE_ATTR_<FOO>
         if let Some(stat) = l.stat.clone()
             && let Some(c) = self.m(

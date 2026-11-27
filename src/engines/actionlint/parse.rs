@@ -92,6 +92,56 @@ pub fn quotes<S: AsRef<str>>(items: &[S]) -> String {
         .join(", ")
 }
 
+/// The keys of a job.
+const JOB_KEYS: &[&str] = &[
+    "name",
+    "needs",
+    "runs-on",
+    "permissions",
+    "environment",
+    "concurrency",
+    "outputs",
+    "env",
+    "defaults",
+    "if",
+    "steps",
+    "timeout-minutes",
+    "strategy",
+    "continue-on-error",
+    "container",
+    "services",
+    "uses",
+    "with",
+    "secrets",
+    "snapshot",
+];
+
+/// A job with nothing in it but its id.
+fn empty_job(id: &Str) -> Job {
+    Job {
+        pos: id.pos,
+        id: id.clone(),
+        name: None,
+        needs: Vec::new(),
+        runs_on: None,
+        permissions: None,
+        environment: None,
+        concurrency: None,
+        outputs: BTreeMap::new(),
+        env: None,
+        defaults: None,
+        if_cond: None,
+        steps: None,
+        timeout_minutes: None,
+        strategy: None,
+        continue_on_error: None,
+        container: None,
+        services: None,
+        workflow_call: None,
+        snapshot: None,
+    }
+}
+
 impl Parser {
     fn error(&mut self, n: &Node, message: String) {
         self.errors.push(LintError {
@@ -1543,29 +1593,86 @@ impl Parser {
         }
     }
 
+    /// The `secrets` of a reusable workflow call: `inherit` or a mapping.
+    fn parse_call_secrets(&mut self, call: &mut WorkflowCall, v: &Node) {
+        if v.kind == Kind::Scalar {
+            if v.value == "inherit" {
+                call.inherit_secrets = true;
+            } else {
+                self.error(
+                    v,
+                    format!(
+                        "expected mapping node for secrets or \"inherit\" string node but found {} node",
+                        go_quote(&v.value)
+                    ),
+                );
+            }
+        } else {
+            call.secrets = BTreeMap::new();
+            for s in self.parse_section_mapping("secrets", v, false, false) {
+                let value = self.parse_string(s.val, true);
+                call.secrets
+                    .insert(s.id, WorkflowCallSecret { name: s.key, value });
+            }
+        }
+    }
+
+    /// A job either runs steps or calls a reusable workflow: report the
+    /// keys of the other kind, and the sections that are missing.
+    fn check_job_kind(
+        &mut self,
+        ret: &mut Job,
+        call: WorkflowCall,
+        steps_only_key: Option<Str>,
+        call_only_key: Option<Str>,
+    ) {
+        if call.uses.is_some() {
+            if let Some(k) = steps_only_key {
+                self.error_at(
+                    k.pos,
+                    format!(
+                        "when a reusable workflow is called with \"uses\", {} is not available. only following keys are allowed: \"name\", \"uses\", \"with\", \"secrets\", \"needs\", \"if\", and \"permissions\" in job {}",
+                        go_quote(&k.value),
+                        go_quote(&ret.id.value)
+                    ),
+                );
+            } else {
+                ret.workflow_call = Some(call);
+            }
+        } else {
+            if ret.steps.is_none() {
+                self.error_at(
+                    ret.id.pos,
+                    format!(
+                        "\"steps\" section is missing in job {}",
+                        go_quote(&ret.id.value)
+                    ),
+                );
+            }
+            if ret.runs_on.is_none() {
+                self.error_at(
+                    ret.id.pos,
+                    format!(
+                        "\"runs-on\" section is missing in job {}",
+                        go_quote(&ret.id.value)
+                    ),
+                );
+            }
+            if let Some(k) = call_only_key {
+                self.error_at(
+                    k.pos,
+                    format!(
+                        "{} is only available for a reusable workflow call with \"uses\" but \"uses\" is not found in job {}",
+                        go_quote(&k.value),
+                        go_quote(&ret.id.value)
+                    ),
+                );
+            }
+        }
+    }
+
     fn parse_job(&mut self, id: &Str, n: &Node) -> Job {
-        let mut ret = Job {
-            pos: id.pos,
-            id: id.clone(),
-            name: None,
-            needs: Vec::new(),
-            runs_on: None,
-            permissions: None,
-            environment: None,
-            concurrency: None,
-            outputs: BTreeMap::new(),
-            env: None,
-            defaults: None,
-            if_cond: None,
-            steps: None,
-            timeout_minutes: None,
-            strategy: None,
-            continue_on_error: None,
-            container: None,
-            services: None,
-            workflow_call: None,
-            snapshot: None,
-        };
+        let mut ret = empty_job(id);
         let mut call = WorkflowCall::default();
         let mut steps_only_key: Option<Str> = None;
         let mut call_only_key: Option<Str> = None;
@@ -1639,101 +1746,15 @@ impl Parser {
                     call_only_key = Some(k);
                 }
                 "secrets" => {
-                    if v.kind == Kind::Scalar {
-                        if v.value == "inherit" {
-                            call.inherit_secrets = true;
-                        } else {
-                            self.error(
-                                v,
-                                format!(
-                                    "expected mapping node for secrets or \"inherit\" string node but found {} node",
-                                    go_quote(&v.value)
-                                ),
-                            );
-                        }
-                    } else {
-                        call.secrets = BTreeMap::new();
-                        for s in self.parse_section_mapping("secrets", v, false, false) {
-                            let value = self.parse_string(s.val, true);
-                            call.secrets
-                                .insert(s.id, WorkflowCallSecret { name: s.key, value });
-                        }
-                    }
+                    self.parse_call_secrets(&mut call, v);
                     call_only_key = Some(k);
                 }
                 "snapshot" => ret.snapshot = self.parse_snapshot(k.pos, v),
-                _ => self.unexpected_key(
-                    &k,
-                    "job",
-                    &[
-                        "name",
-                        "needs",
-                        "runs-on",
-                        "permissions",
-                        "environment",
-                        "concurrency",
-                        "outputs",
-                        "env",
-                        "defaults",
-                        "if",
-                        "steps",
-                        "timeout-minutes",
-                        "strategy",
-                        "continue-on-error",
-                        "container",
-                        "services",
-                        "uses",
-                        "with",
-                        "secrets",
-                        "snapshot",
-                    ],
-                ),
+                _ => self.unexpected_key(&k, "job", JOB_KEYS),
             }
         }
 
-        if call.uses.is_some() {
-            if let Some(k) = steps_only_key {
-                self.error_at(
-                    k.pos,
-                    format!(
-                        "when a reusable workflow is called with \"uses\", {} is not available. only following keys are allowed: \"name\", \"uses\", \"with\", \"secrets\", \"needs\", \"if\", and \"permissions\" in job {}",
-                        go_quote(&k.value),
-                        go_quote(&id.value)
-                    ),
-                );
-            } else {
-                ret.workflow_call = Some(call);
-            }
-        } else {
-            if ret.steps.is_none() {
-                self.error_at(
-                    id.pos,
-                    format!(
-                        "\"steps\" section is missing in job {}",
-                        go_quote(&id.value)
-                    ),
-                );
-            }
-            if ret.runs_on.is_none() {
-                self.error_at(
-                    id.pos,
-                    format!(
-                        "\"runs-on\" section is missing in job {}",
-                        go_quote(&id.value)
-                    ),
-                );
-            }
-            if let Some(k) = call_only_key {
-                self.error_at(
-                    k.pos,
-                    format!(
-                        "{} is only available for a reusable workflow call with \"uses\" but \"uses\" is not found in job {}",
-                        go_quote(&k.value),
-                        go_quote(&id.value)
-                    ),
-                );
-            }
-        }
+        self.check_job_kind(&mut ret, call, steps_only_key, call_only_key);
         ret
     }
 

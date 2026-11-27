@@ -49,9 +49,9 @@ fn redefined(w: &Warning, before: &[u8], after: &[u8]) -> Vec<u8> {
     cat(&[before, &name(w), after, prev_line.as_bytes()])
 }
 
-/// The message for a warning, as luacheck formats it without color.
-pub fn message(w: &Warning) -> Vec<u8> {
-    match w.code.as_str() {
+/// The messages of the syntax errors and of the warnings about globals (`0xx`, `1xx`).
+fn global_message(w: &Warning) -> Option<Vec<u8>> {
+    Some(match w.code.as_str() {
         "011" | "021" => w.msg.clone().unwrap_or_default(),
         "022" => b"unpaired push directive".to_vec(),
         "023" => b"unpaired pop directive".to_vec(),
@@ -97,6 +97,13 @@ pub fn message(w: &Warning) -> Vec<u8> {
                 &name(w),
             ]),
         ),
+        _ => return None,
+    })
+}
+
+/// The messages about unused variables and values (`2xx`, `3xx`).
+fn unused_message(w: &Warning) -> Option<Vec<u8>> {
+    Some(match w.code.as_str() {
         "211" => {
             if w.function.func {
                 if w.function.recursive {
@@ -147,6 +154,13 @@ pub fn message(w: &Warning) -> Vec<u8> {
             b" is mutated but never accessed",
         ]),
         "341" => cat(&[b"mutating uninitialized variable ", &name(w)]),
+        _ => return None,
+    })
+}
+
+/// The messages about redefined and shadowed variables (`4xx`).
+fn redefined_message(w: &Warning) -> Option<Vec<u8>> {
+    Some(match w.code.as_str() {
         "411" => redefined(w, b"variable ", b" was previously defined on line "),
         "412" => redefined(
             w,
@@ -164,6 +178,13 @@ pub fn message(w: &Warning) -> Vec<u8> {
         "431" => redefined(w, b"shadowing upvalue ", b" on line "),
         "432" => redefined(w, b"shadowing upvalue argument ", b" on line "),
         "433" => redefined(w, b"shadowing upvalue loop variable ", b" on line "),
+        _ => return None,
+    })
+}
+
+/// The messages about control flow, statements and layout (`5xx`, `6xx`).
+fn style_message(w: &Warning) -> Option<Vec<u8>> {
+    Some(match w.code.as_str() {
         "511" => b"unreachable code".to_vec(),
         "512" => b"loop is executed at most once".to_vec(),
         "521" => cat(&[
@@ -227,8 +248,20 @@ pub fn message(w: &Warning) -> Vec<u8> {
                 b")",
             ])
         }
-        other => format!("unknown warning code {other}").into_bytes(),
-    }
+        _ => return None,
+    })
+}
+
+/// The message for a warning, as luacheck formats it without color.
+pub fn message(w: &Warning) -> Vec<u8> {
+    let known = match w.code.as_bytes().first() {
+        Some(b'0' | b'1') => global_message(w),
+        Some(b'2' | b'3') => unused_message(w),
+        Some(b'4') => redefined_message(w),
+        Some(b'5' | b'6') => style_message(w),
+        _ => None,
+    };
+    known.unwrap_or_else(|| format!("unknown warning code {}", w.code).into_bytes())
 }
 
 /// `(Wnnn)` for a warning, `(Ennn)` for an error (codes starting with 0).

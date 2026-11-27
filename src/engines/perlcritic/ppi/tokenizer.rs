@@ -1916,157 +1916,175 @@ impl Parser {
 
     // ---- PPI::Token::Unknown.
 
+    /// Whether the last significant token is the operator `->`.
+    fn after_arrow(&self) -> bool {
+        self.previous_significant_tokens(1)
+            .first()
+            .is_some_and(|&t| self.doc.isa(t, Class::Operator) && self.content_of(t) == b"->")
+    }
+
+    /// Whether the last significant token is a number.
+    fn after_number(&self) -> bool {
+        self.previous_significant_tokens(1)
+            .first()
+            .is_some_and(|&t| self.doc.isa(t, Class::Number))
+    }
+
+    /// `*` followed by `ch`: what the two start.
+    fn unknown_star(&mut self, ch: Option<u8>) -> R {
+        let digit = ch.is_some_and(|d| d.is_ascii_digit());
+        let word_or_colon = ch.is_some_and(|d| is_word(d) || d == b':');
+        if digit {
+            self.set_class(Class::Operator);
+            return self.finalize_and_continue();
+        }
+        if word_or_colon && !self.after_number() {
+            self.set_class(Class::Symbol);
+            return Ok(Rv::One);
+        }
+        if ch == Some(b'{') && curly_symbol(self.line(), self.pos() + 1).is_some() {
+            self.set_class(Class::Magic);
+            return Ok(Rv::One);
+        }
+        if ch == Some(b'*') && self.after_arrow() {
+            self.set_class(Class::Cast);
+            return Ok(Rv::One);
+        }
+        if ch == Some(b'*') || ch == Some(b'=') {
+            self.set_class(Class::Operator);
+            return Ok(Rv::One);
+        }
+        if is_cast_or_op(ch) {
+            return self.as_cast_or_op();
+        }
+        self.set_class(Class::Operator);
+        self.finalize_and_continue()
+    }
+
+    /// `$` followed by `ch`: what the two start.
+    fn unknown_dollar(&mut self, ch: Option<u8>) -> R {
+        if matches!(ch, Some(b'*' | b'#')) && self.after_arrow() {
+            self.set_class(Class::Cast);
+            return Ok(Rv::One);
+        }
+        if ch.is_some_and(|d| d.is_ascii_alphabetic() || d == b'_') {
+            self.set_class(Class::Symbol);
+            return Ok(Rv::One);
+        }
+        if matches!(ch, Some(b')' | b'=' | b',')) && self.current_token_has_signatures_active()?.0 {
+            self.set_class(Class::Symbol);
+            return self.finalize_and_continue();
+        }
+        if is_magic(&sigil_with(b'$', ch)) {
+            self.set_class(Class::Magic);
+            return Ok(Rv::One);
+        }
+        if ch == Some(b'{') && curly_symbol(self.line(), self.pos() + 1).is_some() {
+            self.set_class(Class::Magic);
+            return Ok(Rv::One);
+        }
+        self.set_class(Class::Cast);
+        self.finalize_and_continue()
+    }
+
+    /// `@` followed by `ch`: what the two start.
+    fn unknown_at(&mut self, ch: Option<u8>) -> R {
+        let word_or_colon = ch.is_some_and(|d| is_word(d) || d == b':');
+        if ch == Some(b'*') && self.after_arrow() {
+            self.set_class(Class::Cast);
+            return Ok(Rv::One);
+        }
+        if word_or_colon {
+            self.set_class(Class::Symbol);
+            return Ok(Rv::One);
+        }
+        if ch == Some(b')') && self.current_token_has_signatures_active()?.0 {
+            self.set_class(Class::Symbol);
+            return self.finalize_and_continue();
+        }
+        if is_magic(&sigil_with(b'@', ch)) {
+            self.set_class(Class::Magic);
+            return Ok(Rv::One);
+        }
+        if ch == Some(b'{') && curly_symbol(self.line(), self.pos() + 1).is_some() {
+            self.set_class(Class::Magic);
+            return Ok(Rv::One);
+        }
+        self.set_class(Class::Cast);
+        self.finalize_and_continue()
+    }
+
+    /// `%` followed by `ch`: what the two start.
+    fn unknown_percent(&mut self, ch: Option<u8>) -> R {
+        let digit = ch.is_some_and(|d| d.is_ascii_digit());
+        let word_or_colon = ch.is_some_and(|d| is_word(d) || d == b':');
+        if matches!(ch, Some(b'*' | b'[')) && self.after_arrow() {
+            self.set_class(Class::Cast);
+            if ch == Some(b'*') {
+                return Ok(Rv::One);
+            }
+            return self.finalize_and_continue();
+        }
+        if digit {
+            self.set_class(Class::Operator);
+            return self.finalize_and_continue();
+        }
+        if ch == Some(b')') && self.current_token_has_signatures_active()?.0 {
+            self.set_class(Class::Symbol);
+            return self.finalize_and_continue();
+        }
+        if ch == Some(b'^') || is_magic(&sigil_with(b'%', ch)) {
+            self.set_class(Class::Magic);
+            return Ok(Rv::One);
+        }
+        if word_or_colon && !self.after_number() {
+            self.set_class(Class::Symbol);
+            return Ok(Rv::One);
+        }
+        if ch == Some(b'{') && curly_symbol(self.line(), self.pos() + 1).is_some() {
+            self.set_class(Class::Magic);
+            return Ok(Rv::One);
+        }
+        if is_cast_or_op(ch) {
+            return self.as_cast_or_op();
+        }
+        self.set_class(Class::Operator);
+        self.operator_on_char()
+    }
+
+    /// `&` followed by `ch`: what the two start.
+    fn unknown_ampersand(&mut self, ch: Option<u8>) -> R {
+        let digit = ch.is_some_and(|d| d.is_ascii_digit());
+        let word_or_colon = ch.is_some_and(|d| is_word(d) || d == b':');
+        if ch == Some(b'*') && self.after_arrow() {
+            self.set_class(Class::Cast);
+            return Ok(Rv::One);
+        }
+        if digit {
+            self.set_class(Class::Operator);
+            return self.finalize_and_continue();
+        }
+        if word_or_colon && !self.after_number() {
+            self.set_class(Class::Symbol);
+            return Ok(Rv::One);
+        }
+        if is_cast_or_op(ch) {
+            return self.as_cast_or_op();
+        }
+        self.set_class(Class::Operator);
+        self.operator_on_char()
+    }
+
     fn unknown_on_char(&mut self) -> R {
         let c = self.token_content().to_vec();
         let ch = self.at(self.cursor);
-        let after_arrow = |p: &Self| {
-            p.previous_significant_tokens(1)
-                .first()
-                .is_some_and(|&t| p.doc.isa(t, Class::Operator) && p.content_of(t) == b"->")
-        };
-        let after_number = |p: &Self| {
-            p.previous_significant_tokens(1)
-                .first()
-                .is_some_and(|&t| p.doc.isa(t, Class::Number))
-        };
         let digit = ch.is_some_and(|d| d.is_ascii_digit());
-        let word_or_colon = ch.is_some_and(|d| is_word(d) || d == b':');
-        let with = |extra: Option<u8>| {
-            let mut s = c.clone();
-            s.extend(extra);
-            s
-        };
         match c.as_slice() {
-            b"*" => {
-                if digit {
-                    self.set_class(Class::Operator);
-                    return self.finalize_and_continue();
-                }
-                if word_or_colon && !after_number(self) {
-                    self.set_class(Class::Symbol);
-                    return Ok(Rv::One);
-                }
-                if ch == Some(b'{') && curly_symbol(self.line(), self.pos() + 1).is_some() {
-                    self.set_class(Class::Magic);
-                    return Ok(Rv::One);
-                }
-                if ch == Some(b'*') && after_arrow(self) {
-                    self.set_class(Class::Cast);
-                    return Ok(Rv::One);
-                }
-                if ch == Some(b'*') || ch == Some(b'=') {
-                    self.set_class(Class::Operator);
-                    return Ok(Rv::One);
-                }
-                if is_cast_or_op(ch) {
-                    return self.as_cast_or_op();
-                }
-                self.set_class(Class::Operator);
-                self.finalize_and_continue()
-            }
-            b"$" => {
-                if matches!(ch, Some(b'*' | b'#')) && after_arrow(self) {
-                    self.set_class(Class::Cast);
-                    return Ok(Rv::One);
-                }
-                if ch.is_some_and(|d| d.is_ascii_alphabetic() || d == b'_') {
-                    self.set_class(Class::Symbol);
-                    return Ok(Rv::One);
-                }
-                if matches!(ch, Some(b')' | b'=' | b','))
-                    && self.current_token_has_signatures_active()?.0
-                {
-                    self.set_class(Class::Symbol);
-                    return self.finalize_and_continue();
-                }
-                if is_magic(&with(ch)) {
-                    self.set_class(Class::Magic);
-                    return Ok(Rv::One);
-                }
-                if ch == Some(b'{') && curly_symbol(self.line(), self.pos() + 1).is_some() {
-                    self.set_class(Class::Magic);
-                    return Ok(Rv::One);
-                }
-                self.set_class(Class::Cast);
-                self.finalize_and_continue()
-            }
-            b"@" => {
-                if ch == Some(b'*') && after_arrow(self) {
-                    self.set_class(Class::Cast);
-                    return Ok(Rv::One);
-                }
-                if word_or_colon {
-                    self.set_class(Class::Symbol);
-                    return Ok(Rv::One);
-                }
-                if ch == Some(b')') && self.current_token_has_signatures_active()?.0 {
-                    self.set_class(Class::Symbol);
-                    return self.finalize_and_continue();
-                }
-                if is_magic(&with(ch)) {
-                    self.set_class(Class::Magic);
-                    return Ok(Rv::One);
-                }
-                if ch == Some(b'{') && curly_symbol(self.line(), self.pos() + 1).is_some() {
-                    self.set_class(Class::Magic);
-                    return Ok(Rv::One);
-                }
-                self.set_class(Class::Cast);
-                self.finalize_and_continue()
-            }
-            b"%" => {
-                if matches!(ch, Some(b'*' | b'[')) && after_arrow(self) {
-                    self.set_class(Class::Cast);
-                    if ch == Some(b'*') {
-                        return Ok(Rv::One);
-                    }
-                    return self.finalize_and_continue();
-                }
-                if digit {
-                    self.set_class(Class::Operator);
-                    return self.finalize_and_continue();
-                }
-                if ch == Some(b')') && self.current_token_has_signatures_active()?.0 {
-                    self.set_class(Class::Symbol);
-                    return self.finalize_and_continue();
-                }
-                if ch == Some(b'^') || is_magic(&with(ch)) {
-                    self.set_class(Class::Magic);
-                    return Ok(Rv::One);
-                }
-                if word_or_colon && !after_number(self) {
-                    self.set_class(Class::Symbol);
-                    return Ok(Rv::One);
-                }
-                if ch == Some(b'{') && curly_symbol(self.line(), self.pos() + 1).is_some() {
-                    self.set_class(Class::Magic);
-                    return Ok(Rv::One);
-                }
-                if is_cast_or_op(ch) {
-                    return self.as_cast_or_op();
-                }
-                self.set_class(Class::Operator);
-                self.operator_on_char()
-            }
-            b"&" => {
-                if ch == Some(b'*') && after_arrow(self) {
-                    self.set_class(Class::Cast);
-                    return Ok(Rv::One);
-                }
-                if digit {
-                    self.set_class(Class::Operator);
-                    return self.finalize_and_continue();
-                }
-                if word_or_colon && !after_number(self) {
-                    self.set_class(Class::Symbol);
-                    return Ok(Rv::One);
-                }
-                if is_cast_or_op(ch) {
-                    return self.as_cast_or_op();
-                }
-                self.set_class(Class::Operator);
-                self.operator_on_char()
-            }
+            b"*" => self.unknown_star(ch),
+            b"$" => self.unknown_dollar(ch),
+            b"@" => self.unknown_at(ch),
+            b"%" => self.unknown_percent(ch),
+            b"&" => self.unknown_ampersand(ch),
             b"-" => {
                 if digit {
                     self.set_class(Class::Number);
@@ -2964,4 +2982,9 @@ fn magic_capture_variable(c: &[u8]) -> bool {
 
 fn leading_space(line: &[u8]) -> Vec<u8> {
     line.iter().take_while(|&&c| is_space(c)).copied().collect()
+}
+
+/// A sigil and the character after it, when there is one.
+fn sigil_with(sigil: u8, ch: Option<u8>) -> Vec<u8> {
+    std::iter::once(sigil).chain(ch).collect()
 }

@@ -1304,192 +1304,210 @@ pub fn check_unquoted_n(_: &Parameters<'_>, t: &Token, out: &mut Out) {
     }
 }
 
-pub fn check_number_comparisons(params: &Parameters<'_>, t: &Token, out: &mut Out) {
+/// Report a decimal number where the shell compares integers.
+fn check_decimals(params: &Parameters<'_>, hs: &Token, out: &mut Out) {
+    let is_fraction = match oversimplify(hs).as_slice() {
+        [v] => FLOAT_RE.with(|re| re.match_groups(v)).is_some(),
+        _ => false,
+    };
+    if is_fraction && !has_floating_point(params) {
+        err(
+            out,
+            hs.id,
+            2072,
+            "Decimals are not supported. Either use integers only, or use bc or awk to compare.",
+        );
+    }
+}
+
+/// Whether an operand of a comparison is a number: an arithmetic
+/// expansion, a variable known to hold one, or digits.
+fn is_numeric_operand(params: &Parameters<'_>, t: &Token) -> bool {
+    let parts = get_word_parts(t);
+    match parts.as_slice() {
+        [
+            Token {
+                inner: TDollarArithmetic(_),
+                ..
+            },
+        ] => true,
+        [
+            b @ Token {
+                inner: TDollarBraced(_, c),
+                ..
+            },
+        ] => {
+            let var = get_braced_reference(&concat_oversimplify(c));
+            (|| {
+                let cfga = params.cfg_analysis.as_ref()?;
+                let state = cfganalysis::get_incoming_state(cfga, b.id)?;
+                let value = state.variable(&var)?;
+                Some(value.variable_value.numerical_status >= NumericalStatus::Maybe)
+            })()
+            .unwrap_or(false)
+        }
+        _ => match oversimplify(t).as_slice() {
+            [v] => v.chars().all(|c| c.is_ascii_digit()),
+            _ => false,
+        },
+    }
+}
+
+/// The backslash a string comparison operator needs inside `[ ]`.
+fn bracket_escape(typ: ConditionType) -> &'static str {
+    if typ == ConditionType::SingleBracket {
+        "\\"
+    } else {
+        ""
+    }
+}
+
+/// `checkNumberComparisons`, the string comparison operators (`<`, `>=`).
+fn check_string_comparison(params: &Parameters<'_>, t: &Token, out: &mut Out) {
     let TcBinary(typ, op, lhs, rhs) = &t.inner else {
         return;
     };
     let id = t.id;
+    let esc = bracket_escape(*typ);
     let has_string_comparison = params.shell_type != Shell::Sh;
-    let is_lt_gt = |o: &str| ["<", "\\<", ">", "\\>"].contains(&o);
-    let is_le_ge = |o: &str| ["<=", "\\<=", ">=", "\\>="].contains(&o);
-    let is_fraction = |t: &Token| match oversimplify(t).as_slice() {
-        [v] => FLOAT_RE.with(|re| re.match_groups(v)).is_some(),
-        _ => false,
+    let is_lt_gt = ["<", "\\<", ">", "\\>"].contains(&op.as_str());
+    let is_le_ge = ["<=", "\\<=", ">=", "\\>="].contains(&op.as_str());
+    let eqv = match op.trim_start_matches('\\') {
+        "<" => "-lt",
+        ">" => "-gt",
+        "<=" => "-le",
+        ">=" => "-ge",
+        _ => "the numerical equivalent",
     };
-    let decimal_error =
-        "Decimals are not supported. Either use integers only, or use bc or awk to compare.";
-    let check_decimals = |hs: &Token, out: &mut Out| {
-        if is_fraction(hs) && !has_floating_point(params) {
-            err(out, hs.id, 2072, decimal_error);
+    if is_numeric_operand(params, lhs) || is_numeric_operand(params, rhs) {
+        if is_lt_gt {
+            err(
+                out,
+                id,
+                2071,
+                &format!("{op} is for string comparisons. Use {eqv} instead."),
+            );
         }
-    };
-    let is_num = |t: &Token| -> bool {
-        let parts = get_word_parts(t);
-        match parts.as_slice() {
-            [
-                Token {
-                    inner: TDollarArithmetic(_),
-                    ..
-                },
-            ] => true,
-            [
-                b @ Token {
-                    inner: TDollarBraced(_, c),
-                    ..
-                },
-            ] => {
-                let var = get_braced_reference(&concat_oversimplify(c));
-                (|| {
-                    let cfga = params.cfg_analysis.as_ref()?;
-                    let state = cfganalysis::get_incoming_state(cfga, b.id)?;
-                    let value = state.variable(&var)?;
-                    Some(value.variable_value.numerical_status >= NumericalStatus::Maybe)
-                })()
-                .unwrap_or(false)
-            }
-            _ => match oversimplify(t).as_slice() {
-                [v] => v.chars().all(|c| c.is_ascii_digit()),
-                _ => false,
-            },
+        if is_le_ge && has_string_comparison {
+            err(
+                out,
+                id,
+                2071,
+                &format!("{op} is not a valid operator. Use {eqv} ."),
+            );
         }
-    };
-    let eqv = |o: &str| -> &'static str {
-        match o.trim_start_matches('\\') {
-            "<" => "-lt",
-            ">" => "-gt",
-            "<=" => "-le",
-            ">=" => "-ge",
-            _ => "the numerical equivalent",
-        }
-    };
-    let esc = if *typ == ConditionType::SingleBracket {
-        "\\"
-    } else {
-        ""
-    };
-    let seqv = |o: &str| -> String {
-        match o {
-            "-ge" => format!("! a {esc}< b"),
-            "-gt" => format!("{esc}>"),
-            "-le" => format!("! a {esc}> b"),
-            "-lt" => format!("{esc}<"),
-            "-eq" => "=".to_string(),
-            "-ne" => "!=".to_string(),
-            _ => "the string equivalent".to_string(),
-        }
-    };
-    let invert = |o: &str| -> &'static str {
-        match o.trim_start_matches('\\') {
+        return;
+    }
+    if is_le_ge || is_lt_gt {
+        check_decimals(params, lhs, out);
+        check_decimals(params, rhs, out);
+    }
+    if is_le_ge && has_string_comparison {
+        let inverted = match op.trim_start_matches('\\') {
             "<=" => ">",
             ">=" => "<",
             _ => panic!("invert: unexpected operator"),
-        }
-    };
-    if is_num(lhs) || is_num(rhs) {
-        if is_lt_gt(op) {
-            err(
-                out,
-                id,
-                2071,
-                &format!("{op} is for string comparisons. Use {} instead.", eqv(op)),
-            );
-        }
-        if is_le_ge(op) && has_string_comparison {
-            err(
-                out,
-                id,
-                2071,
-                &format!("{op} is not a valid operator. Use {} .", eqv(op)),
-            );
-        }
-    } else {
-        if is_le_ge(op) || is_lt_gt(op) {
-            check_decimals(lhs, out);
-            check_decimals(rhs, out);
-        }
-        if is_le_ge(op) && has_string_comparison {
-            err(
-                out,
-                id,
-                2122,
-                &format!(
-                    "{op} is not a valid operator. Use '! a {esc}{} b' instead.",
-                    invert(op)
-                ),
-            );
-        }
-        if *typ == ConditionType::SingleBracket && (op == "<" || op == ">") {
-            match params.shell_type {
-                Shell::Sh => {}
-                Shell::Dash | Shell::BusyboxSh => {
-                    err(
-                        out,
-                        id,
-                        2073,
-                        &format!("Escape \\{op} to prevent it redirecting."),
-                    );
-                }
-                _ => err(
+        };
+        err(
+            out,
+            id,
+            2122,
+            &format!("{op} is not a valid operator. Use '! a {esc}{inverted} b' instead."),
+        );
+    }
+    if *typ == ConditionType::SingleBracket && (op == "<" || op == ">") {
+        match params.shell_type {
+            Shell::Sh => {}
+            Shell::Dash | Shell::BusyboxSh => {
+                err(
                     out,
                     id,
                     2073,
-                    &format!("Escape \\{op} to prevent it redirecting (or switch to [[ .. ]])."),
+                    &format!("Escape \\{op} to prevent it redirecting."),
+                );
+            }
+            _ => err(
+                out,
+                id,
+                2073,
+                &format!("Escape \\{op} to prevent it redirecting (or switch to [[ .. ]])."),
+            ),
+        }
+    }
+}
+
+/// `checkNumberComparisons`, the numeric operators (`-eq`, `-lt`): their
+/// operands must be numbers.
+fn check_numeric_comparison(params: &Parameters<'_>, t: &Token, out: &mut Out) {
+    let TcBinary(typ, op, lhs, rhs) = &t.inner else {
+        return;
+    };
+    if !ARITHMETIC_BINARY_TEST_OPS.contains(&op.as_str()) {
+        return;
+    }
+    let esc = bracket_escape(*typ);
+    let seqv = match op.as_str() {
+        "-ge" => format!("! a {esc}< b"),
+        "-gt" => format!("{esc}>"),
+        "-le" => format!("! a {esc}> b"),
+        "-lt" => format!("{esc}<"),
+        "-eq" => "=".to_string(),
+        "-ne" => "!=".to_string(),
+        _ => "the string equivalent".to_string(),
+    };
+    check_decimals(params, lhs, out);
+    check_decimals(params, rhs, out);
+    let assigned: Vec<&String> = params
+        .variable_flow
+        .iter()
+        .filter_map(|d| match d {
+            StackData::Assignment((_, _, name, _)) => Some(name),
+            _ => None,
+        })
+        .collect();
+    for t in [lhs, rhs] {
+        let as_string = get_literal_string_def("\0", t);
+        let is_var = is_variable_name(&as_string);
+        let kind = if is_var {
+            "a variable"
+        } else {
+            "an arithmetic expression"
+        };
+        let fix = if is_var { "$var" } else { "$((expr))" };
+        let is_non_num = !only_literal_string(t)
+            .chars()
+            .all(|x| x.is_ascii_digit() || "+-. ".contains(x));
+        if !is_non_num {
+            continue;
+        }
+        if *typ == ConditionType::SingleBracket {
+            err(
+                out,
+                t.id,
+                2170,
+                &format!(
+                    "Invalid number for {op}. Use {seqv} to compare as string (or use {fix} to expand as {kind})."
                 ),
-            }
+            );
+        } else if !is_var
+            || get_word_parts(t).iter().any(|x| is_quotes(x))
+            || !assigned.iter().any(|n| **n == as_string)
+        {
+            warn(
+                out,
+                t.id,
+                2309,
+                &format!(
+                    "{op} treats this as {kind}. Use {seqv} to compare as string (or expand explicitly with {fix})."
+                ),
+            );
         }
     }
-    if ARITHMETIC_BINARY_TEST_OPS.contains(&op.as_str()) {
-        check_decimals(lhs, out);
-        check_decimals(rhs, out);
-        let assigned: Vec<&String> = params
-            .variable_flow
-            .iter()
-            .filter_map(|d| match d {
-                StackData::Assignment((_, _, name, _)) => Some(name),
-                _ => None,
-            })
-            .collect();
-        for t in [lhs, rhs] {
-            let as_string = get_literal_string_def("\0", t);
-            let is_var = is_variable_name(&as_string);
-            let kind = if is_var {
-                "a variable"
-            } else {
-                "an arithmetic expression"
-            };
-            let fix = if is_var { "$var" } else { "$((expr))" };
-            let is_non_num = !only_literal_string(t)
-                .chars()
-                .all(|x| x.is_ascii_digit() || "+-. ".contains(x));
-            if !is_non_num {
-                continue;
-            }
-            if *typ == ConditionType::SingleBracket {
-                err(
-                    out,
-                    t.id,
-                    2170,
-                    &format!(
-                        "Invalid number for {op}. Use {} to compare as string (or use {fix} to expand as {kind}).",
-                        seqv(op)
-                    ),
-                );
-            } else if !is_var
-                || get_word_parts(t).iter().any(|x| is_quotes(x))
-                || !assigned.iter().any(|n| **n == as_string)
-            {
-                warn(
-                    out,
-                    t.id,
-                    2309,
-                    &format!(
-                        "{op} treats this as {kind}. Use {} to compare as string (or expand explicitly with {fix}).",
-                        seqv(op)
-                    ),
-                );
-            }
-        }
-    }
+}
+
+pub fn check_number_comparisons(params: &Parameters<'_>, t: &Token, out: &mut Out) {
+    check_string_comparison(params, t, out);
+    check_numeric_comparison(params, t, out);
 }
 
 pub fn check_single_bracket_operators(params: &Parameters<'_>, t: &Token, out: &mut Out) {

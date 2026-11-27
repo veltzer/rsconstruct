@@ -274,106 +274,11 @@ impl LinState<'_> {
                 self.emit_noop(node, false);
                 self.emit_block(node)
             }
-            Tag::While => {
-                let (cond, block) = (ast.kid(node, 1), ast.kid(node, 2));
-                self.emit_noop(node, false);
-                self.enter_scope();
-                self.register_label(b"do", None)?;
-                self.emit_expr(cond)?;
-                self.emit_cond_goto(b"break", cond);
-                self.emit_block(block)?;
-                self.emit_noop(node, true);
-                self.emit_goto(b"do", false, None);
-                self.register_label(b"break", None)?;
-                self.leave_scope()
-            }
-            Tag::Repeat => {
-                let (block, cond) = (ast.kid(node, 1), ast.kid(node, 2));
-                self.emit_noop(node, false);
-                self.enter_scope();
-                self.register_label(b"do", None)?;
-                self.enter_scope();
-                self.emit_stmts(block)?;
-                self.emit_expr(cond)?;
-                self.leave_scope()?;
-                self.emit_cond_goto(b"do", cond);
-                self.register_label(b"break", None)?;
-                self.leave_scope()
-            }
-            Tag::Fornum => {
-                let var = ast.kid(node, 1);
-                let has_step = ast.get(node, 5).is_some();
-                let block = if has_step {
-                    ast.kid(node, 5)
-                } else {
-                    ast.kid(node, 4)
-                };
-                let (from, to) = (ast.kid(node, 2), ast.kid(node, 3));
-                let step = if has_step {
-                    Some(ast.kid(node, 4))
-                } else {
-                    None
-                };
-                self.emit_noop(node, false);
-                self.emit_expr(from)?;
-                self.emit_expr(to)?;
-                if let Some(step) = step {
-                    self.emit_expr(step)?;
-                }
-                self.enter_scope();
-                self.register_label(b"do", None)?;
-                self.emit_goto(b"break", true, None);
-                self.enter_scope();
-                let lhs = self.st.ast.list(vec![var]);
-                self.emit_local_item(lhs, None);
-                self.register_var(var, VarType::Loopi);
-                self.emit_stmts(block)?;
-                self.leave_scope()?;
-                self.emit_noop(node, true);
-                self.emit_goto(b"do", false, None);
-                self.register_label(b"break", None)?;
-                self.leave_scope()
-            }
-            Tag::Forin => {
-                let (vars, exprs, block) = (ast.kid(node, 1), ast.kid(node, 2), ast.kid(node, 3));
-                self.emit_noop(node, false);
-                self.emit_exprs(exprs)?;
-                self.enter_scope();
-                self.register_label(b"do", None)?;
-                self.emit_goto(b"break", true, None);
-                self.enter_scope();
-                self.emit_local_item(vars, None);
-                self.register_vars(vars, VarType::Loop);
-                self.emit_stmts(block)?;
-                self.leave_scope()?;
-                self.emit_noop(node, true);
-                self.emit_goto(b"do", false, None);
-                self.register_label(b"break", None)?;
-                self.leave_scope()
-            }
-            Tag::If => {
-                let len = ast.len(node);
-                self.emit_noop(node, false);
-                self.enter_scope();
-                let mut i = 1;
-                while i < len {
-                    let (cond, block) = (self.st.ast.kid(node, i), self.st.ast.kid(node, i + 1));
-                    self.enter_scope();
-                    self.emit_expr(cond)?;
-                    self.emit_cond_goto(b"else", cond);
-                    self.emit_block(block)?;
-                    self.emit_goto(b"end", false, None);
-                    self.register_label(b"else", None)?;
-                    self.leave_scope()?;
-                    i += 2;
-                }
-                if len % 2 == 1 {
-                    let block = self.st.ast.kid(node, len);
-                    self.emit_block(block)?;
-                }
-                self.register_label(b"end", None)?;
-                self.leave_scope()
-            }
+            Tag::While => self.emit_while(node),
+            Tag::Repeat => self.emit_repeat(node),
+            Tag::Fornum => self.emit_fornum(node),
+            Tag::Forin => self.emit_forin(node),
+            Tag::If => self.emit_if(node),
             Tag::Label => {
                 let name = ast.str(node, 1).unwrap_or_default().to_vec();
                 let range = ast.range(node);
@@ -417,39 +322,158 @@ impl LinState<'_> {
                 self.st.items[item].node = Some(node);
                 self.scan_expr(item, func)
             }
-            Tag::Set | Tag::OpSet => {
-                let tag = if ast.is(node, Tag::Set) {
-                    ItemTag::Set
-                } else {
-                    ItemTag::OpSet
-                };
-                let (lhs, rhs) = (ast.kid(node, 1), ast.kid(node, 2));
-                let mut item = LItem::new(tag);
-                item.node = Some(node);
-                item.lhs = Some(lhs);
-                item.rhs = Some(rhs);
-                item.accesses = Some(BTreeMap::default());
-                item.mutations = Some(BTreeMap::default());
-                item.used_values = Some(BTreeMap::default());
-                item.lines = Some(Vec::new());
-                self.st.items.push(item);
-                let item = self.st.items.len() - 1;
-                self.scan_exprs(item, rhs)?;
-                for expr in self.st.ast.kids(lhs) {
-                    if self.st.ast.is(expr, Tag::Id) {
-                        if let Some(var) = self.check_var(expr) {
-                            self.register_upvalue_action(item, var, Upvalue::Set);
-                        }
-                    } else {
-                        self.scan_lhs_index(item, expr)?;
-                    }
-                }
-                let line = self.top_line();
-                self.st.lines[line].items.push(item);
-                Ok(())
-            }
+            Tag::Set | Tag::OpSet => self.emit_set(node),
             tag => unreachable!("not a statement: {tag:?}"),
         }
+    }
+
+    /// `emit_stmt_While`.
+    fn emit_while(&mut self, node: NodeId) -> Result<(), SyntaxError> {
+        let ast = &self.st.ast;
+        let (cond, block) = (ast.kid(node, 1), ast.kid(node, 2));
+        self.emit_noop(node, false);
+        self.enter_scope();
+        self.register_label(b"do", None)?;
+        self.emit_expr(cond)?;
+        self.emit_cond_goto(b"break", cond);
+        self.emit_block(block)?;
+        self.emit_noop(node, true);
+        self.emit_goto(b"do", false, None);
+        self.register_label(b"break", None)?;
+        self.leave_scope()
+    }
+
+    /// `emit_stmt_Repeat`.
+    fn emit_repeat(&mut self, node: NodeId) -> Result<(), SyntaxError> {
+        let ast = &self.st.ast;
+        let (block, cond) = (ast.kid(node, 1), ast.kid(node, 2));
+        self.emit_noop(node, false);
+        self.enter_scope();
+        self.register_label(b"do", None)?;
+        self.enter_scope();
+        self.emit_stmts(block)?;
+        self.emit_expr(cond)?;
+        self.leave_scope()?;
+        self.emit_cond_goto(b"do", cond);
+        self.register_label(b"break", None)?;
+        self.leave_scope()
+    }
+
+    /// `emit_stmt_Fornum`.
+    fn emit_fornum(&mut self, node: NodeId) -> Result<(), SyntaxError> {
+        let ast = &self.st.ast;
+        let var = ast.kid(node, 1);
+        let has_step = ast.get(node, 5).is_some();
+        let block = if has_step {
+            ast.kid(node, 5)
+        } else {
+            ast.kid(node, 4)
+        };
+        let (from, to) = (ast.kid(node, 2), ast.kid(node, 3));
+        let step = if has_step {
+            Some(ast.kid(node, 4))
+        } else {
+            None
+        };
+        self.emit_noop(node, false);
+        self.emit_expr(from)?;
+        self.emit_expr(to)?;
+        if let Some(step) = step {
+            self.emit_expr(step)?;
+        }
+        self.enter_scope();
+        self.register_label(b"do", None)?;
+        self.emit_goto(b"break", true, None);
+        self.enter_scope();
+        let lhs = self.st.ast.list(vec![var]);
+        self.emit_local_item(lhs, None);
+        self.register_var(var, VarType::Loopi);
+        self.emit_stmts(block)?;
+        self.leave_scope()?;
+        self.emit_noop(node, true);
+        self.emit_goto(b"do", false, None);
+        self.register_label(b"break", None)?;
+        self.leave_scope()
+    }
+
+    /// `emit_stmt_Forin`.
+    fn emit_forin(&mut self, node: NodeId) -> Result<(), SyntaxError> {
+        let ast = &self.st.ast;
+        let (vars, exprs, block) = (ast.kid(node, 1), ast.kid(node, 2), ast.kid(node, 3));
+        self.emit_noop(node, false);
+        self.emit_exprs(exprs)?;
+        self.enter_scope();
+        self.register_label(b"do", None)?;
+        self.emit_goto(b"break", true, None);
+        self.enter_scope();
+        self.emit_local_item(vars, None);
+        self.register_vars(vars, VarType::Loop);
+        self.emit_stmts(block)?;
+        self.leave_scope()?;
+        self.emit_noop(node, true);
+        self.emit_goto(b"do", false, None);
+        self.register_label(b"break", None)?;
+        self.leave_scope()
+    }
+
+    /// `emit_stmt_If`.
+    fn emit_if(&mut self, node: NodeId) -> Result<(), SyntaxError> {
+        let ast = &self.st.ast;
+        let len = ast.len(node);
+        self.emit_noop(node, false);
+        self.enter_scope();
+        let mut i = 1;
+        while i < len {
+            let (cond, block) = (self.st.ast.kid(node, i), self.st.ast.kid(node, i + 1));
+            self.enter_scope();
+            self.emit_expr(cond)?;
+            self.emit_cond_goto(b"else", cond);
+            self.emit_block(block)?;
+            self.emit_goto(b"end", false, None);
+            self.register_label(b"else", None)?;
+            self.leave_scope()?;
+            i += 2;
+        }
+        if len % 2 == 1 {
+            let block = self.st.ast.kid(node, len);
+            self.emit_block(block)?;
+        }
+        self.register_label(b"end", None)?;
+        self.leave_scope()
+    }
+
+    /// `emit_stmt_Set` and `emit_stmt_OpSet`.
+    fn emit_set(&mut self, node: NodeId) -> Result<(), SyntaxError> {
+        let ast = &self.st.ast;
+        let tag = if ast.is(node, Tag::Set) {
+            ItemTag::Set
+        } else {
+            ItemTag::OpSet
+        };
+        let (lhs, rhs) = (ast.kid(node, 1), ast.kid(node, 2));
+        let mut item = LItem::new(tag);
+        item.node = Some(node);
+        item.lhs = Some(lhs);
+        item.rhs = Some(rhs);
+        item.accesses = Some(BTreeMap::default());
+        item.mutations = Some(BTreeMap::default());
+        item.used_values = Some(BTreeMap::default());
+        item.lines = Some(Vec::new());
+        self.st.items.push(item);
+        let item = self.st.items.len() - 1;
+        self.scan_exprs(item, rhs)?;
+        for expr in self.st.ast.kids(lhs) {
+            if self.st.ast.is(expr, Tag::Id) {
+                if let Some(var) = self.check_var(expr) {
+                    self.register_upvalue_action(item, var, Upvalue::Set);
+                }
+            } else {
+                self.scan_lhs_index(item, expr)?;
+            }
+        }
+        let line = self.top_line();
+        self.st.lines[line].items.push(item);
+        Ok(())
     }
 
     /// `new_local_item`: an item for a local definition with the given lists.

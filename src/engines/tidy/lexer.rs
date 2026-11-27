@@ -2284,6 +2284,127 @@ impl Doc {
         delim
     }
 
+    /// The next character that is not white space. The end of the input
+    /// is given back to it first.
+    fn read_past_white(&mut self) -> u32 {
+        loop {
+            let c = self.read_char();
+            if c == END_OF_STREAM {
+                self.unget_char(c);
+                return c;
+            }
+            if !is_white(c) {
+                return c;
+            }
+        }
+    }
+
+    /// `ParseValue`, a value that is a server instruction (`<% ... %>`),
+    /// whose first character is `c`.
+    fn server_instruction_value(&mut self, c: u32, pdelim: &mut u32) -> Option<String> {
+        let start = self.lexer.lexsize();
+        self.add_char_to_lexer(c);
+        *pdelim = self.parse_server_instruction();
+        let len = self.lexer.lexsize() - start;
+        let value = if len > 0 {
+            Some(String::from_utf8_lossy(self.lexer.from(start)).into_owned())
+        } else {
+            None
+        };
+        self.lexer.truncate(start);
+        value
+    }
+
+    /// `ParseValue`, a character of a value without quotes: true when the
+    /// value ends at it. `c` is replaced where tidy reads ahead.
+    fn unquoted_value_ends(
+        &mut self,
+        c: &mut u32,
+        name: &str,
+        token: Option<NodeId>,
+        isempty: &mut bool,
+    ) -> bool {
+        if *c == u32::from(b'>') {
+            self.unget_char(*c);
+            return true;
+        }
+        if *c == u32::from(b'"') || *c == u32::from(b'\'') {
+            let q = *c;
+            *c = self.read_char();
+            if *c == u32::from(b'>') {
+                self.add_char_to_lexer(q);
+                self.unget_char(*c);
+                return true;
+            }
+            self.unget_char(*c);
+            *c = q;
+        }
+        if *c == u32::from(b'<') {
+            self.unget_char(*c);
+            *c = u32::from(b'>');
+            self.unget_char(*c);
+            self.report_attr(token, None, Code::UnexpectedGt);
+            return true;
+        }
+        if *c == u32::from(b'/') {
+            *c = self.read_char();
+            if *c == u32::from(b'>') && !Self::is_url_attr(name) {
+                *isempty = true;
+                self.unget_char(*c);
+                return true;
+            }
+            self.unget_char(*c);
+            *c = u32::from(b'/');
+        }
+        false
+    }
+
+    /// `ParseValue`: a quoted value with many line ends and angle brackets
+    /// in it probably lost its closing quote.
+    fn warn_missing_quote(&mut self, name: &str, start: usize) {
+        let value = self.lexer.from(start);
+        let exempt = Self::is_script_attr(name)
+            || (Self::is_url_attr(name) && value.starts_with(b"javascript:"))
+            || value.starts_with(b"<xml ");
+        if !exempt {
+            self.report(None, None, Code::SuspectedMissingQuote);
+        }
+    }
+
+    /// `ParseValue`: the value read into the lexer buffer from `start`,
+    /// which is taken out of the buffer.
+    fn take_value(&mut self, name: &str, mut start: usize, munge: bool) -> Option<String> {
+        let orig_start = start;
+        let mut len = self.lexer.lexsize() - start;
+        // tidy's tmbstrndup returns NULL for an empty value, so `alt=""`
+        // and `alt` alike carry no value.
+        let value = if len > 0 {
+            if munge
+                && !name.eq_ignore_ascii_case("alt")
+                && !name.eq_ignore_ascii_case("title")
+                && !name.eq_ignore_ascii_case("value")
+                && !name.eq_ignore_ascii_case("prompt")
+            {
+                while len > 0 && is_white(u32::from(self.lexer.lexbuf[start + len - 1])) {
+                    len -= 1;
+                }
+                while len > 0 && is_white(u32::from(self.lexer.lexbuf[start])) {
+                    start += 1;
+                    len -= 1;
+                }
+            }
+            if len > 0 {
+                Some(String::from_utf8_lossy(&self.lexer.lexbuf[start..start + len]).into_owned())
+            } else {
+                None
+            }
+        } else {
+            None
+        };
+        self.lexer.truncate(orig_start);
+        value
+    }
+
     /// `ParseValue`: the value after an attribute name, if any.
     fn parse_value(
         &mut self,
@@ -2295,53 +2416,24 @@ impl Doc {
         let token = self.lexer.token;
         let munge = !self.opts.attributes.literal_attributes;
         *pdelim = u32::from(b'"');
-        let mut c;
-        loop {
-            c = self.read_char();
-            if c == END_OF_STREAM {
-                self.unget_char(c);
-                break;
-            }
-            if !is_white(c) {
-                break;
-            }
-        }
+        let mut c = self.read_past_white();
         if c != u32::from(b'=') && c != u32::from(b'"') && c != u32::from(b'\'') {
             self.unget_char(c);
             return None;
         }
-        loop {
-            c = self.read_char();
-            if c == END_OF_STREAM {
-                self.unget_char(c);
-                break;
-            }
-            if !is_white(c) {
-                break;
-            }
-        }
+        c = self.read_past_white();
         let mut delim = 0u32;
         if c == u32::from(b'"') || c == u32::from(b'\'') {
             delim = c;
         } else if c == u32::from(b'<') {
-            let start = self.lexer.lexsize();
-            self.add_char_to_lexer(c);
-            *pdelim = self.parse_server_instruction();
-            let len = self.lexer.lexsize() - start;
-            let value = if len > 0 {
-                Some(String::from_utf8_lossy(self.lexer.from(start)).into_owned())
-            } else {
-                None
-            };
-            self.lexer.truncate(start);
-            return value;
+            return self.server_instruction_value(c, pdelim);
         } else {
             self.unget_char(c);
         }
 
         let mut quotewarning = 0u32;
         let mut seen_gt = false;
-        let mut start = self.lexer.lexsize();
+        let start = self.lexer.lexsize();
         c = 0;
         loop {
             let lastc = c;
@@ -2352,37 +2444,8 @@ impl Doc {
                 break;
             }
             if delim == 0 {
-                if c == u32::from(b'>') {
-                    self.unget_char(c);
+                if self.unquoted_value_ends(&mut c, name, token, isempty) {
                     break;
-                }
-                if c == u32::from(b'"') || c == u32::from(b'\'') {
-                    let q = c;
-                    c = self.read_char();
-                    if c == u32::from(b'>') {
-                        self.add_char_to_lexer(q);
-                        self.unget_char(c);
-                        break;
-                    }
-                    self.unget_char(c);
-                    c = q;
-                }
-                if c == u32::from(b'<') {
-                    self.unget_char(c);
-                    c = u32::from(b'>');
-                    self.unget_char(c);
-                    self.report_attr(token, None, Code::UnexpectedGt);
-                    break;
-                }
-                if c == u32::from(b'/') {
-                    c = self.read_char();
-                    if c == u32::from(b'>') && !Self::is_url_attr(name) {
-                        *isempty = true;
-                        self.unget_char(c);
-                        break;
-                    }
-                    self.unget_char(c);
-                    c = u32::from(b'/');
                 }
             } else {
                 if c == delim {
@@ -2434,43 +2497,9 @@ impl Doc {
         }
 
         if quotewarning > 10 && seen_gt && munge {
-            let value = self.lexer.from(start);
-            let exempt = Self::is_script_attr(name)
-                || (Self::is_url_attr(name) && value.starts_with(b"javascript:"))
-                || value.starts_with(b"<xml ");
-            if !exempt {
-                self.report(None, None, Code::SuspectedMissingQuote);
-            }
+            self.warn_missing_quote(name, start);
         }
-
-        let orig_start = start;
-        let mut len = self.lexer.lexsize() - start;
-        // tidy's tmbstrndup returns NULL for an empty value, so `alt=""`
-        // and `alt` alike carry no value.
-        let value = if len > 0 {
-            if munge
-                && !name.eq_ignore_ascii_case("alt")
-                && !name.eq_ignore_ascii_case("title")
-                && !name.eq_ignore_ascii_case("value")
-                && !name.eq_ignore_ascii_case("prompt")
-            {
-                while len > 0 && is_white(u32::from(self.lexer.lexbuf[start + len - 1])) {
-                    len -= 1;
-                }
-                while len > 0 && is_white(u32::from(self.lexer.lexbuf[start])) {
-                    start += 1;
-                    len -= 1;
-                }
-            }
-            if len > 0 {
-                Some(String::from_utf8_lossy(&self.lexer.lexbuf[start..start + len]).into_owned())
-            } else {
-                None
-            }
-        } else {
-            None
-        };
-        self.lexer.truncate(orig_start);
+        let value = self.take_value(name, start, munge);
         *pdelim = delim;
         value
     }

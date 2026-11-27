@@ -28,6 +28,17 @@ struct Frames {
     noframes: Option<NodeId>,
 }
 
+/// What `ParseBody` does with an element that is neither block nor inline.
+enum Misplaced {
+    /// It is dropped or was moved elsewhere: read on.
+    Discard,
+    /// It ends the body.
+    Stop,
+    /// This node goes into the body: the element, or the one inferred
+    /// around it.
+    Keep(NodeId),
+}
+
 impl Doc {
     fn showing_body_only(&self) -> bool {
         self.opts.show_body_only == TriState::Yes
@@ -2377,6 +2388,140 @@ impl Doc {
         }
     }
 
+    /// Whether `body` is the body inside a `noframes` element.
+    fn in_noframes(&self, body: NodeId) -> bool {
+        self.tree
+            .parent(body)
+            .is_some_and(|p| self.node_is(p, TagId::Noframes))
+    }
+
+    /// `TY_(ParseBody)`, an element that is neither block nor inline: it
+    /// is dropped, moved to the head, or put in the list, table or form
+    /// that is inferred for it.
+    fn body_misplaced(&mut self, body: NodeId, mut node: NodeId) -> Misplaced {
+        if (self.node_model(node) & CM_HEAD) == 0 {
+            self.report(Some(body), Some(node), Code::TagNotAllowedIn);
+        }
+        let model = self.node_model(node);
+        if (model & CM_HTML) != 0 {
+            if self.node_is(node, TagId::Body)
+                && self.tree.node(body).implicit
+                && self.tree.node(body).attributes.is_empty()
+            {
+                let attrs = std::mem::take(&mut self.tree.node_mut(node).attributes);
+                self.tree.node_mut(body).attributes = attrs;
+            }
+            return Misplaced::Discard;
+        }
+        if (model & CM_HEAD) != 0 {
+            self.move_to_head(body, node);
+            return Misplaced::Discard;
+        }
+        if (model & CM_LIST) != 0 {
+            self.unget_token();
+            node = self.inferred_tag(TagId::UL);
+            self.add_class_no_indent(node);
+            self.lexer.blocks.exclude_blocks = true;
+        } else if (model & CM_DEFLIST) != 0 {
+            self.unget_token();
+            node = self.inferred_tag(TagId::DL);
+            self.lexer.blocks.exclude_blocks = true;
+        } else if (model & (CM_TABLE | CM_ROWGRP | CM_ROW)) != 0 {
+            if self.ntype(node) != NodeType::EndTag {
+                self.unget_token();
+                node = self.inferred_tag(TagId::Table);
+            }
+            self.lexer.blocks.exclude_blocks = true;
+        } else if self.node_is(node, TagId::Input) {
+            self.unget_token();
+            node = self.inferred_tag(TagId::Form);
+            self.lexer.blocks.exclude_blocks = true;
+        } else {
+            if !self.node_has_cm(node, CM_ROW | CM_FIELD) {
+                self.unget_token();
+                return Misplaced::Stop;
+            }
+            return Misplaced::Discard;
+        }
+        Misplaced::Keep(node)
+    }
+
+    /// `TY_(ParseBody)`: `</br>` and `</p>` stand for the start tags, and
+    /// an inline end tag closes its element on the inline stack.
+    fn end_tag_as_start(&mut self, node: NodeId) {
+        if self.ntype(node) == NodeType::EndTag {
+            if self.node_is(node, TagId::BR) {
+                self.tree.node_mut(node).ntype = NodeType::StartTag;
+            } else if self.node_is(node, TagId::P) {
+                let n = self.tree.node_mut(node);
+                n.ntype = NodeType::StartEndTag;
+                n.implicit = true;
+            } else if self.node_has_cm(node, CM_INLINE) {
+                self.pop_inline(Some(node));
+            }
+        }
+    }
+
+    /// `TY_(ParseBody)`, an element of the body: it is added and parsed.
+    fn body_element(
+        &mut self,
+        body: NodeId,
+        node: NodeId,
+        mode: &mut TokenMode,
+        checkstack: &mut bool,
+    ) {
+        if self.node_is(node, TagId::Main) && self.find_node_by_id(TagId::Main) {
+            self.bad_form |= FLG_BAD_MAIN;
+            self.report(Some(body), Some(node), Code::DiscardingUnexpected);
+            return;
+        }
+        if self.node_has_cm(node, CM_INLINE) {
+            if self.node_is(node, TagId::Img) {
+                self.constrain_version(!VERS_HTML40_STRICT);
+            } else {
+                self.constrain_version(!(VERS_HTML40_STRICT | VERS_HTML20));
+            }
+            if *checkstack && !self.tree.node(node).implicit {
+                *checkstack = false;
+                if self.inline_dup(Some(node)) > 0 {
+                    return;
+                }
+            }
+            *mode = TokenMode::MixedContent;
+        } else {
+            *checkstack = true;
+            *mode = TokenMode::IgnoreWhitespace;
+        }
+        if self.tree.node(node).implicit {
+            self.report(Some(body), Some(node), Code::InsertingTag);
+        }
+        self.tree.insert_node_at_end(body, node);
+        self.parse_tag(node, *mode);
+    }
+
+    /// `TY_(ParseBody)`, text in the body.
+    fn body_text(
+        &mut self,
+        body: NodeId,
+        node: NodeId,
+        iswhitenode: bool,
+        mode: &mut TokenMode,
+        checkstack: &mut bool,
+    ) {
+        if iswhitenode && *mode == TokenMode::IgnoreWhitespace {
+            return;
+        }
+        self.constrain_version(!(VERS_HTML40_STRICT | VERS_HTML20));
+        if *checkstack {
+            *checkstack = false;
+            if self.inline_dup(Some(node)) > 0 {
+                return;
+            }
+        }
+        self.tree.insert_node_at_end(body, node);
+        *mode = TokenMode::MixedContent;
+    }
+
     /// `TY_(ParseBody)`.
     fn parse_body(&mut self, body: NodeId, _mode: TokenMode) {
         let mut mode = TokenMode::IgnoreWhitespace;
@@ -2410,11 +2555,7 @@ impl Doc {
                 self.trim_spaces(body);
                 self.lexer.document.seen_end_body = true;
                 mode = TokenMode::IgnoreWhitespace;
-                if self
-                    .tree
-                    .parent(body)
-                    .is_some_and(|p| self.node_is(p, TagId::Noframes))
-                {
+                if self.in_noframes(body) {
                     break;
                 }
                 continue;
@@ -2425,22 +2566,14 @@ impl Doc {
                     self.parse_block(node, mode);
                     continue;
                 }
-                if self.ntype(node) == NodeType::EndTag
-                    && self
-                        .tree
-                        .parent(body)
-                        .is_some_and(|p| self.node_is(p, TagId::Noframes))
-                {
+                if self.ntype(node) == NodeType::EndTag && self.in_noframes(body) {
                     self.trim_spaces(body);
                     self.unget_token();
                     break;
                 }
             }
             if (self.node_is(node, TagId::Frame) || self.node_is(node, TagId::Frameset))
-                && self
-                    .tree
-                    .parent(body)
-                    .is_some_and(|p| self.node_is(p, TagId::Noframes))
+                && self.in_noframes(body)
             {
                 self.trim_spaces(body);
                 self.unget_token();
@@ -2458,18 +2591,7 @@ impl Doc {
                 continue;
             }
             if self.is_text(node) {
-                if iswhitenode && mode == TokenMode::IgnoreWhitespace {
-                    continue;
-                }
-                self.constrain_version(!(VERS_HTML40_STRICT | VERS_HTML20));
-                if checkstack {
-                    checkstack = false;
-                    if self.inline_dup(Some(node)) > 0 {
-                        continue;
-                    }
-                }
-                self.tree.insert_node_at_end(body, node);
-                mode = TokenMode::MixedContent;
+                self.body_text(body, node, iswhitenode, &mut mode, &mut checkstack);
                 continue;
             }
             if self.ntype(node) == NodeType::DocType {
@@ -2487,92 +2609,17 @@ impl Doc {
                 || (!self.node_has_cm(node, CM_BLOCK) && !self.node_has_cm(node, CM_INLINE)))
                 && !self.html5_mode
             {
-                if (self.node_model(node) & CM_HEAD) == 0 {
-                    self.report(Some(body), Some(node), Code::TagNotAllowedIn);
-                }
-                let model = self.node_model(node);
-                if (model & CM_HTML) != 0 {
-                    if self.node_is(node, TagId::Body)
-                        && self.tree.node(body).implicit
-                        && self.tree.node(body).attributes.is_empty()
-                    {
-                        let attrs = std::mem::take(&mut self.tree.node_mut(node).attributes);
-                        self.tree.node_mut(body).attributes = attrs;
-                    }
-                    continue;
-                }
-                if (model & CM_HEAD) != 0 {
-                    self.move_to_head(body, node);
-                    continue;
-                }
-                if (model & CM_LIST) != 0 {
-                    self.unget_token();
-                    node = self.inferred_tag(TagId::UL);
-                    self.add_class_no_indent(node);
-                    self.lexer.blocks.exclude_blocks = true;
-                } else if (model & CM_DEFLIST) != 0 {
-                    self.unget_token();
-                    node = self.inferred_tag(TagId::DL);
-                    self.lexer.blocks.exclude_blocks = true;
-                } else if (model & (CM_TABLE | CM_ROWGRP | CM_ROW)) != 0 {
-                    if self.ntype(node) != NodeType::EndTag {
-                        self.unget_token();
-                        node = self.inferred_tag(TagId::Table);
-                    }
-                    self.lexer.blocks.exclude_blocks = true;
-                } else if self.node_is(node, TagId::Input) {
-                    self.unget_token();
-                    node = self.inferred_tag(TagId::Form);
-                    self.lexer.blocks.exclude_blocks = true;
-                } else {
-                    if !self.node_has_cm(node, CM_ROW | CM_FIELD) {
-                        self.unget_token();
-                        return;
-                    }
-                    continue;
-                }
+                node = match self.body_misplaced(body, node) {
+                    Misplaced::Discard => continue,
+                    Misplaced::Stop => return,
+                    Misplaced::Keep(node) => node,
+                };
             }
 
-            if self.ntype(node) == NodeType::EndTag {
-                if self.node_is(node, TagId::BR) {
-                    self.tree.node_mut(node).ntype = NodeType::StartTag;
-                } else if self.node_is(node, TagId::P) {
-                    let n = self.tree.node_mut(node);
-                    n.ntype = NodeType::StartEndTag;
-                    n.implicit = true;
-                } else if self.node_has_cm(node, CM_INLINE) {
-                    self.pop_inline(Some(node));
-                }
-            }
+            self.end_tag_as_start(node);
 
             if self.is_element(node) {
-                if self.node_is(node, TagId::Main) && self.find_node_by_id(TagId::Main) {
-                    self.bad_form |= FLG_BAD_MAIN;
-                    self.report(Some(body), Some(node), Code::DiscardingUnexpected);
-                    continue;
-                }
-                if self.node_has_cm(node, CM_INLINE) {
-                    if self.node_is(node, TagId::Img) {
-                        self.constrain_version(!VERS_HTML40_STRICT);
-                    } else {
-                        self.constrain_version(!(VERS_HTML40_STRICT | VERS_HTML20));
-                    }
-                    if checkstack && !self.tree.node(node).implicit {
-                        checkstack = false;
-                        if self.inline_dup(Some(node)) > 0 {
-                            continue;
-                        }
-                    }
-                    mode = TokenMode::MixedContent;
-                } else {
-                    checkstack = true;
-                    mode = TokenMode::IgnoreWhitespace;
-                }
-                if self.tree.node(node).implicit {
-                    self.report(Some(body), Some(node), Code::InsertingTag);
-                }
-                self.tree.insert_node_at_end(body, node);
-                self.parse_tag(node, mode);
+                self.body_element(body, node, &mut mode, &mut checkstack);
                 continue;
             }
             self.report(Some(body), Some(node), Code::DiscardingUnexpected);
