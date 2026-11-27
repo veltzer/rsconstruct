@@ -96,6 +96,10 @@ cargo_common_metadata = "warn"
 negative_feature_names = "warn"
 redundant_feature_names = "warn"
 wildcard_dependencies = "warn"
+# clippy restriction lints, named one by one: leftovers that must not ship.
+dbg_macro = "warn"
+todo = "warn"
+unimplemented = "warn"
 # The pedantic/nursery allow list. Every entry below is a decision, not a
 # backlog item: each was measured, the alternative was written out, and the
 # alternative lost. Lints that were merely noisy have already been removed
