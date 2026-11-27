@@ -55,7 +55,7 @@ src_dirs = [".github"]
 ```
 
 | Key | Type | Default | Description |
-|-----|------|---------|-------------|
+| ----- | ------ | --------- | ------------- |
 | `config_file` | string | `""` | yamllint config file to read; empty means `.yamllint`, `.yamllint.yaml` or `.yamllint.yml` in the project root, else yamllint's `default` configuration |
 | `strict` | bool | `false` | Fail on warnings too, like `yamllint --strict` |
 | `src_dirs` | string[] | `[]` | Directories to scan |

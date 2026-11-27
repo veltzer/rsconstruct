@@ -5,7 +5,7 @@ This page defines the terminology used throughout RSConstruct's code, configurat
 ## Core concepts
 
 | Term | Definition |
-|---|---|
+| --- | --- |
 | **pname** | Processor name: the processor's full path, `processor.<type>.<name>`, identical to its module path in the source tree (`processor.checker.ruff` is `src/processor/checker/ruff.rs`). Unique across all plugins because the type is part of it; the last segment alone is not (`processor.mass_generator.generic` and `processor.explicit.generic` are different processors). Used as the `[processor.TYPE.NAME]` config section header and in `processor defconfig PNAME`. |
 | **iname** | Instance name. The name of a specific processor instance as declared in `rsconstruct.toml`. For a single instance, the iname equals the pname (`[processor.checker.ruff]` → `processor.checker.ruff`). For a named instance, the iname is the pname plus the sub-key (`[processor.explicit.generic.venv]` → `processor.explicit.generic.venv`). Used in `processor config INAME`, `-p`, `--iset`, build output and cache keys. |
 | **processor** | A configured instance that discovers products and executes builds. Created from a plugin + TOML config. Immutable after creation. |
@@ -23,7 +23,7 @@ This page defines the terminology used throughout RSConstruct's code, configurat
 ## Configuration
 
 | Term | Definition |
-|---|---|
+| --- | --- |
 | **output_files** | List of individual output files declared in explicit config. Cached as blobs. |
 | **output_dirs** | List of output directories declared in explicit config. All files inside are walked and cached as a tree. |
 | **src_dirs** | Directories to scan for input files. |
@@ -34,7 +34,7 @@ This page defines the terminology used throughout RSConstruct's code, configurat
 ## Cache
 
 | Term | Definition |
-|---|---|
+| --- | --- |
 | **blob** | A file's raw content stored in the object store, addressed by SHA-256 hash. Blobs have no path — the consumer knows where to restore them. |
 | **tree** | A serialized list of `(path, mode, blob_checksum)` entries describing a set of output files. Stored in the descriptor store. |
 | **marker** | A zero-byte descriptor indicating a checker passed. Its presence is the cached result. |
@@ -45,7 +45,7 @@ This page defines the terminology used throughout RSConstruct's code, configurat
 ## Build pipeline
 
 | Term | Definition |
-|---|---|
+| --- | --- |
 | **discover** | Phase where processors scan the file index and register products in the build graph. |
 | **classify** | Phase where each product is classified as skip, restore, or build based on its cache state. |
 | **execute** | Phase where products are built in dependency order. |
@@ -54,7 +54,7 @@ This page defines the terminology used throughout RSConstruct's code, configurat
 ## CLI conventions
 
 | Command | Name parameter | Meaning |
-|---|---|---|
+| --- | --- | --- |
 | `processor defconfig PNAME` | pname | Processor type name — shows factory defaults |
 | `processor config [INAME]` | iname | Instance name from config — shows resolved config |
 | `processor files [INAME]` | iname | Instance name from config — shows discovered files |

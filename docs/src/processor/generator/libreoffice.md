@@ -27,7 +27,7 @@ dep_inputs = []                      # Additional files that trigger rebuilds wh
 ```
 
 | Key | Type | Default | Description |
-|-----|------|---------|-------------|
+| ----- | ------ | --------- | ------------- |
 | `command` | string | `"libreoffice"` | The libreoffice executable to run |
 | `formats` | string[] | `["pdf"]` | Output formats to generate (`pdf`, `pptx`) |
 | `args` | string[] | `[]` | Extra arguments passed to libreoffice |

@@ -30,7 +30,7 @@ dep_inputs = []                            # Additional files that trigger rebui
 ```
 
 | Key | Type | Default | Description |
-|-----|------|---------|-------------|
+| ----- | ------ | --------- | ------------- |
 | `command` | string | `"yamllint"` | The yamllint executable to run |
 | `args` | string[] | `[]` | Extra arguments passed to yamllint |
 | `dep_inputs` | string[] | `[]` | Extra files whose changes trigger rebuilds |

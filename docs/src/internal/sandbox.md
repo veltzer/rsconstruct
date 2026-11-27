@@ -171,7 +171,7 @@ rsconstruct reads the upper directory. overlayfs records three kinds of
 change there:
 
 | In the upper directory | Meaning |
-|---|---|
+| --- | --- |
 | a file or symlink | written (created or modified) |
 | a character device 0:0 (a *whiteout*) | the path was removed |
 | a directory with xattr `user.overlay.opaque = y` over an existing directory | the directory was removed and created anew |
@@ -397,12 +397,12 @@ sandboxed builds set `execution_model = "sandbox"` through a throwaway user
 config, so the repositories themselves were unchanged. Every build
 succeeded. Times are the mean of the two runs of each mode.
 
-| Repository        | Products | Native  | Sandbox | Extra          |
-|-------------------|---------:|--------:|--------:|---------------:|
+| Repository        | Products |  Native | Sandbox |          Extra |
+| ----------------- | -------: | ------: | ------: | -------------: |
 | pyawskit          |       90 |  0.89 s |  0.98 s | +0.09 s (+10%) |
-| demos-lang-python |     2230 |  5.20 s |  5.24 s | +0.04 s (+1%)  |
-| teaching-syllabi  |     4791 | 143.1 s | 146.9 s | +3.8 s (+3%)   |
-| demos-os-linux    |     6659 |  86.7 s |  96.4 s | +9.7 s (+11%)  |
+| demos-lang-python |     2230 |  5.20 s |  5.24 s |  +0.04 s (+1%) |
+| teaching-syllabi  |     4791 | 143.1 s | 146.9 s |   +3.8 s (+3%) |
+| demos-os-linux    |     6659 |  86.7 s |  96.4 s |  +9.7 s (+11%) |
 | demos-lang-java   |     1306 |  1.19 s |  6.78 s | +5.6 s (+470%) |
 
 Each sandboxed run pays a fixed cost, so the overhead grows with the number
@@ -498,7 +498,7 @@ always builds cold). 192 passed, 25 failed.
 Fixed in rsconstruct (0.9.164):
 
 | Failure | Repos | Fix |
-|---|---|---|
+| --- | --- | --- |
 | "Failed to remove target: Directory not empty" | rsear, rstype | a writable place a run created is merged into the real one a parallel run made, not replaced |
 | cargo cannot resolve index.crates.io | rsimagetag, rsshell, rssite, rstube | cargo declares `needs_network` |
 | `__pycache__` written by scripts whose tool is not known as Python, in `.venv` and beside sources | teaching-animations, teaching-slides, teaching-syllabi, veltzer.github.io, web-schemas | `**/__pycache__` is writable for every run |
@@ -510,7 +510,7 @@ Real findings, for each repo's own config (a script that downloads needs
 file declared or its scratch moved):
 
 | Repo | What the sandbox caught |
-|---|---|
+| --- | --- |
 | demos-hw-stm32 | a build script `git clone`s STM32CubeWL from GitHub |
 | demos-lang-haskell | ghc writes `out/Main.o` and `out/Main.hi` beside the declared output |
 | demos-lang-python | the `make` checker builds SWIG extensions in the source tree |
@@ -529,7 +529,7 @@ cold. 22 of 24 passed. The two failures were gaps the first round could
 not reach, because those builds had died earlier:
 
 | Repo | What the sandbox caught | Fix |
-|---|---|---|
+| --- | --- | --- |
 | demos-hw-stm32 | the HAL library script keeps compiled objects in `exercises/common/.rsc_hal_obj_<core>` as an incremental cache | the cache directory is in `sandbox_writable` |
 | demos-lang-cs | `dotnet build` restores its packages from nuget.org (hidden in round one by the `$XDG_RUNTIME_DIR` failure) | `sandbox_network = true` |
 
@@ -557,7 +557,7 @@ fell into three groups.
 **Real gaps** that would have failed real projects:
 
 | Processor | What it did | Fix |
-|---|---|---|
+| --- | --- | --- |
 | `protobuf` | `--cpp_out` writes `.pb.h` beside the declared `.pb.cc` | Both are outputs (`DiscoverMode::SingleFormatWithCompanions`); natively too, so the cache and `clean` know the header |
 | `sass` | Dart Sass writes `<output>.map` by default | `--no-source-map` unless `args` choose a source-map option |
 | `pdflatex` | its passes share a scratch directory under `out/` | the scratch directory is the product's (`sandbox::allow_output_dirs`) |

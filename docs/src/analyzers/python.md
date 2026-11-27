@@ -44,6 +44,6 @@ search_paths = ["src"]   # extra roots for absolute imports, relative to the pro
 ```
 
 | Key | Type | Default | Description |
-|-----|------|---------|-------------|
+| ----- | ------ | --------- | ------------- |
 | `enabled` | bool | `true` | Set to `false` to keep the stanza but not run the analyzer |
 | `search_paths` | string[] | `["src"]` | Directories that absolute imports resolve against, after the importing file's directory and the project root. A directory that does not exist matches nothing. Changing it rescans every file |

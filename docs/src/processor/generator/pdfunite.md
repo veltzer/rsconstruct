@@ -39,7 +39,7 @@ dep_inputs = []                      # Additional files that trigger rebuilds wh
 ```
 
 | Key | Type | Default | Description |
-|-----|------|---------|-------------|
+| ----- | ------ | --------- | ------------- |
 | `command` | string | `"pdfunite"` | The pdfunite executable to run |
 | `source_dir` | string | `"marp/courses"` | Directory containing course subdirectories |
 | `source_ext` | string | `".md"` | Extension of source files to look for |

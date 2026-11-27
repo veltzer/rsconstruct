@@ -49,7 +49,7 @@ The default `src_dirs` is empty, so a stanza with no `src_dirs` or `src_files` c
 ## Configuration
 
 | Key | Type | Default | Description |
-|-----|------|---------|-------------|
+| ----- | ------ | --------- | ------------- |
 | `filters` | string[] | `[]` | Category filters as `--filter`: `-whitespace`, `+whitespace/braces`, `-runtime/printf:foo.cc:14` (an entry may hold several, comma-separated) |
 | `verbose` | integer | `1` | Report only findings with at least this confidence (0-5), as `--verbose` |
 | `line_length` | integer | `80` | The allowed line length, as `--linelength` |

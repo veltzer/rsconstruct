@@ -28,7 +28,7 @@ dep_inputs = []                          # Additional files that trigger rebuild
 ```
 
 | Key | Type | Default | Description |
-|-----|------|---------|-------------|
+| ----- | ------ | --------- | ------------- |
 | `command` | string | `"ruff"` | The ruff executable to run |
 | `args` | string[] | `[]` | Extra arguments passed to ruff |
 | `dep_inputs` | string[] | `[]` | Extra files whose changes trigger rebuilds |

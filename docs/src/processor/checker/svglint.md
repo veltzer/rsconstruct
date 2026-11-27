@@ -33,7 +33,7 @@ src_dirs = ["images"]
 ```
 
 | Key | Type | Default | Description |
-|-----|------|---------|-------------|
+| ----- | ------ | --------- | ------------- |
 | `command` | string | `"svglint"` | The svglint executable to run |
 | `args` | string[] | `[]` | Extra arguments passed to svglint |
 | `src_dirs` | string[] | `[]` | Directories to scan |

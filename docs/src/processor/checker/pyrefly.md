@@ -28,7 +28,7 @@ dep_inputs = []                            # Additional files that trigger rebui
 ```
 
 | Key | Type | Default | Description |
-|-----|------|---------|-------------|
+| ----- | ------ | --------- | ------------- |
 | `command` | string | `"pyrefly"` | The pyrefly executable to run |
 | `args` | string[] | `[]` | Extra arguments passed to pyrefly |
 | `dep_inputs` | string[] | `[]` | Extra files whose changes trigger rebuilds |

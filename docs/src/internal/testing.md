@@ -20,7 +20,7 @@ There is a recurring question: should unit tests move to `tests/` to keep source
 **This crate is a binary only — there is no `src/lib.rs`.** Integration tests under `tests/` can only link against a *library* crate; against a binary crate they can only do what `tests/main.rs` does today: spawn the `rsconstruct` binary as a subprocess and assert on its output. So there are only three real options for testing internal logic like `BuildGraph`:
 
 | Option | Cost |
-|---|---|
+| --- | --- |
 | Unit tests inline in `src/` (current) | Longer source files (mitigated by `#[cfg(test)]` stripping them from release builds, and by editor folding) |
 | Move tests to `tests/` as end-to-end tests | Far more code per test, much slower, indirect — can't isolate a specific dedup branch without building a whole fake project |
 | Add a `src/lib.rs` exposing modules | Architectural change — the crate becomes both a library and a binary. Forces decisions about what is public API |
@@ -72,7 +72,7 @@ This is the standard Rust pattern for grouping related integration tests into su
 `tests/common/mod.rs` provides utilities used across all test files:
 
 | Helper | Purpose |
-|---|---|
+| --- | --- |
 | `setup_test_project()` | Create an isolated project in a temp directory with `rsconstruct.toml` and basic directories |
 | `setup_cc_project(path)` | Create a C project structure with the `cc_single_file` processor enabled |
 | `run_rsconstruct(dir, args)` | Execute the `rsconstruct` binary in the given directory and return its output |
@@ -183,7 +183,7 @@ mod processor {
 ## Test coverage by area
 
 | Area | File | Tests |
-|---|---|---|
+| --- | --- | --- |
 | Build command | `build.rs` | Force rebuild, incremental skip, clean, deterministic order, keep-going, timings, parallel -j flag, parallel keep-going, parallel all-products, parallel timings, parallel caching |
 | Cache | `cache.rs` | Clear, size, trim, list operations |
 | Complete | `complete.rs` | Bash/zsh/fish generation, config-driven completion |

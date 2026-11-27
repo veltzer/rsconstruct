@@ -11,7 +11,7 @@ rsconstruct is distributed under the MIT licence: `license = "MIT"` in `Cargo.to
 The version is the one the engine's module documentation names. The licence was checked against the upstream project itself (its licence file, its package metadata, or the `SPDX-License-Identifier` in its source) on 2026-10-26.
 
 | Engine | Ports | Upstream licence |
-|---|---|---|
+| --- | --- | --- |
 | `actionlint` | actionlint 1.7.12 (rhysd/actionlint) | MIT |
 | `checkpatch` | the Linux kernel's `scripts/checkpatch.pl` | GPL-2.0 (`SPDX-License-Identifier: GPL-2.0` in the script) |
 | `checkstyle` | checkstyle 8.36.1 | LGPL-2.1 |

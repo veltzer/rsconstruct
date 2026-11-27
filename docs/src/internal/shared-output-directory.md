@@ -112,7 +112,7 @@ The two restores compose correctly regardless of order.
 The system relies on these invariants; each is enforced in code:
 
 | # | Invariant | Where enforced |
-|---|-----------|----------------|
+| --- | ----------- | ---------------- |
 | 1 | Every declared output path has at most one owner. | `add_product` / graph validation (output conflict check) |
 | 2 | An `output_dirs` tree descriptor contains only paths not owned by any other product. | `store_tree_descriptor` with `is_foreign` predicate |
 | 3 | Pre-run cleanup removes only files the product previously owned. | `remove_stale_outputs` reads `previous_tree_paths` |

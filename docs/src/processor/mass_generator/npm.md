@@ -30,7 +30,7 @@ dep_inputs = []                        # Additional files that trigger rebuilds 
 ```
 
 | Key | Type | Default | Description |
-|-----|------|---------|-------------|
+| ----- | ------ | --------- | ------------- |
 | `command` | string | `"npm"` | The npm executable to run |
 | `args` | string[] | `[]` | Extra arguments passed to npm install |
 | `dep_inputs` | string[] | `[]` | Extra files whose changes trigger rebuilds |

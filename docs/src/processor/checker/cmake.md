@@ -32,7 +32,7 @@ dep_inputs = []
 ```
 
 | Key | Type | Default | Description |
-|-----|------|---------|-------------|
+| ----- | ------ | --------- | ------------- |
 | `args` | string[] | `[]` | Extra arguments passed to cmakelint |
 | `dep_inputs` | string[] | `[]` | Extra files whose changes trigger rebuilds |
 | `dep_auto` | string[] | `[".cmakelintrc"]` | Config files that are inputs when they exist |

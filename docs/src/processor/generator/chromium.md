@@ -28,7 +28,7 @@ dep_inputs = []                         # Additional files that trigger rebuilds
 ```
 
 | Key | Type | Default | Description |
-|-----|------|---------|-------------|
+| ----- | ------ | --------- | ------------- |
 | `command` | string | `"google-chrome"` | The Chromium or Google Chrome executable |
 | `args` | string[] | `[]` | Extra arguments passed to Chromium |
 | `output_dir` | string | `"out/processor.generator.chromium"` | Base output directory for PDF files |

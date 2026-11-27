@@ -36,7 +36,7 @@ dep_inputs = []                        # Additional files that trigger rebuilds 
 ```
 
 | Key | Type | Default | Description |
-|-----|------|---------|-------------|
+| ----- | ------ | --------- | ------------- |
 | `command` | string | `"bundle"` | The bundler executable to run |
 | `args` | string[] | `[]` | Extra arguments passed to bundler install |
 | `gem_home` | string | `"gems"` | Directory, relative to the `Gemfile`, where gems are installed; exported as `GEM_HOME` and `GEM_PATH` |

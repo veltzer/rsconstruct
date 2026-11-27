@@ -36,7 +36,7 @@ src_dirs = ["sass"]
 ```
 
 | Key | Type | Default | Description |
-|-----|------|---------|-------------|
+| ----- | ------ | --------- | ------------- |
 | `src_dirs` | string[] | `[]` | Directories to scan |
 | `src_extensions` | string[] | `[".scss", ".sass"]` | File extensions to compile |
 | `output_dir` | string | `"out/processor.generator.isass"` | Output directory |

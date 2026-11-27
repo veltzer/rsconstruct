@@ -86,7 +86,7 @@ dep_inputs = []    # Additional files that trigger rebuilds when changed
 ```
 
 | Key | Type | Default | Description |
-|-----|------|---------|-------------|
+| ----- | ------ | --------- | ------------- |
 | `command` | string | `"make"` | Path or name of the make binary |
 | `args` | string[] | `[]` | Extra arguments passed to every make invocation |
 | `target` | string | `""` | Make target to build (empty = default target) |

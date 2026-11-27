@@ -240,7 +240,7 @@ duration_hours = "number"                                         # Must be nume
 ```
 
 | Key | Type | Default | Description |
-|-----|------|---------|-------------|
+| ----- | ------ | --------- | ------------- |
 | `output` | string | `"out/processor.generator.tags/tags.db"` | Path to the tags database file |
 | `tags_dir` | string | `"tags"` | Directory containing `.txt` tag list files |
 | `required_fields` | string[] | `[]` | Frontmatter fields that every `.md` file must have |
@@ -269,7 +269,7 @@ All support `--json` for machine-readable output.
 ### Querying
 
 | Command | Description |
-|---------|-------------|
+| --------- | ------------- |
 | `rsconstruct tag list` | List all unique tags (sorted) |
 | `rsconstruct tag files TAG [TAG...]` | List files matching all given tags (AND) |
 | `rsconstruct tag files --or TAG [TAG...]` | List files matching any given tag (OR) |
@@ -284,7 +284,7 @@ All support `--json` for machine-readable output.
 ### Reporting
 
 | Command | Description |
-|---------|-------------|
+| --------- | ------------- |
 | `rsconstruct tag matrix` | Show a coverage matrix of tag categories per file |
 | `rsconstruct tag coverage` | Show percentage of files that have each tag category |
 | `rsconstruct tag orphans` | Find files with no tags at all |
@@ -293,7 +293,7 @@ All support `--json` for machine-readable output.
 ### Validation
 
 | Command | Description |
-|---------|-------------|
+| --------- | ------------- |
 | `rsconstruct tag check` | Run all validations without building (fast lint pass). The same checks as the build, with the same settings: unused tags fail only with `check_unused = true`, `unique_fields` compares list values as a whole |
 | `rsconstruct tag unused` | List tags in `tags_dir` that no file uses |
 | `rsconstruct tag unused --strict` | Same, but exit with error if any unused tags exist (for CI) |
@@ -302,7 +302,7 @@ All support `--json` for machine-readable output.
 ### Maintaining the allowlist
 
 | Command | Description |
-|---------|-------------|
+| --------- | ------------- |
 | `rsconstruct tag collect` | Scan the database and add every tag it holds that the allowlist lacks: a `key:value` tag goes to `tags_dir/<key>.txt`, a bare tag to `tags_dir/tags.txt`; each file is kept sorted, and `tags_dir` is created if missing |
 | `rsconstruct tag merge PATH` | Merge another project's tags directory into `tags_dir`: files present in both are unioned and sorted, files only in `PATH` are copied in, and files only in `tags_dir` are copied back to `PATH` |
 

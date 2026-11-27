@@ -72,7 +72,7 @@ The default `src_dirs` is empty, so a stanza with no `src_dirs` or `src_files` c
 ## Configuration
 
 | Key | Type | Default | Description |
-|-----|------|---------|-------------|
+| ----- | ------ | --------- | ------------- |
 | `valid` | bool | `true` | The `valid` rule: every file must be well-formed XML |
 | `elm` | table | `{}` | The `elm` rule: CSS selector = `true`, `false`, a count or `[min, max]` |
 | `attr` | array of tables | `[]` | The `attr` rule: one table per `"rule::selector"`, naming the attributes and their values |

@@ -28,7 +28,7 @@ against this repo's own `rsconstruct.toml`.
 ## Other documents, and which to trust
 
 | Path | What it is |
-|---|---|
+| --- | --- |
 | `CLAUDE.md` | The binding rules. Read first; it overrides everything here. |
 | `docs/src/` | The mdBook: user docs, plus `docs/src/internal/` for maintainers. |
 | `docs/src/internal/README.md` | Reading order and one-line summary of each internal chapter. |
@@ -50,7 +50,7 @@ of the build); `doc/` holds loose notes and is not linted or published.
 ## Vocabulary
 
 | Term | Meaning |
-|---|---|
+| --- | --- |
 | processor | A unit of work kind: wraps one tool or one in-process engine. Four types: `checker`, `generator`, `explicit`, `mass_generator`. |
 | pname | Full processor name, `processor.<type>.<name>`, equal to its module path. Config header, `-p` argument, cache key, default output dir (`out/processor.generator.tera`). |
 | iname | Instance name: a pname, or `pname.<instance>` when a stanza is named (`[processor.checker.clippy.lint]`). Key of the `ProcessorMap`. |
@@ -258,7 +258,7 @@ Most processors do not implement the trait themselves:
 The four types differ in product shape and caching:
 
 | Type | Products | Cache entry |
-|---|---|---|
+| --- | --- | --- |
 | checker | one per file, no outputs | marker (the pass itself) |
 | generator | one per input (per format) | blob per output |
 | explicit | one per stanza, declared `output_files` / `output_dirs` | tree |
@@ -307,7 +307,7 @@ rsconstruct). No shell is ever used
 State lives in `.rsconstruct/`:
 
 | Path | Content |
-|---|---|
+| --- | --- |
 | `objects/` | blobs by SHA-256 of content, two-hex sharding, optionally zstd |
 | `descriptors/` | marker / blob / tree JSON by descriptor key |
 | `db.redb` | stored processor configs (for the "Config changed" diff), last tree per product |
@@ -440,7 +440,7 @@ Things to know while iterating:
 ## Where to look for a given task
 
 | Task | Start at |
-|---|---|
+| --- | --- |
 | New or changed processor | its file in `src/processor/<type>/`; template `checker/svglint.rs` or `generator/sass.rs` |
 | New config field on a processor | `fields: &[FieldSpec]` on its plugin, plus its config struct |
 | New `[build]` / `[cache]` setting | `config/settings.rs`, then `docs/src/configuration.md` |

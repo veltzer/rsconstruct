@@ -54,7 +54,7 @@ list lives alongside the processor, not in a user-facing config.
 The import name is not always the PyPI distribution name:
 
 | Import | Distribution |
-|--------|--------------|
+| -------- | -------------- |
 | `cv2` | `opencv-python` |
 | `yaml` | `PyYAML` |
 | `PIL` | `Pillow` |
@@ -98,7 +98,7 @@ cv2 = "opencv-python"                 # User-provided import → distribution ov
 ```
 
 | Key | Type | Default | Description |
-|-----|------|---------|-------------|
+| ----- | ------ | --------- | ------------- |
 | `output` | string | `"requirements.txt"` | Output file path |
 | `exclude` | string[] | `[]` | Import names to never emit |
 | `sorted` | bool | `true` | Sort entries alphabetically |

@@ -40,7 +40,7 @@ Every processor has a single **identity string** (e.g. `ruff`, `clang_tidy`,
 same string:
 
 | Artifact | Convention | Example (`clang_tidy`) |
-|---|---|---|
+| --- | --- | --- |
 | Source file | `src/processor/<type>/{name}.rs` | `src/processor/checker/clang_tidy.rs` |
 | Processor struct (when it has its own) | `{PascalCase}Processor` | `ClangTidyProcessor` |
 | Config struct (when it has custom fields) | `{PascalCase}Config` | `ClangTidyConfig` |

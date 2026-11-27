@@ -22,7 +22,7 @@ output_dir = "out/processor.generator.yaml2json"    # Output directory (default)
 ```
 
 | Key | Type | Default | Description |
-|-----|------|---------|-------------|
+| ----- | ------ | --------- | ------------- |
 | `output_dir` | string | `"out/processor.generator.yaml2json"` | Output directory for JSON files |
 | `dep_inputs` | string[] | `[]` | Extra files whose changes trigger rebuilds |
 

@@ -141,7 +141,7 @@ You can exclude multiple profiles by listing them space-separated:
 ### Directive summary
 
 | Directive | Execution | Use case |
-|---|---|---|
+| --- | --- | --- |
 | `EXTRA_COMPILE_FLAGS_BEFORE` | Literal flags | Flags before default cflags |
 | `EXTRA_COMPILE_FLAGS_AFTER` | Literal flags | Flags after default cflags |
 | `EXTRA_LINK_FLAGS_BEFORE` | Literal flags | Flags before default ldflags |
@@ -186,7 +186,7 @@ compiler -MMD -MF deps -I... [compile_before] [cflags/cxxflags] [compile_after] 
 Link flags come **after** the source file so the linker can resolve symbols correctly.
 
 | Position | Source |
-|---|---|
+| --- | --- |
 | `compile_before` | `EXTRA_COMPILE_FLAGS_BEFORE` + `EXTRA_COMPILE_CMD` + `EXTRA_COMPILE_SHELL` |
 | `cflags/cxxflags` | `[processor.generator.cc_single_file]` config `cflags` or `cxxflags` |
 | `compile_after` | `EXTRA_COMPILE_FLAGS_AFTER` |
@@ -197,7 +197,7 @@ Link flags come **after** the source file so the linker can resolve symbols corr
 ## Verbosity Levels (`--processor-verbose N`)
 
 | Level | Output |
-|-------|--------|
+| ------- | -------- |
 | 0 (default) | Target basename: `main.elf` |
 | 1 | Target path + compiler commands: `out/processor.generator.cc_single_file/main.elf` |
 | 2 | Adds source path: `out/processor.generator.cc_single_file/main.elf <- src/main.c` |
@@ -264,7 +264,7 @@ Each source file is compiled once per compiler profile, allowing you to:
 ### Configuration Reference
 
 | Key | Type | Default | Description |
-|-----|------|---------|-------------|
+| ----- | ------ | --------- | ------------- |
 | `cc` | string | `"gcc"` | C compiler command |
 | `cxx` | string | `"g++"` | C++ compiler command |
 | `cflags` | string[] | `[]` | Flags passed to the C compiler |
@@ -282,7 +282,7 @@ Each source file is compiled once per compiler profile, allowing you to:
 Each entry in the `compilers` array can have:
 
 | Key | Type | Required | Description |
-|-----|------|----------|-------------|
+| ----- | ------ | ---------- | ------------- |
 | `name` | string | Yes | Profile name (used in output path) |
 | `cc` | string | No | C compiler (default: "gcc") |
 | `cxx` | string | No | C++ compiler (default: "g++") |

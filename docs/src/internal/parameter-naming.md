@@ -9,7 +9,7 @@ adding new processors or renaming existing ones.
 Parameters fall into four categories:
 
 | Category | Purpose |
-|----------|---------|
+| ---------- | --------- |
 | **Source discovery** | Which files are the primary targets to process |
 | **Dependency tracking** | Which additional files affect the checksum / trigger rebuilds |
 | **Tool configuration** | What command/tool to run and how |
@@ -23,7 +23,7 @@ These parameters determine which files are the primary inputs — the files that
 get processed, linted, or transformed.
 
 | Parameter | Type | Description |
-|-----------|------|-------------|
+| ----------- | ------ | ------------- |
 | `src_dirs` | string[] | Directories to scan recursively for source files. |
 | `src_extensions` | string[] | File extensions to match during scanning (e.g. `[".py", ".pyi"]`). |
 | `src_exclude_dirs` | string[] | Directory path segments to skip during scanning. |
@@ -49,7 +49,7 @@ process directly. A change to any of these files invalidates the cache and
 triggers a rebuild, but the files are not passed as arguments to the tool.
 
 | Parameter | Type | Description |
-|-----------|------|-------------|
+| ----------- | ------ | ------------- |
 | `dep_inputs` | string[] | Explicit dependency files (e.g. config files, schema files). Globs are supported. Fails if a listed file does not exist. |
 | `dep_auto` | string[] | Like `dep_inputs`, but a processor's default list is skipped where the files do not exist. Used for optional config files (e.g. `.pylintrc`, `pyproject.toml`). A list written in the config replaces the default and is checked like `dep_inputs` unless `[build] allow_missing_dep_auto` is set. |
 
@@ -77,7 +77,7 @@ changing either the command or any argument invalidates the cache and triggers
 a rebuild.
 
 | Parameter | Type | Description |
-|-----------|------|-------------|
+| ----------- | ------ | ------------- |
 | `command` | string | The executable to run. Required when the processor is active. If the value is a path to a local file, its content checksum is also tracked as a dependency. |
 | `args` | string[] | Arguments passed to the command before file paths. Always present alongside `command`. Both `command` and `args` values are included in the config checksum. |
 
@@ -94,7 +94,7 @@ itself changes, all affected products are rebuilt. System tools (e.g. `bash`,
 ## Execution Control Parameters
 
 | Parameter | Type | Description |
-|-----------|------|-------------|
+| ----------- | ------ | ------------- |
 | `batch` | bool | When `true`, pass all files to the command in a single invocation. When `false`, invoke once per file. Default: `true` for most processors. |
 | `max_jobs` | int | Maximum parallel jobs for this processor. Overrides the global `--jobs` flag. |
 | `output_dir` | string | Directory where output files are written (generator processors). |

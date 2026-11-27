@@ -44,7 +44,7 @@ dep_inputs = ["templates.jinja2/parts/header.inc"]   # included files are not tr
 ```
 
 | Key | Type | Default | Description |
-|-----|------|---------|-------------|
+| ----- | ------ | --------- | ------------- |
 | `src_dirs` | string[] | `[]` | Directories to scan |
 | `src_extensions` | string[] | `[".j2"]` | File extensions to render |
 | `dep_inputs` | string[] | `[]` | Extra files whose changes trigger rebuilds (included and extended templates) |

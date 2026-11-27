@@ -26,7 +26,7 @@ skip_not_found = false
 ```
 
 | Key | Type | Default | Description |
-|-----|------|---------|-------------|
+| ----- | ------ | --------- | ------------- |
 | `enabled` | bool | `true` | Set to `false` to keep the stanza but skip the analyzer |
 | `load_paths` | string[] | `[]` | Directories searched after the importing file's own directory, like the compiler's `--load-path` |
 | `skip_not_found` | bool | `false` | Skip imports that resolve nowhere instead of failing |

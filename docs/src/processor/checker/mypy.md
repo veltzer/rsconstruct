@@ -33,7 +33,7 @@ dep_inputs = []                            # Additional files that trigger rebui
 ```
 
 | Key | Type | Default | Description |
-|-----|------|---------|-------------|
+| ----- | ------ | --------- | ------------- |
 | `command` | string | `"mypy"` | The mypy executable to run |
 | `args` | string[] | `[]` | Extra arguments passed to mypy |
 | `dep_inputs` | string[] | `[]` | Extra files whose changes trigger rebuilds |

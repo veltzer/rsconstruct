@@ -38,7 +38,7 @@ Dirty mtime entries are flushed to the database in a single batch transaction at
 ### Why two layers
 
 | Layer | Scope | Avoids | Cost |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | In-memory cache | Single build run | Re-reading + re-hashing the same file | HashMap lookup |
 | Mtime database | Across builds | Reading unchanged files from disk | `stat()` + DB lookup |
 

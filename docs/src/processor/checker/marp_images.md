@@ -30,7 +30,7 @@ src_dirs = ["marp"]
 ```
 
 | Key | Type | Default | Description |
-|-----|------|---------|-------------|
+| ----- | ------ | --------- | ------------- |
 | `src_dirs` | string[] | `[]` | Directories to scan |
 | `src_extensions` | string[] | `[".md"]` | File extensions to check |
 | `dep_inputs` | string[] | `[]` | Extra files whose changes trigger rebuilds |

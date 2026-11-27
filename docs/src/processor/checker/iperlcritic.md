@@ -51,7 +51,7 @@ The default `src_dirs` is empty, so a stanza with no `src_dirs` or `src_files` c
 ## Configuration
 
 | Key | Type | Default | Description |
-|-----|------|---------|-------------|
+| ----- | ------ | --------- | ------------- |
 | `profile` | string | `".perlcriticrc"` | The Perl::Critic profile, as `perlcritic --profile`; relative to the project root. The default may be absent (then Perl::Critic's defaults apply); any other must exist |
 | `dep_auto` | string[] | `[".perlcriticrc"]` | Config files that are inputs when they exist |
 

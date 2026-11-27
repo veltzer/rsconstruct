@@ -26,7 +26,7 @@ The checker does not judge what the reason says, and it does not know whether th
 ### Directives by language
 
 | Files | Directives read |
-|-------|-----------------|
+| ------- | ----------------- |
 | `.py` | `# noqa`, `# type: ignore`, `# pyrefly: ignore`, `# pylint: disable=`, and the file-wide `# ruff: noqa`, `# flake8: noqa`, `# pyrefly: ignore-errors` |
 | `.sh`, `.bash` | `# shellcheck disable=` |
 | `.c`, `.cc`, `.cpp`, `.cxx`, `.h`, `.hh`, `.hpp` | `cppcheck-suppress`, `NOLINT`, `NOLINTNEXTLINE`, `NOLINTBEGIN` |
@@ -56,7 +56,7 @@ src_files = ["Dockerfile"]
 ```
 
 | Key | Type | Default | Description |
-|-----|------|---------|-------------|
+| ----- | ------ | --------- | ------------- |
 | `src_dirs` | string[] | `[]` | Directories to scan |
 | `src_files` | string[] | `[]` | Single files to check |
 | `src_extensions` | string[] | every extension in the table above | File extensions to check |

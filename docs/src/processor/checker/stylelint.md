@@ -35,7 +35,7 @@ dep_inputs = []
 ```
 
 | Key | Type | Default | Description |
-|-----|------|---------|-------------|
+| ----- | ------ | --------- | ------------- |
 | `command` | string | `"stylelint"` | The stylelint executable to run |
 | `args` | string[] | `[]` | Extra arguments passed to stylelint |
 | `dep_inputs` | string[] | `[]` | Extra files whose changes trigger rebuilds |

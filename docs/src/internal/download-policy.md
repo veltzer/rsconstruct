@@ -9,11 +9,11 @@ wrapping the call in `download::with_retry`. New code containing a naked
 
 The three entry points are:
 
-| Helper                              | Use for                                                         |
-| ----------------------------------- | --------------------------------------------------------------- |
-| `download::curl_argv(url, dest)`    | Downloading a URL to a file. Returns argv; the caller executes it. |
+| Helper                                 | Use for                                                                                          |
+| -------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| `download::curl_argv(url, dest)`       | Downloading a URL to a file. Returns argv; the caller executes it.                               |
 | `download::apply_retry_args(&mut cmd)` | A curl `Command` needing flags this module does not own (`--head`, `-X PUT`, `-w %{http_code}`). |
-| `download::with_retry(closure)`     | HTTP performed in-process via `ureq`.                            |
+| `download::with_retry(closure)`        | HTTP performed in-process via `ureq`.                                                            |
 
 ## Why
 

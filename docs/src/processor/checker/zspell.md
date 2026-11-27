@@ -48,7 +48,7 @@ dep_inputs = []                     # Additional files that trigger rebuilds whe
 ```
 
 | Key | Type | Default | Description |
-|-----|------|---------|-------------|
+| ----- | ------ | --------- | ------------- |
 | `src_extensions` | string[] | `[".md"]` | File extensions to discover |
 | `language` | string | `"en_US"` | Hunspell dictionary language (requires system package) |
 | `words_file` | string | `".zspell-words"` | Path to custom words file (relative to project root) |

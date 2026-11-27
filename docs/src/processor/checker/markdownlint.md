@@ -35,7 +35,7 @@ dep_inputs = []                      # Additional files that trigger rebuilds wh
 ```
 
 | Key | Type | Default | Description |
-|-----|------|---------|-------------|
+| ----- | ------ | --------- | ------------- |
 | `command` | string | `"markdownlint"` | Path to the markdownlint executable |
 | `args` | string[] | `[]` | Extra arguments passed to markdownlint |
 | `dep_inputs` | string[] | `[]` | Extra files whose changes trigger rebuilds |

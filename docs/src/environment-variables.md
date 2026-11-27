@@ -13,7 +13,7 @@ This breaks caching (the cache key doesn't account for env vars), breaks reprodu
 Common examples of environment variables that silently affect build output:
 
 | Variable | Effect |
-|---|---|
+| --- | --- |
 | `CC`, `CXX` | Changes which compiler is used |
 | `CFLAGS`, `CXXFLAGS`, `LDFLAGS` | Changes compiler/linker flags |
 | `PATH` | Changes which tool versions are found |

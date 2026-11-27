@@ -36,7 +36,7 @@ descriptor_set = "out/descriptors.pb"
 ```
 
 | Key | Type | Default | Description |
-|-----|------|---------|-------------|
+| ----- | ------ | --------- | ------------- |
 | `include_paths` | string[] | `[]` | Directories `import` statements resolve against. Empty: the `src_dirs` |
 | `descriptor_set` | string | `""` | Where to write the compiled `FileDescriptorSet`. Empty: not written |
 | `src_dirs` | string[] | `[]` | Directories to scan |

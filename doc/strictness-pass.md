@@ -102,38 +102,38 @@ warning to a fatal error, each firing lint got an explicit per-lint
 Worked top-down by occurrence count, removing each lint's `allow` and
 running `cargo clippy --fix --allow-dirty`:
 
-| Lint                                       | Occurrences | Result                                  |
-| ------------------------------------------ | ----------- | --------------------------------------- |
-| `uninlined_format_args`                    | 378         | Autofixed (everything → `{var}` form).  |
-| `doc_markdown`                             | 305         | Allow kept — opinionated, noisy.        |
-| `redundant_pub_crate`                      | 171         | Autofixed.                              |
-| `redundant_closure_for_method_calls`       | 87          | Autofixed.                              |
-| `missing_const_for_fn`                     | 77          | Autofixed.                              |
-| `manual_let_else`                          | 51          | Allow kept — autofix wasn't safe.       |
-| `format_push_string`                       | 32          | Allow kept — stylistic.                 |
-| `or_fun_call`                              | 26          | Allow kept — stylistic.                 |
-| `match_same_arms`                          | 21          | Allow kept — debatable.                 |
-| `unused_self`                              | 20          | Allow kept — trait methods.             |
-| `option_if_let_else`                       | 18          | Allow kept — `map_or` less readable.    |
-| `map_unwrap_or`                            | 18          | Allow kept — `map_or_else` less readable. |
-| `too_many_lines`                           | 15          | Allow kept — CLI dispatch matches.      |
-| `items_after_statements`                   | 15          | Allow kept — local fns are fine.        |
-| `significant_drop_tightening`              | 14          | Allow kept — needs per-site review.     |
-| `single_match_else`                        | 13          | Allow kept — stylistic.                 |
-| `unnecessary_wraps`                        | 12          | Allow kept — affects function signatures. |
-| `needless_raw_string_hashes`               | 11          | Allow kept — regex constants.           |
-| `needless_pass_by_value`                   | 10          | Allow kept — affects function signatures. |
-| `derivable_impls`                          | 10          | Autofixed.                              |
-| `cast_possible_truncation`                 | 10          | Allow kept — progress percentages.      |
-| `implicit_clone`                           | 9           | Allow kept — cosmetic.                  |
-| `struct_excessive_bools`                   | 7           | Allow kept — config types.              |
-| `doc_link_with_quotes`                     | 7           | Allow kept — opinionated.               |
-| `explicit_iter_loop`                       | 6           | Autofixed.                              |
-| `collapsible_if`                           | 6           | Autofixed.                              |
-| `cast_precision_loss`                      | 6           | Allow kept — same as cast_possible_truncation. |
-| `unnecessary_literal_bound`                | 5           | Autofixed.                              |
-| `stable_sort_primitive`                    | 5           | Autofixed.                              |
-| `redundant_else`                           | 5           | Autofixed.                              |
+| Lint                                 | Occurrences | Result                                         |
+| ------------------------------------ | ----------- | ---------------------------------------------- |
+| `uninlined_format_args`              | 378         | Autofixed (everything → `{var}` form).         |
+| `doc_markdown`                       | 305         | Allow kept — opinionated, noisy.               |
+| `redundant_pub_crate`                | 171         | Autofixed.                                     |
+| `redundant_closure_for_method_calls` | 87          | Autofixed.                                     |
+| `missing_const_for_fn`               | 77          | Autofixed.                                     |
+| `manual_let_else`                    | 51          | Allow kept — autofix wasn't safe.              |
+| `format_push_string`                 | 32          | Allow kept — stylistic.                        |
+| `or_fun_call`                        | 26          | Allow kept — stylistic.                        |
+| `match_same_arms`                    | 21          | Allow kept — debatable.                        |
+| `unused_self`                        | 20          | Allow kept — trait methods.                    |
+| `option_if_let_else`                 | 18          | Allow kept — `map_or` less readable.           |
+| `map_unwrap_or`                      | 18          | Allow kept — `map_or_else` less readable.      |
+| `too_many_lines`                     | 15          | Allow kept — CLI dispatch matches.             |
+| `items_after_statements`             | 15          | Allow kept — local fns are fine.               |
+| `significant_drop_tightening`        | 14          | Allow kept — needs per-site review.            |
+| `single_match_else`                  | 13          | Allow kept — stylistic.                        |
+| `unnecessary_wraps`                  | 12          | Allow kept — affects function signatures.      |
+| `needless_raw_string_hashes`         | 11          | Allow kept — regex constants.                  |
+| `needless_pass_by_value`             | 10          | Allow kept — affects function signatures.      |
+| `derivable_impls`                    | 10          | Autofixed.                                     |
+| `cast_possible_truncation`           | 10          | Allow kept — progress percentages.             |
+| `implicit_clone`                     | 9           | Allow kept — cosmetic.                         |
+| `struct_excessive_bools`             | 7           | Allow kept — config types.                     |
+| `doc_link_with_quotes`               | 7           | Allow kept — opinionated.                      |
+| `explicit_iter_loop`                 | 6           | Autofixed.                                     |
+| `collapsible_if`                     | 6           | Autofixed.                                     |
+| `cast_precision_loss`                | 6           | Allow kept — same as cast_possible_truncation. |
+| `unnecessary_literal_bound`          | 5           | Autofixed.                                     |
+| `stable_sort_primitive`              | 5           | Autofixed.                                     |
+| `redundant_else`                     | 5           | Autofixed.                                     |
 
 Plus a long tail of single-occurrence lints, most fixed by later autofix
 passes or allowed pending careful review.

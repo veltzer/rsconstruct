@@ -38,7 +38,7 @@ source_output_dir = "out/processor.generator.marp"  # Where the upstream process
 ```
 
 | Key | Type | Default | Description |
-|-----|------|---------|-------------|
+| ----- | ------ | --------- | ------------- |
 | `source_dir` | string | `"marp/courses"` | Directory containing course subdirectories |
 | `source_ext` | string | `".md"` | Extension of the source files to look for |
 | `source_output_dir` | string | `"out/processor.generator.marp"` | Directory where the upstream processor writes the PDFs |

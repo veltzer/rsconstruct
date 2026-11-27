@@ -33,7 +33,7 @@ max_attempts = 3                       # Total attempts (including the first) wh
 ```
 
 | Key | Type | Default | Description |
-|-----|------|---------|-------------|
+| ----- | ------ | --------- | ------------- |
 | `command` | string | `"marp"` | The marp executable to run |
 | `formats` | string[] | `["pdf"]` | Output formats to generate (`pdf`, `pptx`, `html`) |
 | `args` | string[] | `["--html", "--allow-local-files"]` | Extra arguments passed to marp |

@@ -89,7 +89,7 @@ CPU-bound, memory-bound, or branch-mispredict-bound."
 ### Wall-clock and counters
 
 | Metric | Value |
-|---|---|
+| --- | --- |
 | Wall time | 1.08 s |
 | User time | 0.99 s |
 | System time | 0.08 s |
@@ -111,7 +111,7 @@ instructions**, not from cache thrash or branch mispredicts.
 ### Hot spots (self-time)
 
 | % of CPU | Function |
-|---|---|
+| --- | --- |
 | **48.79 %** | `std::path::Components::parse_next_component_back` |
 | **12.90 %** | `<std::path::Components as DoubleEndedIterator>::next_back` |
 | **10.84 %** | `rsconstruct::graph::BuildGraph::add_product_with_variant` |
@@ -189,7 +189,7 @@ on-disk-format changes.
 ### Wall-clock and counters
 
 | Metric | Value | vs. 0.8.1 tag |
-|---|---|---|
+| --- | --- | --- |
 | Wall time | 0.265 s | **4.1× faster** |
 | Instructions | 2.05 B | -90 % |
 | Cycles | 0.88 B | -83 % |
@@ -202,7 +202,7 @@ of using `PathBuf` as HashMap keys.
 ### Hot spots (self-time, user-space, 9,948 samples, 10 iterations)
 
 | % | Function | Category |
-|---|---|---|
+| --- | --- | --- |
 | 5.42 | `core::str::converts::from_utf8` | UTF-8 validation |
 | 3.52 | `sip::Hasher::write` | HashMap hashing |
 | 3.51 | `<Path as Hash>::hash` | HashMap hashing |
@@ -226,7 +226,7 @@ backed by an in-memory `PathInterner`. See
 ### Wall-clock and counters
 
 | Metric | Value | vs. previous |
-|---|---|---|
+| --- | --- | --- |
 | Wall time | 0.245 s | -8 % |
 | Instructions | 2.04 B | ~flat |
 | Cycles | 0.91 B | ~flat |
@@ -234,7 +234,7 @@ backed by an in-memory `PathInterner`. See
 ### Hot spots (self-time, user-space, 9,925 samples, 10 iterations)
 
 | % | Function | Notes |
-|---|---|---|
+| --- | --- | --- |
 | 4.34 | `core::str::converts::from_utf8` | unchanged |
 | 3.21 | `sha2::sha256::digest_blocks` | unchanged |
 | 2.60 | `Components::next` | unchanged |
@@ -306,7 +306,7 @@ half.
 ### After
 
 | Threads | 0.9.195 | after |
-|---|---|---|
+| --- | --- | --- |
 | 1 | 0.757 s | 0.530 s |
 | 4 | 0.773 s | 0.453 s |
 | 16 | 0.790 s | 0.447 s |
@@ -345,7 +345,7 @@ Cache](checksum-cache.md).
 ### After
 
 | | 0.9.197 | after |
-|---|---|---|
+| --- | --- | --- |
 | `statx` calls | 40,796 | 20,796 |
 | `-j1` wall | 0.167 s | 0.152 s |
 | `-j16` wall | 0.134 s | 0.130 s |
@@ -359,7 +359,7 @@ same cache, mean of 10 runs, 0.9.197 built from its tag for the
 comparison:
 
 | | 0.9.195 | 0.9.197 | 0.9.198 |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `statx` calls | 381k | 188k | 44k |
 | files opened | 39k | 3.3k | 3.3k |
 | `-j1` wall | 0.757 s | 0.47 s | 0.32 s |

@@ -47,7 +47,7 @@ dep_inputs = []
 ```
 
 | Key | Type | Default | Description |
-|-----|------|---------|-------------|
+| ----- | ------ | --------- | ------------- |
 | `src_dirs` | string[] | `[]` | Directories to scan — set to `[".github/workflows"]` |
 | `args` | string[] | `[]` | Extra arguments passed to actionlint |
 | `dep_inputs` | string[] | `[]` | Extra files whose changes trigger rebuilds |

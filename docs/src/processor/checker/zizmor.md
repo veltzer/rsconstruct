@@ -45,7 +45,7 @@ args = ["--offline", "--no-progress"]        # The default
 ```
 
 | Key | Type | Default | Description |
-|-----|------|---------|-------------|
+| ----- | ------ | --------- | ------------- |
 | `command` | string | `"zizmor"` | The zizmor executable to run |
 | `args` | string[] | `["--offline", "--no-progress"]` | Arguments passed to zizmor before the files |
 | `dep_inputs` | string[] | `[]` | Extra files whose changes trigger rebuilds |

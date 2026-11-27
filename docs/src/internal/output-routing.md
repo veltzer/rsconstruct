@@ -231,7 +231,7 @@ search and path settings against `out/` and other processors' declared
 output directories; approximate):
 
 | Repo | Sites | Kind |
-|------|-------|------|
+| ------ | ------- | ------ |
 | book-openbook | 25 | `src_dirs` into tera / generic outputs; `input_globs` over `out/derived`; literal `inputs` of generated `.ly`/`.pdf` |
 | teaching-syllabi | 6 | five processors with `src_dirs` on one generic generator's output; one glob over `_site/tracks` |
 | rsslide | 2 | `src_dirs = ["out/import"]` |
@@ -351,7 +351,7 @@ scanned file, and store nothing taken from the index:
 **Left `WholeIndex`, and why:**
 
 | Processor | Its discovery depends on |
-|---|---|
+| --- | --- |
 | `generator.tera` | the set of includable templates, recorded from the whole index |
 | `generator.requirements`, `generator.tags`, `checker.duplicate_files` | one product over the whole set of scanned files |
 | `generator.pdfunite`, `generator.ipdfunite` | files grouped by directory |

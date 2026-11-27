@@ -44,7 +44,7 @@ The default `src_dirs` is empty, so a stanza with no `src_dirs` or `src_files` c
 ## Configuration
 
 | Key | Type | Default | Description |
-|-----|------|---------|-------------|
+| ----- | ------ | --------- | ------------- |
 | `config_file` | string | `""` | A hadolint configuration file (YAML). Empty: `.hadolint.yaml` or `.hadolint.yml` in the project root when present |
 | `ignored` | string[] | `[]` | Rule codes to ignore, added to the configuration file's `ignored` |
 | `trusted_registries` | string[] | `[]` | Registries `FROM` images may come from (DL3026); `*` wildcards allowed |

@@ -30,7 +30,7 @@ dep_inputs = []
 ```
 
 | Key | Type | Default | Description |
-|-----|------|---------|-------------|
+| ----- | ------ | --------- | ------------- |
 | `command` | string | `"htmlhint"` | The htmlhint executable to run |
 | `args` | string[] | `[]` | Extra arguments passed to htmlhint |
 | `dep_inputs` | string[] | `[]` | Extra files whose changes trigger rebuilds |

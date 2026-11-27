@@ -49,7 +49,7 @@ dep_inputs = []                      # Additional files that trigger rebuilds wh
 ```
 
 | Key | Type | Default | Description |
-|-----|------|---------|-------------|
+| ----- | ------ | --------- | ------------- |
 | `command` | string | `"tectonic"` | The tectonic executable to run |
 | `args` | string[] | `[]` | Extra arguments passed to tectonic |
 | `output_dir` | string | `"out/processor.generator.tectonic"` | Output directory for PDF files |

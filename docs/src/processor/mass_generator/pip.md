@@ -30,7 +30,7 @@ dep_inputs = []                        # Additional files that trigger rebuilds 
 ```
 
 | Key | Type | Default | Description |
-|-----|------|---------|-------------|
+| ----- | ------ | --------- | ------------- |
 | `command` | string | `"pip"` | The pip executable to run |
 | `args` | string[] | `[]` | Extra arguments passed to pip |
 | `dep_inputs` | string[] | `[]` | Extra files whose changes trigger rebuilds |

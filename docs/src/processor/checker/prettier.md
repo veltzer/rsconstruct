@@ -32,7 +32,7 @@ src_dirs = ["web"]
 ```
 
 | Key | Type | Default | Description |
-|-----|------|---------|-------------|
+| ----- | ------ | --------- | ------------- |
 | `command` | string | `"prettier"` | The prettier executable to run |
 | `args` | string[] | `[]` | Extra arguments passed to prettier |
 | `src_dirs` | string[] | `[]` | Directories to scan |

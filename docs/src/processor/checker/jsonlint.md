@@ -29,7 +29,7 @@ dep_inputs = []                            # Additional files that trigger rebui
 ```
 
 | Key | Type | Default | Description |
-|-----|------|---------|-------------|
+| ----- | ------ | --------- | ------------- |
 | `command` | string | `"jsonlint"` | The jsonlint executable to run |
 | `args` | string[] | `[]` | Extra arguments passed to jsonlint |
 | `dep_inputs` | string[] | `[]` | Extra files whose changes trigger rebuilds |

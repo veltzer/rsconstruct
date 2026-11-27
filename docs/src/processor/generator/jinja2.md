@@ -38,7 +38,7 @@ dep_inputs = ["config/settings.py"]     # Additional files that trigger rebuilds
 ```
 
 | Key | Type | Default | Description |
-|-----|------|---------|-------------|
+| ----- | ------ | --------- | ------------- |
 | `src_extensions` | string[] | `[".j2"]` | File extensions to discover |
 | `dep_inputs` | string[] | `[]` | Extra files whose changes trigger rebuilds |
 | `required_tools` | string[] | `[]` | Extra tools the build needs on PATH beyond the built-in ones (e.g. what a wrapper script shells out to); checked before building and covered by `tool install` and version locking |

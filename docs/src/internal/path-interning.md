@@ -13,13 +13,13 @@ Replacing those scans with `HashMap<PathBuf, _>` indexes took `status` from
 
 The remaining 0.26 s is dominated, by category:
 
-| Category                          | % of CPU |
-|-----------------------------------|----------|
-| Path iteration (`Components`)     | ~10 %    |
-| HashMap hashing (SipHash + Path)  | ~7 %     |
-| Allocator churn (malloc/free)     | ~6 %     |
-| UTF-8 validation/decoding         | ~7 %     |
-| Checksumming (SHA-256 + keys)     | ~6 %     |
+| Category                         | % of CPU |
+| -------------------------------- | -------- |
+| Path iteration (`Components`)    | ~10 %    |
+| HashMap hashing (SipHash + Path) | ~7 %     |
+| Allocator churn (malloc/free)    | ~6 %     |
+| UTF-8 validation/decoding        | ~7 %     |
+| Checksumming (SHA-256 + keys)    | ~6 %     |
 
 A lot of that is the cost of *using `PathBuf` as a HashMap key*. Every insert
 and lookup does:
@@ -60,11 +60,11 @@ Every hot HashMap that currently keys on `PathBuf` switches to `PathId`.
 every `rsconstruct` invocation and dropped when the process exits. They
 never touch disk.
 
-| Data                                    | Lives in           | IDs used? |
-|-----------------------------------------|--------------------|-----------|
-| `BuildGraph` HashMaps                   | RAM, this process  | Yes       |
-| On-disk cache (redb descriptors, etc.)  | Disk, persistent   | No        |
-| Config files, discovered files          | Disk               | No        |
+| Data                                   | Lives in          | IDs used? |
+| -------------------------------------- | ----------------- | --------- |
+| `BuildGraph` HashMaps                  | RAM, this process | Yes       |
+| On-disk cache (redb descriptors, etc.) | Disk, persistent  | No        |
+| Config files, discovered files         | Disk              | No        |
 
 The path `foo/bar.md` might be `PathId(42)` today and `PathId(17)` tomorrow.
 That is fine because nothing persistent ever referred to `42`.

@@ -15,7 +15,7 @@ This document explains:
 ## The three data sources
 
 | Question | Lives where | Cost of grouping by X |
-|---|---|---|
+| --- | --- | --- |
 | "How many products does pylint have in this build config?" | graph (in-memory) | free |
 | "How many products were built / skipped / restored this run?" | executor stats (in-memory) | free |
 | "How many files did each analyzer find?" | `.rsconstruct/deps.redb` (on disk, keyed by analyzer) | fast — single DB scan, key is already the analyzer name |
@@ -190,7 +190,7 @@ fact — so they're immune to drift.
 ### Option comparison
 
 | Aspect | A (field in descriptor) | B (processor in path) | C (redb sidecar) |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | Grouping correctness | yes | yes | yes (if kept in sync) |
 | Scan cost | O(N) reads | O(P) readdirs | O(P) DB reads |
 | Bytes count free | no | no (still stat blobs) | yes (pre-aggregated) |

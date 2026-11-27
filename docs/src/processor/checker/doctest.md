@@ -25,7 +25,7 @@ dep_inputs = []                         # Additional files that trigger rebuilds
 ```
 
 | Key | Type | Default | Description |
-|-----|------|---------|-------------|
+| ----- | ------ | --------- | ------------- |
 | `src_extensions` | string[] | `[".py"]` | File extensions to discover |
 | `dep_inputs` | string[] | `[]` | Extra files whose changes trigger rebuilds |
 

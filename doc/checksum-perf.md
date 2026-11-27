@@ -48,11 +48,11 @@ instead of being distributed as per-file metadata.
 
 Three options for "store the checksum near the file":
 
-| Option              | How                                            | Problems                                                                 |
-| ------------------- | ---------------------------------------------- | ------------------------------------------------------------------------ |
-| **xattrs**          | `setxattr(path, "user.rsconstruct.sha256", ...)` | tmpfs / NFS / sshfs / WSL often don't support them; `cp`, `tar`, `rsync` don't preserve them by default; `mv` across filesystems silently drops them. Result: cache misses are silent and frequent. |
-| **Sidecar files**   | `path.sha256` next to `path`                   | Pollutes the tree. Files accidentally get committed. Glob patterns (`*.sha256`) noise up unrelated tools. Dotfile sidecars (`.path.sha256`) have similar issues plus visibility quirks. |
-| **Centralized DB**  | One redb at `.rsconstruct/mtime.redb` (current) | Single file, single rule for ignore, easy to nuke, no FS dependencies, survives across builds.                                                |
+| Option             | How                                              | Problems                                                                                                                                                                                            |
+| ------------------ | ------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **xattrs**         | `setxattr(path, "user.rsconstruct.sha256", ...)` | tmpfs / NFS / sshfs / WSL often don't support them; `cp`, `tar`, `rsync` don't preserve them by default; `mv` across filesystems silently drops them. Result: cache misses are silent and frequent. |
+| **Sidecar files**  | `path.sha256` next to `path`                     | Pollutes the tree. Files accidentally get committed. Glob patterns (`*.sha256`) noise up unrelated tools. Dotfile sidecars (`.path.sha256`) have similar issues plus visibility quirks.             |
+| **Centralized DB** | One redb at `.rsconstruct/mtime.redb` (current)  | Single file, single rule for ignore, easy to nuke, no FS dependencies, survives across builds.                                                                                                      |
 
 We picked centralized DB. It works on every filesystem rsconstruct
 runs on, doesn't pollute the project tree, and is already

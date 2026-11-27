@@ -36,7 +36,7 @@ dep_inputs = []                      # Additional files that trigger rebuilds wh
 ```
 
 | Key | Type | Default | Description |
-|-----|------|---------|-------------|
+| ----- | ------ | --------- | ------------- |
 | `command` | string | `"aspell"` | The aspell executable to run |
 | `conf` | string | `".aspell.conf"` | Aspell configuration file, as `--conf`; a non-default one must exist and is an input of every product |
 | `words_file` | string | `".aspell.en.pws"` | The personal word list; an input of every product |

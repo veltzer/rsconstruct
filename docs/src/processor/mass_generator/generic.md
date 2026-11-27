@@ -6,12 +6,12 @@ Runs a tool that enumerates its outputs in advance. The tool's plan command prin
 
 The processor types cover a matrix of "how many outputs" and "are they known in advance":
 
-| Type               | Outputs known?              | Example                |
-|--------------------|-----------------------------|------------------------|
-| **Generator**      | Yes, 1 per input            | tera: template → file  |
+| Type               | Outputs known?                                | Example                              |
+| ------------------ | --------------------------------------------- | ------------------------------------ |
+| **Generator**      | Yes, 1 per input                              | tera: template → file                |
 | **Explicit**       | Yes, user-declared; or opaque (`output_dirs`) | custom build step; mkdocs → `_site/` |
-| **Checker**        | None (pass/fail)            | ruff                   |
-| **Mass generator** | Yes — tool enumerates them  | rssite → `_site/*`     |
+| **Checker**        | None (pass/fail)                              | ruff                                 |
+| **Mass generator** | Yes — tool enumerates them                    | rssite → `_site/*`                   |
 
 A mass generator produces many output files from one tool run (like an explicit stanza with `output_dirs`), but the tool itself answers *"what will you produce?"* before running. Each predicted file becomes a declared product with its own inputs, cache entry, and dependency edges.
 
@@ -53,17 +53,17 @@ Commands are executed directly, never through a shell (see [No-Shell Policy](../
 
 ### Fields
 
-| Key               | Type             | Required | Description                                                                 |
-|-------------------|------------------|----------|-----------------------------------------------------------------------------|
-| `command`         | string           | yes      | The tool's build command. Runs at most once per build.                      |
-| `args`            | array of strings | no       | Arguments for `command`.                                                    |
-| `predict_command` | string           | yes      | The tool's plan command. Must print the JSON manifest to stdout.            |
-| `predict_args`    | array of strings | no       | Arguments for `predict_command`.                                            |
-| `output_dirs`     | array of strings | yes      | Directories the tool writes into. Every manifest path must fall inside one. |
-| `loose_manifest`  | bool             | no       | Default false. If true, plan/build mismatches are warnings, not errors.     |
-| `dep_inputs`      | array of strings | no       | Extra files added to the inputs of every product.                           |
-| `src_dirs`, `src_extensions`, `src_files`, `src_exclude_*` | arrays | no | The files the plan is computed from; they key the [plan cache](#plan-cache). |
-| `required_tools`  | array of strings | no       | Tools the commands shell out to, for `tool install` and version locking.   |
+| Key                                                        | Type             | Required | Description                                                                  |
+| ---------------------------------------------------------- | ---------------- | -------- | ---------------------------------------------------------------------------- |
+| `command`                                                  | string           | yes      | The tool's build command. Runs at most once per build.                       |
+| `args`                                                     | array of strings | no       | Arguments for `command`.                                                     |
+| `predict_command`                                          | string           | yes      | The tool's plan command. Must print the JSON manifest to stdout.             |
+| `predict_args`                                             | array of strings | no       | Arguments for `predict_command`.                                             |
+| `output_dirs`                                              | array of strings | yes      | Directories the tool writes into. Every manifest path must fall inside one.  |
+| `loose_manifest`                                           | bool             | no       | Default false. If true, plan/build mismatches are warnings, not errors.      |
+| `dep_inputs`                                               | array of strings | no       | Extra files added to the inputs of every product.                            |
+| `src_dirs`, `src_extensions`, `src_files`, `src_exclude_*` | arrays           | no       | The files the plan is computed from; they key the [plan cache](#plan-cache). |
+| `required_tools`                                           | array of strings | no       | Tools the commands shell out to, for `tool install` and version locking.     |
 
 The scan fields discover no products — the manifest's `sources` decide every product's inputs — but they declare which files the plan is computed from; see [Plan cache](#plan-cache). `src_dirs` without `src_extensions` is rejected, because it would match no file and silently key the cache on nothing.
 
@@ -177,13 +177,13 @@ See [rssite](https://github.com/veltzer/rssite) for a tool built to this contrac
 ## Comparison with other processor types
 
 |                            | Explicit with `output_dirs` (opaque) | Mass generator (transparent)  | Generator (1:1)         |
-|----------------------------|-------------------------|-------------------------------|-------------------------|
-| Outputs known in advance?  | No                      | Yes                           | Yes                     |
-| Tool invocations per build | 1 if dirty              | 1 if any product is dirty     | N (one per dirty input) |
-| Cache unit                 | Whole tree              | Per file                      | Per file                |
-| Downstream deps            | Only on declared files  | On every predicted file       | On every produced file  |
-| Shared-folder safety       | Via `path_owner` filter | Via declared outputs (normal) | Via declared outputs    |
-| Use case                   | mkdocs, Sphinx          | rssite, cooperative tools     | tera, mako, compilers   |
+| -------------------------- | ------------------------------------ | ----------------------------- | ----------------------- |
+| Outputs known in advance?  | No                                   | Yes                           | Yes                     |
+| Tool invocations per build | 1 if dirty                           | 1 if any product is dirty     | N (one per dirty input) |
+| Cache unit                 | Whole tree                           | Per file                      | Per file                |
+| Downstream deps            | Only on declared files               | On every predicted file       | On every produced file  |
+| Shared-folder safety       | Via `path_owner` filter              | Via declared outputs (normal) | Via declared outputs    |
+| Use case                   | mkdocs, Sphinx                       | rssite, cooperative tools     | tera, mako, compilers   |
 
 ## Migration from an `output_dirs` stanza
 

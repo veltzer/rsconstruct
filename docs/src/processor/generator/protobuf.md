@@ -38,7 +38,7 @@ dep_inputs = []                         # Additional files that trigger rebuilds
 ```
 
 | Key | Type | Default | Description |
-|-----|------|---------|-------------|
+| ----- | ------ | --------- | ------------- |
 | `command` | string | `"protoc"` | Path to protoc compiler |
 | `src_extensions` | string[] | `[".proto"]` | File extensions to discover |
 | `output_dir` | string | `"out/processor.generator.protobuf"` | Output directory |

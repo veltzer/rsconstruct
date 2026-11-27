@@ -46,14 +46,14 @@ No explicit cross-crate ordering. Everything flows from `[dependencies]` / libra
 
 ### Summary table
 
-| Tool         | Explicit ordering knobs               | Philosophy                                       |
-|--------------|---------------------------------------|--------------------------------------------------|
-| Make / Ninja | Order-only deps (`\|\|`)              | Bridge when file deps aren't enough              |
-| Bazel, Buck2 | **None**                              | Hermeticity; all ordering comes from data flow   |
-| Cargo, SBT   | **None**                              | Same as Bazel                                    |
-| Gradle       | `dependsOn`, `mustRunAfter`, `shouldRunAfter` | Real-world tasks have non-data ordering needs |
-| CMake        | `add_dependencies`                    | Bridge for "phantom" custom targets              |
-| rsconstruct  | **None** (currently)                  | Same as Bazel                                    |
+| Tool         | Explicit ordering knobs                       | Philosophy                                     |
+| ------------ | --------------------------------------------- | ---------------------------------------------- |
+| Make / Ninja | Order-only deps (`\|\|`)                      | Bridge when file deps aren't enough            |
+| Bazel, Buck2 | **None**                                      | Hermeticity; all ordering comes from data flow |
+| Cargo, SBT   | **None**                                      | Same as Bazel                                  |
+| Gradle       | `dependsOn`, `mustRunAfter`, `shouldRunAfter` | Real-world tasks have non-data ordering needs  |
+| CMake        | `add_dependencies`                            | Bridge for "phantom" custom targets            |
+| rsconstruct  | **None** (currently)                          | Same as Bazel                                  |
 
 ## The dilemmas
 

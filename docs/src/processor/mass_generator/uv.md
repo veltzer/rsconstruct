@@ -44,7 +44,7 @@ args = ["--locked"]                    # The default
 ```
 
 | Key | Type | Default | Description |
-|-----|------|---------|-------------|
+| ----- | ------ | --------- | ------------- |
 | `command` | string | `"uv"` | The uv executable to run |
 | `args` | string[] | `["--locked"]` | Arguments passed after `uv sync` |
 | `dep_inputs` | string[] | `[]` | Extra files whose changes trigger rebuilds |

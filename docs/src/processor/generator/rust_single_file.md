@@ -35,7 +35,7 @@ dep_inputs = []                         # Additional files that trigger rebuilds
 ```
 
 | Key | Type | Default | Description |
-|-----|------|---------|-------------|
+| ----- | ------ | --------- | ------------- |
 | `command` | string | `"rustc"` | Path to Rust compiler |
 | `flags` | string[] | `[]` | Additional compiler flags |
 | `output_suffix` | string | `".elf"` | Suffix for output executables |

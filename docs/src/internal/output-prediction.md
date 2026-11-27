@@ -194,10 +194,10 @@ loose_manifest = false
 
 This processor type does not replace the explicit `output_dirs` / shared-output-directory mechanism. Both coexist:
 
-| User declares                   | Treated as       | Caching                    | Cross-processor deps    |
-|---------------------------------|------------------|----------------------------|-------------------------|
-| `output_dirs` only (explicit)   | Explicit (opaque) | One tree per build        | Only via declared files |
-| `output_dirs` + `predict_command` | MassGenerator    | Per file                   | Full — all files known  |
+| User declares                     | Treated as        | Caching            | Cross-processor deps    |
+| --------------------------------- | ----------------- | ------------------ | ----------------------- |
+| `output_dirs` only (explicit)     | Explicit (opaque) | One tree per build | Only via declared files |
+| `output_dirs` + `predict_command` | MassGenerator     | Per file           | Full — all files known  |
 
 Choose an explicit stanza with `output_dirs` when the tool can't enumerate its outputs. Choose MassGenerator when it can.
 

@@ -22,7 +22,7 @@ args = []                                 # Extra arguments passed to black
 ```
 
 | Key | Type | Default | Description |
-|-----|------|---------|-------------|
+| ----- | ------ | --------- | ------------- |
 | `src_extensions` | string[] | `[".py"]` | File extensions to discover |
 | `dep_inputs` | string[] | `[]` | Extra files whose changes trigger rechecks |
 | `dep_auto` | string[] | `["pyproject.toml"]` | Config files that auto-trigger rechecks |

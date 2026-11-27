@@ -25,7 +25,7 @@ check_ordering = true    # Check propertyOrdering (default: true)
 ```
 
 | Key | Type | Default | Description |
-|-----|------|---------|-------------|
+| ----- | ------ | --------- | ------------- |
 | `check_ordering` | boolean | `true` | Whether to check property ordering against `propertyOrdering` in the schema |
 | `dep_inputs` | string[] | `[]` | Extra files whose changes trigger rebuilds |
 

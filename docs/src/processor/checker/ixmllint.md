@@ -52,7 +52,7 @@ schema = "xsd/keynote.xsd"
 ```
 
 | Key | Type | Default | Description |
-|-----|------|---------|-------------|
+| ----- | ------ | --------- | ------------- |
 | `schema` | string | `""` | XSD schema to validate every file against, like `xmllint --schema`; relative to the project root. Empty: well-formedness only |
 | `strict` | bool | `false` | Fail on namespace errors and parser warnings too (xmllint exits 0 on them) |
 | `src_dirs` | string[] | `[]` | Directories to scan |

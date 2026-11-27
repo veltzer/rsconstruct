@@ -7,7 +7,7 @@ commit it pushes.
 ## Supported Platforms
 
 | Platform | Binary name |
-|---|---|
+| --- | --- |
 | Linux x86_64 | `rsconstruct-linux-x86_64` |
 | Linux aarch64 (arm64) | `rsconstruct-linux-aarch64` |
 

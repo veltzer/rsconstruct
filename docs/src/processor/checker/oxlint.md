@@ -48,7 +48,7 @@ dep_inputs = []
 ```
 
 | Key | Type | Default | Description |
-|-----|------|---------|-------------|
+| ----- | ------ | --------- | ------------- |
 | `command` | string | `"oxlint"` | The oxlint executable to run |
 | `args` | string[] | `[]` | Extra arguments passed to oxlint |
 | `dep_inputs` | string[] | `[]` | Extra files whose changes trigger rebuilds |

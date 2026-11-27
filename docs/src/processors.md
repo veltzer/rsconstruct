@@ -70,7 +70,7 @@ Use `rsconstruct processor files` to see which files each processor discovers.
 `rsconstruct clean outputs` calls each product's processor-defined `clean()`. What gets removed depends on the processor type:
 
 | Processor type | What `clean()` removes | Recursive? |
-|---|---|---|
+| --- | --- | --- |
 | Checker | Nothing — checkers produce no outputs | — |
 | Generator | Each declared output file (`product.outputs`) | No |
 | Explicit | Declared `output_files` + declared `output_dirs` | Yes (for `output_dirs` only) |

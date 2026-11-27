@@ -47,7 +47,7 @@ None of these sees the installed packages. `uv lock --upgrade` changes only
 ## Decision 1: what is fingerprinted
 
 | | Fingerprint | Cost per build | Lock refreshed, not synced | `uv pip install` / manual change | Same on every machine | False rebuilds |
-|---|---|---|---|---|---|---|
+| --- | --- | --- | --- | --- | --- | --- |
 | A | Hash of the whole `uv.lock` file | read ~1 MB | **Wrong**: re-runs against the *old* packages and caches that result under the new key | Missed | Yes | Any lock edit, even with no version change |
 | B | `uv.lock` parsed to (name, version, source) per package | parse ~1 MB | **Wrong**, as A | Missed | Yes | Real version changes only |
 | **C** | **Installed set: sorted `*.dist-info` / `*.egg-info` directory names in `site-packages` (each is `name-version`), plus the interpreter version from `pyvenv.cfg`** | **one `readdir` and one small file** | **Right**: nothing changes until the sync | **Caught** | **Yes, for the same packages** | **Real version changes only** |

@@ -84,7 +84,7 @@ dep_inputs = ["src/mypkg/**/*.py", "pyproject.toml", "uv.lock"]
 ```
 
 | Key | Type | Default | Description |
-|-----|------|---------|-------------|
+| ----- | ------ | --------- | ------------- |
 | `command` | string | `"sphinx-build"` | The sphinx-build executable |
 | `args` | string[] | `[]` | Extra arguments for `sphinx-build` (see the owned options above) |
 | `root` | string | `"sphinx"` | The Sphinx source directory, relative to the project root |

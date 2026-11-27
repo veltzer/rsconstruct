@@ -24,7 +24,7 @@ output_dir = "out/processor.generator.objdump"
 ```
 
 | Key | Type | Default | Description |
-|-----|------|---------|-------------|
+| ----- | ------ | --------- | ------------- |
 | `args` | string[] | `[]` | Extra arguments passed to objdump |
 | `dep_inputs` | string[] | `[]` | Extra files whose changes trigger rebuilds |
 | `output_dir` | string | `"out/processor.generator.objdump"` | Directory for disassembly output |

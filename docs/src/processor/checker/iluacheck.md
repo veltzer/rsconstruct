@@ -47,7 +47,7 @@ The default `src_dirs` is empty, so a stanza with no `src_dirs` or `src_files` c
 ## Configuration
 
 | Key | Type | Default | Description |
-|-----|------|---------|-------------|
+| ----- | ------ | --------- | ------------- |
 | `config_file` | string | `".luacheckrc"` | The configuration file, as `--config`; empty for `--no-config` |
 | `std` | string | `""` | Standard globals, as `--std` (`max`, `lua51`, `lua54+busted`, ...); empty: unset |
 | `globals` | string[] | unset | Custom globals or fields, as `--globals` |

@@ -39,7 +39,7 @@ rsconstruct graph unreferenced --extensions .svg[,.png,...] [--rm]
 ### Options
 
 | Option | Description |
-|--------|-------------|
+| -------- | ------------- |
 | `--extensions` | Comma-separated list of file extensions to check (required) |
 | `--rm` | Delete the unreferenced files immediately (no confirmation) |
 

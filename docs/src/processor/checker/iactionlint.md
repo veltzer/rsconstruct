@@ -49,7 +49,7 @@ src_dirs = [".github/workflows"]
 ```
 
 | Key | Type | Default | Description |
-|-----|------|---------|-------------|
+| ----- | ------ | --------- | ------------- |
 | `config_file` | string | `""` | actionlint config file to read; empty means `.github/actionlint.yaml`, then `.github/actionlint.yml`, else no configuration |
 | `src_dirs` | string[] | `[]` | Directories to scan |
 | `src_extensions` | string[] | `[".yml", ".yaml"]` | File extensions to check |

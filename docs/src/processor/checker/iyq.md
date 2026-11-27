@@ -36,7 +36,7 @@ The default `src_dirs` is empty, so a stanza with no `src_dirs` or `src_files` c
 ## Configuration
 
 | Key | Type | Default | Description |
-|-----|------|---------|-------------|
+| ----- | ------ | --------- | ------------- |
 | `filter` | string | `"."` | The jq filter evaluated over every document; `.` only checks that the YAML parses |
 | `src_dirs` | string[] | `[]` | Directories to scan |
 | `src_extensions` | string[] | `[".yml", ".yaml"]` | File extensions to check |

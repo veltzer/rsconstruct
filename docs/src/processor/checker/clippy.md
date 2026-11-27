@@ -40,7 +40,7 @@ dep_inputs = []        # Additional files that trigger rebuilds
 ```
 
 | Key | Type | Default | Description |
-|-----|------|---------|-------------|
+| ----- | ------ | --------- | ------------- |
 | `cargo` | string | `"cargo"` | Path or name of the cargo binary |
 | `command` | string | `"clippy"` | Cargo subcommand to run |
 | `args` | string[] | `[]` | Extra arguments passed to cargo clippy |

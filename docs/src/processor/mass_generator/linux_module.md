@@ -143,7 +143,7 @@ required_tools = []      # Extra tools the build needs on PATH
 ### Configuration Reference
 
 | Key | Type | Default | Description |
-|-----|------|---------|-------------|
+| ----- | ------ | --------- | ------------- |
 | `enabled` | bool | `true` | Enable/disable the processor |
 | `dep_inputs` | string[] | `[]` | Extra files that trigger rebuilds when changed; each must exist |
 | `dep_auto` | string[] | `[]` | Like `dep_inputs`, but an entry that does not exist is skipped |

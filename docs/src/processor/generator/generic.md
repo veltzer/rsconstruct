@@ -37,7 +37,7 @@ dep_inputs = []
 ```
 
 | Key | Type | Default | Description |
-|-----|------|---------|-------------|
+| ----- | ------ | --------- | ------------- |
 | `command` | string | `""` | Script or command to run; there is no useful default, so every stanza sets it |
 | `output_dir` | string | `"out/processor.generator.generic"` (`out/processor.generator.generic.NAME` for a named instance) | Directory for output files |
 | `output_extension` | string | `"out"` | Extension for output files |

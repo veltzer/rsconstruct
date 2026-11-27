@@ -83,7 +83,7 @@ output_dir = "_site"       # Default: the site config's output_dir ("public")
 ```
 
 | Key | Type | Default | Description |
-|-----|------|---------|-------------|
+| ----- | ------ | --------- | ------------- |
 | `command` | string | `"zola"` | The zola binary (must be 0.23.3) |
 | `args` | string[] | `[]` | Extra arguments for `zola build` |
 | `root` | string | `""` | The site directory, relative to the project root |

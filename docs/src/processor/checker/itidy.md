@@ -62,7 +62,7 @@ options = ["warn-proprietary-attributes: no"]
 ```
 
 | Key | Type | Default | Description |
-|-----|------|---------|-------------|
+| ----- | ------ | --------- | ------------- |
 | `config_file` | string | `""` | A tidy configuration file read like `tidy -config`; relative to the project root. Empty: none |
 | `options` | string[] | `[]` | Further tidy options as `"name: value"` strings, applied after the config file, like `--name value` arguments |
 | `src_dirs` | string[] | `[]` | Directories to scan |

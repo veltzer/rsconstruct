@@ -128,7 +128,7 @@ changed key could not be attributed to a cause. Contributors now append a
 named, typed component and one function folds them into the digest:
 
 | Component | Contributed by | Covers |
-|---|---|---|
+| --- | --- | --- |
 | `config` | discovery, via `output_config_hash` over the processor's `checksum_fields()` | compiler flags, args, output declarations |
 | `variant` | `Product::with_variant` | multiple products from one input (e.g. one per output format) |
 | `analyzer` | `Product::extend_config_hash` | non-content state an analyzer resolves, e.g. the sorted set of paths matching a glob |
@@ -238,7 +238,7 @@ does in the build.
 ## Rebuild classification
 
 | Classification | Condition | Action |
-|---|---|---|
+| --- | --- | --- |
 | **Skip** | Cache key found AND all outputs exist on disk | No work needed |
 | **Restore** | Cache key found BUT some outputs are missing | Restore from object store |
 | **Build** | No cache entry for this key | Execute the processor |
@@ -260,7 +260,7 @@ Processor configuration is hashed into cache keys. Changing a config value trigg
 ## Cache restoration methods
 
 | Method | Behavior | Best for |
-|---|---|---|
+| --- | --- | --- |
 | `hardlink` | Links output to cached blob (same inode, read-only) | Local development (fast, no disk space) |
 | `copy` | Copies cached blob to output path (writable) | CI runners, cross-filesystem setups |
 | `auto` (default) | Uses `copy` when `CI=true`, `hardlink` otherwise | Most setups |
@@ -270,7 +270,7 @@ Hardlinks work because blob objects contain raw file content (not wrapped in a d
 ## Cache commands
 
 | Command | Description |
-|---|---|
+| --- | --- |
 | `rsconstruct cache size` | Show cache size and object count |
 | `rsconstruct cache list` | List all cache entries as JSON |
 | `rsconstruct cache stats` | Show per-processor cache statistics |

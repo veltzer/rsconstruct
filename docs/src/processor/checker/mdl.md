@@ -43,7 +43,7 @@ dep_inputs = []                      # Additional files that trigger rebuilds wh
 ```
 
 | Key | Type | Default | Description |
-|-----|------|---------|-------------|
+| ----- | ------ | --------- | ------------- |
 | `local_repo` | boolean | `false` | Run mdl from the local gem repository the gem processor installs, and depend on its install |
 | `gem_home` | string | `"gems"` | GEM_HOME directory for Ruby gems (used when `local_repo`) |
 | `command` | string | `"mdl"` | Path to the mdl executable |

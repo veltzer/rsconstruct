@@ -35,7 +35,7 @@ pdf_engine = ""                # PDF engine; empty = pandoc default (pdflatex)
 ```
 
 | Key | Type | Default | Description |
-|-----|------|---------|-------------|
+| ----- | ------ | --------- | ------------- |
 | `command` | string | `"pandoc"` | Path to the pandoc executable |
 | `formats` | string[] | `["pdf", "html", "docx"]` | Output formats to generate |
 | `args` | string[] | `[]` | Extra arguments passed to pandoc |
@@ -61,7 +61,7 @@ pdf_engine = "xelatex"   # or "lualatex"
 Recognized values:
 
 | Value | When to use |
-|-------|-------------|
+| ------- | ------------- |
 | `""` (default) | Pandoc's default (pdflatex). ASCII / latin-1 only. |
 | `pdflatex` | Same as default; explicit form. |
 | `xelatex` | Unicode-aware. Best general-purpose choice for non-ASCII text. |
@@ -93,7 +93,7 @@ tectonic 0.17.0 was tried in its place, through rspandoc, on the hardest
 fleet documents, against XeTeX from TeX Live 2025:
 
 | Document | xelatex | tectonic |
-|---|---|---|
+| --- | --- | --- |
 | data `cv.he.md` (Hebrew, babel with bidi) | 1.09 s, 5 pages | builds; same pages |
 | demos-ai-coding exercise (box-drawing characters) | 0.93 s, 2 pages | builds; same pages |
 | business-syllabi syllabus (azure theme fonts) | 1.05 s, 4 pages | fails |

@@ -62,7 +62,7 @@ bigger deal — they happen to come from the same mechanism.
 ## When it actually matters
 
 | Workload | Serial cost (5,000 files) | io_uring win |
-|---|---|---|
+| --- | --- | --- |
 | Warm cache (dentries/inodes in memory) | 2–5 ms | 1.5–2× |
 | Cold cache, SSD | 250 ms – 1 s | 5–10× |
 | Cold cache, HDD | 5–10 s | ~10× |

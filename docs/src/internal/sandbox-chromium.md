@@ -43,7 +43,7 @@ with the same shape as rsconstruct's (`--ro-bind / /`, writable `$HOME` and
 with Chromium's own sandbox turned off:
 
 | Tool | As is | With Chromium's sandbox off | How it is turned off |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | google-chrome | aborts (SUID sandbox helper) | works | `--no-sandbox` |
 | marp | fails to launch the browser | works | env `CHROME_NO_SANDBOX=1` (read by marp-cli) |
 | mmdc | fails to launch the browser | works | puppeteer config `{"args":["--no-sandbox"]}` passed with `-p` |

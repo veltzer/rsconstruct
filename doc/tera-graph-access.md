@@ -19,12 +19,12 @@ The Tera processor (`src/processor/generator/tera.rs`) renders
 templates with **an empty `TeraContext`**. Templates have access to
 only the four custom Tera functions registered by rsconstruct:
 
-| Function          | Purpose                                                  |
-| ----------------- | -------------------------------------------------------- |
-| `workflow_names()`| Names of GitHub Actions workflows in `.github/workflows` |
-| `shell_output()`  | Run a shell command, return stdout                       |
-| `glob()`          | List files matching a glob pattern                       |
-| `grep_count()`    | Count files matching a content pattern                   |
+| Function           | Purpose                                                  |
+| ------------------ | -------------------------------------------------------- |
+| `workflow_names()` | Names of GitHub Actions workflows in `.github/workflows` |
+| `shell_output()`   | Run a shell command, return stdout                       |
+| `glob()`           | List files matching a glob pattern                       |
+| `grep_count()`     | Count files matching a content pattern                   |
 
 So when a template wants to say "this project has 1234 markdown files
 under the syllabi processor", it has to do:
@@ -139,18 +139,18 @@ the common case, plus two or three richer functions for filtering.
 
 For any of A/B/C, the question is what fields:
 
-| Field on `ProcessorSnapshot`           | Cheap to compute? |
-| -------------------------------------- | ------------------ |
-| `name` (processor iname)               | yes                |
-| `type_name` (`ruff`, `cc`, ...)        | yes                |
-| `product_count`                        | yes                |
-| `source_count` (unique input files)    | yes                |
-| `output_count`                         | yes                |
-| `enabled` (per project config)         | yes                |
-| `is_native`                            | yes                |
-| `sources: Vec<PathBuf>`                | medium (memory)    |
-| `outputs: Vec<PathBuf>`                | medium (memory)    |
-| `extensions: Map<ext, count>`          | medium             |
+| Field on `ProcessorSnapshot`        | Cheap to compute? |
+| ----------------------------------- | ----------------- |
+| `name` (processor iname)            | yes               |
+| `type_name` (`ruff`, `cc`, ...)     | yes               |
+| `product_count`                     | yes               |
+| `source_count` (unique input files) | yes               |
+| `output_count`                      | yes               |
+| `enabled` (per project config)      | yes               |
+| `is_native`                         | yes               |
+| `sources: Vec<PathBuf>`             | medium (memory)   |
+| `outputs: Vec<PathBuf>`             | medium (memory)   |
+| `extensions: Map<ext, count>`       | medium            |
 
 I'd ship `name`, `type_name`, `product_count`, `source_count`,
 `output_count`, `enabled`, `is_native` in v1. The list-typed fields

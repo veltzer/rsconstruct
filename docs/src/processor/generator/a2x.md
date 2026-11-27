@@ -27,7 +27,7 @@ dep_inputs = []                      # Additional files that trigger rebuilds wh
 ```
 
 | Key | Type | Default | Description |
-|-----|------|---------|-------------|
+| ----- | ------ | --------- | ------------- |
 | `command` | string | `"a2x"` | The a2x executable to run |
 | `args` | string[] | `[]` | Extra arguments passed to a2x |
 | `output_dir` | string | `"out/processor.generator.a2x"` | Output directory |

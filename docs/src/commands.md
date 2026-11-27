@@ -9,7 +9,7 @@ exits with status 2. The listing leaves the flags out; `--help` shows them.
 These flags can be used with any command:
 
 | Flag | Description |
-|------|-------------|
+| ------ | ------------- |
 | `--verbose`, `-v` | Show skip/restore/cache messages during build |
 | `--output-display`, `-O` | What to show for output files (`none`, `basename`, `path`; default: `none`) |
 | `--input-display`, `-I` | What to show for input files (`none`, `source`, `all`; default: `source`) |
@@ -166,7 +166,7 @@ The `--stop-after` flag allows stopping the build at a specific phase:
 Clean build artifacts. A subcommand is required; run without one, `clean` lists them.
 
 | Subcommand | Config required? |
-|------------|-----------------|
+| ------------ | ----------------- |
 | `outputs` | Yes |
 | `all` | Yes |
 | `git` | Yes |
@@ -336,7 +336,7 @@ Each rebuild is a fresh incremental build:
 Display the build dependency graph.
 
 | Subcommand | Config required? |
-|------------|-----------------|
+| ------------ | ----------------- |
 | `lookup-fwd` | Yes |
 | `lookup-rev` | Yes |
 | `show` | Yes |
@@ -365,7 +365,7 @@ rsconstruct graph unreferenced -e .svg,.png   # List files on disk with these ex
 Manage the build cache.
 
 | Subcommand | Config required? |
-|------------|-----------------|
+| ------------ | ----------------- |
 | `clear` | No |
 | `compact` | No |
 | `size` | Yes |
@@ -393,7 +393,7 @@ The databases in `.rsconstruct/` (`db.redb`, `deps.redb`, `mtime.redb`, `webcach
 Manage the web request cache. Schemas fetched by `iyamlschema` (and any future processors that fetch URLs) are cached in `.rsconstruct/webcache.redb`.
 
 | Subcommand | Config required? |
-|------------|-----------------|
+| ------------ | ----------------- |
 | `clear` | No |
 | `stats` | No |
 | `list` | No |
@@ -409,7 +409,7 @@ rsconstruct webcache list    # List all cached URLs and their sizes
 Manage dependency analyzers and inspect the dependency cache they fill. An analyzer scans source files for dependencies (C/C++ `#include`s, Python imports, Sass `@use`s, Markdown and Tera references) and records them in `.rsconstruct/deps.redb`; see [Dependency Analyzers](analyzers.md). Analyzers are referred to by pname (the type: `cpp`, `icpp`, `markdown`, `python`, `sass`, `tera`) or by iname (the instance as declared in `rsconstruct.toml`, e.g. `cpp` or `cpp.kernel`).
 
 | Subcommand | Config required? |
-|------------|-----------------|
+| ------------ | ----------------- |
 | `add` | Yes (`--dry-run`: no) |
 | `build` | Yes |
 | `clean` | Yes |
@@ -482,7 +482,7 @@ These commands are useful for:
 Smart config manipulation commands for managing processor sections in `rsconstruct.toml`.
 
 | Subcommand | Config required? |
-|------------|-----------------|
+| ------------ | ----------------- |
 | `auto` | Yes |
 | `disable` | No |
 | `disable-all` | No |
@@ -526,7 +526,7 @@ an analyzer).
 ## `rsconstruct processor`
 
 | Subcommand | Config required? |
-|------------|-----------------|
+| ------------ | ----------------- |
 | `add` | Yes (`--dry-run`: no) |
 | `allowlist` | Yes |
 | `config` | Yes |
@@ -633,7 +633,7 @@ the processors' built-in metadata, so it needs no `rsconstruct.toml`.
 List or check external tools required by declared processors. `list` reads only the tool registry; `check` and `lock` need a project; the rest use config if available and without one operate on all built-in processors.
 
 | Subcommand | Config required? |
-|------------|-----------------|
+| ------------ | ----------------- |
 | `cache` | No |
 | `check` | Yes |
 | `graph` | Uses config if available |
@@ -790,7 +790,7 @@ shell and on a CI runner alike.
 Search and query frontmatter tags from markdown files.
 
 | Subcommand | Config required? |
-|------------|-----------------|
+| ------------ | ----------------- |
 | `list` | Yes |
 | `count` | Yes |
 | `tree` | Yes |
@@ -848,7 +848,7 @@ rsconstruct complete fish    # Generate fish completions
 Manage term checking and fixing in markdown files.
 
 | Subcommand | Config required? |
-|------------|-----------------|
+| ------------ | ----------------- |
 | `fix` | Yes |
 | `merge` | Yes |
 | `stats` | Yes |
@@ -892,7 +892,7 @@ rsconstruct doctor
 Show project information.
 
 | Subcommand | Config required? |
-|------------|-----------------|
+| ------------ | ----------------- |
 | `source` | Yes |
 
 ```bash
@@ -904,7 +904,7 @@ rsconstruct info source          # Show source file counts by extension
 Query GitHub Pages publishing settings from the [`[pages]`](configuration.md#pages) config section.
 
 | Subcommand | Config required? |
-|------------|-----------------|
+| ------------ | ----------------- |
 | `dir` | Yes |
 
 ```bash
@@ -954,7 +954,7 @@ rsconstruct error
 ```
 
 | Code | Name |
-|------|------|
+| ------ | ------ |
 | 0 | `EXIT_SUCCESS` |
 | 1 | `EXIT_BUILD_ERROR` |
 | 2 | `EXIT_CONFIG_ERROR` |
@@ -970,7 +970,7 @@ rsconstruct error
 Inspect the built-in functions rsconstruct exposes to Tera templates (`load_python`, `load_lua`, `load_toml`, `toml_get`, ...).
 
 | Subcommand | Config required? |
-|------------|-----------------|
+| ------------ | ----------------- |
 | `list` | No |
 
 ```bash
@@ -1013,7 +1013,7 @@ rsconstruct hook
 Inspect a single product in the build graph: everything that goes into its cache key and whether it would be rebuilt. Use it to answer "why is this file rebuilding?".
 
 | Subcommand | Config required? |
-|------------|-----------------|
+| ------------ | ----------------- |
 | `show` | Yes |
 
 ```bash

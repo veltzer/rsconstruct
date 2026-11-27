@@ -36,7 +36,7 @@ src_exclude_files = ["__init__.py"]
 ```
 
 | Key | Type | Default | Description |
-|-----|------|---------|-------------|
+| ----- | ------ | --------- | ------------- |
 | `src_dirs` | string[] | `[]` | Directories to scan |
 | `src_extensions` | string[] | (list above) | File extensions to compare |
 | `src_exclude_files` | string[] | `[]` | File names to leave out of the comparison |

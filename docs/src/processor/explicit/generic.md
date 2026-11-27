@@ -136,7 +136,7 @@ output_files = [
 ### Fields
 
 | Key | Type | Required | Description |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `command` | string | yes | Script or binary to execute |
 | `args` | array of strings | no | Extra arguments passed before `--inputs` |
 | `inputs` | array of strings | no | Literal input file paths; each must exist or be an upstream processor's declared output |
@@ -176,7 +176,7 @@ build — everything is handled in a single build invocation.
 ## Comparison with Other Processor Types
 
 | | Checker | Generator | Explicit |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | Products | one per input file | one per input file | one total |
 | Outputs | none (pass/fail) | one per input | explicitly listed |
 | Discovery | src_dirs + src_extensions | src_dirs + src_extensions | declared inputs/globs |

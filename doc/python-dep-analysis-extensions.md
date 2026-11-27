@@ -52,12 +52,12 @@ what's recognized.
 
 Initial allowlist (small on purpose):
 
-| Pattern                       | Argument that's the path |
-| ----------------------------- | ------------------------ |
-| `open(<arg>)`                 | first positional         |
-| `open(<arg>, ...)`            | first positional         |
-| `pathlib.Path(<arg>)`         | first positional         |
-| `Path(<arg>)`                 | first positional         |
+| Pattern               | Argument that's the path |
+| --------------------- | ------------------------ |
+| `open(<arg>)`         | first positional         |
+| `open(<arg>, ...)`    | first positional         |
+| `pathlib.Path(<arg>)` | first positional         |
+| `Path(<arg>)`         | first positional         |
 
 The user can extend the list later. We do NOT chase aliases (`my_open = open;
 my_open("x")` is not recognized) — that requires real flow analysis.

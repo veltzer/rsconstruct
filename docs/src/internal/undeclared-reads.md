@@ -68,7 +68,7 @@ measuring shell's `VIRTUAL_ENV` pointing at a personal venv, without the
 report as well.
 
 | Repository | Findings |
-|---|---|
+| --- | --- |
 | pytconf, demos-hw-stm32, rstype | none |
 | demos-lang-cs | none before the `dotnet build` daemon hang above |
 | demos-lang-rust | the cargo stanza reads `rust-toolchain.toml` and its own command, `scripts/cargo_build.py` |
@@ -170,7 +170,7 @@ file is missing from it.
 ## Mechanisms considered
 
 | Mechanism | Sees | Cost | Notes |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | **`strace -f -e trace=openat,open,execve`** around each tool run | every syscall, including static binaries and Go programs | traced runs are much slower; needs the `strace` tool | Linux only — on macOS the mode would fail with a clear "needs strace" error, consistent with the platform rules (no `#[cfg]`). Leading candidate. |
 | `LD_PRELOAD` shim intercepting `open`/`openat` | dynamically linked programs only | fast | Misses static binaries, Go, direct syscalls: it would under-report silently, against strict-by-default. Also a `.so` to build and ship. |
 | fanotify, in-process | all opens under the project | no external tool | Attributing an open to the product that caused it needs the process tree; unprivileged fanotify is limited on older kernels; Linux-only code to keep in `platform.rs`. |

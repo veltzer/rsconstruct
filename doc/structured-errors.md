@@ -98,20 +98,20 @@ call. Less invasive, less principled. Probably the right ship-now choice.
 
 Each external tool has its own output format:
 
-| Tool        | Format                                                    |
-| ----------- | --------------------------------------------------------- |
-| rustc       | `--error-format=json` produces structured JSON per line   |
-| clippy      | same as rustc                                             |
-| ruff        | `--output-format=json` — JSON array                       |
-| pylint      | `--output-format=json` — JSON list                        |
-| mypy        | `error: <file>:<line>: ...` — text grep                   |
-| eslint      | `--format=json` — JSON                                    |
-| shellcheck  | `--format=json1` — newline-delimited JSON                 |
-| gcc / clang | `<file>:<line>:<col>: error: <msg>` — text grep           |
-| make        | `<makefile>:<line>: ...` — text grep                      |
-| markdownlint| `--output=...` — text or JSON depending on flag           |
-| terms       | internal; we already know the file and lines              |
-| aspell      | internal scan; we already know the file and lines         |
+| Tool         | Format                                                  |
+| ------------ | ------------------------------------------------------- |
+| rustc        | `--error-format=json` produces structured JSON per line |
+| clippy       | same as rustc                                           |
+| ruff         | `--output-format=json` — JSON array                     |
+| pylint       | `--output-format=json` — JSON list                      |
+| mypy         | `error: <file>:<line>: ...` — text grep                 |
+| eslint       | `--format=json` — JSON                                  |
+| shellcheck   | `--format=json1` — newline-delimited JSON               |
+| gcc / clang  | `<file>:<line>:<col>: error: <msg>` — text grep         |
+| make         | `<makefile>:<line>: ...` — text grep                    |
+| markdownlint | `--output=...` — text or JSON depending on flag         |
+| terms        | internal; we already know the file and lines            |
+| aspell       | internal scan; we already know the file and lines       |
 
 Each processor that wraps a tool needs a small **parser** that ingests the
 captured stdout/stderr + the tool's exit code and produces
@@ -178,11 +178,11 @@ helix, emacs), encode the locations as `file:line:column` so vim's
 
 The exact invocation pattern depends on `$EDITOR`. Initial support:
 
-| `$EDITOR`           | Invocation                                        |
-| ------------------- | ------------------------------------------------- |
-| `vim` / `nvim`      | `$EDITOR -q <quickfix-file>`                      |
-| `emacs` / `emacsclient` | `$EDITOR --eval '(grep "<args>")'`            |
-| anything else       | `$EDITOR <file1> <file2> ...` (no jump)           |
+| `$EDITOR`               | Invocation                              |
+| ----------------------- | --------------------------------------- |
+| `vim` / `nvim`          | `$EDITOR -q <quickfix-file>`            |
+| `emacs` / `emacsclient` | `$EDITOR --eval '(grep "<args>")'`      |
+| anything else           | `$EDITOR <file1> <file2> ...` (no jump) |
 
 Build the quickfix file from the diagnostic list. This is straightforward.
 

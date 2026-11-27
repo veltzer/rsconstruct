@@ -31,7 +31,7 @@ dep_inputs = []                            # Additional files that trigger rebui
 ```
 
 | Key | Type | Default | Description |
-|-----|------|---------|-------------|
+| ----- | ------ | --------- | ------------- |
 | `command` | string | `"jq"` | The jq executable to run |
 | `args` | string[] | `[]` | Extra arguments passed to jq (after the `empty` filter) |
 | `dep_inputs` | string[] | `[]` | Extra files whose changes trigger rebuilds |

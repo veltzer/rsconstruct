@@ -46,7 +46,7 @@ so the default is identity (`import requests` → `requests`). A curated table
 handles the common exceptions:
 
 | Import | Distribution |
-|--------|--------------|
+| -------- | -------------- |
 | `cv2` | `opencv-python` |
 | `yaml` | `PyYAML` |
 | `PIL` | `Pillow` |
@@ -96,7 +96,7 @@ python_paths = []              # Extra source roots (e.g. ["src"]) whose modules
 ```
 
 | Key | Type | Default | Description |
-|-----|------|---------|-------------|
+| ----- | ------ | --------- | ------------- |
 | `output` | string | `"requirements.txt"` | Output file path |
 | `exclude` | string[] | `[]` | Import names to never emit |
 | `sorted` | bool | `true` | Sort entries alphabetically (false preserves first-seen order) |

@@ -32,7 +32,7 @@ src_dirs = ["images"]
 ```
 
 | Key | Type | Default | Description |
-|-----|------|---------|-------------|
+| ----- | ------ | --------- | ------------- |
 | `command` | string | `"svgo"` | The svgo executable to run |
 | `args` | string[] | `[]` | Extra arguments passed to svgo |
 | `src_dirs` | string[] | `[]` | Directories to scan |

@@ -57,7 +57,7 @@ dep_inputs = ["config/settings.py"]      # Additional files that trigger rebuild
 ```
 
 | Key | Type | Default | Description |
-|-----|------|---------|-------------|
+| ----- | ------ | --------- | ------------- |
 | `src_extensions` | string[] | `[".tera"]` | File extensions to discover |
 | `dep_inputs` | string[] | `[]` | Extra files whose changes trigger rebuilds |
 

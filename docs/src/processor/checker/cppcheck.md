@@ -47,7 +47,7 @@ dep_inputs = [".cppcheck-suppressions"]   # Additional files that trigger rebuil
 ```
 
 | Key | Type | Default | Description |
-|-----|------|---------|-------------|
+| ----- | ------ | --------- | ------------- |
 | `args` | string[] | `["--error-exitcode=1", "--enable=warning,style,performance,portability"]` | Arguments passed to cppcheck |
 | `dep_inputs` | string[] | `[]` | Extra files whose changes trigger rebuilds |
 | `batch_by_dir` | boolean | `false` | One cppcheck run per directory, on exactly that directory's files (see above) |

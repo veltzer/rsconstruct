@@ -10,7 +10,7 @@ How to run rsconstruct in a GitHub Actions workflow.
 ```
 
 | Flag | Why |
-|------|-----|
+| ------ | ----- |
 | `-q` (quiet) | Suppresses the progress bar and status messages. The progress bar uses terminal escape codes that produce garbage in CI logs. Only errors are shown. |
 | `-j0` | Auto-detect CPU cores. GitHub-hosted runners have 4 cores (`ubuntu-latest`) — using them all speeds up the build significantly vs the default of `-j1`. |
 
@@ -41,7 +41,7 @@ jobs:
 ## Runner sizing
 
 | Runner | Cores | RAM | Notes |
-|--------|-------|-----|-------|
+| -------- | ------- | ----- | ------- |
 | `ubuntu-latest` | 4 | 16 GB | Good for most projects. Use `-j0` or `-j4`. |
 | `ubuntu-latest` (private repo) | 4 | 16 GB | Same hardware as public repos. |
 | Large runners | 8-64 | 32-256 GB | For large projects. `-j0` scales automatically. |

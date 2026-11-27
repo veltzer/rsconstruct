@@ -43,7 +43,7 @@ dep_inputs = []                         # Additional files that trigger rebuilds
 ```
 
 | Key | Type | Default | Description |
-|-----|------|---------|-------------|
+| ----- | ------ | --------- | ------------- |
 | `command` | string | `"sass"` | Path to sass compiler |
 | `src_extensions` | string[] | `[".scss", ".sass"]` | File extensions to discover |
 | `output_dir` | string | `"out/processor.generator.sass"` | Output directory |

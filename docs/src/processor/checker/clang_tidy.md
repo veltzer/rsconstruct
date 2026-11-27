@@ -28,7 +28,7 @@ dep_inputs = []                           # Additional files that trigger rebuil
 ```
 
 | Key | Type | Default | Description |
-|-----|------|---------|-------------|
+| ----- | ------ | --------- | ------------- |
 | `args` | string[] | `[]` | Arguments passed to clang-tidy |
 | `compiler_args` | string[] | `[]` | Compiler arguments passed after `--` separator |
 | `dep_inputs` | string[] | `[]` | Extra files whose changes trigger rebuilds |

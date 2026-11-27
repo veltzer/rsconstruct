@@ -42,7 +42,7 @@ The default `src_dirs` is empty, so a stanza with no `src_dirs` or `src_files` c
 ## Configuration
 
 | Key | Type | Default | Description |
-|-----|------|---------|-------------|
+| ----- | ------ | --------- | ------------- |
 | `shell` | string | `""` | The dialect, as `--shell` (`sh`, `bash`, `dash`, `ksh`, `busybox`); empty: from directives, the shebang or the extension |
 | `external_sources` | bool | `false` | Follow `source`d files that are not inputs, as `--external-sources` |
 | `source_path` | string[] | `[]` | Where to look for `source`d files, as `--source-path` (`SCRIPTDIR` is the script's directory) |

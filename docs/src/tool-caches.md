@@ -6,7 +6,7 @@ tool a project gets; that is always [`rsconstruct.lock`](tool-lock.md)'s.
 They only avoid fetching and unpacking the same release twice.
 
 | Cache | Default location | Override | Holds |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | Tool store | `~/.cache/rsconstruct/tools` | `$RSCONSTRUCT_TOOL_STORE` | Installed tools, one directory per version |
 | Download cache | `~/.cache/rsconstruct/downloads` | `$RSCONSTRUCT_DOWNLOAD_CACHE` | Release assets as downloaded, one file per URL |
 

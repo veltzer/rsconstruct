@@ -24,7 +24,7 @@ Only two `Processor` methods are required — `scan_config()` and
 by the processor's `StandardConfig`. The main methods:
 
 | Method | Purpose |
-|---|---|
+| --- | --- |
 | `auto_detect(&FileIndex) -> bool` | Return `true` if the project looks like it needs this processor |
 | `discover(&mut BuildGraph, &FileIndex, instance_name)` | Query the file index and add products to the build graph |
 | `execute(&BuildContext, &Product)` | Build a single product |
@@ -213,7 +213,7 @@ and which binary the build's tool hashing identifies.
 behaviour on the presence of a path separator:
 
 | Name form | Resolution | Depends on cwd? |
-|---|---|---|
+| --- | --- | --- |
 | `mdl` | searched on `$PATH` | no |
 | `gems/bin/mdl` | relative to the current working directory | **yes** |
 | `./gems/bin/mdl` | relative to the current working directory | **yes** |

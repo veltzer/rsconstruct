@@ -31,7 +31,7 @@ dep_inputs = []                        # Additional files that trigger rebuilds 
 ```
 
 | Key | Type | Default | Description |
-|-----|------|---------|-------------|
+| ----- | ------ | --------- | ------------- |
 | `command` | string | `"mdbook"` | The mdbook executable to run |
 | `output_dir` | string | `"book"` | Output directory for generated documentation (relative to `book.toml` unless `build.build-dir` is set in `book.toml`) |
 | `loose_manifest` | boolean | `false` | Warn instead of failing when `mdbook build` writes files not in the plan |

@@ -28,7 +28,7 @@ dep_inputs = []
 ```
 
 | Key | Type | Default | Description |
-|-----|------|---------|-------------|
+| ----- | ------ | --------- | ------------- |
 | `args` | string[] | `[]` | Extra arguments passed to tidy |
 | `dep_inputs` | string[] | `[]` | Extra files whose changes trigger rebuilds |
 

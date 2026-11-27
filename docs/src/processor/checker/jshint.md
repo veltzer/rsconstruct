@@ -30,7 +30,7 @@ dep_inputs = []
 ```
 
 | Key | Type | Default | Description |
-|-----|------|---------|-------------|
+| ----- | ------ | --------- | ------------- |
 | `command` | string | `"jshint"` | The jshint executable to run |
 | `args` | string[] | `[]` | Extra arguments passed to jshint |
 | `dep_inputs` | string[] | `[]` | Extra files whose changes trigger rebuilds |

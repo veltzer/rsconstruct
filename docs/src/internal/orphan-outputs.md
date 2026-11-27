@@ -141,7 +141,7 @@ book-openbook the first run took 7 ms against 16 ms steady, so expect roughly
 double for those in steady state.
 
 | Repository        | Products | Output files | Orphans phase | No-op build (off) | No-op build (on) |
-|-------------------|---------:|-------------:|--------------:|------------------:|-----------------:|
+| ----------------- | -------: | -----------: | ------------: | ----------------: | ---------------: |
 | book-openbook     |     5106 |         5069 |         16 ms |            1.19 s |           1.20 s |
 | veltzer.github.io |     6032 |         3036 |          8 ms |                 — |                — |
 | teaching-syllabi  |     4791 |         2049 |          4 ms |                 — |                — |

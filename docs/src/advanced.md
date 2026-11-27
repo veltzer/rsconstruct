@@ -73,7 +73,7 @@ By default a build prints only the phase summary lines (`[build] 1 to build, 0 t
 What those lines show for each file is controlled by three separate flags, not by a verbosity level:
 
 | Flag | Values | Effect |
-|---|---|---|
+| --- | --- | --- |
 | `-O`, `--output-display` | `none` (default), `basename`, `path` | Whether and how the output file is shown |
 | `-I`, `--input-display` | `none`, `source` (default), `all` | Show no inputs, only the primary source file, or every input including headers/dependencies |
 | `-P`, `--path-format` | `basename`, `path` (default) | Show displayed files as bare file names or as project-relative paths |

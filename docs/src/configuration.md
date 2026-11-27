@@ -221,7 +221,7 @@ The tables, their commands and their columns; a column marked *(verbose)*
 is hidden by default:
 
 | Table | Command | Columns |
-|---|---|---|
+| --- | --- | --- |
 | `analyzer_defconfig` | `rsconstruct analyzer defconfig` | `Field`, `Type`, `Default` |
 | `analyzer_list` | `rsconstruct analyzer list` | `Name`, `Builtin`, `Description` *(verbose)* |
 | `analyzer_stats` | `rsconstruct analyzer stats, analyzer build` | `Analyzer`, `Files`, `Dependencies` |
@@ -285,7 +285,7 @@ reported without a location: the files are fine.
 ### `[build]`
 
 | Key | Type | Default | Description |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `parallel` | integer | `0` | Number of parallel jobs. `0` = one per CPU core, `1` = sequential. Can also be set via the `RSCONSTRUCT_THREADS` environment variable (CLI `-j` takes precedence). |
 | `batch_size` | integer | `0` | Maximum files per batch for batch-capable processors. `0` = no limit (all files in one batch). To disable batching, pass `--batch-size -1` on the CLI or set `batch = false` on individual processors. |
 | `output_dir` | string | `"out"` | Global output directory prefix. Processor `output_dir` defaults that start with `out/` are remapped to use this prefix (e.g., setting `"build"` changes `out/processor.generator.marp` to `build/processor.generator.marp`). Individual processors can still override their `output_dir` explicitly. |
@@ -315,7 +315,7 @@ Each `[processor.TYPE.NAME]` section declares a processor instance. The header i
 Common fields available to all processors:
 
 | Key | Type | Default | Description |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `enabled` | boolean | `true` | Set to `false` to disable this processor without removing the stanza. Accepted on every processor. A disabled processor is skipped during discovery, so it produces no products; `smart remove-no-file-processors` ignores disabled stanzas rather than reporting them as matching no files. |
 | `enabled_if_dir_exists` | string | unset | Run this processor only on a machine where this directory exists; a leading `~/` expands to the home directory (the only expansion: no environment variables). Where the directory is missing, the processor is off exactly as with `enabled = false` (no products, no tool to install, exempt from the `src_dirs` and `dep_auto` existence checks), and it is never hidden: the build prints `[build] <iname> skipped: <dir> does not exist`, `processor used` lists it under `Skipped on this machine`, and `processor config` shows the effective `enabled = false` beside the field. `enabled = false` wins over it. Accepted on every processor; not part of the cache key, since it decides whether the processor runs, not what it produces. **This deliberately makes a build machine-dependent**, which rsconstruct otherwise refuses (the user config cannot add processors): it exists for a processor whose job is a side effect on the local machine, such as mirroring files into a folder a sync client uploads, which has no meaning on CI or on another clone. The condition sits in the committed config, so anyone reading it sees which machines run the processor and why. **Known gap:** such a processor writes a stamp as its declared output, and the cache judges the stamp, not the side effect. Inputs that return to a state built before (an edit reverted) match that earlier cache entry, so the processor is skipped or its stamp restored without running, and the side effect keeps the newer state until the next new input state or a manual run. |
 | `args` | array of strings | `[]` | Extra command-line arguments passed to the tool. |
@@ -342,7 +342,7 @@ Processor-specific fields are documented on each processor's page under [Process
 ### `[cache]`
 
 | Key | Type | Default | Description |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `restore_method` | string | `"auto"` | How to restore cached outputs. `"auto"` (default) uses `"copy"` in CI environments (`CI=true`) and `"hardlink"` otherwise. `"hardlink"` is faster but requires same filesystem; `"copy"` works everywhere. |
 | `compression` | boolean | `false` | Compress cached objects with zstd. Incompatible with `restore_method = "hardlink"` — requires `"copy"`. |
 | `remote` | string | none | Remote cache URL. See [Remote Caching](remote-caching.md). |
@@ -365,7 +365,7 @@ switches it off without removing the table. See
 ### `[graph]`
 
 | Key | Type | Default | Description |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `viewer` | string | platform-specific | Command to open graph files |
 | `validate_empty_inputs` | boolean | `true` | Reject products with no input files |
 | `validate_dep_references` | boolean | `true` | Check the graph's internal consistency (ids, dependency table) after it is built |
@@ -377,7 +377,7 @@ The defaults hold whether or not the `[graph]` table is present.
 ### `[completions]`
 
 | Key | Type | Default | Description |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `shells` | array | `["bash"]` | Shells to generate completions for |
 
 ### Missing `src_dirs` and `src_files` entries
@@ -433,7 +433,7 @@ catch.
 Declare project dependencies by package manager. Used by `rsconstruct doctor` to verify availability, and by `rsconstruct tool install machine` (the `system` list) and `rsconstruct tool install project` (everything else) to install missing packages. There is no Python list: a project's Python packages are declared in `pyproject.toml` and pinned by `uv.lock` (see below).
 
 | Key | Type | Default | Description |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `npm` | array of strings | `[]` | Node.js command-line packages installed into the project's tool directory, `.rsconstruct/tools` (see [Tool Lock](tool-lock.md#where-tools-are-installed)), on top of the project's own package.json set. |
 | `npm_source` | string | `"package-lock"` | Where the project's Node.js package set comes from: `"package-lock"` installs the closure package-lock.json pins with `npm ci`; `"package-json"` resolves package.json's ranges with `npm install`. |
 | `gem` | array of strings | `[]` | Ruby gems installed into the project's tool directory, `.rsconstruct/tools`. |
@@ -571,12 +571,12 @@ If `eatmydata` is not installed, the commands run unwrapped — no error, no war
 
 ##### Controlling the wrap
 
-| To...                                       | Do this                                              |
-| ------------------------------------------- | ---------------------------------------------------- |
-| Use the wrap (the CI default)               | Set `CI=true` and have eatmydata installed           |
-| Skip the wrap in CI                         | Unset `CI` (or set it to anything other than `true`) |
-| Use the wrap outside CI                     | Run with `CI=true rsconstruct tool install machine` |
-| Skip the wrap for a single invocation       | Pass `--no-eatmydata`                                |
+| To...                                 | Do this                                              |
+| ------------------------------------- | ---------------------------------------------------- |
+| Use the wrap (the CI default)         | Set `CI=true` and have eatmydata installed           |
+| Skip the wrap in CI                   | Unset `CI` (or set it to anything other than `true`) |
+| Use the wrap outside CI               | Run with `CI=true rsconstruct tool install machine`  |
+| Skip the wrap for a single invocation | Pass `--no-eatmydata`                                |
 
 The CLI flag `--no-eatmydata` always wins. Otherwise the policy is driven entirely by `CI=true`. There is no `rsconstruct.toml` field for this — the env var is the knob.
 
@@ -591,7 +591,7 @@ The mechanism is a [post-config hook](processors.md): `eatmydata_ci_default` run
 Declares that this repo publishes a directory to GitHub Pages. The section is optional — its *presence* is the signal. `rsconstruct page dir` prints the directory when the section exists and prints nothing (exit 0) when it doesn't, which lets a single shared CI workflow decide whether to run the Pages upload/deploy steps. See [GitHub Actions](github-actions.md#github-pages-deployment) for the workflow pattern.
 
 | Key | Type | Default | Description |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `dir` | string | required | Directory whose contents are published to GitHub Pages (e.g., `"out/web"` or `"_site"`). |
 
 ### `[command.symlink_install]`
@@ -599,6 +599,6 @@ Declares that this repo publishes a directory to GitHub Pages. The section is op
 Configures [`rsconstruct symlink-install`](commands.md#rsconstruct-symlink-install), which symlinks every file under each source folder into the matching target folder, recreating the directory structure. `sources[i]` is installed into `targets[i]`; the command fails if the arrays differ in length or are empty. A leading `~/` in a target is expanded to `$HOME`. The section is read only by that command, never by a build.
 
 | Key | Type | Default | Description |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | `sources` | string[] | `[]` | Folders (relative to the project root) whose files are linked. |
 | `targets` | string[] | `[]` | Folders the links are created in, one per entry of `sources`. |

@@ -35,7 +35,7 @@ dep_inputs = []                          # Additional files that trigger rebuild
 ```
 
 | Key | Type | Default | Description |
-|-----|------|---------|-------------|
+| ----- | ------ | --------- | ------------- |
 | `args` | string[] | `[]` | Extra arguments passed to pylint |
 | `dep_inputs` | string[] | `[]` | Extra files whose changes trigger rebuilds |
 | `dep_auto` | string[] | `["pylintrc", "pylintrc.toml", ".pylintrc", ".pylintrc.toml", "pyproject.toml", "setup.cfg", "tox.ini"]` | Config files that are inputs when they exist |

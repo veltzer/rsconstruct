@@ -65,7 +65,7 @@ dep_inputs = []
 ```
 
 | Key | Type | Default | Description |
-|-----|------|---------|-------------|
+| ----- | ------ | --------- | ------------- |
 | `command` | string | `"selene"` | The selene executable to run |
 | `args` | string[] | `[]` | Extra arguments passed to selene |
 | `dep_inputs` | string[] | `[]` | Extra files whose changes trigger rebuilds (a custom standard library file, say) |

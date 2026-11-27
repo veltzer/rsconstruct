@@ -29,7 +29,7 @@ not on a fixed set of files" problem. We need a way to express that.
 ## How other tools solve it
 
 | Tool | Approach |
-|---|---|
+| --- | --- |
 | **make** | Doesn't solve it. Globs in Makefiles are evaluated once, when the Makefile is parsed. Re-running `make` after adding a file picks up the new file because the Makefile is re-parsed. Make's dependency model = file content + mtime, never directory contents. |
 | **ninja** | Same as make — relies on the build-graph generator (cmake, gn) to re-run and produce new `build.ninja`. |
 | **bazel / buck** | Solve it cleanly by **forbidding implicit globs inside actions**. Globs are evaluated by the build tool itself at graph-construction time, producing a fixed list of files baked into the action. Add a file → BUILD-file evaluation produces a different action with a different cache key. The action itself never reads the directory. This works because Bazel **owns the `glob()` function** — it's not a side effect inside the user's tool. |

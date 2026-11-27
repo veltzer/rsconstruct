@@ -67,7 +67,7 @@ dep_inputs = []                               # Additional files that trigger re
 ```
 
 | Key | Type | Default | Description |
-|-----|------|---------|-------------|
+| ----- | ------ | --------- | ------------- |
 | `dir_terms_unambiguous` | string | `"terms/unambiguous"` | Directory containing `.txt` files of unambiguous terms. Terms here must be backticked in markdown. |
 | `dir_terms_ambiguous` | string | `"terms/ambiguous"` | Directory of ambiguous terms. Treated as empty if the directory does not exist on disk. Build fails if any term overlaps with `dir_terms_unambiguous`. Terms here are **not** required to be backticked. |
 | `forbid_backticked_ambiguous` | bool | `true` | If true, backticking an ambiguous term is a build error and `term fix` strips those backticks. |

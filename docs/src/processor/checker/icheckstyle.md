@@ -51,7 +51,7 @@ The default `src_dirs` is empty, so a stanza with no `src_dirs` or `src_files` c
 ## Configuration
 
 | Key | Type | Default | Description |
-|-----|------|---------|-------------|
+| ----- | ------ | --------- | ------------- |
 | `config_file` | string | `"checkstyle.xml"` | The checkstyle configuration, as `checkstyle -c`; relative to the project root |
 | `dep_auto` | string[] | `["checkstyle.xml"]` | Config files that are inputs when they exist |
 

@@ -56,7 +56,7 @@ header_lines = [
 ```
 
 | Key | Type | Default | Description |
-|-----|------|---------|-------------|
+| ----- | ------ | --------- | ------------- |
 | `header_lines` | string[] | (required) | The lines every file must start with, one entry per line |
 | `optional_prefix_lines` | string[] | `[]` | Lines that may come right before the header, all or none |
 | `skip_shebang` | bool | `true` | Skip a leading `#!` line before looking for the header |

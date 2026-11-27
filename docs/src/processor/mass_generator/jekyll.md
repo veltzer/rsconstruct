@@ -42,7 +42,7 @@ dep_auto = []
 ```
 
 | Key | Type | Default | Description |
-|-----|------|---------|-------------|
+| ----- | ------ | --------- | ------------- |
 | `command` | string | `"jekyll"` | Path to the jekyll executable |
 | `ruby` | string | `"ruby"` | Ruby interpreter for the discovery-time planner (must have the `jekyll` gem) |
 | `output_dir` | string | `"_site"` | Output directory for generated site files, relative to `_config.yml` |

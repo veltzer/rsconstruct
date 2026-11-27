@@ -37,7 +37,7 @@ dep_inputs = []
 ```
 
 | Key | Type | Default | Description |
-|-----|------|---------|-------------|
+| ----- | ------ | --------- | ------------- |
 | `command` | string | `"eslint"` | The eslint executable to run |
 | `args` | string[] | `[]` | Extra arguments passed to eslint |
 | `dep_inputs` | string[] | `[]` | Extra files whose changes trigger rebuilds |

@@ -25,7 +25,7 @@ invocation starts a Java virtual machine.
 ## Tools
 
 | Tool | Installed by | What it is |
-|------|--------------|------------|
+| ------ | -------------- | ------------ |
 | `vnu.jar` | `binary` (into the project or the machine) | The checker, one jar, fetched from the npm registry's `vnu-jar` package and locked in `rsconstruct.lock` |
 | `java` | `apt` (`default-jre-headless`, machine only) | The Java runtime that runs the jar |
 
@@ -54,7 +54,7 @@ dep_inputs = []
 ```
 
 | Key | Type | Default | Description |
-|-----|------|---------|-------------|
+| ----- | ------ | --------- | ------------- |
 | `command` | string | `"java"` | The Java runtime that runs the checker |
 | `args` | string[] | `[]` | Extra arguments passed to the checker, after `-jar <vnu.jar>` |
 | `dep_inputs` | string[] | `[]` | Extra files whose changes trigger rebuilds |

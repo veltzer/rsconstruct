@@ -34,7 +34,7 @@ src_dirs = ["marp"]
 ```
 
 | Key | Type | Default | Description |
-|-----|------|---------|-------------|
+| ----- | ------ | --------- | ------------- |
 | `enabled` | bool | `true` | Set to `false` to keep the stanza but skip the processor |
 | `command` | string | (required) | The command to run |
 | `args` | string[] | `[]` | Extra arguments passed before file paths |

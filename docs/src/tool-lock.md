@@ -14,7 +14,7 @@ hand.
 ## What it locks
 
 | Section | Installed by | Into | Pinned as |
-|---------|--------------|------|-----------|
+| --------- | -------------- | ------ | ----------- |
 | `[cargo]` | `cargo install --locked --root` | the project ([below](#where-tools-are-installed)) | `name@version` |
 | `[npm]` | `npm install --global --prefix` | the project | `name@version` |
 | `[gem]` | `gem install --install-dir` | the project | `name:version` |
@@ -59,7 +59,7 @@ rsconstruct's source (zola, checkpatch.pl, …) are recorded at that URL.
 ## Who reads it
 
 | Command | Outside CI | In CI (`CI=true`) |
-|---------|------------|-------------------|
+| --------- | ------------ | ------------------- |
 | `tool lock` | add missing entries, drop unused ones, keep the rest | same (but run it outside CI) |
 | `tool lock --upgrade` | re-resolve every entry to its latest release | same |
 | `tool lock --upgrade <name>...` | like `tool lock`, plus re-resolve only the named tools; an unknown name is an error | same |

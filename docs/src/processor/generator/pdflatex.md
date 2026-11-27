@@ -31,7 +31,7 @@ dep_inputs = []                      # Additional files that trigger rebuilds wh
 ```
 
 | Key | Type | Default | Description |
-|-----|------|---------|-------------|
+| ----- | ------ | --------- | ------------- |
 | `command` | string | `"pdflatex"` | The pdflatex executable to run |
 | `runs` | integer | `2` | Number of compilation passes (for cross-references) |
 | `qpdf` | bool | `true` | Use qpdf to linearize the output PDF |

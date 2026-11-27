@@ -27,7 +27,7 @@ dep_inputs = []                      # Additional files that trigger rebuilds wh
 ```
 
 | Key | Type | Default | Description |
-|-----|------|---------|-------------|
+| ----- | ------ | --------- | ------------- |
 | `command` | string | `"markdown"` | The markdown executable to run |
 | `args` | string[] | `[]` | Extra arguments passed to markdown |
 | `output_dir` | string | `"out/processor.generator.markdown2html"` | Output directory for HTML files |

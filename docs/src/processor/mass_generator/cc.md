@@ -79,7 +79,7 @@ programs:
 ## Library Types
 
 | Type | Output | Description |
-|------|--------|-------------|
+| ------ | -------- | ------------- |
 | `shared` | `lib/lib<name>.so` | Shared library (default). Sources compiled with `-fPIC`. |
 | `static` | `lib/lib<name>.a` | Static library via `ar rcs`. |
 | `both` | Both `.so` and `.a` | Builds both shared and static variants. |
@@ -89,7 +89,7 @@ programs:
 The compiler is chosen per source file based on extension:
 
 | Extensions | Compiler |
-|-----------|----------|
+| ----------- | ---------- |
 | `.c` | C compiler (`cc` field) |
 | `.cc`, `.cpp`, `.cxx`, `.C` | C++ compiler (`cxx` field) |
 
@@ -173,7 +173,7 @@ checking during discovery.
 ### Configuration Reference
 
 | Key | Type | Default | Description |
-|-----|------|---------|-------------|
+| ----- | ------ | --------- | ------------- |
 | `enabled` | bool | `true` | Enable/disable the processor |
 | `cc` | string | `"gcc"` | Default C compiler |
 | `cxx` | string | `"g++"` | Default C++ compiler |

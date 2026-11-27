@@ -283,7 +283,7 @@ Any tool that honors the manifest contract plugs into the config-driven `generic
 ## Comparison
 
 | | Checker | Generator | Explicit | Mass Generator |
-|---|---|---|---|---|
+| --- | --- | --- | --- | --- |
 | **Purpose** | Validate | Transform | Aggregate | Transform, many at once |
 | **Inputs** | Scanned | Scanned | Declared in config | Declared by the tool's plan |
 | **Products** | One per input | One per input (x format) | One total | One per predicted file |

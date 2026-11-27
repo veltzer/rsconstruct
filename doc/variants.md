@@ -99,13 +99,13 @@ profiles = ["release"]
 
 ### Practical differences
 
-| Aspect                               | Variants                  | Multi-instance              |
-| ------------------------------------ | ------------------------- | --------------------------- |
-| One config section or N?             | One                       | N                           |
-| Can sub-configs differ?              | No (only the variant name)| Yes (every field can differ)|
-| Discovers files independently?       | No (one scan, N products) | Yes (N independent scans)   |
-| Naming in error messages             | `[cargo]`                 | `[cargo.dev]`               |
-| Best for                             | Same build, different output target (debug+release of same code) | Different scopes (kernel vs userspace), different tools, different scan rules |
+| Aspect                         | Variants                                                         | Multi-instance                                                                |
+| ------------------------------ | ---------------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| One config section or N?       | One                                                              | N                                                                             |
+| Can sub-configs differ?        | No (only the variant name)                                       | Yes (every field can differ)                                                  |
+| Discovers files independently? | No (one scan, N products)                                        | Yes (N independent scans)                                                     |
+| Naming in error messages       | `[cargo]`                                                        | `[cargo.dev]`                                                                 |
+| Best for                       | Same build, different output target (debug+release of same code) | Different scopes (kernel vs userspace), different tools, different scan rules |
 
 The two are not redundant. They solve different problems.
 

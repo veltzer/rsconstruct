@@ -20,7 +20,7 @@ output_dir = "out/processor.generator.imarkdown2html"    # Output directory (def
 ```
 
 | Key | Type | Default | Description |
-|-----|------|---------|-------------|
+| ----- | ------ | --------- | ------------- |
 | `output_dir` | string | `"out/processor.generator.imarkdown2html"` | Output directory for HTML files |
 | `dep_inputs` | string[] | `[]` | Extra files whose changes trigger rebuilds |
 

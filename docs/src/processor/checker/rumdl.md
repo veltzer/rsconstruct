@@ -37,7 +37,7 @@ dep_inputs = []                            # Additional files that trigger rebui
 ```
 
 | Key | Type | Default | Description |
-|-----|------|---------|-------------|
+| ----- | ------ | --------- | ------------- |
 | `command` | string | `"rumdl"` | The rumdl executable to run |
 | `args` | string[] | `[]` | Extra arguments passed to rumdl |
 | `dep_inputs` | string[] | `[]` | Extra files whose changes trigger rebuilds |

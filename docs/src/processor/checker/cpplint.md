@@ -34,7 +34,7 @@ dep_inputs = []
 ```
 
 | Key | Type | Default | Description |
-|-----|------|---------|-------------|
+| ----- | ------ | --------- | ------------- |
 | `args` | string[] | `[]` | Extra arguments passed to cpplint |
 | `dep_inputs` | string[] | `[]` | Extra files whose changes trigger rebuilds |
 | `dep_auto` | string[] | `["CPPLINT.cfg"]` | Config files that are inputs when they exist |
