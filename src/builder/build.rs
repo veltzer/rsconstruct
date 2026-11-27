@@ -959,15 +959,17 @@ impl Builder {
         ctx: &crate::build_context::BuildContext,
         product: &crate::graph::Product,
     ) -> ExplainAction {
-        match crate::checksum::combined_input_checksum(ctx, &product.inputs) {
-            Ok(input_checksum) => self.object_store.explain_descriptor(
-                ctx,
-                &product.descriptor_key(&input_checksum),
-                &product.outputs,
-                false,
-            ),
-            Err(_) => ExplainAction::Rebuild(RebuildReason::InputUnreadable),
-        }
+        crate::checksum::combined_input_checksum(ctx, &product.inputs).map_or(
+            ExplainAction::Rebuild(RebuildReason::InputUnreadable),
+            |input_checksum| {
+                self.object_store.explain_descriptor(
+                    ctx,
+                    &product.descriptor_key(&input_checksum),
+                    &product.outputs,
+                    false,
+                )
+            },
+        )
     }
 
     /// Print the status of each product, with per-processor and total summary.

@@ -75,9 +75,9 @@ fn assert_regexes_match_perl(cases: &[(&[u8], &str, &[u8], bool)]) {
     assert_eq!(expected.len(), cases.len(), "perl answered every case");
     let mut failures = Vec::new();
     for ((p, f, s, g), want) in cases.iter().zip(&expected) {
-        let got = match Regex::new(p, Flags::parse(f)) {
-            Err(_) => "ERR".to_string(),
-            Ok(re) => {
+        let got = Regex::new(p, Flags::parse(f)).map_or_else(
+            |_| "ERR".to_string(),
+            |re| {
                 if *g {
                     re.find_all(s)
                         .iter()
@@ -87,8 +87,8 @@ fn assert_regexes_match_perl(cases: &[(&[u8], &str, &[u8], bool)]) {
                 } else {
                     re.find(s).map_or_else(|| "-".to_string(), |c| render(&c))
                 }
-            }
-        };
+            },
+        );
         if &got != want {
             failures.push(format!(
                 "/{}/{f} on {:?}{}: perl {want}, engine {got}",

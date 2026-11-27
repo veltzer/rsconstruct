@@ -58,11 +58,13 @@ pub fn add_analyzer(name: &str, dry_run: bool) -> Result<()> {
         .find(|p| p.name == name)
         .ok_or_else(|| anyhow::anyhow!("Unknown analyzer '{name}'"))?;
 
-    let defaults: serde_json::Value = match (plugin.defconfig_toml)() {
-        Some(t) => toml::from_str::<serde_json::Value>(&t)
-            .unwrap_or_else(|_| serde_json::Value::Object(serde_json::Map::default())),
-        None => serde_json::Value::Object(serde_json::Map::default()),
-    };
+    let defaults: serde_json::Value = (plugin.defconfig_toml)().map_or_else(
+        || serde_json::Value::Object(serde_json::Map::default()),
+        |t| {
+            toml::from_str::<serde_json::Value>(&t)
+                .unwrap_or_else(|_| serde_json::Value::Object(serde_json::Map::default()))
+        },
+    );
     let keys: Vec<&str> = match &defaults {
         serde_json::Value::Object(map) => map.keys().map(std::string::String::as_str).collect(),
         _ => Vec::new(),

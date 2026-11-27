@@ -53,14 +53,14 @@ fn split_invocation(tokens: &[Vec<u8>]) -> Option<(String, Vec<Vec<u8>>)> {
     let mut cur_name: Option<Vec<u8>> = None;
     let mut last_valid: Option<(String, usize)> = None;
     for (i, token) in tokens.iter().enumerate() {
-        let name = match cur_name.take() {
-            Some(mut n) => {
+        let name = cur_name.take().map_or_else(
+            || token.clone(),
+            |mut n| {
                 n.push(b'_');
                 n.extend_from_slice(token);
                 n
-            }
-            None => token.clone(),
-        };
+            },
+        );
         if let Ok(s) = std::str::from_utf8(&name)
             && is_valid_option_name(s)
         {
@@ -129,10 +129,9 @@ fn parse_options(body: &[u8]) -> Result<Rc<LTable>, String> {
             set(&mut opts, &name, strings(&args));
         } else {
             let full_name = name.replace('_', " ");
-            let (name, flag) = match name.strip_prefix("no_") {
-                Some(rest) => (rest.to_string(), false),
-                None => (name.clone(), true),
-            };
+            let (name, flag) = name
+                .strip_prefix("no_")
+                .map_or_else(|| (name.clone(), true), |rest| (rest.to_string(), false));
             if NULLARY_INLINE_OPTIONS.contains(&name.as_str()) {
                 if !args.is_empty() {
                     return Err(unexpected_num_args(&full_name, &args, 0));

@@ -465,10 +465,10 @@ impl Executor<'_> {
                 // any other error is the build's single failure.
                 let duration = build_start.elapsed();
                 let failures = e.downcast_ref::<BuildFailures>();
-                let messages: Vec<String> = match failures {
-                    Some(failures) => failures.messages.clone(),
-                    None => vec![format!("{e:#}")],
-                };
+                let messages: Vec<String> = failures.map_or_else(
+                    || vec![format!("{e:#}")],
+                    |failures| failures.messages.clone(),
+                );
                 let (processed, skipped, restored) =
                     failures.map_or((0, 0, 0), |f| (f.processed, f.skipped, f.restored));
                 json_output::emit_build_summary(

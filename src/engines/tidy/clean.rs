@@ -240,10 +240,10 @@ impl Doc {
         let known = tables::tables().known;
         if let Some(index) = self.tree.attr_by_id(node, known.style) {
             let current = self.tree.node(node).attributes[index].value.clone();
-            let merged = match current {
-                Some(existing) => merge_properties(&existing, property),
-                None => property.to_string(),
-            };
+            let merged = current.map_or_else(
+                || property.to_string(),
+                |existing| merge_properties(&existing, property),
+            );
             self.tree.node_mut(node).attributes[index].value = Some(merged);
         } else {
             let mut av = super::node::AttVal::new();

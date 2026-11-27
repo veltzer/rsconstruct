@@ -259,10 +259,10 @@ fn parse_checkstyle_output(text: &str) -> BTreeMap<String, Result> {
             // The root exception's message runs from its line to the first
             // stack frame; it spans lines when it quotes a token that does.
             let start = record.iter().rposition(|l| l.starts_with("Caused by: "));
-            let (head, rest) = match start {
-                Some(i) => (&record[i]["Caused by: ".len()..], &record[i + 1..]),
-                None => (exception, &record[1..]),
-            };
+            let (head, rest) = start.map_or_else(
+                || (exception, &record[1..]),
+                |i| (&record[i]["Caused by: ".len()..], &record[i + 1..]),
+            );
             let mut root = head.to_string();
             for line in rest
                 .iter()

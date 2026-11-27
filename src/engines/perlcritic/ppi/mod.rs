@@ -1145,10 +1145,10 @@ impl Doc {
         if class.isa(Class::QuoteLiteral) {
             // `string` returns nothing without a section: `literal`'s
             // `$str` is undef.
-            return Some(vec![match self.section_content(id, 0) {
-                Some(s) => Arg::Str(single_quote_literal(&s)),
-                None => Arg::Undef,
-            }]);
+            return Some(vec![
+                self.section_content(id, 0)
+                    .map_or(Arg::Undef, |s| Arg::Str(single_quote_literal(&s))),
+            ]);
         }
         if class.isa(Class::Quote) {
             return Some(vec![Arg::Str(self.quote_string(id))]);

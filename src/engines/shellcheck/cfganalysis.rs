@@ -751,10 +751,8 @@ impl Ctx<'_> {
         if function_only && self.stack[i].is_function_call {
             return def;
         }
-        let res = match get(&self.stack[i].stack_state) {
-            Some(v) => v,
-            None => self.lookup_stack_from(i, function_only, get, dep, def),
-        };
+        let res = get(&self.stack[i].stack_state)
+            .unwrap_or_else(|| self.lookup_stack_from(i, function_only, get, dep, def));
         let d = dep(&res);
         self.stack[i].dependencies.insert(d);
         res
@@ -1190,11 +1188,7 @@ impl Ctx<'_> {
     /// `wouldBeRecursive`.
     fn would_be_recursive(&mut self, node: Node) -> bool {
         let found = self.stack.iter().rposition(|s| s.entry_point == node);
-        let (from, res) = match found {
-            // Entries from the innermost down to the match are visited.
-            Some(i) => (i, true),
-            None => (0, false),
-        };
+        let (from, res) = found.map_or((0, false), |i| (i, true));
         for s in &mut self.stack[from..] {
             s.dependencies
                 .insert(StateDependency::IsRecursive(node, res));

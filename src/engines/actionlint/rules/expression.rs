@@ -602,17 +602,17 @@ impl<'a> RuleExpression<'a> {
             let Some(j) = workflow.jobs.as_ref().and_then(|jobs| jobs.get(&i)) else {
                 continue;
             };
-            let outputs = match &j.workflow_call {
-                None => {
+            let outputs = j.workflow_call.as_ref().map_or_else(
+                || {
                     let props = j
                         .outputs
                         .keys()
                         .map(|n| (n.clone(), ExprType::String))
                         .collect();
                     ObjectType::strict(props)
-                }
-                Some(call) => self.get_workflow_call_outputs_type(call),
-            };
+                },
+                |call| self.get_workflow_call_outputs_type(call),
+            );
             o.props.insert(
                 i,
                 ExprType::Object(ObjectType::strict(
@@ -639,10 +639,10 @@ impl<'a> RuleExpression<'a> {
             && let ExprType::Object(o) = a.elem.as_ref()
         {
             for (n, p) in &o.props {
-                let merged = match mat_ty.props.get(n) {
-                    None => p.clone(),
-                    Some(t) => t.merge(p),
-                };
+                let merged = mat_ty
+                    .props
+                    .get(n)
+                    .map_or_else(|| p.clone(), |t| t.merge(p));
                 mat_ty.props.insert(n.clone(), merged);
             }
         }

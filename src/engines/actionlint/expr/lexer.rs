@@ -232,10 +232,10 @@ impl Lexer {
     }
 
     fn unexpected(&mut self, r: Option<char>, where_: &str, expected: &str) -> Token {
-        let what = match r {
-            None => "EOF".to_string(),
-            Some(c) => format!("character {}", go_quote_rune(c)),
-        };
+        let what = r.map_or_else(
+            || "EOF".to_string(),
+            |c| format!("character {}", go_quote_rune(c)),
+        );
         let note = if r == Some('"') {
             ". do you mean string literals? only single quotes are available for string delimiter"
         } else {

@@ -770,14 +770,17 @@ fn deterministic_build_order() {
             let processing_names: Vec<String> = stdout
                 .lines()
                 .flat_map(|l| {
-                    if let Some(rest) = l.split("Processing batch:").nth(1) {
-                        let files = rest.split_once("files:").map_or("", |(_, f)| f);
-                        files.split(',').map(|s| s.trim().to_string()).collect()
-                    } else if let Some(rest) = l.split("Processing:").nth(1) {
-                        vec![rest.trim().to_string()]
-                    } else {
-                        Vec::new()
-                    }
+                    l.split("Processing batch:").nth(1).map_or_else(
+                        || {
+                            l.split("Processing:")
+                                .nth(1)
+                                .map_or_else(Vec::new, |rest| vec![rest.trim().to_string()])
+                        },
+                        |rest| {
+                            let files = rest.split_once("files:").map_or("", |(_, f)| f);
+                            files.split(',').map(|s| s.trim().to_string()).collect()
+                        },
+                    )
                 })
                 .collect();
             assert_eq!(

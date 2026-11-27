@@ -645,21 +645,20 @@ fn get_header_guard_cpp_variable(settings: &Settings, filename: &str) -> String 
                 &paths::split_to_list(&file_path_from_root),
                 &paths::split_to_list(root),
             );
-            if let Some(rest) = stripped.filter(|r| !r.is_empty()) {
-                paths::join_all(&rest)
-            } else {
-                let full_path = paths::abspath(&filename);
-                let root_abspath = paths::abspath(root);
-                let stripped = strip_list_prefix(
-                    &paths::split_to_list(&full_path),
-                    &paths::split_to_list(&root_abspath),
-                );
-                if let Some(rest) = stripped.filter(|r| !r.is_empty()) {
-                    paths::join_all(&rest)
-                } else {
-                    file_path_from_root
-                }
-            }
+            stripped.filter(|r| !r.is_empty()).map_or_else(
+                || {
+                    let full_path = paths::abspath(&filename);
+                    let root_abspath = paths::abspath(root);
+                    let stripped = strip_list_prefix(
+                        &paths::split_to_list(&full_path),
+                        &paths::split_to_list(&root_abspath),
+                    );
+                    stripped
+                        .filter(|r| !r.is_empty())
+                        .map_or(file_path_from_root, |rest| paths::join_all(&rest))
+                },
+                |rest| paths::join_all(&rest),
+            )
         }
     };
     let mut guard = sub("[^a-zA-Z0-9]", "_", &fixed).to_uppercase();
@@ -703,10 +702,10 @@ fn process_config_overrides(options: &Options, filename: &str) -> Result<Overrid
             if line.trim().is_empty() {
                 continue;
             }
-            let (name, val) = match line.find('=') {
-                Some(eq) => (line[..eq].trim(), line[eq + 1..].trim()),
-                None => (line.trim(), ""),
-            };
+            let (name, val) = line.find('=').map_or_else(
+                || (line.trim(), ""),
+                |eq| (line[..eq].trim(), line[eq + 1..].trim()),
+            );
             match name {
                 "set noparent" => keep_looking = false,
                 "filter" => cfg_filters.push(val.to_string()),

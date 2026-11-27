@@ -705,10 +705,8 @@ impl Loader<'_> {
         }
         let name = self.required(element, "name")?;
         let qualified = global
-            || match attr(element, "form") {
-                Some(form) => form == "qualified",
-                None => self.element_form_qualified,
-            };
+            || attr(element, "form")
+                .map_or(self.element_form_qualified, |form| form == "qualified");
         let name = QName {
             namespace: if qualified {
                 self.schema.target_namespace.clone()
@@ -771,10 +769,8 @@ impl Loader<'_> {
     fn attribute_decl(&self, element: &Element, global: bool) -> Result<AttributeDecl> {
         let name = self.required(element, "name")?;
         let qualified = global
-            || match attr(element, "form") {
-                Some(form) => form == "qualified",
-                None => self.attribute_form_qualified,
-            };
+            || attr(element, "form")
+                .map_or(self.attribute_form_qualified, |form| form == "qualified");
         let mut type_ref = match attr(element, "type") {
             Some(type_name) => self.simple_ref(element, type_name)?,
             None => SimpleRef::Builtin(Builtin::AnySimpleType),

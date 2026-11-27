@@ -20,14 +20,13 @@ impl ObjectStore {
                 .db
                 .begin_read()
                 .context("Failed to begin read transaction")?;
-            match read_txn.open_table(CONFIGS_TABLE) {
-                Ok(table) => table
+            read_txn.open_table(CONFIGS_TABLE).map_or(None, |table| {
+                table
                     .get(processor)
                     .ok()
                     .flatten()
-                    .and_then(|bytes| String::from_utf8(bytes.value().to_vec()).ok()),
-                Err(_) => None,
-            }
+                    .and_then(|bytes| String::from_utf8(bytes.value().to_vec()).ok())
+            })
         };
 
         // Only update if changed

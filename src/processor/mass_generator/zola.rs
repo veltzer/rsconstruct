@@ -893,36 +893,40 @@ impl Site {
             dated = true;
         }
         let strategy = self.config.slugify.paths;
-        let slug = if let Some(ref s) = meta.slug {
-            slugify_paths(s, strategy)
-        } else if let Some(s) = slug_from_dated_name {
-            slugify_paths(&s, strategy)
-        } else {
-            slugify_paths(&slug_source, strategy)
-        };
+        // The front matter's slug, else the one in a dated file name, else the name.
+        let slug = slugify_paths(
+            meta.slug
+                .as_deref()
+                .or(slug_from_dated_name.as_deref())
+                .unwrap_or(&slug_source),
+            strategy,
+        );
 
-        let mut path = if let Some(ref p) = meta.path {
-            let p = p.trim();
-            if p.starts_with('/') {
-                p.to_string()
-            } else {
-                format!("/{p}")
-            }
-        } else {
-            let mut path = if components.is_empty() {
-                if name == "index" && !colocated {
-                    String::new()
+        let mut path = meta.path.as_ref().map_or_else(
+            || {
+                let mut path = if components.is_empty() {
+                    if name == "index" && !colocated {
+                        String::new()
+                    } else {
+                        slug
+                    }
                 } else {
-                    slug
+                    format!("{}/{slug}", components.join("/"))
+                };
+                if lang != self.config.default_language {
+                    path = format!("{lang}/{path}");
                 }
-            } else {
-                format!("{}/{slug}", components.join("/"))
-            };
-            if lang != self.config.default_language {
-                path = format!("{lang}/{path}");
-            }
-            format!("/{path}")
-        };
+                format!("/{path}")
+            },
+            |p| {
+                let p = p.trim();
+                if p.starts_with('/') {
+                    p.to_string()
+                } else {
+                    format!("/{p}")
+                }
+            },
+        );
         if !path.ends_with('/') {
             path.push('/');
         }
@@ -1121,10 +1125,10 @@ impl Site {
         for (lang, options) in &languages {
             if options.generate_feeds {
                 for feed in &options.feed_filenames {
-                    let path = match self.config.lang_prefix(lang) {
-                        Some(prefix) => format!("{prefix}/{feed}"),
-                        None => feed.clone(),
-                    };
+                    let path = self
+                        .config
+                        .lang_prefix(lang)
+                        .map_or_else(|| feed.clone(), |prefix| format!("{prefix}/{feed}"));
                     rendered(&mut plan, path);
                 }
             }

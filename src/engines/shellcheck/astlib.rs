@@ -193,10 +193,9 @@ pub fn get_opts<'a>(
             return Some(list_to_args(rest));
         }
         if let Some(word) = s.strip_prefix("--") {
-            let (name, arg) = match word.find('=') {
-                Some(p) => (&word[..p], &word[p..]),
-                None => (word, ""),
-            };
+            let (name, arg) = word
+                .find('=')
+                .map_or((word, ""), |p| (&word[..p], &word[p..]));
             let needs_arg = if arbitrary {
                 flag_map.get(name).copied().unwrap_or(false)
             } else {
@@ -1014,10 +1013,8 @@ pub fn is_special_variable_char(x: char) -> bool {
 
 pub fn is_variable_name(s: &str) -> bool {
     let mut it = s.chars();
-    match it.next() {
-        Some(x) => is_variable_start_char(x) && it.all(is_variable_char),
-        None => false,
-    }
+    it.next()
+        .is_some_and(|x| is_variable_start_char(x) && it.all(is_variable_char))
 }
 
 /// `getBracedReference`.
@@ -1077,10 +1074,9 @@ pub fn get_index_references(s: &str) -> Vec<String> {
     let Some(groups) = INDEX_RE.with(|re| re.match_groups(s)) else {
         return Vec::new();
     };
-    match groups.first() {
-        Some(index) => VARIABLE_NAME_RE.with(|re| re.match_all_strings(index)),
-        None => Vec::new(),
-    }
+    groups.first().map_or_else(Vec::new, |index| {
+        VARIABLE_NAME_RE.with(|re| re.match_all_strings(index))
+    })
 }
 
 /// `getOffsetReferences`.
@@ -1088,10 +1084,9 @@ pub fn get_offset_references(mods: &str) -> Vec<String> {
     let Some(groups) = OFFSET_RE.with(|re| re.match_groups(mods)) else {
         return Vec::new();
     };
-    match groups.get(1) {
-        Some(offsets) => VARIABLE_NAME_RE.with(|re| re.match_all_strings(offsets)),
-        None => Vec::new(),
-    }
+    groups.get(1).map_or_else(Vec::new, |offsets| {
+        VARIABLE_NAME_RE.with(|re| re.match_all_strings(offsets))
+    })
 }
 
 pub fn is_unmodified_parameter_expansion(t: &Token) -> bool {

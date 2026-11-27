@@ -125,10 +125,10 @@ pub fn check_script(sys: &Rc<dyn SystemInterface>, spec: &CheckSpec) -> Vec<Posi
     let should_include = |pc: &PositionedComment| {
         let code = pc.comment.code;
         pc.comment.severity <= spec.min_severity
-            && match &spec.included_warnings {
-                None => !spec.excluded_warnings.contains(&code),
-                Some(included) => included.contains(&code),
-            }
+            && spec.included_warnings.as_ref().map_or_else(
+                || !spec.excluded_warnings.contains(&code),
+                |included| included.contains(&code),
+            )
     };
     let mut kept: Vec<PositionedComment> = comments.into_iter().filter(should_include).collect();
     kept.sort_by(|a, b| {
@@ -330,10 +330,9 @@ impl SystemInterface for IoInterface {
         original: &str,
     ) -> String {
         // dropFileName
-        let scriptdir = match current_script.rfind('/') {
-            Some(i) => &current_script[..=i],
-            None => "",
-        };
+        let scriptdir = current_script
+            .rfind('/')
+            .map_or("", |i| &current_script[..=i]);
         let adjust_path = |s: &str| -> String {
             let dirs = split_directories(s);
             if dirs.first().map(String::as_str) == Some("SCRIPTDIR") {

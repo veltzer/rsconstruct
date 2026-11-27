@@ -627,10 +627,9 @@ impl Lexer<'_> {
 
     /// `testLiteralsTable`: an identifier that is a keyword.
     fn literal_type(text: &str, ty: u16) -> u16 {
-        match LITERALS.binary_search_by(|(word, _)| (*word).cmp(text)) {
-            Ok(i) => LITERALS[i].1,
-            Err(_) => ty,
-        }
+        LITERALS
+            .binary_search_by(|(word, _)| (*word).cmp(text))
+            .map_or(ty, |i| LITERALS[i].1)
     }
 
     // ---- the token stream -------------------------------------------------

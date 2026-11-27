@@ -520,10 +520,12 @@ impl<'a> Lexer<'a> {
             b = self.next_byte();
         }
         let ident = self.src.get_substring(start, self.offset - 1);
-        match KEYWORDS.iter().find(|k| k.as_bytes() == ident.as_slice()) {
-            Some(k) => Lexed::Token(sym(k), None),
-            None => Lexed::Token(Tok::Name, Some(ident)),
-        }
+        KEYWORDS
+            .iter()
+            .find(|k| k.as_bytes() == ident.as_slice())
+            .map_or(Lexed::Token(Tok::Name, Some(ident)), |k| {
+                Lexed::Token(sym(k), None)
+            })
     }
 
     fn lex_dash(&mut self) -> Lexed {

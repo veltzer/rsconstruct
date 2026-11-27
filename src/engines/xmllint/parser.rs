@@ -41,14 +41,16 @@ pub(super) fn decode(bytes: &[u8]) -> Result<String, Problem> {
         Some("iso-8859-1" | "iso_8859-1" | "latin1" | "latin-1" | "l1" | "cp819" | "iso8859-1") => {
             Ok(bytes.iter().map(|&b| char::from(b)).collect())
         }
-        Some("us-ascii" | "ascii") => match bytes.iter().position(|&b| b >= 0x80) {
-            None => decode_utf8(bytes),
-            Some(offset) => Err(Problem {
-                line: line_of_byte(bytes, offset),
-                kind: Kind::ParserError,
-                message: "Invalid bytes in character encoding".to_string(),
-            }),
-        },
+        Some("us-ascii" | "ascii") => bytes.iter().position(|&b| b >= 0x80).map_or_else(
+            || decode_utf8(bytes),
+            |offset| {
+                Err(Problem {
+                    line: line_of_byte(bytes, offset),
+                    kind: Kind::ParserError,
+                    message: "Invalid bytes in character encoding".to_string(),
+                })
+            },
+        ),
         Some(other) => Err(Problem {
             line: 1,
             kind: Kind::ParserError,
@@ -340,10 +342,10 @@ impl<'a> Parser<'a> {
     /// Builds the element from its start tag: namespace declarations,
     /// duplicate attributes, prefix resolution, attribute values.
     fn open_element(&mut self, pending: &Pending<'a>) -> Element {
-        let mut scope: Vec<(String, String)> = match self.stack.last() {
-            Some(parent) => parent.scope.clone(),
-            None => vec![("xml".to_string(), XML_NS.to_string())],
-        };
+        let mut scope: Vec<(String, String)> = self.stack.last().map_or_else(
+            || vec![("xml".to_string(), XML_NS.to_string())],
+            |parent| parent.scope.clone(),
+        );
 
         // Duplicate attributes, by the name as written.
         for (i, attr) in pending.attributes.iter().enumerate() {
@@ -686,14 +688,16 @@ impl<'a> Parser<'a> {
                 if self.has_fatal() {
                     return;
                 }
-                match self.stack.last() {
-                    Some(open) => format!(
-                        "Premature end of data in tag {} line {}",
-                        qualified(&open.prefix, &open.local),
-                        open.line
-                    ),
-                    None => "Couldn't find end of Start Tag".to_string(),
-                }
+                self.stack.last().map_or_else(
+                    || "Couldn't find end of Start Tag".to_string(),
+                    |open| {
+                        format!(
+                            "Premature end of data in tag {} line {}",
+                            qualified(&open.prefix, &open.local),
+                            open.line
+                        )
+                    },
+                )
             }
             other => {
                 // xmlparser's own description, with its position stripped:

@@ -602,15 +602,17 @@ impl Parser {
         let esc = self.esc;
         loop {
             // try insignificantLineBreak
-            let brk = self.attempt(|p| match p.escaped_line_breaks() {
-                None => p.fail("no line break"),
-                Some(found) => {
-                    if found && pred(' ') {
-                        p.fail("escaped line break separating two tokens")
-                    } else {
-                        Ok(found)
-                    }
-                }
+            let brk = self.attempt(|p| {
+                p.escaped_line_breaks().map_or_else(
+                    || p.fail("no line break"),
+                    |found| {
+                        if found && pred(' ') {
+                            p.fail("escaped line break separating two tokens")
+                        } else {
+                            Ok(found)
+                        }
+                    },
+                )
             });
             if let Ok(found) = brk {
                 out.push(if found {

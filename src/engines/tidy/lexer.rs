@@ -791,10 +791,7 @@ impl Doc {
         if n.ntype != NodeType::StartTag {
             return false;
         }
-        match n.tag {
-            None => true,
-            Some(t) => (self.tags[t].model & CM_EMPTY) == 0,
-        }
+        n.tag.is_none_or(|t| (self.tags[t].model & CM_EMPTY) == 0)
     }
 
     /// `TY_(IsJavaScript)`.

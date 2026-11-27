@@ -174,10 +174,10 @@ pub fn lua_str_tonumber(text: &[u8]) -> Option<f64> {
     let s = std::str::from_utf8(text).ok()?;
     let is_space = |c: char| matches!(c, ' ' | '\t' | '\n' | '\x0b' | '\x0c' | '\r');
     let trimmed = s.trim_start_matches(is_space).trim_end_matches(is_space);
-    let (negative, body) = match trimmed.strip_prefix('-') {
-        Some(rest) => (true, rest),
-        None => (false, trimmed.strip_prefix('+').unwrap_or(trimmed)),
-    };
+    let (negative, body) = trimmed.strip_prefix('-').map_or_else(
+        || (false, trimmed.strip_prefix('+').unwrap_or(trimmed)),
+        |rest| (true, rest),
+    );
     let value = if let Some(hex) = body.strip_prefix("0x").or_else(|| body.strip_prefix("0X")) {
         parse_hex_float(hex)?
     } else {
@@ -201,14 +201,12 @@ pub fn lua_str_tonumber(text: &[u8]) -> Option<f64> {
 }
 
 fn parse_hex_float(s: &str) -> Option<f64> {
-    let (mantissa, exponent) = match s.find(['p', 'P']) {
-        Some(i) => (&s[..i], Some(&s[i + 1..])),
-        None => (s, None),
-    };
-    let (int_part, frac_part) = match mantissa.find('.') {
-        Some(i) => (&mantissa[..i], &mantissa[i + 1..]),
-        None => (mantissa, ""),
-    };
+    let (mantissa, exponent) = s
+        .find(['p', 'P'])
+        .map_or((s, None), |i| (&s[..i], Some(&s[i + 1..])));
+    let (int_part, frac_part) = mantissa
+        .find('.')
+        .map_or((mantissa, ""), |i| (&mantissa[..i], &mantissa[i + 1..]));
     if int_part.is_empty() && frac_part.is_empty() {
         return None;
     }

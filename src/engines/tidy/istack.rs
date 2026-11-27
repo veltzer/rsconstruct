@@ -122,10 +122,10 @@ impl Doc {
         {
             return false;
         }
-        match self.lexer.istack.last() {
-            Some(top) => Some(top.tag) == self.tree.node(node).tag,
-            None => false,
-        }
+        self.lexer
+            .istack
+            .last()
+            .is_some_and(|top| Some(top.tag) == self.tree.node(node).tag)
     }
 
     /// `TY_(InlineDup)`: arrange for the open inlines above the stack base

@@ -133,10 +133,10 @@ impl Chars {
         if index == 0 {
             return None;
         }
-        match &self.unicode {
-            Some(u) => u.codepoints.get(index - 1).copied(),
-            None => self.bytes.get(index - 1).map(|&b| u32::from(b)),
-        }
+        self.unicode.as_ref().map_or_else(
+            || self.bytes.get(index - 1).map(|&b| u32::from(b)),
+            |u| u.codepoints.get(index - 1).copied(),
+        )
     }
 
     pub const fn get_length(&self) -> usize {
@@ -148,22 +148,22 @@ impl Chars {
 
     /// The bytes of characters `from..=to`.
     pub fn get_substring(&self, from: usize, to: usize) -> Vec<u8> {
-        match &self.unicode {
-            None => lua_sub(&self.bytes, from, to).to_vec(),
-            Some(u) => {
+        self.unicode.as_ref().map_or_else(
+            || lua_sub(&self.bytes, from, to).to_vec(),
+            |u| {
                 // byte_offsets[from] .. byte_offsets[to + 1] - 1, 1-based.
                 let start = u.byte_offsets[from - 1];
                 let end = u.byte_offsets[to] - 1;
                 lua_sub(&self.bytes, start, end).to_vec()
-            }
-        }
+            },
+        )
     }
 
     /// Like `get_substring`, with characters that are not printable escaped
     /// (`\xNN`, or `\u{N}` above 255).
     pub fn get_printable_substring(&self, from: usize, to: usize) -> Vec<u8> {
-        match &self.unicode {
-            None => {
+        self.unicode.as_ref().map_or_else(
+            || {
                 let mut out = Vec::new();
                 for &b in lua_sub(&self.bytes, from, to) {
                     if (32..=126).contains(&b) {
@@ -173,8 +173,8 @@ impl Chars {
                     }
                 }
                 out
-            }
-            Some(u) => {
+            },
+            |u| {
                 let mut out = Vec::new();
                 let mut index = from;
                 while index <= to {
@@ -189,16 +189,16 @@ impl Chars {
                     index += 1;
                 }
                 out
-            }
-        }
+            },
+        )
     }
 
     /// `string.find` from a 1-based character index; the result is in bytes.
     pub fn find(&self, pattern: &[u8], from: usize) -> Result<Option<Match>, PatternError> {
-        let init = match &self.unicode {
-            None => from,
-            Some(u) => u.byte_offsets[from - 1],
-        };
+        let init = self
+            .unicode
+            .as_ref()
+            .map_or(from, |u| u.byte_offsets[from - 1]);
         pattern::find(&self.bytes, pattern, crate::numeric::to_i64(init))
     }
 }

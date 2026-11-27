@@ -621,10 +621,10 @@ fn run_builtin_job(
     let output = crate::processor::run_command_with_stdin(ctx, &cmd, &payload)?;
 
     let stdout = String::from_utf8_lossy(&output.stdout);
-    let (printed, results) = match stdout.rfind(RESULTS_MARKER) {
-        Some(at) => (&stdout[..at], Some(&stdout[at + RESULTS_MARKER.len()..])),
-        None => (&*stdout, None),
-    };
+    let (printed, results) = stdout.rfind(RESULTS_MARKER).map_or_else(
+        || (&*stdout, None),
+        |at| (&stdout[..at], Some(&stdout[at + RESULTS_MARKER.len()..])),
+    );
     relay(printed, &String::from_utf8_lossy(&output.stderr));
     if !output.status.success() {
         anyhow::bail!(

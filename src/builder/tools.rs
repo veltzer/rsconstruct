@@ -1311,20 +1311,20 @@ fn install_project(
     // The tool directory goes last: crates and gems may build native code
     // against what the environments above provide. With nothing to
     // install, its bin/ is still rebuilt.
-    let tool_dir_failed = match &tool_dir {
-        Some(dir) => match apply_project_tools(dir, &lock, flags.verbose) {
-            Ok(()) => false,
-            Err(e) => {
-                println!(
-                    "{} [{}]: {e:#}",
-                    color::red("✗"),
-                    crate::tool_store::REPO_TOOLS_DIR
-                );
-                true
-            }
-        },
-        None => false,
-    };
+    let tool_dir_failed =
+        tool_dir
+            .as_ref()
+            .is_some_and(|dir| match apply_project_tools(dir, &lock, flags.verbose) {
+                Ok(()) => false,
+                Err(e) => {
+                    println!(
+                        "{} [{}]: {e:#}",
+                        color::red("✗"),
+                        crate::tool_store::REPO_TOOLS_DIR
+                    );
+                    true
+                }
+            });
     if groups_failed || tool_dir_failed {
         return Err(tool_error("Some project installs failed".to_string()));
     }

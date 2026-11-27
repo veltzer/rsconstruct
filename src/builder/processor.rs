@@ -599,10 +599,9 @@ pub fn processor_defconfig(name: &str, verbose: bool) -> Result<()> {
 /// description. `None` shows every processor, sorted by name. Works without
 /// rsconstruct.toml: everything comes from the processors' plugin entries.
 pub fn processor_info(pname: Option<&str>) -> Result<()> {
-    let names: Vec<String> = match pname {
-        Some(name) => vec![name.to_string()],
-        None => crate::registries::processor::all_pnames(),
-    };
+    let names: Vec<String> = pname.map_or_else(crate::registries::processor::all_pnames, |name| {
+        vec![name.to_string()]
+    });
     let mut plugins = Vec::new();
     for name in &names {
         let plugin = crate::registries::processor::find_plugin(name).ok_or_else(|| {

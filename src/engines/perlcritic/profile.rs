@@ -106,19 +106,14 @@ fn parse_ini(text: &str) -> Result<Ini> {
             continue;
         }
         // s/\s\;\s.+$//g
-        let line = match find_inline_comment(raw) {
-            Some(at) => &raw[..at],
-            None => raw,
-        };
+        let line = find_inline_comment(raw).map_or(raw, |at| &raw[..at]);
         let t = line.trim();
         if t.starts_with('[') && t.ends_with(']') && t.len() > 2 {
             let name = t[1..t.len() - 1].trim().to_string();
-            current = if let Some(p) = ini.iter().position(|(n, _)| *n == name) {
-                p
-            } else {
+            current = ini.iter().position(|(n, _)| *n == name).unwrap_or_else(|| {
                 ini.push((name, Vec::new()));
                 ini.len() - 1
-            };
+            });
             continue;
         }
         if let Some(eq) = line.find('=') {
@@ -497,10 +492,9 @@ pub fn load(text: &str) -> Result<Profile> {
             }
             continue;
         }
-        let (disabled, policy_name) = match name.strip_prefix('-') {
-            Some(rest) => (true, rest),
-            None => (false, name.as_str()),
-        };
+        let (disabled, policy_name) = name
+            .strip_prefix('-')
+            .map_or((false, name.as_str()), |rest| (true, rest));
         let short = short_name(policy_name).to_string();
         if !SITE_POLICIES.iter().any(|(n, _)| *n == short) {
             bail!("Policy \"{short}\" is not installed.");

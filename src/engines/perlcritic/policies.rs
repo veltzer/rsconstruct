@@ -433,29 +433,27 @@ pub fn violates(
             if module.is_empty() || module == b"0" {
                 return Ok(Vec::new());
             }
-            let description = if let Some(d) = settings.evil_modules.get(&module) {
-                Some(d.clone())
-            } else {
-                settings
-                    .evil_module_regexes
-                    .iter()
-                    .find(|(re, _)| re.is_match(&module))
-                    .map(|(_, d)| d.clone())
-            };
-            match description {
-                Some(d) => {
-                    let d = if d.is_empty() || d == b"0" {
-                        let mut s = b"Prohibited module \"".to_vec();
-                        s.extend(&module);
-                        s.extend(b"\" used");
-                        s
-                    } else {
-                        d
-                    };
-                    found(d, elem)
-                }
-                None => Vec::new(),
-            }
+            let description = settings.evil_modules.get(&module).map_or_else(
+                || {
+                    settings
+                        .evil_module_regexes
+                        .iter()
+                        .find(|(re, _)| re.is_match(&module))
+                        .map(|(_, d)| d.clone())
+                },
+                |d| Some(d.clone()),
+            );
+            description.map_or_else(Vec::new, |d| {
+                let d = if d.is_empty() || d == b"0" {
+                    let mut s = b"Prohibited module \"".to_vec();
+                    s.extend(&module);
+                    s.extend(b"\" used");
+                    s
+                } else {
+                    d
+                };
+                found(d, elem)
+            })
         }
         Policy::RequireBarewordIncludes => {
             let Some(child) = doc.schild(elem, 1) else {
@@ -780,10 +778,7 @@ fn is_topic_mutating_func(doc: &Doc, elem: Id) -> bool {
     if !matches!(content, b"chop" | b"chomp" | b"undef") || !is_function_call(doc, elem) {
         return false;
     }
-    match first_arg(doc, elem) {
-        None => content != b"undef",
-        Some(first) => is_topic(doc, Some(first)),
-    }
+    first_arg(doc, elem).map_or_else(|| content != b"undef", |first| is_topic(doc, Some(first)))
 }
 
 fn is_topic_mutating_substr(doc: &Doc, elem: Id) -> Result<bool, Fatal> {
@@ -974,10 +969,10 @@ fn filename_matches_package(critic: &CriticDoc) -> Vec<Found> {
     if filename.is_empty() || filename == b"0" {
         return Vec::new();
     }
-    let (dirs, file) = match filename.iter().rposition(|&c| c == b'/') {
-        Some(slash) => (&filename[..=slash], &filename[slash + 1..]),
-        None => (&b""[..], &filename[..]),
-    };
+    let (dirs, file) = filename.iter().rposition(|&c| c == b'/').map_or_else(
+        || (&b""[..], &filename[..]),
+        |slash| (&filename[..=slash], &filename[slash + 1..]),
+    );
     let stem = strip_extension(file);
     let mut path_parts: Vec<Vec<u8>> = dirs
         .split(|&c| c == b'/')

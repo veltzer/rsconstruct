@@ -61,10 +61,10 @@ impl GlobValidator {
     }
 
     fn unexpected(&mut self, c: Option<char>, what: &str, why: &str) {
-        let unexpected = match c {
-            None => "unexpected EOF".to_string(),
-            Some(c) => format!("unexpected character {}", go_quote_rune(c)),
-        };
+        let unexpected = c.map_or_else(
+            || "unexpected EOF".to_string(),
+            |c| format!("unexpected character {}", go_quote_rune(c)),
+        );
         let while_ = if what.is_empty() {
             String::new()
         } else {

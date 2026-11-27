@@ -611,10 +611,10 @@ pub fn get_modified_variables(t: &Token) -> Vec<AssignmentData<'_>> {
                 DataType::DataArray(DataSource::External),
             ),
         ],
-        TcUnary(_, op, token) if op == "-v" => match get_variable_for_test_dash_v(token) {
-            Some(s) => vec![(b(t), b(token), s, DataType::DataString(DataSource::Checked))],
-            None => Vec::new(),
-        },
+        TcUnary(_, op, token) if op == "-v" => get_variable_for_test_dash_v(token)
+            .map_or_else(Vec::new, |s| {
+                vec![(b(t), b(token), s, DataType::DataString(DataSource::Checked))]
+            }),
         TcUnary(_, op, token) if op == "-n" || op == "-z" => mark_checked(t, token),
         TcNullary(_, token) => mark_checked(t, token),
         TDollarBraced(_, l) => {
@@ -649,10 +649,9 @@ pub fn get_modified_variables(t: &Token) -> Vec<AssignmentData<'_>> {
             "COPROC".to_string(),
             DataType::DataArray(DataSource::Integer),
         )],
-        TCoProc(Some(token), _) => match get_literal_string(token) {
-            Some(name) => vec![(b(t), b(t), name, DataType::DataArray(DataSource::Integer))],
-            None => Vec::new(),
-        },
+        TCoProc(Some(token), _) => get_literal_string(token).map_or_else(Vec::new, |name| {
+            vec![(b(t), b(t), name, DataType::DataArray(DataSource::Integer))]
+        }),
         TForIn(s, words, _) if words.is_empty() => {
             vec![(
                 b(t),
@@ -746,13 +745,12 @@ pub fn get_referenced_variable_command(base: &Token) -> Vec<ReferenceData<'_>> {
                 Vec::new()
             }
         }
-        "trap" => match rest.first() {
-            Some(head) => get_variables_from_literal_token(head)
+        "trap" => rest.first().map_or_else(Vec::new, |head| {
+            get_variables_from_literal_token(head)
                 .into_iter()
                 .map(|x| (b(base), b(head), x))
-                .collect(),
-            None => Vec::new(),
-        },
+                .collect()
+        }),
         "alias" => rest
             .iter()
             .flat_map(|token| {
@@ -853,13 +851,8 @@ fn modified_variable_command_for<'a>(base: &'a Token, x: &str) -> Vec<Assignment
                 None => fallback,
                 Some(parsed) => match parsed.iter().find(|(f, _)| f == "a") {
                     Some((_, (_, var))) => {
-                        match get_literal_of_data_type(
-                            var,
-                            DataType::DataArray(DataSource::External),
-                        ) {
-                            Some(x) => vec![x],
-                            None => fallback,
-                        }
+                        get_literal_of_data_type(var, DataType::DataArray(DataSource::External))
+                            .map_or(fallback, |x| vec![x])
                     }
                     None => parsed
                         .iter()
@@ -927,15 +920,14 @@ fn modified_variable_command_for<'a>(base: &'a Token, x: &str) -> Vec<Assignment
                     .collect()
             }
         }
-        "set" => match get_set_params(rest) {
-            Some(params) => vec![(
+        "set" => get_set_params(rest).map_or_else(Vec::new, |params| {
+            vec![(
                 b(base),
                 b(base),
                 "@".to_string(),
                 DataType::DataString(DataSource::From(params.into_iter().map(b).collect())),
-            )],
-            None => Vec::new(),
-        },
+            )]
+        }),
         "printf" => get_flag_assigned_variable(
             base,
             "v",
@@ -951,15 +943,14 @@ fn modified_variable_command_for<'a>(base: &'a Token, x: &str) -> Vec<Assignment
         }
         "mapfile" | "readarray" => get_mapfile_array(base, rest).into_iter().collect(),
         "DEFINE_boolean" | "DEFINE_float" | "DEFINE_integer" | "DEFINE_string" => match rest {
-            [n, _, ..] => match get_literal_string(n) {
-                Some(name) => vec![(
+            [n, _, ..] => get_literal_string(n).map_or_else(Vec::new, |name| {
+                vec![(
                     b(base),
                     b(n),
                     format!("FLAGS_{name}"),
                     DataType::DataString(DataSource::External),
-                )],
-                None => Vec::new(),
-            },
+                )]
+            }),
             _ => Vec::new(),
         },
         _ => Vec::new(),
@@ -985,10 +976,8 @@ fn own_data_type<'a>(d: DataType<'_>) -> DataType<'a> {
 }
 
 fn strip_equals(s: &str) -> String {
-    match s.find('=') {
-        Some(i) => s[i + 1..].to_string(),
-        None => String::new(),
-    }
+    s.find('=')
+        .map_or_else(String::new, |i| s[i + 1..].to_string())
 }
 
 /// `stripEqualsFrom`.
@@ -1058,10 +1047,10 @@ fn get_flag_assigned_variable<'a>(
     let flags = flags?;
     let (_, (_, value)) = flags.iter().find(|(f, _)| f == flag)?;
     let variable_name = get_literal_string_ext(value, &|_| Some("!".to_string()))?;
-    let (base_name, index) = match variable_name.find('[') {
-        Some(i) => (variable_name[..i].to_string(), &variable_name[i..]),
-        None => (variable_name.clone(), ""),
-    };
+    let (base_name, index) = variable_name.find('[').map_or_else(
+        || (variable_name.clone(), ""),
+        |i| (variable_name[..i].to_string(), &variable_name[i..]),
+    );
     let dt = if index.is_empty() {
         DataType::DataString(data_source)
     } else {
@@ -1194,10 +1183,9 @@ pub fn get_referenced_variables<'a>(parents: &Tree<'a>, t: &'a Token) -> Vec<Ref
 }
 
 fn get_if_reference<'a>(context: &'a Token, token: &'a Token) -> Vec<ReferenceData<'a>> {
-    match get_variable_for_test_dash_v(token) {
-        Some(s) => vec![(b(context), b(token), get_braced_reference(&s))],
-        None => Vec::new(),
-    }
+    get_variable_for_test_dash_v(token).map_or_else(Vec::new, |s| {
+        vec![(b(context), b(token), get_braced_reference(&s))]
+    })
 }
 
 pub fn is_dereferencing_binary_op(op: &str) -> bool {

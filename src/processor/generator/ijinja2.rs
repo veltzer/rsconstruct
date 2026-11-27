@@ -154,10 +154,7 @@ mod filters {
     /// `do_replace(s, old, new, count=None)`.
     pub fn replace(value: &Value, old: &str, new: &str, count: Option<usize>) -> Value {
         let s = value.to_string();
-        Value::from(match count {
-            Some(n) => s.replacen(old, new, n),
-            None => s.replace(old, new),
-        })
+        Value::from(count.map_or_else(|| s.replace(old, new), |n| s.replacen(old, new, n)))
     }
 
     /// `do_round(value, precision=0, method='common')`.
@@ -195,10 +192,10 @@ mod filters {
         let base = base.unwrap_or(10);
         if let Some(s) = value.as_str() {
             let t = s.trim();
-            let (negative, digits) = match t.strip_prefix('-') {
-                Some(rest) => (true, rest),
-                None => (false, t.strip_prefix('+').unwrap_or(t)),
-            };
+            let (negative, digits) = t.strip_prefix('-').map_or_else(
+                || (false, t.strip_prefix('+').unwrap_or(t)),
+                |rest| (true, rest),
+            );
             let digits = match base {
                 16 => digits
                     .strip_prefix("0x")
@@ -279,10 +276,7 @@ mod filters {
             };
             add(&item)?;
         }
-        Ok(match acc_int {
-            Some(i) => Value::from(i),
-            None => Value::from(acc),
-        })
+        Ok(acc_int.map_or_else(|| Value::from(acc), Value::from))
     }
 
     /// `do_center(value, width=80)`.

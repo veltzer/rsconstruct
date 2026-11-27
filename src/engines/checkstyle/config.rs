@@ -173,13 +173,10 @@ fn attribute_value(raw: &str) -> Result<String> {
             "quot" => '"',
             "apos" => '\'',
             _ => {
-                let code = if let Some(hex) = name.strip_prefix("#x") {
-                    u32::from_str_radix(hex, 16).ok()
-                } else if let Some(dec) = name.strip_prefix('#') {
-                    dec.parse().ok()
-                } else {
-                    None
-                };
+                let code = name.strip_prefix("#x").map_or_else(
+                    || name.strip_prefix('#').and_then(|dec| dec.parse().ok()),
+                    |hex| u32::from_str_radix(hex, 16).ok(),
+                );
                 code.and_then(char::from_u32)
                     .ok_or_else(|| anyhow!("unknown reference &{name}; in {raw:?}"))?
             }
@@ -458,13 +455,13 @@ fn check_module(element: Element, inherited: &Common) -> Result<CheckModule> {
     }
     let common = common(name, &mut props, inherited, messages)?;
     let mut get_bool = |prop: &str, default: bool| -> Result<bool> {
-        match props.iter().position(|(n, _)| n == prop) {
-            Some(i) => {
+        props.iter().position(|(n, _)| n == prop).map_or_else(
+            || Ok(default),
+            |i| {
                 let (n, v) = props.remove(i);
                 parse_bool(name, &n, &v)
-            }
-            None => Ok(default),
-        }
+            },
+        )
     };
     let kind = match name {
         "ArrayTypeStyle" => CheckKind::ArrayTypeStyle {
@@ -478,10 +475,13 @@ fn check_module(element: Element, inherited: &Common) -> Result<CheckModule> {
         "EqualsHashCode" => CheckKind::EqualsHashCode,
         "FallThrough" => {
             let check_last_case_group = get_bool("checkLastCaseGroup", false)?;
-            let pattern = match props.iter().position(|(n, _)| n == "reliefPattern") {
-                Some(i) => props.remove(i).1,
-                None => "falls?[ -]?thr(u|ough)".to_string(),
-            };
+            let pattern = props
+                .iter()
+                .position(|(n, _)| n == "reliefPattern")
+                .map_or_else(
+                    || "falls?[ -]?thr(u|ough)".to_string(),
+                    |i| props.remove(i).1,
+                );
             let relief_pattern = Regex::new(&pattern).map_err(|e| {
                 anyhow!("cannot initialize module FallThrough - reliefPattern {pattern:?}: {e}")
             })?;

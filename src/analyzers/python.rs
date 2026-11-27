@@ -113,17 +113,14 @@ fn parse_imports(content: &str) -> Vec<Import> {
             in_parens = !closed;
         } else if let Some(caps) = from_re.captures(code) {
             let rest = caps[2].trim();
-            let names = match rest.strip_prefix('(') {
-                Some(inner) => {
-                    if let Some((names, _)) = inner.split_once(')') {
-                        names
-                    } else {
-                        in_parens = true;
-                        inner
-                    }
+            let names = rest.strip_prefix('(').map_or(rest, |inner| {
+                if let Some((names, _)) = inner.split_once(')') {
+                    names
+                } else {
+                    in_parens = true;
+                    inner
                 }
-                None => rest,
-            };
+            });
             imports.push(Import {
                 module: caps[1].to_string(),
                 names: import_items(names).collect(),
@@ -238,10 +235,10 @@ impl PythonDepAnalyzer {
         if dots > 0 {
             // A relative import that climbs out of the project names
             // nothing a build can depend on.
-            return match relative_base(importer, dots) {
-                Some(base) => Self::resolve_under(&base, &parts, &exists),
-                None => (Vec::new(), Vec::new()),
-            };
+            return relative_base(importer, dots).map_or_else(
+                || (Vec::new(), Vec::new()),
+                |base| Self::resolve_under(&base, &parts, &exists),
+            );
         }
         let roots = std::iter::once(crate::processor::parent_dir(importer).to_path_buf())
             .chain(std::iter::once(PathBuf::new()))

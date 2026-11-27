@@ -72,10 +72,10 @@ pub type GlobalSpanMap = HashMap<String, HashMap<String, usize>>;
 /// `Document` preserves byte spans on every `Key` and `Item`. `DocumentMut`
 /// strips them on construction (`despan`), so we can't use it here.
 pub fn build_span_maps(source: &str) -> (SpanMap, GlobalSpanMap) {
-    match Document::parse(source) {
-        Ok(doc) => (span_map_of(&doc, source), global_span_map_of(&doc, source)),
-        Err(_) => (SpanMap::new(), GlobalSpanMap::new()),
-    }
+    Document::parse(source).map_or_else(
+        |_| (SpanMap::new(), GlobalSpanMap::new()),
+        |doc| (span_map_of(&doc, source), global_span_map_of(&doc, source)),
+    )
 }
 
 fn span_map_of(doc: &Document<&str>, source: &str) -> SpanMap {

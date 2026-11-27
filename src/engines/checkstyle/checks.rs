@@ -174,13 +174,10 @@ fn is_object_param(ctx: &Ctx, param: NodeId) -> Result<bool, Crash> {
 
 /// `String.substring(0, s.lastIndexOf('.'))`, which throws without a dot.
 fn package_part(name: &str) -> Result<&str, Crash> {
-    match name.rfind('.') {
-        Some(i) => Ok(&name[..i]),
-        None => Err(format!(
+    name.rfind('.').map_or_else(|| Err(format!(
             "java.lang.StringIndexOutOfBoundsException: Range [0, -1) out of bounds for length {}",
             name.encode_utf16().count()
-        )),
-    }
+        )), |i| Ok(&name[..i]))
 }
 
 // ---- javadoc tags (UnusedImports) ------------------------------------------

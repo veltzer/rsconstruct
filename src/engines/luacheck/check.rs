@@ -248,10 +248,8 @@ impl CheckState {
         let line_offset = self.line_offsets[line].expect("line offset known");
         // `offset - line_offset + 1`, as far as it is not negative.
         let column = (offset + 1).saturating_sub(line_offset);
-        match self.line_length(line) {
-            None => column,
-            Some(line_length) => column.min(line_length).max(1),
-        }
+        self.line_length(line)
+            .map_or(column, |line_length| column.min(line_length).max(1))
     }
 
     pub fn warn(

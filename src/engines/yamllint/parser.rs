@@ -379,10 +379,7 @@ impl<'a> Stream<'a> {
     /// The comment's text, from its `#` to the end of its line.
     pub fn comment_text(&self, comment: &Comment) -> &'a str {
         let rest = &self.buffer[comment.pointer..];
-        match rest.find('\n') {
-            Some(end) => &rest[..end],
-            None => rest,
-        }
+        rest.find('\n').map_or(rest, |end| &rest[..end])
     }
 
     /// Mirrors `Comment.is_inline`: the comment follows content on its line.

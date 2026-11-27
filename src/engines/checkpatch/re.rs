@@ -63,10 +63,10 @@ pub fn interp(template: &[u8], lookup: &dyn Fn(&str) -> Option<Vec<u8>>) -> Vec<
                 continue;
             }
             let (name, next) = if t[i + 1] == b'{' {
-                match t[i + 2..].iter().position(|&b| b == b'}') {
-                    Some(end) => (&t[i + 2..i + 2 + end], i + 3 + end),
-                    None => (&t[..0], i + 1),
-                }
+                t[i + 2..].iter().position(|&b| b == b'}').map_or_else(
+                    || (&t[..0], i + 1),
+                    |end| (&t[i + 2..i + 2 + end], i + 3 + end),
+                )
             } else {
                 let len = t[i + 1..]
                     .iter()

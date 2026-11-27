@@ -52,10 +52,10 @@ thread_local! {
 }
 
 fn path_of<'a>(params: &Parameters<'a>, t: &Token) -> Vec<&'a Token> {
-    match params.id_map.get(&t.id) {
-        Some(r) => get_path(&params.parent_map, r),
-        None => Vec::new(),
-    }
+    params
+        .id_map
+        .get(&t.id)
+        .map_or_else(Vec::new, |r| get_path(&params.parent_map, r))
 }
 
 pub fn check_globs_as_options(_: &Parameters<'_>, cmd: &Token, out: &mut Out) {
@@ -1044,14 +1044,13 @@ pub fn check_redirected_nowhere(params: &Parameters<'_>, token: &Token, out: &mu
         }
     }
     fn is_in_expansion(params: &Parameters<'_>, t: &Token) -> bool {
-        match get_parents_of_id(&params.parent_map, t.id).first() {
-            Some(p) => match &p.inner {
+        get_parents_of_id(&params.parent_map, t.id)
+            .first()
+            .is_some_and(|p| match &p.inner {
                 TDollarExpansion(l) | TBackticked(l) if l.len() == 1 => true,
                 TAnnotation(..) => is_in_expansion(params, p),
                 _ => false,
-            },
-            None => false,
-        }
+            })
     }
     if let TPipeline(_, list) = &token.inner {
         if let [single] = list.as_slice() {
@@ -2216,14 +2215,11 @@ pub fn check_equals_in_command(params: &Parameters<'_>, original: &Token, out: &
     };
     let is_leading_number_var = |s: &str| {
         let lead: String = s.chars().take_while(|&c| c != '=').collect();
-        match lead.chars().next() {
-            Some(x) => {
-                x.is_ascii_digit()
-                    && lead.chars().all(is_variable_char)
-                    && !lead.chars().all(|c| c.is_ascii_digit())
-            }
-            None => false,
-        }
+        lead.chars().next().is_some_and(|x| {
+            x.is_ascii_digit()
+                && lead.chars().all(is_variable_char)
+                && !lead.chars().all(|c| c.is_ascii_digit())
+        })
     };
     if leading.is_empty() && s.starts_with('-') {
         return;

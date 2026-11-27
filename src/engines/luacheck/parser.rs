@@ -547,10 +547,10 @@ impl<'a> Parser<'a> {
 
     fn atom(&mut self, tag: Tag) -> Result<NodeId, SyntaxError> {
         let range = self.range();
-        let items = match self.token_value.clone() {
-            Some(value) => vec![Item::Str(value)],
-            None => Vec::new(),
-        };
+        let items = self
+            .token_value
+            .clone()
+            .map_or_else(Vec::new, |value| vec![Item::Str(value)]);
         let node = self.new_outer_node(range, tag, items);
         self.skip_token()?;
         Ok(node)
@@ -1032,13 +1032,13 @@ impl<'a> Parser<'a> {
         } else {
             None
         };
-        let last = match &rhs {
-            Some(exprs) => match exprs.last() {
+        let last = rhs.as_ref().map_or_else(
+            || *lhs.last().expect("lhs"),
+            |exprs| match exprs.last() {
                 Some(Item::Node(n)) => *n,
                 _ => unreachable!("expression list"),
             },
-            None => *lhs.last().expect("lhs"),
-        };
+        );
         let end = self.end_of(last);
         let lhs = self.ast.list(lhs);
         let mut items = vec![Item::Node(lhs)];

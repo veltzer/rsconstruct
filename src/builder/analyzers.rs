@@ -81,11 +81,13 @@ pub fn analyzer_defconfig(name: Option<&str>) -> Result<()> {
             .iter()
             .map(|n| {
                 let plugin = registry::find_analyzer_plugin(n).expect("checked above");
-                let config = match (plugin.defconfig_toml)() {
-                    Some(toml_str) => toml::from_str::<serde_json::Value>(&toml_str)
-                        .unwrap_or(serde_json::Value::Null),
-                    None => serde_json::Value::Null,
-                };
+                let config = (plugin.defconfig_toml)().map_or_else(
+                    || serde_json::Value::Null,
+                    |toml_str| {
+                        toml::from_str::<serde_json::Value>(&toml_str)
+                            .unwrap_or(serde_json::Value::Null)
+                    },
+                );
                 Entry {
                     name: n.clone(),
                     config,
@@ -639,14 +641,16 @@ fn print_deps_json_with_pieces(entries: &[ShowFileEntry], include_hash_pieces: b
             if include_hash_pieces {
                 obj.insert(
                     "hash_pieces".into(),
-                    match pieces {
-                        None => serde_json::Value::Null,
-                        Some(p) => serde_json::Value::Array(
-                            p.iter()
-                                .map(|s| serde_json::Value::String(s.clone()))
-                                .collect(),
-                        ),
-                    },
+                    pieces.as_ref().map_or_else(
+                        || serde_json::Value::Null,
+                        |p| {
+                            serde_json::Value::Array(
+                                p.iter()
+                                    .map(|s| serde_json::Value::String(s.clone()))
+                                    .collect(),
+                            )
+                        },
+                    ),
                 );
             }
             serde_json::Value::Object(obj)

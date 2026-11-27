@@ -91,17 +91,21 @@ impl IsvglintProcessor {
         }
         let lines: Vec<String> = reports
             .iter()
-            .map(|r| match &r.at {
-                Some(at) => format!(
-                    "{}:{}:{}: {}: {} (<{}>)",
-                    file.display(),
-                    at.line,
-                    at.column,
-                    r.rule,
-                    r.text,
-                    at.name
-                ),
-                None => format!("{}: {}: {}", file.display(), r.rule, r.text),
+            .map(|r| {
+                r.at.as_ref().map_or_else(
+                    || format!("{}: {}: {}", file.display(), r.rule, r.text),
+                    |at| {
+                        format!(
+                            "{}:{}:{}: {}: {} (<{}>)",
+                            file.display(),
+                            at.line,
+                            at.column,
+                            r.rule,
+                            r.text,
+                            at.name
+                        )
+                    },
+                )
             })
             .collect();
         bail!("{}", lines.join("\n"))

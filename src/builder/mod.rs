@@ -451,18 +451,17 @@ impl Builder {
         let Some(obj) = value.as_object() else {
             return json.to_string();
         };
-        match checksum_fields {
-            Some(fields) => {
+        checksum_fields.map_or_else(
+            || json.to_string(),
+            |fields| {
                 let filtered: serde_json::Map<String, serde_json::Value> = obj
                     .iter()
                     .filter(|(k, _)| fields.contains(&k.as_str()))
                     .map(|(k, v)| (k.clone(), v.clone()))
                     .collect();
                 serde_json::to_string(&filtered).unwrap_or_else(|_| json.to_string())
-            }
-            // Not a registered processor: no checksum_fields declaration, use full config
-            None => json.to_string(),
-        }
+            },
+        )
     }
 
     /// Create dependency analyzers for each declared instance in `[analyzer.*]`.

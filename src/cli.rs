@@ -1032,9 +1032,10 @@ impl SharedBuildArgs {
             display_opts: cli.display_options(),
             jobs: self.jobs,
             summary: !self.flow.no_summary,
-            batch_size: self.batch_size.map(|n| match usize::try_from(n) {
-                Ok(size) => BatchSizeOverride::Size(size),
-                Err(_) => BatchSizeOverride::Disabled,
+            batch_size: self.batch_size.map(|n| {
+                usize::try_from(n).map_or(BatchSizeOverride::Disabled, |size| {
+                    BatchSizeOverride::Size(size)
+                })
             }),
             stop_after,
             processor_filter: self.processor.clone(),

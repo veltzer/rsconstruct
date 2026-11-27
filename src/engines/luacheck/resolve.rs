@@ -274,12 +274,11 @@ fn propagate_closure_creations(st: &mut CheckState, line: LineId) {
         for created_line in created_lines {
             let mut visited = BTreeSet::new();
             let mut reached = Vec::new();
-            st.walk(line, &mut visited, i + 1, &mut |_, _, item| match item {
-                None => true,
-                Some(item) => {
+            st.walk(line, &mut visited, i + 1, &mut |_, _, item| {
+                item.is_none_or(|item| {
                     reached.push(item);
                     false
-                }
+                })
             });
             for item in reached {
                 apply_closure_creation(st, line, item, created_line);

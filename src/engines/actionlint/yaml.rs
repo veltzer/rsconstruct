@@ -411,10 +411,8 @@ fn mark_column(mark: libyaml_safer::Mark) -> u32 {
 
 /// go-yaml's `shortTag`: `tag:yaml.org,2002:str` becomes `!!str`.
 fn short_tag(tag: &str) -> String {
-    match tag.strip_prefix("tag:yaml.org,2002:") {
-        Some(rest) => format!("!!{rest}"),
-        None => tag.to_string(),
-    }
+    tag.strip_prefix("tag:yaml.org,2002:")
+        .map_or_else(|| tag.to_string(), |rest| format!("!!{rest}"))
 }
 
 static YAML_STYLE_FLOAT: LazyLock<Regex> = LazyLock::new(|| {
@@ -471,10 +469,10 @@ pub fn resolve(value: &str) -> &'static str {
 /// Go's `strconv.ParseInt(s, 0, 64)`: optional sign, then a base prefix
 /// (`0x`, `0o`, `0b`, or a leading `0` for octal) or decimal.
 pub fn go_parse_int_base0(s: &str) -> Option<i64> {
-    let (negative, digits) = match s.strip_prefix('-') {
-        Some(rest) => (true, rest),
-        None => (false, s.strip_prefix('+').unwrap_or(s)),
-    };
+    let (negative, digits) = s.strip_prefix('-').map_or_else(
+        || (false, s.strip_prefix('+').unwrap_or(s)),
+        |rest| (true, rest),
+    );
     if digits.is_empty() {
         return None;
     }
@@ -581,29 +579,25 @@ pub fn go_parse_float(s: &str) -> Option<f64> {
     }
     let body = cleaned.trim_start_matches(['+', '-']);
     let valid_shape = {
-        let (mantissa, exponent) = match body.find(['e', 'E']) {
-            Some(i) => (&body[..i], Some(&body[i + 1..])),
-            None => (body, None),
-        };
+        let (mantissa, exponent) = body
+            .find(['e', 'E'])
+            .map_or((body, None), |i| (&body[..i], Some(&body[i + 1..])));
         let (int_part, frac_part) = match mantissa.split_once('.') {
             Some((i, f)) => (i, Some(f)),
             None => (mantissa, None),
         };
         let digits_ok = |p: &str| !p.is_empty() && p.bytes().all(|b| b.is_ascii_digit());
-        let mantissa_ok = match frac_part {
-            Some(f) => {
+        let mantissa_ok = frac_part.map_or_else(
+            || digits_ok(int_part),
+            |f| {
                 (digits_ok(int_part) && (f.is_empty() || digits_ok(f)))
                     || (int_part.is_empty() && digits_ok(f))
-            }
-            None => digits_ok(int_part),
-        };
-        let exponent_ok = match exponent {
-            Some(e) => {
-                let e = e.strip_prefix(['+', '-']).unwrap_or(e);
-                digits_ok(e)
-            }
-            None => true,
-        };
+            },
+        );
+        let exponent_ok = exponent.is_none_or(|e| {
+            let e = e.strip_prefix(['+', '-']).unwrap_or(e);
+            digits_ok(e)
+        });
         mantissa_ok && exponent_ok
     };
     if !valid_shape {

@@ -21,13 +21,13 @@ use super::value::{LKey, LTable, LVal};
 
 /// `fs.split_base`: the root part of a path and the rest.
 pub fn split_base(path: &str) -> (&str, &str) {
-    if let Some(rest) = path.strip_prefix("//") {
-        ("//", rest)
-    } else if let Some(rest) = path.strip_prefix('/') {
-        ("/", rest)
-    } else {
-        ("", path)
-    }
+    path.strip_prefix("//").map_or_else(
+        || {
+            path.strip_prefix('/')
+                .map_or(("", path), |rest| ("/", rest))
+        },
+        |rest| ("//", rest),
+    )
 }
 
 fn is_absolute(path: &str) -> bool {
@@ -372,10 +372,9 @@ fn find_file(start: &str, file: &str) -> Option<(String, String)> {
             return None;
         }
         rest = &rest_owned;
-        rest_owned = match rest.rfind('/') {
-            Some(i) => rest[..i].to_string(),
-            None => String::new(),
-        };
+        rest_owned = rest
+            .rfind('/')
+            .map_or_else(String::new, |i| rest[..i].to_string());
         rel_path.push_str("../");
     }
 }
@@ -386,10 +385,9 @@ fn strip_chunk_prefix(message: &str) -> String {
         .next()
         .unwrap_or(message);
     let message = message.trim_end();
-    match message.strip_prefix("[string \"chunk\"]:") {
-        Some(rest) => format!("line {rest}"),
-        None => format!("line {message}"),
-    }
+    message
+        .strip_prefix("[string \"chunk\"]:")
+        .map_or_else(|| format!("line {message}"), |rest| format!("line {rest}"))
 }
 
 /// Runs a configuration file the way `config.load_config` does and returns
@@ -601,9 +599,10 @@ pub struct ConfigStack {
 
 pub fn stack_configs(configs: Vec<Config>) -> Result<ConfigStack> {
     let mut stds: Stds = standards::builtin_standards();
-    let prefix = |conf: &Config| match &conf.path {
-        Some(path) => format!("in config loaded from {path}: "),
-        None => String::new(),
+    let prefix = |conf: &Config| {
+        conf.path.as_ref().map_or_else(String::new, |path| {
+            format!("in config loaded from {path}: ")
+        })
     };
     for conf in &configs {
         add_stds_from_config(conf, &mut stds)

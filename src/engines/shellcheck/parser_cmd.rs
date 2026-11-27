@@ -607,14 +607,13 @@ impl P {
             };
             (inner.id, cmd.clone(), args.to_vec())
         };
-        let file: Option<&Token> = match args.first() {
-            Some(first) => match get_literal_string(first).as_deref() {
-                Some("--") => args.get(1),
-                Some("-p") => args.get(2),
-                _ => Some(first),
-            },
-            None => None,
-        };
+        let file: Option<&Token> =
+            args.first()
+                .and_then(|first| match get_literal_string(first).as_deref() {
+                    Some("--") => args.get(1),
+                    Some("-p") => args.get(2),
+                    _ => Some(first),
+                });
         let override_ = self.get_source_override();
         let strip_dynamic_prefix = |word: &Token| -> Option<String> {
             let parts = get_word_parts(word);

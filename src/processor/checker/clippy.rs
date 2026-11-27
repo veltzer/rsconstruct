@@ -116,14 +116,14 @@ fn cargo_command(
     subcommand: &str,
     project_exe: Option<std::path::PathBuf>,
 ) -> Command {
-    let mut cmd = match project_exe {
-        Some(exe) => {
+    let mut cmd = project_exe.map_or_else(
+        || Command::new(cargo),
+        |exe| {
             let mut cmd = Command::new(exe);
             cmd.env("CARGO", cargo);
             cmd
-        }
-        None => Command::new(cargo),
-    };
+        },
+    );
     cmd.arg(subcommand);
     cmd
 }

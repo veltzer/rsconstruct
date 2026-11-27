@@ -156,10 +156,10 @@ fn basename(path: &[u8]) -> Vec<u8> {
             &path[..path.len() - n]
         }
     };
-    match trimmed.iter().rposition(|&c| c == b'/') {
-        Some(slash) => trimmed[slash + 1..].to_vec(),
-        None => trimmed.to_vec(),
-    }
+    trimmed
+        .iter()
+        .rposition(|&c| c == b'/')
+        .map_or_else(|| trimmed.to_vec(), |slash| trimmed[slash + 1..].to_vec())
 }
 
 /// `_line_containing_violation` (`%r`).

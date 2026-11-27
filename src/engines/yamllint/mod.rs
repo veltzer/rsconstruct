@@ -68,10 +68,10 @@ impl Problem {
 
     /// yamllint's `message`: the description, with the rule in parentheses.
     pub fn message(&self) -> String {
-        match self.rule {
-            Some(rule) => format!("{} ({rule})", self.desc),
-            None => self.desc.clone(),
-        }
+        self.rule.map_or_else(
+            || self.desc.clone(),
+            |rule| format!("{} ({rule})", self.desc),
+        )
     }
 }
 

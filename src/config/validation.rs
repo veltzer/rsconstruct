@@ -42,10 +42,10 @@ impl ConfigIssue {
 
     /// The message, led by `file:line:` when the key is in a file.
     pub(super) fn located(&self, sources: &SourceFiles) -> String {
-        match sources.locate(&self.path) {
-            Some(location) => format!("{location}: {}", self.message),
-            None => self.message.clone(),
-        }
+        sources.locate(&self.path).map_or_else(
+            || self.message.clone(),
+            |location| format!("{location}: {}", self.message),
+        )
     }
 
     /// This issue alone as a config error.

@@ -52,17 +52,19 @@ impl Version {
         }
         // An underscore may only follow the decimal point ("alpha without
         // decimal" otherwise).
-        let (int, frac): (&[u8], Vec<u8>) = match s.iter().position(|&c| c == b'.') {
-            Some(dot) => (
-                &s[..dot],
-                s[dot + 1..]
-                    .iter()
-                    .copied()
-                    .filter(|&c| c != b'_')
-                    .collect(),
-            ),
-            None => (s, Vec::new()),
-        };
+        let (int, frac): (&[u8], Vec<u8>) = s.iter().position(|&c| c == b'.').map_or_else(
+            || (s, Vec::new()),
+            |dot| {
+                (
+                    &s[..dot],
+                    s[dot + 1..]
+                        .iter()
+                        .copied()
+                        .filter(|&c| c != b'_')
+                        .collect(),
+                )
+            },
+        );
         let frac = frac.as_slice();
         // `.006` is 0.006.
         let major = if int.is_empty() && !frac.is_empty() {
@@ -248,10 +250,9 @@ fn finish(s: &[u8], mut d: usize, saw_decimal: usize) -> Result<(), &'static str
 pub fn number_literal(class: Class, text: &[u8]) -> Option<Vec<u8>> {
     let cleaned: Vec<u8> = text.iter().copied().filter(|&c| c != b'_').collect();
     let cleaned = cleaned.strip_prefix(b"+").unwrap_or(&cleaned);
-    let (neg, body) = match cleaned.strip_prefix(b"-") {
-        Some(rest) => (true, rest),
-        None => (false, cleaned),
-    };
+    let (neg, body) = cleaned
+        .strip_prefix(b"-")
+        .map_or((false, cleaned), |rest| (true, rest));
     let signed = |v: f64| if neg { -v } else { v };
     let value = match class {
         Class::NumberVersion => {
@@ -375,10 +376,7 @@ fn parse_digits(s: &[u8]) -> Option<u64> {
 pub fn numeric_literal(text: &[u8]) -> Option<f64> {
     let s: Vec<u8> = text.iter().copied().filter(|&c| c != b'_').collect();
     let s = s.strip_prefix(b"+").unwrap_or(&s);
-    let (neg, s) = match s.strip_prefix(b"-") {
-        Some(rest) => (true, rest),
-        None => (false, s),
-    };
+    let (neg, s) = s.strip_prefix(b"-").map_or((false, s), |rest| (true, rest));
     let value = if let Some(hex) = s.strip_prefix(b"0x").or_else(|| s.strip_prefix(b"0X")) {
         crate::numeric::u64_to_f64(u64::from_str_radix(std::str::from_utf8(hex).ok()?, 16).ok()?)
     } else if let Some(bin) = s.strip_prefix(b"0b").or_else(|| s.strip_prefix(b"0B")) {

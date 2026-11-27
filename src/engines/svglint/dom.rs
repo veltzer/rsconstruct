@@ -78,10 +78,9 @@ impl Dom {
     /// The siblings list the node belongs to (its parent's children, or the
     /// top level), as css-select's `getSiblings` returns it.
     pub fn siblings(&self, id: NodeId) -> &[NodeId] {
-        match self.nodes[id].parent {
-            Some(p) => &self.nodes[p].children,
-            None => &self.roots,
-        }
+        self.nodes[id]
+            .parent
+            .map_or_else(|| &self.roots, |p| &self.nodes[p].children)
     }
 
     /// Every element in document (pre-order) order.

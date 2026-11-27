@@ -155,10 +155,7 @@ impl Element {
 
 /// `{namespace}local`, or just `local` when there is no namespace.
 pub fn expanded_name(namespace: Option<&str>, local: &str) -> String {
-    match namespace {
-        Some(ns) => format!("{{{ns}}}{local}"),
-        None => local.to_string(),
-    }
+    namespace.map_or_else(|| local.to_string(), |ns| format!("{{{ns}}}{local}"))
 }
 
 /// A parsed file: the problems found, and the tree when there was a root

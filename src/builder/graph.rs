@@ -236,11 +236,12 @@ impl Builder {
     pub(super) fn open_file(&self, path: &std::path::Path) -> Result<()> {
         use std::process::Command;
 
-        let cmd = if let Some(ref viewer) = self.config.graph.viewer {
-            viewer.as_str()
-        } else {
-            "xdg-open"
-        };
+        let cmd = self
+            .config
+            .graph
+            .viewer
+            .as_ref()
+            .map_or("xdg-open", |viewer| viewer.as_str());
 
         let mut open_cmd = Command::new(cmd);
         open_cmd.arg(path);

@@ -70,10 +70,10 @@ struct Inner {
 
 impl Inner {
     fn new(conf: &RuleConf) -> Self {
-        let spaces = match conf.opt("spaces").as_int() {
-            Some(n) => Spaces::Width(n),
-            None => Spaces::Consistent,
-        };
+        let spaces = conf
+            .opt("spaces")
+            .as_int()
+            .map_or(Spaces::Consistent, Spaces::Width);
         let indent_sequences = match conf.opt("indent-sequences").as_bool() {
             Some(true) => IndentSequences::Yes,
             Some(false) => IndentSequences::No,

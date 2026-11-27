@@ -172,16 +172,17 @@ impl CppDepAnalyzer {
                 if path.is_absolute() {
                     if self.is_project_local(&path) {
                         // Convert to relative path
-                        if let Ok(rel) = path.strip_prefix(canonical_root) {
-                            Some(rel.to_path_buf())
-                        } else if let Ok(canonical) = path.canonicalize() {
-                            canonical
-                                .strip_prefix(canonical_root)
-                                .ok()
-                                .map(std::path::Path::to_path_buf)
-                        } else {
-                            None
-                        }
+                        path.strip_prefix(canonical_root).map_or_else(
+                            |_| {
+                                path.canonicalize().map_or(None, |canonical| {
+                                    canonical
+                                        .strip_prefix(canonical_root)
+                                        .ok()
+                                        .map(std::path::Path::to_path_buf)
+                                })
+                            },
+                            |rel| Some(rel.to_path_buf()),
+                        )
                     } else {
                         // System header, skip it
                         None

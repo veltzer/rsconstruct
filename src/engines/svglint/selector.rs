@@ -643,10 +643,7 @@ fn matches_from(dom: &Dom, el: El, parts: &[(Combinator, Compound)], anchor: Opt
         return false;
     }
     if rest.is_empty() {
-        return match anchor {
-            None => true,
-            Some(a) => related(dom, a, *comb, el),
-        };
+        return anchor.is_none_or(|a| related(dom, a, *comb, el));
     }
     match comb {
         Combinator::Child => {
@@ -843,16 +840,13 @@ fn matches_attr(actual: Option<&str>, op: AttrOp, value: &str, ignore_case: bool
     let value = fold(value);
     match op {
         AttrOp::Exists => actual.is_some(),
-        AttrOp::Not => match actual {
-            None => !value.is_empty(),
-            Some(a) => {
-                if value.is_empty() {
-                    !a.is_empty()
-                } else {
-                    fold(a) != value
-                }
+        AttrOp::Not => actual.map_or(!value.is_empty(), |a| {
+            if value.is_empty() {
+                !a.is_empty()
+            } else {
+                fold(a) != value
             }
-        },
+        }),
         _ => {
             let Some(actual) = actual else {
                 return false;

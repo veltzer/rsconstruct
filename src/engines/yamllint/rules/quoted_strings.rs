@@ -63,10 +63,7 @@ fn resolver_regexes() -> &'static [Regex] {
 pub fn resolve_plain_tag(value: &str) -> &'static str {
     let first = value.chars().next();
     for (i, (tag, first_chars, _)) in RESOLVERS.iter().enumerate() {
-        let tried = match first {
-            Some(c) => first_chars.contains(c),
-            None => *tag == "null",
-        };
+        let tried = first.map_or_else(|| *tag == "null", |c| first_chars.contains(c));
         if tried && resolver_regexes()[i].is_match(value) {
             return tag;
         }

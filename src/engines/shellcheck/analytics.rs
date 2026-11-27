@@ -1622,13 +1622,13 @@ pub fn check_literal_breaking_test(_: &Parameters<'_>, t: &Token, out: &mut Out)
     let has_equals = |t: &Token| get_literal_string(t).is_some_and(|s| s.contains('='));
     let is_non_empty = |t: &Token| get_literal_string(t).is_some_and(|s| !s.is_empty());
     let tautology = |w: &Token, s: &str, out: &mut Out| -> bool {
-        match get_word_parts(w).into_iter().find(|x| is_non_empty(x)) {
-            Some(token) => {
+        get_word_parts(w)
+            .into_iter()
+            .find(|x| is_non_empty(x))
+            .is_some_and(|token| {
                 err(out, token.id, 2157, s);
                 true
-            }
-            None => false,
-        }
+            })
     };
     match &t.inner {
         TcNullary(_, w) => {
@@ -2297,10 +2297,10 @@ pub fn check_inexplicably_unquoted(params: &Parameters<'_>, t: &Token, out: &mut
                     );
                 }
                 TLiteral(s) => {
-                    let path: Vec<&Token> = match params.id_map.get(&trapped.id) {
-                        Some(node) => get_path(&params.parent_map, node),
-                        None => vec![trapped],
-                    };
+                    let path: Vec<&Token> = params
+                        .id_map
+                        .get(&trapped.id)
+                        .map_or_else(|| vec![trapped], |node| get_path(&params.parent_map, node));
                     if !((quotes_single_thing(before) && quotes_single_thing(after))
                         || ["=", ":", "/"].contains(&s.as_str())
                         || is_special(&path))

@@ -2899,10 +2899,7 @@ fn heredoc_introducer(line: &[u8], pos: usize) -> Option<usize> {
 /// heredoc is indented, and its terminator.
 fn heredoc_terminator(content: &[u8]) -> Option<(bool, Vec<u8>)> {
     let rest = content.strip_prefix(b"<<")?;
-    let (indented, rest) = match rest.strip_prefix(b"~") {
-        Some(r) => (true, r),
-        None => (false, rest),
-    };
+    let (indented, rest) = rest.strip_prefix(b"~").map_or((false, rest), |r| (true, r));
     if !rest.is_empty() && rest.iter().all(|&c| is_word(c)) {
         return Some((indented, rest.to_vec()));
     }

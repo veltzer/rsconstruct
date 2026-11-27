@@ -493,10 +493,10 @@ pub const NONE_LABEL: &str = "None";
 /// Render an optional JSON value for display. `None` becomes `NONE_LABEL`;
 /// `Some(v)` is JSON-serialized (strings stay quoted, arrays/objects stay compact).
 pub fn opt_json(value: Option<&serde_json::Value>) -> String {
-    match value {
-        Some(v) => serde_json::to_string(v).unwrap_or_default(),
-        None => NONE_LABEL.to_string(),
-    }
+    value.map_or_else(
+        || NONE_LABEL.to_string(),
+        |v| serde_json::to_string(v).unwrap_or_default(),
+    )
 }
 
 #[cfg(test)]

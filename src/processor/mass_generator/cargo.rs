@@ -545,10 +545,10 @@ fn build_script_watches(
             files.extend(watched_files(&package_dir, path, &project_root));
         }
         for var in env_vars {
-            env.insert(match std::env::var(var) {
-                Ok(value) => format!("{var}={value}"),
-                Err(_) => var.to_string(),
-            });
+            env.insert(
+                std::env::var(var)
+                    .map_or_else(|_| var.to_string(), |value| format!("{var}={value}")),
+            );
         }
     }
     Ok((files.into_iter().collect(), env.into_iter().collect()))

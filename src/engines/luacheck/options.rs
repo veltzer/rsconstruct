@@ -91,14 +91,15 @@ pub fn top_options() -> Vec<(&'static str, Validator)> {
 
 /// `utils.split(s, sep)` (or on whitespace when `sep` is `None`).
 pub fn split(s: &[u8], sep: Option<u8>) -> Vec<Vec<u8>> {
-    match sep {
-        Some(sep) => s.split(|&c| c == sep).map(<[u8]>::to_vec).collect(),
-        None => s
-            .split(|c| matches!(c, b' ' | b'\t' | b'\n' | 0x0b | 0x0c | b'\r'))
-            .filter(|p| !p.is_empty())
-            .map(<[u8]>::to_vec)
-            .collect(),
-    }
+    sep.map_or_else(
+        || {
+            s.split(|c| matches!(c, b' ' | b'\t' | b'\n' | 0x0b | 0x0c | b'\r'))
+                .filter(|p| !p.is_empty())
+                .map(<[u8]>::to_vec)
+                .collect()
+        },
+        |sep| s.split(|&c| c == sep).map(<[u8]>::to_vec).collect(),
+    )
 }
 
 /// `utils.strip`.
@@ -399,17 +400,19 @@ fn anchor_pattern(pattern: Option<&[u8]>, only_start: bool) -> Option<Vec<u8>> {
 }
 
 fn normalize_pattern(pattern: &[u8]) -> NormalizedPattern {
-    let (code_pattern, name_pattern) =
-        if let Some(slash_pos) = pattern.iter().position(|&c| c == b'/') {
-            (Some(&pattern[..slash_pos]), Some(&pattern[slash_pos + 1..]))
-        } else if pattern
-            .iter()
-            .any(|&c| c == b'_' || c.is_ascii_alphabetic())
-        {
-            (None, Some(pattern))
-        } else {
-            (Some(pattern), None)
-        };
+    let (code_pattern, name_pattern) = pattern.iter().position(|&c| c == b'/').map_or_else(
+        || {
+            if pattern
+                .iter()
+                .any(|&c| c == b'_' || c.is_ascii_alphabetic())
+            {
+                (None, Some(pattern))
+            } else {
+                (Some(pattern), None)
+            }
+        },
+        |slash_pos| (Some(&pattern[..slash_pos]), Some(&pattern[slash_pos + 1..])),
+    );
     (
         anchor_pattern(code_pattern, true),
         anchor_pattern(name_pattern, false),

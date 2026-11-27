@@ -85,13 +85,13 @@ impl S3Backend {
         // Parse s3://bucket/prefix
         let without_scheme = url.strip_prefix("s3://").context("Invalid S3 URL")?;
 
-        let (bucket, prefix) = match without_scheme.find('/') {
-            Some(idx) => {
+        let (bucket, prefix) = without_scheme.find('/').map_or_else(
+            || (without_scheme.to_string(), String::new()),
+            |idx| {
                 let (b, p) = without_scheme.split_at(idx);
                 (b.to_string(), p[1..].to_string()) // Skip the leading '/'
-            }
-            None => (without_scheme.to_string(), String::new()),
-        };
+            },
+        );
 
         anyhow::ensure!(
             !bucket.is_empty(),

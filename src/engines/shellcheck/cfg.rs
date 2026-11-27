@@ -424,10 +424,7 @@ impl Graph {
                 let mut new_idom: Option<usize> = None;
                 for &p in &preds[i] {
                     if idom[p].is_some() {
-                        new_idom = Some(match new_idom {
-                            None => p,
-                            Some(cur) => intersect(&idom, p, cur),
-                        });
+                        new_idom = Some(new_idom.map_or(p, |cur| intersect(&idom, p, cur)));
                     }
                 }
                 if new_idom.is_some() && idom[i] != new_idom {
@@ -996,16 +993,12 @@ impl Builder {
                 self.link_range(cond, status)
             }
             TCoProc(name_token, body) => {
-                let maybe_name = match name_token {
-                    Some(x) => get_literal_string(x),
-                    None => Some("COPROC".to_string()),
-                };
-                let parent_node = match maybe_name {
-                    Some(s) => {
-                        apply_single(IdTagged(id, CfEffect::WriteVariable(s, CfValue::Array)))
-                    }
-                    None => CfNode::StructuralNode,
-                };
+                let maybe_name = name_token
+                    .as_ref()
+                    .map_or_else(|| Some("COPROC".to_string()), |x| get_literal_string(x));
+                let parent_node = maybe_name.map_or(CfNode::StructuralNode, |s| {
+                    apply_single(IdTagged(id, CfEffect::WriteVariable(s, CfValue::Array)))
+                });
                 let start = self.none(ctx);
                 let parent = self.new_node_range(ctx, parent_node);
                 let child = self.subshell(ctx, id, "coproc", &mut |s, c| s.build(c, body));
@@ -1456,10 +1449,10 @@ impl Builder {
 
     fn handle_unset(&mut self, ctx: &CfContext, args: &[&Token]) -> Range {
         let rest = args_slice(&args[1..]);
-        let pairs: Vec<(String, &Token)> = match get_gnu_opts("vfn", &rest) {
-            Some(opts) => opts.into_iter().map(|(s, (flag, _))| (s, flag)).collect(),
-            None => rest.iter().map(|c| (String::new(), c)).collect(),
-        };
+        let pairs: Vec<(String, &Token)> = get_gnu_opts("vfn", &rest).map_or_else(
+            || rest.iter().map(|c| (String::new(), c)).collect(),
+            |opts| opts.into_iter().map(|(s, (flag, _))| (s, flag)).collect(),
+        );
         let flag_names: Vec<&String> = pairs
             .iter()
             .filter(|(s, _)| !s.is_empty())
@@ -1591,10 +1584,11 @@ impl Builder {
                         name.clone(),
                         CfValue::Computed(
                             t.id,
-                            vec![CfStringPart::Literal(match literal.find('=') {
-                                Some(i) => literal[i + 1..].to_string(),
-                                None => String::new(),
-                            })],
+                            vec![CfStringPart::Literal(
+                                literal
+                                    .find('=')
+                                    .map_or_else(String::new, |i| literal[i + 1..].to_string()),
+                            )],
                         ),
                     ),
                 );
@@ -1715,16 +1709,14 @@ impl Builder {
                 .map(|(id, name)| IdTagged(id, CfEffect::WriteVariable(name, value.clone())))
                 .collect()
         };
-        let main = match get_gnu_opts(FLAGS_FOR_READ, &args) {
-            None => fallback(),
-            Some(flags) => match flags.iter().find(|(f, _)| f == "a") {
-                Some((_, (_, token))) => match get_literal_string(token) {
-                    Some(name) => vec![IdTagged(
+        let main = get_gnu_opts(FLAGS_FOR_READ, &args).map_or_else(fallback, |flags| {
+            match flags.iter().find(|(f, _)| f == "a") {
+                Some((_, (_, token))) => get_literal_string(token).map_or_else(Vec::new, |name| {
+                    vec![IdTagged(
                         token.id,
                         CfEffect::WriteVariable(name, CfValue::Array),
-                    )],
-                    None => Vec::new(),
-                },
+                    )]
+                }),
                 None => flags
                     .iter()
                     .filter(|(f, _)| f.is_empty())
@@ -1736,8 +1728,8 @@ impl Builder {
                         ))
                     })
                     .collect(),
-            },
-        };
+            }
+        });
         self.new_node_range(ctx, CfNode::ApplyEffects(main))
     }
 

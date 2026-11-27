@@ -711,10 +711,8 @@ impl Doc {
         if tables::si_from_vers(self.lexer.version_emitted).is_none() {
             return false;
         }
-        match self.find_doctype() {
-            Some(doctype) => self.tree.attr_by_name(doctype, "SYSTEM").is_none(),
-            None => false,
-        }
+        self.find_doctype()
+            .is_some_and(|doctype| self.tree.attr_by_name(doctype, "SYSTEM").is_none())
     }
 }
 

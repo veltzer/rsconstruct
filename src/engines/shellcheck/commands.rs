@@ -545,9 +545,9 @@ fn check_mkdir_dash_pm(_: &Parameters<'_>, t: &Token, out: &mut Out) {
     let Some((dash_m, _)) = flags.iter().find(|(_, f)| f == "m" || f == "mode") else {
         return;
     };
-    let could_have_subdirs = |t: &Token| match get_literal_string(t) {
-        Some(name) => name.contains('/') && !SUBDIR_RE.with(|re| re.is_match(&name)),
-        None => true,
+    let could_have_subdirs = |t: &Token| {
+        get_literal_string(t)
+            .is_none_or(|name| name.contains('/') && !SUBDIR_RE.with(|re| re.is_match(&name)))
     };
     if arguments(t).iter().skip(1).any(could_have_subdirs) {
         warn(

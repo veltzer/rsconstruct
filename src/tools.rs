@@ -1342,10 +1342,7 @@ fn run_binary(pkg: &str, ctx: &InstallCtx) -> anyhow::Result<()> {
             "Refusing to install the release binary '{pkg}': rsconstruct.lock does not pin it\n{UNPINNED_HELP}"
         );
     }
-    let url = match pin {
-        Some(pin) => pin.url.clone(),
-        None => unpinned_binary_url(&recipe),
-    };
+    let url = pin.map_or_else(|| unpinned_binary_url(&recipe), |pin| pin.url.clone());
     let work_dir = install_work_dir();
     crate::platform::create_private_dir(std::path::Path::new(&work_dir)).with_context(|| {
         format!("Failed to create the install work directory {work_dir} (remove it if a crashed install left it)")

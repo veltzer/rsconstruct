@@ -905,13 +905,15 @@ fn match_registry(allow: &str, registry: &str) -> bool {
 
 fn dl3026(doc: &Doc, allowed: &[String], out: &mut Vec<Failure>) {
     let registry_allowed = |r: &str| allowed.iter().any(|a| match_registry(a, r));
-    let is_allowed = |img: &Image| match &img.registry {
-        Some(r) => registry_allowed(r),
-        None => {
-            img.name == "scratch"
-                || registry_allowed("docker.io")
-                || registry_allowed("hub.docker.com")
-        }
+    let is_allowed = |img: &Image| {
+        img.registry.as_ref().map_or_else(
+            || {
+                img.name == "scratch"
+                    || registry_allowed("docker.io")
+                    || registry_allowed("hub.docker.com")
+            },
+            |r| registry_allowed(r),
+        )
     };
     let mut aliases: BTreeSet<Option<String>> = BTreeSet::new();
     let check = |aliases: &BTreeSet<Option<String>>, img: &Image| {
@@ -1954,10 +1956,7 @@ fn dl3055(doc: &Doc, schema: &[(String, LabelType)], out: &mut Vec<Failure>) {
 
 /// Data.SemVer `fromText`: `MAJOR.MINOR.PATCH[-pre][+build]`.
 fn is_semver(s: &str) -> bool {
-    let (core, rest) = match s.find(['-', '+']) {
-        Some(i) => (&s[..i], &s[i..]),
-        None => (s, ""),
-    };
+    let (core, rest) = s.find(['-', '+']).map_or((s, ""), |i| (&s[..i], &s[i..]));
     let nums: Vec<&str> = core.split('.').collect();
     if nums.len() != 3
         || !nums.iter().all(|n| {
@@ -1968,10 +1967,9 @@ fn is_semver(s: &str) -> bool {
     {
         return false;
     }
-    let (pre, build) = match rest.find('+') {
-        Some(i) => (&rest[..i], Some(&rest[i + 1..])),
-        None => (rest, None),
-    };
+    let (pre, build) = rest
+        .find('+')
+        .map_or((rest, None), |i| (&rest[..i], Some(&rest[i + 1..])));
     let ident_ok = |part: &str| {
         !part.is_empty() && part.chars().all(|c| c.is_ascii_alphanumeric() || c == '-')
     };

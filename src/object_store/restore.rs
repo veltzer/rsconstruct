@@ -128,13 +128,13 @@ impl ObjectStore {
     /// points at, and neither is a file where a link was recorded.
     fn entry_is_current(ctx: &crate::build_context::BuildContext, entry: &TreeEntry) -> bool {
         let path = Path::new(&entry.path);
-        match &entry.link {
-            Some(target) => super::is_link_to(path, target),
-            None => {
+        entry.link.as_ref().map_or_else(
+            || {
                 fs::symlink_metadata(path).is_ok_and(|m| m.is_file())
                     && Self::verify_checksum(ctx, path).as_ref() == Some(&entry.checksum)
-            }
-        }
+            },
+            |target| super::is_link_to(path, target),
+        )
     }
 
     /// Remove whatever stands where a tree entry is about to be restored:

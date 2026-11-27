@@ -2527,7 +2527,7 @@ impl Checker {
 
             // As for `a`: the Perl's last matching assignment wins, so the
             // tests run from the last to the first.
-            let c: u8 = if let Some(next) = elements.get(idx + 2) {
+            let c: u8 = elements.get(idx + 2).map_or(b'E', |next| {
                 if self.t(r"^\s*\\$", next) {
                     b'E'
                 } else if next.is_empty() {
@@ -2541,9 +2541,7 @@ impl Checker {
                 } else {
                     b'V'
                 }
-            } else {
-                b'E'
-            };
+            });
 
             let mut ctx = Vec::new();
             if a != 0 {
@@ -3010,12 +3008,10 @@ impl Checker {
         // `$1` as the statements below leave it, should the define not
         // match: Perl's captures are those of the last match that did.
         let mut last_1 = guard_1;
-        let has_flow_statement = if let Some(c) = self.m(r"\b(goto|return)\b", &ctx) {
+        let has_flow_statement = self.m(r"\b(goto|return)\b", &ctx).is_some_and(|c| {
             last_1 = Some(c.s(1));
             true
-        } else {
-            false
-        };
+        });
         let mut has_arg_concat = false;
         if self.t(r"\#\#", &ctx) {
             last_1 = None;
@@ -3043,14 +3039,15 @@ impl Checker {
             define_args = last_1;
         }
         let define_stmt = dstat.clone();
-        let def_args: Vec<Vec<u8>> = if let Some(args) = define_args.filter(|a| !a.is_empty()) {
-            let mut args = substr_s(&args, 1, Some(len(&args) - 2));
-            args.retain(|b| !super::check::perl_space(*b));
-            self.s(r"\\\+?", "", &mut args, true, &mut |_| Vec::new());
-            split(&self.re(r",", ""), &args)
-        } else {
-            Vec::new()
-        };
+        let def_args: Vec<Vec<u8>> =
+            define_args
+                .filter(|a| !a.is_empty())
+                .map_or_else(Vec::new, |args| {
+                    let mut args = substr_s(&args, 1, Some(len(&args) - 2));
+                    args.retain(|b| !super::check::perl_space(*b));
+                    self.s(r"\\\+?", "", &mut args, true, &mut |_| Vec::new());
+                    split(&self.re(r",", ""), &args)
+                });
 
         dstat.retain(|&b| b != SUBSEP);
         self.s(r"\\\n.", "", &mut dstat, true, &mut |_| Vec::new());
@@ -3581,10 +3578,10 @@ impl Checker {
         {
             let lc = count(&stat, b'\n') + l.linenr;
             let stat_real = self.get_stat_real(l.linenr, lc);
-            let start = match stat_real.iter().position(|&b| b == b'"') {
-                Some(i) => i,
-                None => stat_real.len().saturating_sub(1),
-            };
+            let start = stat_real
+                .iter()
+                .position(|&b| b == b'"')
+                .unwrap_or_else(|| stat_real.len().saturating_sub(1));
             let re = self.re(r#"[^\"%]*(%[\#\d\.\*\-]*(h+)[idux])"#, "");
             let mut pos = start;
             let mut last_empty_at = None;
@@ -3964,13 +3961,16 @@ impl Checker {
                 continue;
             };
             let new: Vec<u8> = if curr_attr == b"format" && truthy(&params) {
-                if let Some(m) = self.m(r"^\s*\(\s*(\w+)\s*,\s*(.*)", &params) {
-                    cat(&[b"__", &m.s(1), b"(", &m.s(2)])
-                } else if stripped {
-                    b"__(".to_vec()
-                } else {
-                    cat(&[b"__", &orig_attr, b"(", &params])
-                }
+                self.m(r"^\s*\(\s*(\w+)\s*,\s*(.*)", &params).map_or_else(
+                    || {
+                        if stripped {
+                            b"__(".to_vec()
+                        } else {
+                            cat(&[b"__", &orig_attr, b"(", &params])
+                        }
+                    },
+                    |m| cat(&[b"__", &m.s(1), b"(", &m.s(2)]),
+                )
             } else {
                 cat(&[new.as_bytes(), &params])
             };

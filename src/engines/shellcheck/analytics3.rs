@@ -183,10 +183,10 @@ pub fn check_functions_used_externally(params: &Parameters<'_>, t: &Token) -> Ou
             return;
         };
         let name = basename(&s).to_string();
-        let rest: Vec<&Token> = match argv.iter().position(|c| c.id == tok.id) {
-            Some(i) => argv[i + 1..].iter().collect(),
-            None => Vec::new(),
-        };
+        let rest: Vec<&Token> = argv
+            .iter()
+            .position(|c| c.id == tok.id)
+            .map_or_else(Vec::new, |i| argv[i + 1..].iter().collect());
         let arg_strings: Vec<(String, &Token)> =
             rest.iter().map(|a| (only_literal_string(a), *a)).collect();
         let candidates: Vec<(String, &Token)> = match name.as_str() {
@@ -582,10 +582,8 @@ pub fn check_array_assignment_indices(params: &Parameters<'_>, root: &Token) -> 
                         .iter()
                         .filter_map(|p| match &p.inner {
                             TLiteral(s) => {
-                                let (before, after) = match s.find('=') {
-                                    Some(i) => (&s[..i], &s[i..]),
-                                    None => (s.as_str(), ""),
-                                };
+                                let (before, after) =
+                                    s.find('=').map_or((s.as_str(), ""), |i| (&s[..i], &s[i..]));
                                 if before.chars().all(|c| c.is_ascii_digit()) && !after.is_empty() {
                                     Some(p.id)
                                 } else {
@@ -703,10 +701,8 @@ pub fn check_alias_used_in_same_parsing_unit(params: &Parameters<'_>, root: &Tok
                     Some("alias") => {
                         for arg in args {
                             let s = get_literal_string_def("-", arg);
-                            let (name, value) = match s.find('=') {
-                                Some(i) => (&s[..i], &s[i..]),
-                                None => (s.as_str(), ""),
-                            };
+                            let (name, value) =
+                                s.find('=').map_or((s.as_str(), ""), |i| (&s[..i], &s[i..]));
                             if is_variable_name(name) && !value.is_empty() {
                                 aliases.entry(name.to_string()).or_insert(arg);
                             }
