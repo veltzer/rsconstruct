@@ -233,19 +233,15 @@ pub enum Inner {
 }
 
 use Inner::{
-    TAndIf, TAnnotation, TArithmetic, TArray, TAssignment, TBackgrounded, TBackticked, TBang,
-    TBanged, TBatsTest, TBraceExpansion, TBraceGroup, TCase, TCaseExpression, TCoProc, TCoProcBody,
-    TCondition, TDo, TDollarArithmetic, TDollarBraceCommandExpansion, TDollarBraced,
-    TDollarBracket, TDollarDoubleQuoted, TDollarExpansion, TDollarSingleQuoted, TDone,
-    TDoubleQuoted, TElif, TElse, TEsac, TExtglob, TFdRedirect, TFi, TFor, TForArithmetic, TForIn,
-    TFunction, TGlob, TGreater, THereDoc, THereString, TIf, TIfExpression, TIn, TInclude,
-    TIndexedElement, TIoDuplicate, TIoFile, TLbrace, TLess, TLexAndIf, TLexClobber, TLexDgreat,
-    TLexDsemi, TLexEof, TLexGreatand, TLexLessand, TLexLessgreat, TLexOrIf, TLiteral, TLparen,
-    TNormalWord, TOrIf, TParamSubSpecialChar, TPipe, TPipeline, TProcSub, TRbrace, TRedirecting,
-    TRparen, TScript, TSelect, TSelectIn, TSemi, TSimpleCommand, TSingleQuoted, TSourceCommand,
-    TSubshell, TThen, TUnparsedIndex, TUntil, TUntilExpression, TWhile, TWhileExpression,
+    TAndIf, TAnnotation, TArithmetic, TArray, TAssignment, TBackgrounded, TBackticked, TBanged,
+    TBatsTest, TBraceExpansion, TBraceGroup, TCaseExpression, TCoProc, TCoProcBody, TCondition,
+    TDollarArithmetic, TDollarBraceCommandExpansion, TDollarBraced, TDollarBracket,
+    TDollarDoubleQuoted, TDollarExpansion, TDoubleQuoted, TExtglob, TFdRedirect, TForArithmetic,
+    TForIn, TFunction, THereDoc, THereString, TIfExpression, TInclude, TIndexedElement,
+    TIoDuplicate, TIoFile, TNormalWord, TOrIf, TPipeline, TProcSub, TRedirecting, TScript,
+    TSelectIn, TSimpleCommand, TSourceCommand, TSubshell, TUntilExpression, TWhileExpression,
     TaAssignment, TaBinary, TaExpansion, TaParenthesis, TaSequence, TaTrinary, TaUnary, TaVariable,
-    TcAnd, TcBinary, TcEmpty, TcGroup, TcNullary, TcOr, TcUnary,
+    TcAnd, TcBinary, TcGroup, TcNullary, TcOr, TcUnary,
 };
 
 impl Token {
@@ -313,6 +309,15 @@ impl Token {
                 visit(a);
                 visit(b);
             }
+            _ => self.for_each_compound_child(visit),
+        }
+    }
+
+    /// The children of the tokens that hold more than a list, one, two or
+    /// three of them. Every other token with children is
+    /// [`Self::for_each_child`]'s.
+    fn for_each_compound_child<'a>(&'a self, visit: &mut dyn FnMut(&'a Self)) {
+        match &self.inner {
             TIndexedElement(l, a) | TAssignment(_, _, l, a) | TRedirecting(l, a) => {
                 for child in l {
                     visit(child);
@@ -361,45 +366,9 @@ impl Token {
                     visit(child);
                 }
             }
-            TcEmpty(_)
-            | TLexAndIf
-            | TUnparsedIndex(..)
-            | TBang
-            | TLexClobber
-            | TCase
-            | TLexDgreat
-            | TLexDsemi
-            | TDo
-            | TDollarSingleQuoted(_)
-            | TDone
-            | TLexEof
-            | TElif
-            | TElse
-            | TEsac
-            | TFi
-            | TFor
-            | TLexGreatand
-            | TGlob(_)
-            | TGreater
-            | TIf
-            | TIn
-            | TLexLessand
-            | TLexLessgreat
-            | TLbrace
-            | TLess
-            | TLiteral(_)
-            | TLparen
-            | TLexOrIf
-            | TParamSubSpecialChar(_)
-            | TRbrace
-            | TRparen
-            | TSelect
-            | TSemi
-            | TSingleQuoted(_)
-            | TThen
-            | TUntil
-            | TWhile
-            | TPipe(_) => {}
+            // The tokens with no children, and the shapes `for_each_child`
+            // visits itself.
+            _ => {}
         }
     }
 
@@ -464,6 +433,13 @@ impl Token {
                 visit(a);
                 visit(b);
             }
+            _ => self.for_each_compound_child_mut(visit),
+        }
+    }
+
+    /// [`Self::for_each_compound_child`], mutably.
+    fn for_each_compound_child_mut(&mut self, visit: &mut dyn FnMut(&mut Self)) {
+        match &mut self.inner {
             TIndexedElement(l, a) | TAssignment(_, _, l, a) | TRedirecting(l, a) => {
                 for child in l {
                     visit(child);

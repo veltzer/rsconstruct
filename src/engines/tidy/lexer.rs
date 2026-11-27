@@ -632,6 +632,19 @@ enum EntState {
     NumHex,
 }
 
+/// What follows a `<` inside the text of a script or style element.
+enum CdataTag {
+    /// Nothing that matters: the text goes on.
+    None,
+    /// A start tag, whose name begins at this offset of the lexer buffer.
+    Start(usize),
+    /// An end tag, whose name begins at this offset.
+    End(usize),
+    /// A start tag in a script that has a `src` attribute and no text:
+    /// the element has no text token.
+    EmptyScript,
+}
+
 impl Doc {
     // ---- buffer and node helpers ------------------------------------------
 
@@ -1090,6 +1103,97 @@ impl Doc {
         }
     }
 
+    /// `GetCDATA`, after a `<`: what the characters behind it start.
+    /// `empty_script` says that the container is a script with a `src`
+    /// attribute and no text so far, which a start tag ends.
+    fn cdata_after_lt(&mut self, empty_script: bool, nonested: bool) -> CdataTag {
+        let c2 = self.read_char();
+        if is_letter(c2) {
+            if empty_script {
+                self.lexer.truncate(self.lexer.txtstart);
+                self.unget_char(c2);
+                self.unget_char(u32::from(b'<'));
+                return CdataTag::EmptyScript;
+            }
+            self.add_char_to_lexer(c2);
+            return CdataTag::Start(self.lexer.lexsize() - 1);
+        }
+        if c2 == u32::from(b'/') {
+            self.add_char_to_lexer(c2);
+        } else if c2 == u32::from(b'\\') {
+            self.add_char_to_lexer(c2);
+            let c3 = self.read_char();
+            if c3 != u32::from(b'/') {
+                self.unget_char(c3);
+                return CdataTag::None;
+            }
+            self.add_char_to_lexer(c3);
+            if nonested {
+                return CdataTag::None;
+            }
+        } else {
+            self.unget_char(c2);
+            return CdataTag::None;
+        }
+        // `</` or `<\/`: an end tag when a letter follows.
+        let next = self.read_char();
+        self.unget_char(next);
+        if is_letter(next) {
+            CdataTag::End(self.lexer.lexsize())
+        } else {
+            CdataTag::None
+        }
+    }
+
+    /// `GetCDATA`, at the end of the name of an end tag that starts at
+    /// `start`: true when the tag ends the text.
+    fn cdata_end_tag(
+        &mut self,
+        container: NodeId,
+        container_name: &str,
+        start: usize,
+        is_empty: bool,
+        nested: &mut i32,
+    ) -> bool {
+        let matches = self.cdata_name_matches(container_name, start);
+        if is_empty && !matches {
+            self.unget_lexbuf_from(start);
+            self.unget_char(u32::from(b'/'));
+            self.unget_char(u32::from(b'<'));
+            return true;
+        }
+        let was_nested = *nested;
+        if matches {
+            *nested -= 1;
+        }
+        if matches && was_nested <= 0 {
+            self.unget_lexbuf_from(start);
+            self.unget_char(u32::from(b'/'));
+            self.unget_char(u32::from(b'<'));
+            let new_size = self.lexer.lexsize() - ((self.lexer.lexsize() - start) + 2);
+            self.lexer.truncate(new_size);
+            return true;
+        }
+        if start < 2 || self.lexer.lexbuf[start - 2] != b'\\' {
+            self.set_lexer_locus();
+            self.lexer.columns = (self.lexer.columns - 3).max(0);
+            if self.is_javascript(container) && self.opts.enclose.escape_scripts && !self.html5_mode
+            {
+                self.report(None, None, Code::BadCdataContent);
+                // Shift the end tag right by one and put the
+                // backslash before it.
+                let size = self.lexer.lexsize();
+                self.lexer.push_byte(0);
+                for i in (start..=size).rev() {
+                    let prev = self.lexer.lexbuf[i - 1];
+                    self.lexer.lexbuf[i] = prev;
+                }
+                self.lexer.lexbuf[start - 1] = b'\\';
+            }
+        }
+        false
+    }
+
     /// `GetCDATA`: the text of a script or style element, up to its end
     /// tag.
     fn get_cdata(&mut self, container: NodeId) -> Option<NodeId> {
@@ -1135,48 +1239,19 @@ impl Doc {
                         }
                         continue;
                     }
-                    let c2 = self.read_char();
-                    if is_letter(c2) {
-                        if has_src && is_empty && self.node_is(container, TagId::Script) {
-                            self.lexer.truncate(self.lexer.txtstart);
-                            self.unget_char(c2);
-                            self.unget_char(u32::from(b'<'));
-                            return None;
+                    let empty_script =
+                        has_src && is_empty && self.node_is(container, TagId::Script);
+                    match self.cdata_after_lt(empty_script, nonested) {
+                        CdataTag::None => {}
+                        CdataTag::Start(at) => {
+                            start = at;
+                            state = State::StartTag;
                         }
-                        self.add_char_to_lexer(c2);
-                        start = self.lexer.lexsize() - 1;
-                        state = State::StartTag;
-                    } else if c2 == u32::from(b'/') {
-                        self.add_char_to_lexer(c2);
-                        let c3 = self.read_char();
-                        if !is_letter(c3) {
-                            self.unget_char(c3);
-                            continue;
+                        CdataTag::End(at) => {
+                            start = at;
+                            state = State::EndTag;
                         }
-                        self.unget_char(c3);
-                        start = self.lexer.lexsize();
-                        state = State::EndTag;
-                    } else if c2 == u32::from(b'\\') {
-                        self.add_char_to_lexer(c2);
-                        let c3 = self.read_char();
-                        if c3 != u32::from(b'/') {
-                            self.unget_char(c3);
-                            continue;
-                        }
-                        self.add_char_to_lexer(c3);
-                        if nonested {
-                            continue;
-                        }
-                        let c4 = self.read_char();
-                        if !is_letter(c4) {
-                            self.unget_char(c4);
-                            continue;
-                        }
-                        self.unget_char(c4);
-                        start = self.lexer.lexsize();
-                        state = State::EndTag;
-                    } else {
-                        self.unget_char(c2);
+                        CdataTag::EmptyScript => return None,
                     }
                 }
                 State::StartTag => {
@@ -1193,42 +1268,15 @@ impl Doc {
                     if is_letter(c) {
                         continue;
                     }
-                    let matches = self.cdata_name_matches(&container_name, start);
-                    if is_empty && !matches {
-                        self.unget_lexbuf_from(start);
-                        self.unget_char(u32::from(b'/'));
-                        self.unget_char(u32::from(b'<'));
+                    let ends = self.cdata_end_tag(
+                        container,
+                        &container_name,
+                        start,
+                        is_empty,
+                        &mut nested,
+                    );
+                    if ends {
                         break;
-                    }
-                    let was_nested = nested;
-                    if matches {
-                        nested -= 1;
-                    }
-                    if matches && was_nested <= 0 {
-                        self.unget_lexbuf_from(start);
-                        self.unget_char(u32::from(b'/'));
-                        self.unget_char(u32::from(b'<'));
-                        let new_size = self.lexer.lexsize() - ((self.lexer.lexsize() - start) + 2);
-                        self.lexer.truncate(new_size);
-                        break;
-                    } else if start < 2 || self.lexer.lexbuf[start - 2] != b'\\' {
-                        self.set_lexer_locus();
-                        self.lexer.columns = (self.lexer.columns - 3).max(0);
-                        if self.is_javascript(container)
-                            && self.opts.enclose.escape_scripts
-                            && !self.html5_mode
-                        {
-                            self.report(None, None, Code::BadCdataContent);
-                            // Shift the end tag right by one and put the
-                            // backslash before it.
-                            let size = self.lexer.lexsize();
-                            self.lexer.push_byte(0);
-                            for i in (start..=size).rev() {
-                                let prev = self.lexer.lexbuf[i - 1];
-                                self.lexer.lexbuf[i] = prev;
-                            }
-                            self.lexer.lexbuf[start - 1] = b'\\';
-                        }
                     }
                     state = State::Intermediate;
                 }
@@ -2487,6 +2535,47 @@ impl Doc {
 
     // ---- doctype -------------------------------------------------------------
 
+    /// The lexer buffer from `start` up to the character just added, or
+    /// `None` when there is nothing between them.
+    fn lexed_since(&self, start: usize) -> Option<String> {
+        let text = String::from_utf8_lossy(&self.lexer.lexbuf[start..self.lexer.lexsize() - 1]);
+        if text.is_empty() {
+            None
+        } else {
+            Some(text.into_owned())
+        }
+    }
+
+    /// Take the character just added out of the lexer buffer and give it
+    /// back to the input.
+    fn unlex_char(&mut self, c: u32) {
+        let s = self.lexer.lexsize() - 1;
+        self.lexer.truncate(s);
+        self.unget_char(c);
+    }
+
+    /// The `>` that closes a doctype declaration: the node when the
+    /// declaration names a valid root element.
+    fn finish_doctype(&mut self, node: NodeId) -> Option<NodeId> {
+        let s = self.lexer.lexsize() - 1;
+        self.lexer.truncate(s);
+        self.tree.node_mut(node).end = s;
+        if let Some(si) = self.tree.attr_by_name(node, "SYSTEM") {
+            self.check_url(node, si);
+        }
+        let valid = self
+            .tree
+            .node(node)
+            .element
+            .as_deref()
+            .is_some_and(Self::is_valid_xml_id);
+        if !valid {
+            self.report(None, None, Code::MalformedDoctype);
+            return None;
+        }
+        Some(node)
+    }
+
     /// `ParseDocTypeDecl`.
     fn parse_doctype_decl(&mut self) -> Option<NodeId> {
         #[derive(PartialEq, Eq, Clone, Copy)]
@@ -2540,37 +2629,15 @@ impl Doc {
                         delim = c;
                         state = State::QuotedString;
                     } else if c == u32::from(b'>') {
-                        let s = self.lexer.lexsize() - 1;
-                        self.lexer.truncate(s);
-                        self.tree.node_mut(node).end = s;
-                        if let Some(si) = self.tree.attr_by_name(node, "SYSTEM") {
-                            self.check_url(node, si);
-                        }
-                        let valid = self
-                            .tree
-                            .node(node)
-                            .element
-                            .as_deref()
-                            .is_some_and(Self::is_valid_xml_id);
-                        if !valid {
-                            self.report(None, None, Code::MalformedDoctype);
-                            return None;
-                        }
-                        return Some(node);
+                        return self.finish_doctype(node);
                     }
                 }
                 State::DoctypeName => {
                     if is_white(c) || c == u32::from(b'>') || c == u32::from(b'[') {
-                        let name = String::from_utf8_lossy(
-                            &self.lexer.lexbuf[start..self.lexer.lexsize() - 1],
-                        )
-                        .into_owned();
-                        self.tree.node_mut(node).element =
-                            if name.is_empty() { None } else { Some(name) };
+                        let name = self.lexed_since(start);
+                        self.tree.node_mut(node).element = name;
                         if c == u32::from(b'>') || c == u32::from(b'[') {
-                            let s = self.lexer.lexsize() - 1;
-                            self.lexer.truncate(s);
-                            self.unget_char(c);
+                            self.unlex_char(c);
                         }
                         state = State::Intermediate;
                     }
@@ -2580,21 +2647,15 @@ impl Doc {
                         let attname = &self.lexer.lexbuf[start..self.lexer.lexsize() - 1];
                         hasfpi = !attname.eq_ignore_ascii_case(b"SYSTEM");
                         if c == u32::from(b'>') {
-                            let s = self.lexer.lexsize() - 1;
-                            self.lexer.truncate(s);
-                            self.unget_char(c);
+                            self.unlex_char(c);
                         }
                         state = State::Intermediate;
                     }
                 }
                 State::QuotedString => {
                     if c == delim {
-                        let value = String::from_utf8_lossy(
-                            &self.lexer.lexbuf[start..self.lexer.lexsize() - 1],
-                        )
-                        .into_owned();
+                        let value = self.lexed_since(start);
                         let name = if hasfpi { "PUBLIC" } else { "SYSTEM" };
-                        let value = if value.is_empty() { None } else { Some(value) };
                         let index = self.add_attribute(node, name, value.as_deref());
                         self.tree.node_mut(node).attributes[index].delim = delim;
                         hasfpi = false;

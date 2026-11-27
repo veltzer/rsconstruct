@@ -476,12 +476,27 @@ fn short_name(name: &str) -> &str {
     name.strip_prefix("Perl::Critic::Policy::").unwrap_or(name)
 }
 
-/// Parse a profile and select the policies it enables.
-pub fn load(text: &str) -> Result<Profile> {
-    let ini = parse_ini(text)?;
+/// What a profile says about one policy: named `[-Policy]`, named
+/// `[Policy]`, and its parameters.
+#[derive(Default)]
+struct Section {
+    disabled: bool,
+    named: bool,
+    params: HashMap<String, String>,
+}
+
+/// The global options that decide which policies are loaded.
+struct Selection {
+    min_severity: u8,
+    only: bool,
+    include: Vec<Regex>,
+    exclude: Vec<Regex>,
+}
+
+/// Split a parsed profile into its global options and its policy sections.
+fn read_sections(ini: Ini) -> Result<(HashMap<String, String>, HashMap<String, Section>)> {
     let mut globals: HashMap<String, String> = HashMap::new();
-    // Per policy: named `[-Policy]`, named `[Policy]`, and its parameters.
-    let mut sections: HashMap<String, (bool, bool, HashMap<String, String>)> = HashMap::new();
+    let mut sections: HashMap<String, Section> = HashMap::new();
     for (name, entries) in ini {
         if name == "_" {
             for (key, value) in entries {
@@ -499,16 +514,115 @@ pub fn load(text: &str) -> Result<Profile> {
         if !SITE_POLICIES.iter().any(|(n, _)| *n == short) {
             bail!("Policy \"{short}\" is not installed.");
         }
-        let entry = sections
-            .entry(short)
-            .or_insert_with(|| (false, false, HashMap::new()));
+        let entry = sections.entry(short).or_default();
         if disabled {
-            entry.0 = true;
+            entry.disabled = true;
         } else {
-            entry.1 = true;
-            entry.2.extend(entries);
+            entry.named = true;
+            entry.params.extend(entries);
         }
     }
+    Ok((globals, sections))
+}
+
+/// The report format the `verbose` option selects.
+fn report_format(verbose: &str) -> Result<String> {
+    let format = match parse_integer(verbose) {
+        Some(n) => {
+            // perlcritic names the file once it is given several, which
+            // a build always does.
+            let n = if verbose == "4" {
+                5
+            } else {
+                u32::try_from(n.unsigned_abs()).unwrap_or(u32::MAX)
+            };
+            numeric_format(n)
+                .unwrap_or_else(|| numeric_format(4).expect("format 4"))
+                .to_string()
+        }
+        None => interpolate(verbose)?,
+    };
+    if format.contains("%d") {
+        bail!(
+            "iperlcritic does not support \"%d\" (the policy's diagnostics) in the verbose format"
+        );
+    }
+    Ok(format)
+}
+
+/// The configuration of one installed policy, or `None` when the profile
+/// does not load it.
+fn policy_config(
+    name: &str,
+    default_severity: u8,
+    section: Option<&Section>,
+    selection: &Selection,
+) -> Result<Option<PolicyConfig>> {
+    let long = format!("Perl::Critic::Policy::{name}");
+    let params = section.map(|s| s.params.clone()).unwrap_or_default();
+    let severity = match params.get("severity") {
+        Some(s) => severity_to_number(s).with_context(|| format!("Policy {name}: severity"))?,
+        None => default_severity,
+    };
+    // `_load_policies`, in its order: `only`, `[-Policy]`, `[Policy]`,
+    // the severity, then `include` and `exclude`.
+    let disabled = section.is_some_and(|s| s.disabled);
+    let named = section.is_some_and(|s| s.named);
+    let matches = |list: &[Regex]| list.iter().any(|re| re.is_match(long.as_bytes()));
+    let included = matches(&selection.include);
+    let excluded = matches(&selection.exclude);
+    let load_me = ((named || (!selection.only && !disabled)) && severity >= selection.min_severity
+        || included)
+        && !excluded;
+    if !load_me {
+        return Ok(None);
+    }
+    let Some(policy) = Policy::from_short_name(name) else {
+        // ProhibitEvilVariables enables itself only once given
+        // variables to prohibit.
+        if name == "Variables::ProhibitEvilVariables"
+            && params.get("variables").is_none_or(|v| v.trim().is_empty())
+            && params
+                .get("variables_file")
+                .is_none_or(|v| v.trim().is_empty())
+        {
+            return Ok(None);
+        }
+        bail!("iperlcritic does not implement policy \"{name}\", which the profile enables");
+    };
+    for key in params.keys() {
+        let general = matches!(
+            key.as_str(),
+            "severity" | "maximum_violations_per_document" | "set_themes" | "add_themes"
+        );
+        if !general && !policy.parameters().contains(&key.as_str()) {
+            bail!("The \"{key}\" parameter is not supported by policy {name}");
+        }
+    }
+    let maximum_violations = match params.get("maximum_violations_per_document") {
+        Some(m) if !m.is_empty() && !m.eq_ignore_ascii_case("no_limit") => {
+            let n = parse_integer(m)
+                .filter(|n| *n >= 0)
+                .and_then(|n| usize::try_from(n).ok())
+                .with_context(|| format!("The value for the {name} \"maximum_violations_per_document\" option (\"{m}\") is not an integer greater than or equal to zero"))?;
+            Some(n)
+        }
+        _ => policy.default_maximum_violations(),
+    };
+    let Some(settings) = policy_settings(policy, &params)? else {
+        return Ok(None);
+    };
+    Ok(Some(PolicyConfig {
+        policy,
+        severity,
+        maximum_violations,
+        settings,
+    }))
+}
+
+/// Parse a profile and select the policies it enables.
+pub fn load(text: &str) -> Result<Profile> {
+    let (globals, sections) = read_sections(parse_ini(text)?)?;
     let get = |k: &str| globals.get(k).map(String::as_str);
     if get("theme").is_some_and(|t| !t.trim().is_empty()) {
         bail!("iperlcritic does not support the \"theme\" option");
@@ -533,100 +647,26 @@ pub fn load(text: &str) -> Result<Profile> {
                 })?,
         ),
     };
-    let include: Vec<Regex> = get("include")
-        .unwrap_or("")
-        .split_ascii_whitespace()
-        .map(regex_ci)
-        .collect::<Result<_>>()?;
-    let exclude: Vec<Regex> = get("exclude")
-        .unwrap_or("")
-        .split_ascii_whitespace()
-        .map(regex_ci)
-        .collect::<Result<_>>()?;
-    let program_extensions = words(get("program-extensions").unwrap_or(""));
-    let verbose = get("verbose").unwrap_or("4");
-    let format = match parse_integer(verbose) {
-        Some(n) => {
-            // perlcritic names the file once it is given several, which
-            // a build always does.
-            let n = if verbose == "4" {
-                5
-            } else {
-                u32::try_from(n.unsigned_abs()).unwrap_or(u32::MAX)
-            };
-            numeric_format(n)
-                .unwrap_or_else(|| numeric_format(4).expect("format 4"))
-                .to_string()
-        }
-        None => interpolate(verbose)?,
+    let patterns = |option: &str| -> Result<Vec<Regex>> {
+        get(option)
+            .unwrap_or("")
+            .split_ascii_whitespace()
+            .map(regex_ci)
+            .collect()
     };
-    if format.contains("%d") {
-        bail!(
-            "iperlcritic does not support \"%d\" (the policy's diagnostics) in the verbose format"
-        );
-    }
+    let selection = Selection {
+        min_severity,
+        only,
+        include: patterns("include")?,
+        exclude: patterns("exclude")?,
+    };
+    let program_extensions = words(get("program-extensions").unwrap_or(""));
+    let format = report_format(get("verbose").unwrap_or("4"))?;
 
     let mut policies = Vec::new();
     for &(name, default_severity) in SITE_POLICIES {
-        let long = format!("Perl::Critic::Policy::{name}");
-        let section = sections.get(name);
-        let params = section.map(|s| s.2.clone()).unwrap_or_default();
-        let severity = match params.get("severity") {
-            Some(s) => severity_to_number(s).with_context(|| format!("Policy {name}: severity"))?,
-            None => default_severity,
-        };
-        // `_load_policies`, in its order: `only`, `[-Policy]`, `[Policy]`,
-        // the severity, then `include` and `exclude`.
-        let disabled = section.is_some_and(|s| s.0);
-        let named = section.is_some_and(|s| s.1);
-        let included = include.iter().any(|re| re.is_match(long.as_bytes()));
-        let excluded = exclude.iter().any(|re| re.is_match(long.as_bytes()));
-        let load_me =
-            ((named || (!only && !disabled)) && severity >= min_severity || included) && !excluded;
-        if !load_me {
-            continue;
-        }
-        let Some(policy) = Policy::from_short_name(name) else {
-            // ProhibitEvilVariables enables itself only once given
-            // variables to prohibit.
-            if name == "Variables::ProhibitEvilVariables"
-                && params.get("variables").is_none_or(|v| v.trim().is_empty())
-                && params
-                    .get("variables_file")
-                    .is_none_or(|v| v.trim().is_empty())
-            {
-                continue;
-            }
-            bail!("iperlcritic does not implement policy \"{name}\", which the profile enables");
-        };
-        for key in params.keys() {
-            let general = matches!(
-                key.as_str(),
-                "severity" | "maximum_violations_per_document" | "set_themes" | "add_themes"
-            );
-            if !general && !policy.parameters().contains(&key.as_str()) {
-                bail!("The \"{key}\" parameter is not supported by policy {name}");
-            }
-        }
-        let maximum_violations = match params.get("maximum_violations_per_document") {
-            Some(m) if !m.is_empty() && !m.eq_ignore_ascii_case("no_limit") => {
-                let n = parse_integer(m)
-                    .filter(|n| *n >= 0)
-                    .and_then(|n| usize::try_from(n).ok())
-                    .with_context(|| format!("The value for the {name} \"maximum_violations_per_document\" option (\"{m}\") is not an integer greater than or equal to zero"))?;
-                Some(n)
-            }
-            _ => policy.default_maximum_violations(),
-        };
-        let Some(settings) = policy_settings(policy, &params)? else {
-            continue;
-        };
-        policies.push(PolicyConfig {
-            policy,
-            severity,
-            maximum_violations,
-            settings,
-        });
+        let config = policy_config(name, default_severity, sections.get(name), &selection)?;
+        policies.extend(config);
     }
     if policies.is_empty() {
         bail!("There are no enabled policies.");

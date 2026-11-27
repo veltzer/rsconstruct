@@ -800,6 +800,96 @@ fn own_assignment<'a>(a: AssignmentData<'_>) -> AssignmentData<'a> {
     )
 }
 
+/// `getLiteralOfDataType`: the variable a word names, unless it is a flag.
+fn literal_of_data_type<'a>(
+    base: &'a Token,
+    t: &'a Token,
+    d: DataType<'a>,
+) -> Option<AssignmentData<'a>> {
+    let s = get_literal_string(t)?;
+    if s.starts_with('-') {
+        return None;
+    }
+    Some((b(base), b(t), s, d))
+}
+
+/// `getLiteral`: a variable set from outside the script.
+fn external_literal<'a>(base: &'a Token, t: &'a Token) -> Option<AssignmentData<'a>> {
+    literal_of_data_type(base, t, DataType::DataString(DataSource::External))
+}
+
+/// `getModifierParam`: the variable an argument of `declare` and its
+/// relatives assigns or names.
+fn modifier_param<'a>(base: &'a Token, array: bool, t: &'a Token) -> Vec<AssignmentData<'a>> {
+    match &t.inner {
+        TAssignment(_, name, _, value) => {
+            vec![(b(base), b(t), name.clone(), data_type_from(array, value))]
+        }
+        TNormalWord(_) => match get_literal_string(t) {
+            Some(name) if is_variable_name(&name) => {
+                let d = if array {
+                    DataType::DataArray(DataSource::Declaration)
+                } else {
+                    DataType::DataString(DataSource::Declaration)
+                };
+                vec![(b(base), b(t), name, d)]
+            }
+            _ => Vec::new(),
+        },
+        _ => Vec::new(),
+    }
+}
+
+/// The variables `read` sets.
+fn read_variables<'a>(base: &'a Token, rest: &'a [Token]) -> Vec<AssignmentData<'a>> {
+    let mut fallback: Vec<AssignmentData<'a>> = Vec::new();
+    for t in rest.iter().rev() {
+        match external_literal(base, t) {
+            Some(x) => fallback.push(x),
+            None => break,
+        }
+    }
+    match get_gnu_opts(FLAGS_FOR_READ, rest) {
+        None => fallback,
+        Some(parsed) => match parsed.iter().find(|(f, _)| f == "a") {
+            Some((_, (_, var))) => {
+                literal_of_data_type(base, var, DataType::DataArray(DataSource::External))
+                    .map_or(fallback, |x| vec![x])
+            }
+            None => parsed
+                .iter()
+                .filter(|(f, _)| f.is_empty())
+                .filter_map(|(_, (_, v))| external_literal(base, v))
+                .collect(),
+        },
+    }
+}
+
+/// The variables `let` assigns.
+fn let_variables<'a>(base: &'a Token, rest: &'a [Token]) -> Vec<AssignmentData<'a>> {
+    rest.iter()
+        .flat_map(|token| {
+            let var: String = concat_oversimplify(token)
+                .chars()
+                .skip_while(|c| *c == '+' || *c == '-')
+                .take_while(|&c| is_variable_char(c))
+                .collect();
+            if var.is_empty() {
+                Vec::new()
+            } else {
+                vec![(
+                    b(base),
+                    b(token),
+                    var,
+                    DataType::DataString(DataSource::From(vec![Cow::Owned(strip_equals_from(
+                        token,
+                    ))])),
+                )]
+            }
+        })
+        .collect()
+}
+
 /// The cases of `getModifiedVariableCommand` for a command named `x`.
 fn modified_variable_command_for<'a>(base: &'a Token, x: &str) -> Vec<AssignmentData<'a>> {
     let TSimpleCommand(cmd_prefix, words) = &base.inner else {
@@ -808,33 +898,10 @@ fn modified_variable_command_for<'a>(base: &'a Token, x: &str) -> Vec<Assignment
     let rest: &'a [Token] = &words[1..];
     let flags: Vec<String> = get_all_flags(base).into_iter().map(|(_, f)| f).collect();
     let has = |f: &str| flags.iter().any(|x| x == f);
-    let get_literal_of_data_type = |t: &'a Token, d: DataType<'a>| -> Option<AssignmentData<'a>> {
-        let s = get_literal_string(t)?;
-        if s.starts_with('-') {
-            return None;
-        }
-        Some((b(base), b(t), s, d))
-    };
-    let get_literal =
-        |t: &'a Token| get_literal_of_data_type(t, DataType::DataString(DataSource::External));
-    let get_modifier_param = |array: bool, t: &'a Token| -> Vec<AssignmentData<'a>> {
-        match &t.inner {
-            TAssignment(_, name, _, value) => {
-                vec![(b(base), b(t), name.clone(), data_type_from(array, value))]
-            }
-            TNormalWord(_) => match get_literal_string(t) {
-                Some(name) if is_variable_name(&name) => {
-                    let d = if array {
-                        DataType::DataArray(DataSource::Declaration)
-                    } else {
-                        DataType::DataString(DataSource::Declaration)
-                    };
-                    vec![(b(base), b(t), name, d)]
-                }
-                _ => Vec::new(),
-            },
-            _ => Vec::new(),
-        }
+    let modifier_params = |array: bool| -> Vec<AssignmentData<'a>> {
+        rest.iter()
+            .flat_map(|t| modifier_param(base, array, t))
+            .collect()
     };
     match x {
         "builtin" => {
@@ -844,85 +911,32 @@ fn modified_variable_command_for<'a>(base: &'a Token, x: &str) -> Vec<Assignment
                 .map(own_assignment)
                 .collect()
         }
-        "read" => {
-            let mut fallback: Vec<AssignmentData<'a>> = Vec::new();
-            for t in rest.iter().rev() {
-                match get_literal(t) {
-                    Some(x) => fallback.push(x),
-                    None => break,
-                }
-            }
-            match get_gnu_opts(FLAGS_FOR_READ, rest) {
-                None => fallback,
-                Some(parsed) => match parsed.iter().find(|(f, _)| f == "a") {
-                    Some((_, (_, var))) => {
-                        get_literal_of_data_type(var, DataType::DataArray(DataSource::External))
-                            .map_or(fallback, |x| vec![x])
-                    }
-                    None => parsed
-                        .iter()
-                        .filter(|(f, _)| f.is_empty())
-                        .filter_map(|(_, (_, v))| get_literal(v))
-                        .collect(),
-                },
-            }
-        }
+        "read" => read_variables(base, rest),
         "getopts" => match rest {
-            [_, var, ..] => get_literal(var).into_iter().collect(),
+            [_, var, ..] => external_literal(base, var).into_iter().collect(),
             _ => Vec::new(),
         },
-        "let" => rest
-            .iter()
-            .flat_map(|token| {
-                let var: String = concat_oversimplify(token)
-                    .chars()
-                    .skip_while(|c| *c == '+' || *c == '-')
-                    .take_while(|&c| is_variable_char(c))
-                    .collect();
-                if var.is_empty() {
-                    Vec::new()
-                } else {
-                    vec![(
-                        b(base),
-                        b(token),
-                        var,
-                        DataType::DataString(DataSource::From(vec![Cow::Owned(
-                            strip_equals_from(token),
-                        )])),
-                    )]
-                }
-            })
-            .collect(),
+        "let" => let_variables(base, rest),
         "export" => {
             if has("f") {
                 Vec::new()
             } else {
-                rest.iter()
-                    .flat_map(|t| get_modifier_param(false, t))
-                    .collect()
+                modifier_params(false)
             }
         }
         "declare" | "typeset" => {
             if has("F") || has("f") || has("p") {
                 Vec::new()
             } else {
-                let array = has("a") || has("A");
-                rest.iter()
-                    .flat_map(|t| get_modifier_param(array, t))
-                    .collect()
+                modifier_params(has("a") || has("A"))
             }
         }
-        "local" => rest
-            .iter()
-            .flat_map(|t| get_modifier_param(false, t))
-            .collect(),
+        "local" => modifier_params(false),
         "readonly" => {
             if has("f") || has("p") {
                 Vec::new()
             } else {
-                rest.iter()
-                    .flat_map(|t| get_modifier_param(false, t))
-                    .collect()
+                modifier_params(false)
             }
         }
         "set" => get_set_params(rest).map_or_else(Vec::new, |params| {

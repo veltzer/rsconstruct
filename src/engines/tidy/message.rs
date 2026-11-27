@@ -31,7 +31,7 @@ impl Level {
 
 /// The report codes itidy can emit (the non-accessibility rows of tidy's
 /// dispatch table).
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, strum::EnumIter)]
 pub enum Code {
     AddedMissingCharset,
     AnchorNotUnique,
@@ -168,26 +168,12 @@ impl Code {
             AddedMissingCharset, AnchorDuplicated, AnchorNotUnique, AposUndefined,
             AttrValueNotLcase, AttributeIsNotAllowed, AttributeValueReplaced, BackslashInUri,
             BadAttributeValue, BadAttributeValueReplaced, BadCdataContent, BadSummaryHtml5,
-            BadSurrogateLead, BadSurrogatePair, BadSurrogateTail, BlankTitleElement, CantBeNested,
-            CoerceToEndtag, ContentAfterBody, CustomTagDetected, DiscardingUnexpected,
-            DoctypeAfterTags, DuplicateFrameset, ElementVersMismatchError, ElementVersMismatchWarn,
+            BadSurrogateLead, BadSurrogatePair, BadSurrogateTail, CantBeNested, CoerceToEndtag,
+            ContentAfterBody, CustomTagDetected, DiscardingUnexpected, DoctypeAfterTags,
+            DuplicateFrameset, ElementVersMismatchError, ElementVersMismatchWarn,
             EscapedIllegalUri, FixedBackslash, FoundStyleInBody, IdNameMismatch, IllegalNesting,
             IllegalUriCodepoint, IllegalUriReference, InsertingAutoAttribute, InsertingTag,
             InvalidAttribute, InvalidNcr, InvalidUtf8, InvalidXmlId, JoiningAttribute,
-            MalformedComment, MalformedCommentDropping, MalformedCommentEos, MalformedCommentWarn,
-            MalformedDoctype, MismatchedAttributeError, MismatchedAttributeWarn, MissingAttrValue,
-            MissingAttribute, MissingDoctype, MissingEndtagBefore, MissingEndtagFor,
-            MissingEndtagOptional, MissingImagemap, MissingQuotemark, MissingQuotemarkOpen,
-            MissingSemicolon, MissingSemicolonNcr, MissingStarttag, MissingTitleElement,
-            MovedStyleToHead, NestedEmphasis, NestedQuotation, NewlineInUri, NoframesContent,
-            NonMatchingEndtag, ObsoleteElement, PreviousLocation, ProprietaryAttrValue,
-            ProprietaryAttribute, ProprietaryElement, RemovedHtml5, RepeatedAttribute,
-            ReplacingElement, ReplacingUnexElement, SpacePrecedingXmldecl, StringContentLooks,
-            StringDoctypeGiven, StringNoSysid, SuspectedMissingQuote, TagNotAllowedIn,
-            TooManyElementsIn, TrimEmptyElement, UnescapedAmpersand, UnexpectedEndOfFile,
-            UnexpectedEndOfFileAttr, UnexpectedEqualsign, UnexpectedGt, UnexpectedQuotemark,
-            UnknownElement, UnknownElementLooksCustom, UnknownEntity, UsingBrInplaceOf, WhiteInUri,
-            XmlDeclarationDetected, XmlIdSyntax,
         };
         match self {
             AddedMissingCharset => "Added appropriate missing <meta charset=...> to %s",
@@ -235,6 +221,30 @@ impl Code {
             InvalidUtf8 => "%s invalid UTF-8 bytes (char. code %s)",
             InvalidXmlId => "%s cannot copy name attribute to id",
             JoiningAttribute => "%s joining values of repeated attribute \"%s\"",
+            _ => self.text_from_malformed(),
+        }
+    }
+
+    /// [`Self::text`] for the codes from `MalformedComment` on. The test
+    /// `every_code_has_a_text` checks that the two cover every code.
+    const fn text_from_malformed(self) -> &'static str {
+        use Code::{
+            BlankTitleElement, MalformedComment, MalformedCommentDropping, MalformedCommentEos,
+            MalformedCommentWarn, MalformedDoctype, MismatchedAttributeError,
+            MismatchedAttributeWarn, MissingAttrValue, MissingAttribute, MissingDoctype,
+            MissingEndtagBefore, MissingEndtagFor, MissingEndtagOptional, MissingImagemap,
+            MissingQuotemark, MissingQuotemarkOpen, MissingSemicolon, MissingSemicolonNcr,
+            MissingStarttag, MissingTitleElement, MovedStyleToHead, NestedEmphasis,
+            NestedQuotation, NewlineInUri, NoframesContent, NonMatchingEndtag, ObsoleteElement,
+            PreviousLocation, ProprietaryAttrValue, ProprietaryAttribute, ProprietaryElement,
+            RemovedHtml5, RepeatedAttribute, ReplacingElement, ReplacingUnexElement,
+            SpacePrecedingXmldecl, StringContentLooks, StringDoctypeGiven, StringNoSysid,
+            SuspectedMissingQuote, TagNotAllowedIn, TooManyElementsIn, TrimEmptyElement,
+            UnescapedAmpersand, UnexpectedEndOfFile, UnexpectedEndOfFileAttr, UnexpectedEqualsign,
+            UnexpectedGt, UnexpectedQuotemark, UnknownElement, UnknownElementLooksCustom,
+            UnknownEntity, UsingBrInplaceOf, WhiteInUri, XmlDeclarationDetected, XmlIdSyntax,
+        };
+        match self {
             MalformedComment => "tidy replaced adjacent \"-\" with \"=\"",
             MalformedCommentDropping => "dropping a possible comment due to a missing hyphen",
             MalformedCommentEos => {
@@ -301,6 +311,8 @@ impl Code {
             }
             XmlIdSyntax => "%s ID \"%s\" uses XML ID syntax",
             BlankTitleElement => "blank 'title' element",
+            // `text` has the other codes.
+            _ => unreachable!(),
         }
     }
 }
@@ -719,3 +731,18 @@ impl Doc {
 /// `doc->badChars` bits that matter here: only whether anything was seen.
 pub const BC_INVALID_UTF8: u32 = 4;
 pub const BC_OTHER: u32 = 1;
+
+#[cfg(test)]
+mod tests {
+    use super::Code;
+    use strum::IntoEnumIterator;
+
+    /// `text` is split over two functions, so the compiler no longer
+    /// checks that every code is in one of them.
+    #[test]
+    fn every_code_has_a_text() {
+        for code in Code::iter() {
+            assert!(!code.text().is_empty(), "{code:?}");
+        }
+    }
+}

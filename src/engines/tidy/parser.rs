@@ -20,6 +20,14 @@ use super::{
 
 const XHTML_NAMESPACE: &str = "http://www.w3.org/1999/xhtml";
 
+/// The frames of the document `ParseHTML` is reading: its first
+/// `frameset`, and the `noframes` element inside it.
+#[derive(Default)]
+struct Frames {
+    frameset: Option<NodeId>,
+    noframes: Option<NodeId>,
+}
+
 impl Doc {
     fn showing_body_only(&self) -> bool {
         self.opts.show_body_only == TriState::Yes
@@ -2693,20 +2701,16 @@ impl Doc {
         self.report(Some(frameset), node_opt, Code::MissingEndtagFor);
     }
 
-    /// `TY_(ParseHTML)`.
-    fn parse_html(&mut self, html: NodeId, mode: TokenMode) {
-        let mut frameset: Option<NodeId> = None;
-        let mut noframes: Option<NodeId> = None;
-        let head;
+    /// `TY_(ParseHTML)`, up to the head: the `head` element, inferred when
+    /// the document has none.
+    fn html_head(&mut self, html: NodeId) -> NodeId {
         loop {
             let node = self.get_token(TokenMode::IgnoreWhitespace);
             let Some(node) = node else {
-                head = self.inferred_tag(TagId::Head);
-                break;
+                return self.inferred_tag(TagId::Head);
             };
             if self.node_is(node, TagId::Head) {
-                head = node;
-                break;
+                return node;
             }
             if self.tags_equal(node, html) && self.ntype(node) == NodeType::EndTag {
                 self.report(Some(html), Some(node), Code::DiscardingUnexpected);
@@ -2720,17 +2724,158 @@ impl Doc {
                 continue;
             }
             self.unget_token();
-            head = self.inferred_tag(TagId::Head);
-            break;
+            return self.inferred_tag(TagId::Head);
         }
+    }
+
+    /// `TY_(ParseHTML)`, a `body` tag after the head: the body element,
+    /// or `None` when the tag is dropped or goes into `noframes`.
+    fn html_body_tag(
+        &mut self,
+        html: NodeId,
+        node: NodeId,
+        mode: TokenMode,
+        frames: &mut Frames,
+    ) -> Option<NodeId> {
+        if self.ntype(node) != NodeType::StartTag {
+            self.report(Some(html), Some(node), Code::DiscardingUnexpected);
+            return None;
+        }
+        let Some(fs) = frames.frameset else {
+            self.constrain_version(!VERS_FRAMESET);
+            return Some(node);
+        };
+        self.unget_token();
+        let nf = match frames.noframes {
+            None => {
+                let nf = self.inferred_tag(TagId::Noframes);
+                self.tree.insert_node_at_end(fs, nf);
+                self.report(Some(html), Some(nf), Code::InsertingTag);
+                frames.noframes = Some(nf);
+                nf
+            }
+            Some(nf) => {
+                if self.ntype(nf) == NodeType::StartEndTag {
+                    self.tree.node_mut(nf).ntype = NodeType::StartTag;
+                }
+                nf
+            }
+        };
+        self.parse_tag(nf, mode);
+        None
+    }
+
+    /// `TY_(ParseHTML)`, a `frameset` tag after the head.
+    fn html_frameset_tag(
+        &mut self,
+        html: NodeId,
+        node: NodeId,
+        mode: TokenMode,
+        frames: &mut Frames,
+    ) {
+        if self.ntype(node) != NodeType::StartTag {
+            self.report(Some(html), Some(node), Code::DiscardingUnexpected);
+            return;
+        }
+        if frames.frameset.is_some() {
+            self.report(Some(html), Some(node), Code::DuplicateFrameset);
+        }
+        let fs = *frames.frameset.get_or_insert(node);
+        self.tree.insert_node_at_end(html, node);
+        self.parse_tag(node, mode);
+        let mut child = self.tree.content(fs);
+        while let Some(c) = child {
+            if self.node_is(c, TagId::Noframes) {
+                frames.noframes = Some(c);
+            }
+            child = self.tree.next(c);
+        }
+    }
+
+    /// `TY_(ParseHTML)`, a `noframes` tag after the head: an inferred
+    /// body when there is no frameset for it, else `None`.
+    fn html_noframes_tag(
+        &mut self,
+        html: NodeId,
+        node: NodeId,
+        mode: TokenMode,
+        frames: &mut Frames,
+    ) -> Option<NodeId> {
+        if self.ntype(node) != NodeType::StartTag {
+            self.report(Some(html), Some(node), Code::DiscardingUnexpected);
+            return None;
+        }
+        let Some(fs) = frames.frameset else {
+            self.report(Some(html), Some(node), Code::DiscardingUnexpected);
+            return Some(self.inferred_tag(TagId::Body));
+        };
+        if frames.noframes.is_none() {
+            self.tree.insert_node_at_end(fs, node);
+        }
+        let nf = *frames.noframes.get_or_insert(node);
+        self.parse_tag(nf, mode);
+        None
+    }
+
+    /// `TY_(ParseHTML)`, anything else after the head: it starts the body,
+    /// which is inferred, unless it belongs in the head or in `noframes`.
+    fn html_body_content(
+        &mut self,
+        html: NodeId,
+        node: NodeId,
+        mode: TokenMode,
+        frames: &mut Frames,
+    ) -> Option<NodeId> {
+        if self.is_element(node) {
+            if (self.node_model(node) & CM_HEAD) != 0 {
+                self.move_to_head(html, node);
+                return None;
+            }
+            if frames.frameset.is_some() && self.node_is(node, TagId::Frame) {
+                self.report(Some(html), Some(node), Code::DiscardingUnexpected);
+                return None;
+            }
+        }
+        self.unget_token();
+        let Some(fs) = frames.frameset else {
+            let body = self.inferred_tag(TagId::Body);
+            if !self.showing_body_only() {
+                self.report(Some(html), Some(body), Code::InsertingTag);
+            }
+            self.constrain_version(!VERS_FRAMESET);
+            return Some(body);
+        };
+        let nf = match frames.noframes {
+            None => {
+                let nf = self.inferred_tag(TagId::Noframes);
+                self.tree.insert_node_at_end(fs, nf);
+                frames.noframes = Some(nf);
+                nf
+            }
+            Some(nf) => {
+                self.report(Some(html), Some(node), Code::NoframesContent);
+                if self.ntype(nf) == NodeType::StartEndTag {
+                    self.tree.node_mut(nf).ntype = NodeType::StartTag;
+                }
+                nf
+            }
+        };
+        self.constrain_version(VERS_FRAMESET);
+        self.parse_tag(nf, mode);
+        None
+    }
+
+    /// `TY_(ParseHTML)`.
+    fn parse_html(&mut self, html: NodeId, mode: TokenMode) {
+        let head = self.html_head(html);
         self.tree.insert_node_at_end(html, head);
         self.parse_head(head);
 
-        let body;
-        loop {
+        let mut frames = Frames::default();
+        let body = loop {
             let node = self.get_token(TokenMode::IgnoreWhitespace);
-            let Some(mut node) = node else {
-                if frameset.is_none() {
+            let Some(node) = node else {
+                if frames.frameset.is_none() {
                     let node = self.inferred_tag(TagId::Body);
                     self.tree.insert_node_at_end(html, node);
                     self.parse_body(node, mode);
@@ -2738,7 +2883,7 @@ impl Doc {
                 return;
             };
             if self.tags_equal(node, html) {
-                if self.ntype(node) != NodeType::StartTag && frameset.is_none() {
+                if self.ntype(node) != NodeType::StartTag && frames.frameset.is_none() {
                     self.report(Some(html), Some(node), Code::DiscardingUnexpected);
                 }
                 continue;
@@ -2746,112 +2891,20 @@ impl Doc {
             if self.insert_misc(html, node) {
                 continue;
             }
-            if self.node_is(node, TagId::Body) {
-                if self.ntype(node) != NodeType::StartTag {
-                    self.report(Some(html), Some(node), Code::DiscardingUnexpected);
-                    continue;
-                }
-                if let Some(fs) = frameset {
-                    self.unget_token();
-                    match noframes {
-                        None => {
-                            let nf = self.inferred_tag(TagId::Noframes);
-                            self.tree.insert_node_at_end(fs, nf);
-                            self.report(Some(html), Some(nf), Code::InsertingTag);
-                            noframes = Some(nf);
-                        }
-                        Some(nf) => {
-                            if self.ntype(nf) == NodeType::StartEndTag {
-                                self.tree.node_mut(nf).ntype = NodeType::StartTag;
-                            }
-                        }
-                    }
-                    let nf = noframes.expect("noframes was just set");
-                    self.parse_tag(nf, mode);
-                    continue;
-                }
-                self.constrain_version(!VERS_FRAMESET);
-                body = node;
-                break;
+            let found = if self.node_is(node, TagId::Body) {
+                self.html_body_tag(html, node, mode, &mut frames)
+            } else if self.node_is(node, TagId::Frameset) {
+                self.html_frameset_tag(html, node, mode, &mut frames);
+                None
+            } else if self.node_is(node, TagId::Noframes) {
+                self.html_noframes_tag(html, node, mode, &mut frames)
+            } else {
+                self.html_body_content(html, node, mode, &mut frames)
+            };
+            if let Some(body) = found {
+                break body;
             }
-            if self.node_is(node, TagId::Frameset) {
-                if self.ntype(node) != NodeType::StartTag {
-                    self.report(Some(html), Some(node), Code::DiscardingUnexpected);
-                    continue;
-                }
-                if frameset.is_some() {
-                    self.report(Some(html), Some(node), Code::DuplicateFrameset);
-                } else {
-                    frameset = Some(node);
-                }
-                self.tree.insert_node_at_end(html, node);
-                self.parse_tag(node, mode);
-                let fs = frameset.expect("frameset was just set");
-                let mut child = self.tree.content(fs);
-                while let Some(c) = child {
-                    if self.node_is(c, TagId::Noframes) {
-                        noframes = Some(c);
-                    }
-                    child = self.tree.next(c);
-                }
-                continue;
-            }
-            if self.node_is(node, TagId::Noframes) {
-                if self.ntype(node) != NodeType::StartTag {
-                    self.report(Some(html), Some(node), Code::DiscardingUnexpected);
-                    continue;
-                }
-                let Some(fs) = frameset else {
-                    self.report(Some(html), Some(node), Code::DiscardingUnexpected);
-                    body = self.inferred_tag(TagId::Body);
-                    break;
-                };
-                if noframes.is_none() {
-                    noframes = Some(node);
-                    self.tree.insert_node_at_end(fs, node);
-                }
-                let nf = noframes.expect("noframes is set");
-                self.parse_tag(nf, mode);
-                continue;
-            }
-            if self.is_element(node) {
-                if (self.node_model(node) & CM_HEAD) != 0 {
-                    self.move_to_head(html, node);
-                    continue;
-                }
-                if frameset.is_some() && self.node_is(node, TagId::Frame) {
-                    self.report(Some(html), Some(node), Code::DiscardingUnexpected);
-                    continue;
-                }
-            }
-            self.unget_token();
-            if let Some(fs) = frameset {
-                match noframes {
-                    None => {
-                        let nf = self.inferred_tag(TagId::Noframes);
-                        self.tree.insert_node_at_end(fs, nf);
-                        noframes = Some(nf);
-                    }
-                    Some(nf) => {
-                        self.report(Some(html), Some(node), Code::NoframesContent);
-                        if self.ntype(nf) == NodeType::StartEndTag {
-                            self.tree.node_mut(nf).ntype = NodeType::StartTag;
-                        }
-                    }
-                }
-                self.constrain_version(VERS_FRAMESET);
-                let nf = noframes.expect("noframes is set");
-                self.parse_tag(nf, mode);
-                continue;
-            }
-            node = self.inferred_tag(TagId::Body);
-            if !self.showing_body_only() {
-                self.report(Some(html), Some(node), Code::InsertingTag);
-            }
-            self.constrain_version(!VERS_FRAMESET);
-            body = node;
-            break;
-        }
+        };
         self.tree.insert_node_at_end(html, body);
         self.parse_tag(body, mode);
     }

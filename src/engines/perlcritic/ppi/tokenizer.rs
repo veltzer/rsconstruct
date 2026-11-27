@@ -1090,6 +1090,122 @@ impl Parser {
         Ok(Rv::One)
     }
 
+    /// `(` after white space: a prototype, a signature or plain structure.
+    fn whitespace_on_paren(&mut self) -> R {
+        if self.token.is_some() {
+            self.finalize();
+        }
+        let (has_sig, tokens) = self.current_token_has_signatures_active()?;
+        if has_sig {
+            return Ok(Rv::Class(Class::StructureToken));
+        }
+        let p0 = tokens.first().copied();
+        let p1 = tokens.get(1).copied();
+        let p2 = tokens.get(2).copied();
+        if self.token_isa(p0, Class::Word)
+            && self.token_is(p1, Class::Word, b"sub")
+            && (p2.is_none()
+                || self.token_isa(p2, Class::StructureToken)
+                || self.token_is(p2, Class::Whitespace, b"")
+                || (self.token_isa(p2, Class::Word)
+                    && p2.is_some_and(|t| matches!(self.content_of(t), b"my" | b"our" | b"state"))))
+        {
+            return Ok(Rv::Class(Class::Prototype));
+        }
+        if self.token_is(p0, Class::Word, b"sub") && !self.token_is(p1, Class::Operator, b"->") {
+            return Ok(Rv::Class(Class::Prototype));
+        }
+        Ok(Rv::Class(Class::StructureToken))
+    }
+
+    /// `<` after white space: an operator or the start of a readline.
+    fn whitespace_on_less_than(&mut self) -> Rv {
+        if self.token.is_some() {
+            self.finalize();
+        }
+        let prev = self.last_significant_token();
+        for class in [
+            Class::Symbol,
+            Class::Magic,
+            Class::Number,
+            Class::ArrayIndex,
+        ] {
+            if self.token_isa(prev, class) {
+                return Rv::Class(Class::Operator);
+            }
+        }
+        let next = (self.at(self.cursor + 1), self.at(self.cursor + 2));
+        if next.0 == Some(b'<') && next.1.is_some_and(|c| c != b'>') {
+            return Rv::Class(Class::Operator);
+        }
+        let Some(prev) = prev else {
+            return Rv::Class(Class::Operator);
+        };
+        let before = self.content_of(prev);
+        let structure = self.doc.isa(prev, Class::StructureToken);
+        let operator = self.doc.isa(prev, Class::Operator);
+        if (structure && (before == b"(" || before == b";"))
+            || (self.doc.isa(prev, Class::Word) && before == b"while")
+            || (operator && (before == b"=" || before == b","))
+        {
+            return Rv::Class(Class::QuoteLikeReadline);
+        }
+        // After a `}`: `\G<(?!\d)\w+>` is almost surely a readline.
+        if structure && before == b"}" {
+            let line = self.line();
+            let pos = self.pos();
+            if line.get(pos) == Some(&b'<')
+                && line
+                    .get(pos + 1)
+                    .is_some_and(|&c| is_word(c) && !c.is_ascii_digit())
+                && line.get(pos + 1 + line[pos + 1..].iter().take_while(|&&c| is_word(c)).count())
+                    == Some(&b'>')
+            {
+                return Rv::Class(Class::QuoteLikeReadline);
+            }
+        }
+        Rv::Class(Class::Operator)
+    }
+
+    /// `/` after white space: a division or the start of a match.
+    fn whitespace_on_slash(&mut self) -> Rv {
+        if self.token.is_some() {
+            self.finalize();
+        }
+        let Some(prev) = self.last_significant_token() else {
+            return Rv::Class(Class::RegexpMatch);
+        };
+        let before = self.content_of(prev).to_vec();
+        if self.doc.isa(prev, Class::Operator) {
+            return Rv::Class(Class::RegexpMatch);
+        }
+        if self.doc.isa(prev, Class::Symbol) {
+            return Rv::Class(Class::Operator);
+        }
+        if before == b"]" && self.doc.isa(prev, Class::StructureToken) {
+            return Rv::Class(Class::Operator);
+        }
+        if self.doc.isa(prev, Class::Number) {
+            return Rv::Class(Class::Operator);
+        }
+        if self.doc.isa(prev, Class::StructureToken)
+            && matches!(before.as_slice(), b"(" | b"{" | b";")
+        {
+            return Rv::Class(Class::RegexpMatch);
+        }
+        if matches!(
+            before.as_slice(),
+            b"return" | b"split" | b"if" | b"unless" | b"grep" | b"map"
+        ) && self.doc.isa(prev, Class::Word)
+        {
+            return Rv::Class(Class::RegexpMatch);
+        }
+        if matches!(self.at(self.cursor + 1), Some(b'^' | b'[' | b'\\')) {
+            return Rv::Class(Class::RegexpMatch);
+        }
+        Rv::Class(Class::Operator)
+    }
+
     fn whitespace_on_char(&mut self) -> R {
         let c = self.at(self.cursor);
         let ch = c.unwrap_or(0);
@@ -1115,121 +1231,9 @@ impl Parser {
             _ => {}
         }
         match ch {
-            b'(' => {
-                if self.token.is_some() {
-                    self.finalize();
-                }
-                let (has_sig, tokens) = self.current_token_has_signatures_active()?;
-                if has_sig {
-                    return Ok(Rv::Class(Class::StructureToken));
-                }
-                let p0 = tokens.first().copied();
-                let p1 = tokens.get(1).copied();
-                let p2 = tokens.get(2).copied();
-                if self.token_isa(p0, Class::Word)
-                    && self.token_is(p1, Class::Word, b"sub")
-                    && (p2.is_none()
-                        || self.token_isa(p2, Class::StructureToken)
-                        || self.token_is(p2, Class::Whitespace, b"")
-                        || (self.token_isa(p2, Class::Word)
-                            && p2.is_some_and(|t| {
-                                matches!(self.content_of(t), b"my" | b"our" | b"state")
-                            })))
-                {
-                    return Ok(Rv::Class(Class::Prototype));
-                }
-                if self.token_is(p0, Class::Word, b"sub")
-                    && !self.token_is(p1, Class::Operator, b"->")
-                {
-                    return Ok(Rv::Class(Class::Prototype));
-                }
-                Ok(Rv::Class(Class::StructureToken))
-            }
-            b'<' => {
-                if self.token.is_some() {
-                    self.finalize();
-                }
-                let prev = self.last_significant_token();
-                for class in [
-                    Class::Symbol,
-                    Class::Magic,
-                    Class::Number,
-                    Class::ArrayIndex,
-                ] {
-                    if self.token_isa(prev, class) {
-                        return Ok(Rv::Class(Class::Operator));
-                    }
-                }
-                let next = (self.at(self.cursor + 1), self.at(self.cursor + 2));
-                if next.0 == Some(b'<') && next.1.is_some_and(|c| c != b'>') {
-                    return Ok(Rv::Class(Class::Operator));
-                }
-                let Some(prev) = prev else {
-                    return Ok(Rv::Class(Class::Operator));
-                };
-                let before = self.content_of(prev);
-                let structure = self.doc.isa(prev, Class::StructureToken);
-                let operator = self.doc.isa(prev, Class::Operator);
-                if (structure && (before == b"(" || before == b";"))
-                    || (self.doc.isa(prev, Class::Word) && before == b"while")
-                    || (operator && (before == b"=" || before == b","))
-                {
-                    return Ok(Rv::Class(Class::QuoteLikeReadline));
-                }
-                // After a `}`: `\G<(?!\d)\w+>` is almost surely a readline.
-                if structure && before == b"}" {
-                    let line = self.line();
-                    let pos = self.pos();
-                    if line.get(pos) == Some(&b'<')
-                        && line
-                            .get(pos + 1)
-                            .is_some_and(|&c| is_word(c) && !c.is_ascii_digit())
-                        && line.get(
-                            pos + 1 + line[pos + 1..].iter().take_while(|&&c| is_word(c)).count(),
-                        ) == Some(&b'>')
-                    {
-                        return Ok(Rv::Class(Class::QuoteLikeReadline));
-                    }
-                }
-                Ok(Rv::Class(Class::Operator))
-            }
-            b'/' => {
-                if self.token.is_some() {
-                    self.finalize();
-                }
-                let Some(prev) = self.last_significant_token() else {
-                    return Ok(Rv::Class(Class::RegexpMatch));
-                };
-                let before = self.content_of(prev).to_vec();
-                if self.doc.isa(prev, Class::Operator) {
-                    return Ok(Rv::Class(Class::RegexpMatch));
-                }
-                if self.doc.isa(prev, Class::Symbol) {
-                    return Ok(Rv::Class(Class::Operator));
-                }
-                if before == b"]" && self.doc.isa(prev, Class::StructureToken) {
-                    return Ok(Rv::Class(Class::Operator));
-                }
-                if self.doc.isa(prev, Class::Number) {
-                    return Ok(Rv::Class(Class::Operator));
-                }
-                if self.doc.isa(prev, Class::StructureToken)
-                    && matches!(before.as_slice(), b"(" | b"{" | b";")
-                {
-                    return Ok(Rv::Class(Class::RegexpMatch));
-                }
-                if matches!(
-                    before.as_slice(),
-                    b"return" | b"split" | b"if" | b"unless" | b"grep" | b"map"
-                ) && self.doc.isa(prev, Class::Word)
-                {
-                    return Ok(Rv::Class(Class::RegexpMatch));
-                }
-                if matches!(self.at(self.cursor + 1), Some(b'^' | b'[' | b'\\')) {
-                    return Ok(Rv::Class(Class::RegexpMatch));
-                }
-                Ok(Rv::Class(Class::Operator))
-            }
+            b'(' => self.whitespace_on_paren(),
+            b'<' => Ok(self.whitespace_on_less_than()),
+            b'/' => Ok(self.whitespace_on_slash()),
             b'x' => {
                 if self.current_x_is_operator() {
                     let next = self.at(self.cursor + 1);

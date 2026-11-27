@@ -562,6 +562,167 @@ impl Checker {
         self.av_pend_colon = b'O';
     }
 
+    /// `annotate_values`, for white space, casts, types and preprocessor
+    /// lines at the start of `cur`: the number of bytes taken.
+    fn annotate_layout(&mut self, cur: &[u8], ty: &mut u8) -> Option<usize> {
+        let taken: usize;
+        if let Some(c) = self.m(r"^(\s+)", cur) {
+            taken = c.s(1).len();
+            if c.s(1).contains(&b'\n') && self.av_preprocessor {
+                *ty = self.av_paren_type.pop().unwrap_or(0);
+                self.av_preprocessor = false;
+            }
+        } else if let Some(c) = self
+            .m(r"^(\(\s*$Type\s*)\)", cur)
+            .filter(|_| self.av_pending == b'_')
+        {
+            taken = c.s(1).len();
+            self.av_paren_type.push(*ty);
+            *ty = b'c';
+        } else if let Some(c) = self.m(r"^($Type)\s*(?:$Ident|,|\)|\(|\s*$)", cur) {
+            taken = c.s(1).len();
+            *ty = b'T';
+        } else if let Some(c) = self.m(r"^($Modifier)\s*", cur) {
+            taken = c.s(1).len();
+            *ty = b'T';
+        } else if let Some(c) = self.m(r"^(\#\s*define\s*$Ident)(\(?)", cur) {
+            taken = c.s(1).len();
+            self.av_preprocessor = true;
+            self.av_paren_type.push(*ty);
+            if !c.s(2).is_empty() {
+                self.av_pending = b'N';
+            }
+            *ty = b'E';
+        } else if let Some(c) = self.m(r"^(\#\s*(?:undef\s*$Ident|include\b))", cur) {
+            taken = c.s(1).len();
+            self.av_preprocessor = true;
+            self.av_paren_type.push(*ty);
+        } else if let Some(c) = self.m(r"^(\#\s*(?:ifdef|ifndef|if))", cur) {
+            taken = c.s(1).len();
+            self.av_preprocessor = true;
+            self.av_paren_type.push(*ty);
+            self.av_paren_type.push(*ty);
+            *ty = b'E';
+        } else if let Some(c) = self.m(r"^(\#\s*(?:else|elif))", cur) {
+            taken = c.s(1).len();
+            self.av_preprocessor = true;
+            let top = *self.av_paren_type.last().expect("a paren type");
+            self.av_paren_type.push(top);
+            *ty = b'E';
+        } else if let Some(c) = self.m(r"^(\#\s*(?:endif))", cur) {
+            taken = c.s(1).len();
+            self.av_preprocessor = true;
+            self.av_paren_type.pop();
+            self.av_paren_type.push(*ty);
+            *ty = b'E';
+        } else {
+            taken = self.m(r"^(\\\n)", cur)?.s(1).len();
+        }
+        Some(taken)
+    }
+
+    /// `annotate_values`, for keywords, parentheses, identifiers and
+    /// statement ends.
+    fn annotate_word(&mut self, cur: &[u8], ty: &mut u8) -> Option<usize> {
+        let taken: usize;
+        if let Some(c) = self.m(r"^(__attribute__)\s*\(?", cur) {
+            taken = c.s(1).len();
+            self.av_pending = *ty;
+            *ty = b'N';
+        } else if let Some(c) = self.m(r"^(sizeof)\s*(\()?", cur) {
+            taken = c.s(1).len();
+            if c.defined(2) {
+                self.av_pending = b'V';
+            }
+            *ty = b'N';
+        } else if let Some(c) = self.m(r"^(if|while|for)\b", cur) {
+            taken = c.s(1).len();
+            self.av_pending = b'E';
+            *ty = b'N';
+        } else if let Some(c) = self.m(r"^(case)", cur) {
+            taken = c.s(1).len();
+            self.av_pend_colon = b'C';
+            *ty = b'N';
+        } else if let Some(c) = self.m(r"^(return|else|goto|typeof|__typeof__)\b", cur) {
+            taken = c.s(1).len();
+            *ty = b'N';
+        } else if let Some(c) = self.m(r"^(\()", cur) {
+            taken = c.s(1).len();
+            self.av_paren_type.push(self.av_pending);
+            self.av_pending = b'_';
+            *ty = b'N';
+        } else if let Some(c) = self.m(r"^(\))", cur) {
+            taken = c.s(1).len();
+            let new_type = self.av_paren_type.pop().unwrap_or(0);
+            if new_type != b'_' {
+                *ty = new_type;
+            }
+        } else if let Some(c) = self.m(r"^($Ident)\s*\(", cur) {
+            taken = c.s(1).len();
+            *ty = b'V';
+            self.av_pending = b'V';
+        } else if let Some(c) = self.m(r"^($Ident\s*):(?:\s*\d+\s*(,|=|;))?", cur) {
+            taken = c.s(1).len();
+            if c.defined(2) && *ty == b'C' || *ty == b'T' {
+                self.av_pend_colon = b'B';
+            } else if *ty == b'E' {
+                self.av_pend_colon = b'L';
+            }
+            *ty = b'V';
+        } else if let Some(c) = self.m(r"^($Ident|$Constant)", cur) {
+            taken = c.s(1).len();
+            *ty = b'V';
+        } else if let Some(c) = self.m(r"^($Assignment)", cur) {
+            taken = c.s(1).len();
+            *ty = b'N';
+        } else {
+            taken = self.m(r"^(;|{|})", cur)?.s(1).len();
+            *ty = b'E';
+            self.av_pend_colon = b'O';
+        }
+        Some(taken)
+    }
+
+    /// `annotate_values`, for the operators and whatever is left. `var`
+    /// is the variant of the operator at this position.
+    fn annotate_operator(&mut self, cur: &[u8], ty: &mut u8, var: &mut u8) -> usize {
+        let taken: usize;
+        if let Some(c) = self.m(r"^(,)", cur) {
+            taken = c.s(1).len();
+            *ty = b'C';
+        } else if let Some(c) = self.m(r"^(\?)", cur) {
+            taken = c.s(1).len();
+            *ty = b'N';
+        } else if let Some(c) = self.m(r"^(:)", cur) {
+            taken = c.s(1).len();
+            *var = self.av_pend_colon;
+            *ty = if self.av_pend_colon == b'C' || self.av_pend_colon == b'L' {
+                b'E'
+            } else {
+                b'N'
+            };
+            self.av_pend_colon = b'O';
+        } else if let Some(c) = self.m(r"^(\[)", cur) {
+            taken = c.s(1).len();
+            *ty = b'N';
+        } else if let Some(c) = self.m(r"^(-(?![->])|\+(?!\+)|\*|\&\&|\&)", cur) {
+            taken = c.s(1).len();
+            *var = if *ty == b'V' { b'B' } else { b'U' };
+            *ty = b'N';
+        } else if let Some(c) = self.m(r"^($Operators)", cur) {
+            taken = c.s(1).len();
+            let op = c.s(1);
+            if op != b"++" && op != b"--" {
+                *ty = b'N';
+            }
+        } else if let Some(c) = self.m(r"(^.)", cur) {
+            taken = c.s(1).len();
+        } else {
+            unreachable!("annotate_values: every character is matched");
+        }
+        taken
+    }
+
     /// `annotate_values`: the value type at each character of `stream`
     /// (`res`), and the variant of each operator (`var`).
     pub(super) fn annotate_values(&mut self, stream: &[u8], mut ty: u8) -> (Vec<u8>, Vec<u8>) {
@@ -572,145 +733,12 @@ impl Checker {
             if self.av_paren_type.is_empty() {
                 self.av_paren_type.push(b'E');
             }
-            let taken: usize;
-            if let Some(c) = self.m(r"^(\s+)", cur) {
-                taken = c.s(1).len();
-                if c.s(1).contains(&b'\n') && self.av_preprocessor {
-                    ty = self.av_paren_type.pop().unwrap_or(0);
-                    self.av_preprocessor = false;
-                }
-            } else if let Some(c) = self
-                .m(r"^(\(\s*$Type\s*)\)", cur)
-                .filter(|_| self.av_pending == b'_')
-            {
-                taken = c.s(1).len();
-                self.av_paren_type.push(ty);
-                ty = b'c';
-            } else if let Some(c) = self.m(r"^($Type)\s*(?:$Ident|,|\)|\(|\s*$)", cur) {
-                taken = c.s(1).len();
-                ty = b'T';
-            } else if let Some(c) = self.m(r"^($Modifier)\s*", cur) {
-                taken = c.s(1).len();
-                ty = b'T';
-            } else if let Some(c) = self.m(r"^(\#\s*define\s*$Ident)(\(?)", cur) {
-                taken = c.s(1).len();
-                self.av_preprocessor = true;
-                self.av_paren_type.push(ty);
-                if !c.s(2).is_empty() {
-                    self.av_pending = b'N';
-                }
-                ty = b'E';
-            } else if let Some(c) = self.m(r"^(\#\s*(?:undef\s*$Ident|include\b))", cur) {
-                taken = c.s(1).len();
-                self.av_preprocessor = true;
-                self.av_paren_type.push(ty);
-            } else if let Some(c) = self.m(r"^(\#\s*(?:ifdef|ifndef|if))", cur) {
-                taken = c.s(1).len();
-                self.av_preprocessor = true;
-                self.av_paren_type.push(ty);
-                self.av_paren_type.push(ty);
-                ty = b'E';
-            } else if let Some(c) = self.m(r"^(\#\s*(?:else|elif))", cur) {
-                taken = c.s(1).len();
-                self.av_preprocessor = true;
-                let top = *self.av_paren_type.last().expect("a paren type");
-                self.av_paren_type.push(top);
-                ty = b'E';
-            } else if let Some(c) = self.m(r"^(\#\s*(?:endif))", cur) {
-                taken = c.s(1).len();
-                self.av_preprocessor = true;
-                self.av_paren_type.pop();
-                self.av_paren_type.push(ty);
-                ty = b'E';
-            } else if let Some(c) = self.m(r"^(\\\n)", cur) {
-                taken = c.s(1).len();
-            } else if let Some(c) = self.m(r"^(__attribute__)\s*\(?", cur) {
-                taken = c.s(1).len();
-                self.av_pending = ty;
-                ty = b'N';
-            } else if let Some(c) = self.m(r"^(sizeof)\s*(\()?", cur) {
-                taken = c.s(1).len();
-                if c.defined(2) {
-                    self.av_pending = b'V';
-                }
-                ty = b'N';
-            } else if let Some(c) = self.m(r"^(if|while|for)\b", cur) {
-                taken = c.s(1).len();
-                self.av_pending = b'E';
-                ty = b'N';
-            } else if let Some(c) = self.m(r"^(case)", cur) {
-                taken = c.s(1).len();
-                self.av_pend_colon = b'C';
-                ty = b'N';
-            } else if let Some(c) = self.m(r"^(return|else|goto|typeof|__typeof__)\b", cur) {
-                taken = c.s(1).len();
-                ty = b'N';
-            } else if let Some(c) = self.m(r"^(\()", cur) {
-                taken = c.s(1).len();
-                self.av_paren_type.push(self.av_pending);
-                self.av_pending = b'_';
-                ty = b'N';
-            } else if let Some(c) = self.m(r"^(\))", cur) {
-                taken = c.s(1).len();
-                let new_type = self.av_paren_type.pop().unwrap_or(0);
-                if new_type != b'_' {
-                    ty = new_type;
-                }
-            } else if let Some(c) = self.m(r"^($Ident)\s*\(", cur) {
-                taken = c.s(1).len();
-                ty = b'V';
-                self.av_pending = b'V';
-            } else if let Some(c) = self.m(r"^($Ident\s*):(?:\s*\d+\s*(,|=|;))?", cur) {
-                taken = c.s(1).len();
-                if c.defined(2) && ty == b'C' || ty == b'T' {
-                    self.av_pend_colon = b'B';
-                } else if ty == b'E' {
-                    self.av_pend_colon = b'L';
-                }
-                ty = b'V';
-            } else if let Some(c) = self.m(r"^($Ident|$Constant)", cur) {
-                taken = c.s(1).len();
-                ty = b'V';
-            } else if let Some(c) = self.m(r"^($Assignment)", cur) {
-                taken = c.s(1).len();
-                ty = b'N';
-            } else if let Some(c) = self.m(r"^(;|{|})", cur) {
-                taken = c.s(1).len();
-                ty = b'E';
-                self.av_pend_colon = b'O';
-            } else if let Some(c) = self.m(r"^(,)", cur) {
-                taken = c.s(1).len();
-                ty = b'C';
-            } else if let Some(c) = self.m(r"^(\?)", cur) {
-                taken = c.s(1).len();
-                ty = b'N';
-            } else if let Some(c) = self.m(r"^(:)", cur) {
-                taken = c.s(1).len();
-                var[res.len()] = self.av_pend_colon;
-                ty = if self.av_pend_colon == b'C' || self.av_pend_colon == b'L' {
-                    b'E'
-                } else {
-                    b'N'
-                };
-                self.av_pend_colon = b'O';
-            } else if let Some(c) = self.m(r"^(\[)", cur) {
-                taken = c.s(1).len();
-                ty = b'N';
-            } else if let Some(c) = self.m(r"^(-(?![->])|\+(?!\+)|\*|\&\&|\&)", cur) {
-                taken = c.s(1).len();
-                var[res.len()] = if ty == b'V' { b'B' } else { b'U' };
-                ty = b'N';
-            } else if let Some(c) = self.m(r"^($Operators)", cur) {
-                taken = c.s(1).len();
-                let op = c.s(1);
-                if op != b"++" && op != b"--" {
-                    ty = b'N';
-                }
-            } else if let Some(c) = self.m(r"(^.)", cur) {
-                taken = c.s(1).len();
-            } else {
-                unreachable!("annotate_values: every character is matched");
+            let mut step = self.annotate_layout(cur, &mut ty);
+            if step.is_none() {
+                step = self.annotate_word(cur, &mut ty);
             }
+            let taken =
+                step.unwrap_or_else(|| self.annotate_operator(cur, &mut ty, &mut var[res.len()]));
             cur = &cur[taken..];
             if ty != 0 {
                 res.extend(std::iter::repeat_n(ty, taken));

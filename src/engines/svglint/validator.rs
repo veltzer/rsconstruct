@@ -132,12 +132,48 @@ fn json_string(s: &str) -> String {
     serde_json::to_string(s).unwrap_or_else(|_| format!("{s:?}"))
 }
 
+/// A closing tag: it must be well formed and close the innermost open tag,
+/// which is taken off `tags`.
+fn close_tag(
+    x: &[u16],
+    tags: &mut Vec<OpenTag>,
+    tag_name: &str,
+    tag_closed: bool,
+    attr_str: &[u16],
+) -> Result<(), String> {
+    if !tag_closed {
+        return Err(format!(
+            "Closing tag '{tag_name}' doesn't have proper closing."
+        ));
+    } else if !trim(attr_str).is_empty() {
+        return Err(format!(
+            "Closing tag '{tag_name}' can't have attributes or invalid starting."
+        ));
+    }
+    let Some(open) = tags.pop() else {
+        return Err(format!("Closing tag '{tag_name}' has not been opened."));
+    };
+    if tag_name != open.name {
+        let (line, col) = line_col(x, open.start);
+        return Err(format!(
+            "Expected closing tag '{}' (opened in line {line}, col {col}) instead of closing tag '{tag_name}'.",
+            open.name
+        ));
+    }
+    Ok(())
+}
+
 impl Validator {
     fn at(&self, i: usize) -> Option<u16> {
         self.x.get(i).copied()
     }
 
     fn run(&self) -> Option<String> {
+        self.check().err()
+    }
+
+    /// The first thing wrong with the document, as the message to report.
+    fn check(&self) -> Result<(), String> {
         let x = &self.x;
         let len = x.len();
         let mut tags: Vec<OpenTag> = Vec::new();
@@ -146,11 +182,7 @@ impl Validator {
         let mut i = 0usize;
         while i < len {
             if x[i] == LT && self.at(i + 1) == Some(QUESTION) {
-                i += 2;
-                i = match self.read_pi(i) {
-                    Ok(i) => i,
-                    Err(msg) => return Some(msg),
-                };
+                i = self.read_pi(i + 2)?;
             } else if x[i] == LT {
                 let tag_start = i;
                 i += 1;
@@ -159,75 +191,33 @@ impl Validator {
                     i += 1;
                     continue;
                 }
-                let mut closing = false;
-                if self.at(i) == Some(SLASH) {
-                    closing = true;
+                let closing = self.at(i) == Some(SLASH);
+                if closing {
                     i += 1;
                 }
-                let name_start = i;
-                while i < len
-                    && x[i] != GT
-                    && x[i] != SPACE
-                    && x[i] != u16::from(b'\t')
-                    && x[i] != u16::from(b'\n')
-                    && x[i] != u16::from(b'\r')
-                {
-                    i += 1;
-                }
-                let mut name_units = trim(&x[name_start..i]).to_vec();
-                if name_units.last() == Some(&SLASH) {
-                    name_units.pop();
-                    i -= 1;
-                }
-                let tag_name = utf16(&name_units);
-                if !is_name(&tag_name) {
-                    if trim(&name_units).is_empty() {
-                        return Some("Invalid space after '<'.".to_string());
-                    }
-                    return Some(format!("Tag '{tag_name}' is an invalid name."));
-                }
-                let Some((mut attr_str, after, tag_closed)) = self.read_attribute_str(i) else {
-                    return Some(format!("Attributes for '{tag_name}' have open quote."));
+                let (tag_name, after_name) = self.read_tag_name(i)?;
+                let Some((mut attr_str, after, tag_closed)) = self.read_attribute_str(after_name)
+                else {
+                    return Err(format!("Attributes for '{tag_name}' have open quote."));
                 };
                 i = after;
                 if attr_str.last() == Some(&SLASH) {
                     attr_str.pop();
                     if let Some(msg) = validate_attribute_string(&attr_str) {
-                        return Some(msg);
+                        return Err(msg);
                     }
                     tag_found = true;
                 } else if closing {
-                    if !tag_closed {
-                        return Some(format!(
-                            "Closing tag '{tag_name}' doesn't have proper closing."
-                        ));
-                    } else if !trim(&attr_str).is_empty() {
-                        return Some(format!(
-                            "Closing tag '{tag_name}' can't have attributes or invalid starting."
-                        ));
-                    } else if tags.is_empty() {
-                        return Some(format!("Closing tag '{tag_name}' has not been opened."));
-                    }
-                    let open = tags.pop().unwrap_or(OpenTag {
-                        name: String::new(),
-                        start: 0,
-                    });
-                    if tag_name != open.name {
-                        let (line, col) = line_col(x, open.start);
-                        return Some(format!(
-                            "Expected closing tag '{}' (opened in line {line}, col {col}) instead of closing tag '{tag_name}'.",
-                            open.name
-                        ));
-                    }
+                    close_tag(x, &mut tags, &tag_name, tag_closed, &attr_str)?;
                     if tags.is_empty() {
                         reached_root = true;
                     }
                 } else {
                     if let Some(msg) = validate_attribute_string(&attr_str) {
-                        return Some(msg);
+                        return Err(msg);
                     }
                     if reached_root {
-                        return Some("Multiple possible root nodes found.".to_string());
+                        return Err("Multiple possible root nodes found.".to_string());
                     }
                     tags.push(OpenTag {
                         name: tag_name,
@@ -235,64 +225,92 @@ impl Validator {
                     });
                     tag_found = true;
                 }
-
-                // The text after the tag, with the comments, CDATA sections
-                // and processing instructions inside it.
-                i += 1;
-                while i < len {
-                    if x[i] == LT {
-                        if self.at(i + 1) == Some(BANG) {
-                            i += 1;
-                            i = self.read_comment_and_cdata(i);
-                            i += 1;
-                            continue;
-                        } else if self.at(i + 1) == Some(QUESTION) {
-                            i += 1;
-                            i = match self.read_pi(i) {
-                                Ok(i) => i,
-                                Err(msg) => return Some(msg),
-                            };
-                        } else {
-                            break;
-                        }
-                    } else if x[i] == AMP {
-                        let after_amp = self.validate_ampersand(i);
-                        let Some(after_amp) = after_amp else {
-                            return Some("char '&' is not expected.".to_string());
-                        };
-                        i = after_amp;
-                    } else if reached_root && !is_ws(x[i]) {
-                        return Some("Extra text at the end".to_string());
-                    }
-                    i += 1;
-                }
-                if self.at(i) == Some(LT) {
-                    i -= 1;
-                }
+                i = self.skip_text(i + 1, reached_root)?;
             } else {
                 if is_ws(x[i]) {
                     i += 1;
                     continue;
                 }
-                return Some(format!("char '{}' is not expected.", utf16(&x[i..=i])));
+                return Err(format!("char '{}' is not expected.", utf16(&x[i..=i])));
             }
             i += 1;
         }
 
         if !tag_found {
-            return Some("Start tag expected.".to_string());
+            return Err("Start tag expected.".to_string());
         }
         if tags.len() == 1 {
-            return Some(format!("Unclosed tag '{}'.", tags[0].name));
+            return Err(format!("Unclosed tag '{}'.", tags[0].name));
         }
         if !tags.is_empty() {
             let names: Vec<String> = tags
                 .iter()
                 .map(|t| format!("    {}", json_string(&t.name)))
                 .collect();
-            return Some(format!("Invalid '[{}]' found.", names.join(",")));
+            return Err(format!("Invalid '[{}]' found.", names.join(",")));
         }
-        None
+        Ok(())
+    }
+
+    /// The name of the tag that starts at `i`, and the index after it.
+    fn read_tag_name(&self, mut i: usize) -> Result<(String, usize), String> {
+        let x = &self.x;
+        let name_start = i;
+        while i < x.len()
+            && x[i] != GT
+            && x[i] != SPACE
+            && x[i] != u16::from(b'\t')
+            && x[i] != u16::from(b'\n')
+            && x[i] != u16::from(b'\r')
+        {
+            i += 1;
+        }
+        let mut name_units = trim(&x[name_start..i]).to_vec();
+        if name_units.last() == Some(&SLASH) {
+            name_units.pop();
+            i -= 1;
+        }
+        let tag_name = utf16(&name_units);
+        if !is_name(&tag_name) {
+            if trim(&name_units).is_empty() {
+                return Err("Invalid space after '<'.".to_string());
+            }
+            return Err(format!("Tag '{tag_name}' is an invalid name."));
+        }
+        Ok((tag_name, i))
+    }
+
+    /// The text after a tag, from `i`, with the comments, CDATA sections
+    /// and processing instructions inside it. Returns the index of its
+    /// last unit.
+    fn skip_text(&self, mut i: usize, reached_root: bool) -> Result<usize, String> {
+        let x = &self.x;
+        while i < x.len() {
+            if x[i] == LT {
+                if self.at(i + 1) == Some(BANG) {
+                    i += 1;
+                    i = self.read_comment_and_cdata(i);
+                    i += 1;
+                    continue;
+                } else if self.at(i + 1) == Some(QUESTION) {
+                    i += 1;
+                    i = self.read_pi(i)?;
+                } else {
+                    break;
+                }
+            } else if x[i] == AMP {
+                i = self
+                    .validate_ampersand(i)
+                    .ok_or_else(|| "char '&' is not expected.".to_string())?;
+            } else if reached_root && !is_ws(x[i]) {
+                return Err("Extra text at the end".to_string());
+            }
+            i += 1;
+        }
+        if self.at(i) == Some(LT) {
+            i -= 1;
+        }
+        Ok(i)
     }
 
     /// `readPI`: skip a processing instruction. `Ok(i)` is the index to

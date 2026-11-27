@@ -280,29 +280,7 @@ impl Composer<'_, '_> {
                 Ok(node)
             }
             EventData::SequenceStart { anchor, tag, .. } => {
-                let resolved = match tag {
-                    Some(t) if t != "!" => short_tag(&t),
-                    _ => "!!seq".to_string(),
-                };
-                if let Some(name) = &anchor {
-                    self.anchors.push(AnchorDef {
-                        name: name.clone(),
-                        line,
-                        column,
-                        node: None,
-                        used: false,
-                    });
-                }
-                let mut node = Node {
-                    kind: Kind::Sequence,
-                    tag: resolved,
-                    value: String::new(),
-                    quoted: false,
-                    line,
-                    column,
-                    content: Vec::new(),
-                    anchor: anchor.clone(),
-                };
+                let mut node = self.open_collection(Kind::Sequence, anchor, tag, line, column);
                 loop {
                     let item = self.next()?;
                     if matches!(item.data, EventData::SequenceEnd) {
@@ -311,35 +289,11 @@ impl Composer<'_, '_> {
                     let child = self.compose(item)?;
                     node.content.push(child);
                 }
-                if let Some(name) = anchor {
-                    self.complete_anchor(&name, &node);
-                }
+                self.close_collection(&node);
                 Ok(node)
             }
             EventData::MappingStart { anchor, tag, .. } => {
-                let resolved = match tag {
-                    Some(t) if t != "!" => short_tag(&t),
-                    _ => "!!map".to_string(),
-                };
-                if let Some(name) = &anchor {
-                    self.anchors.push(AnchorDef {
-                        name: name.clone(),
-                        line,
-                        column,
-                        node: None,
-                        used: false,
-                    });
-                }
-                let mut node = Node {
-                    kind: Kind::Mapping,
-                    tag: resolved,
-                    value: String::new(),
-                    quoted: false,
-                    line,
-                    column,
-                    content: Vec::new(),
-                    anchor: anchor.clone(),
-                };
+                let mut node = self.open_collection(Kind::Mapping, anchor, tag, line, column);
                 loop {
                     let key_event = self.next()?;
                     if matches!(key_event.data, EventData::MappingEnd) {
@@ -351,53 +305,98 @@ impl Composer<'_, '_> {
                     node.content.push(key);
                     node.content.push(value);
                 }
-                if let Some(name) = anchor {
-                    self.complete_anchor(&name, &node);
-                }
+                self.close_collection(&node);
                 Ok(node)
             }
-            EventData::Alias { anchor } => {
-                // The latest definition of the name, as go-yaml resolves it.
-                let Some(def) = self.anchors.iter_mut().rev().find(|d| d.name == anchor) else {
-                    return Err(YamlError {
-                        message: format!("yaml: unknown anchor '{anchor}' referenced"),
-                        line: 0,
-                        column: 0,
-                    });
-                };
-                def.used = true;
-                if let Some(target) = &def.node {
-                    // actionlint replaces the alias by the anchored node
-                    // itself, positions included.
-                    return Ok(target.clone());
-                }
-                // Recursive: the anchored node is still being built.
-                let (decl_line, decl_column) = (def.line, def.column);
-                self.anchor_errors.push((
-                    format!(
-                        "recursive alias {} is found. anchor was declared at line:{decl_line}, column:{decl_column}",
-                        go_quote(&anchor)
-                    ),
-                    line,
-                    column,
-                ));
-                Ok(Node {
-                    kind: Kind::Alias,
-                    tag: String::new(),
-                    value: anchor,
-                    quoted: false,
-                    line,
-                    column,
-                    content: Vec::new(),
-                    anchor: None,
-                })
-            }
+            EventData::Alias { anchor } => self.compose_alias(anchor, line, column),
             other => Err(YamlError {
                 message: format!("unexpected YAML event {other:?}"),
                 line,
                 column,
             }),
         }
+    }
+
+    /// The empty node of a sequence or a mapping that starts here. Its
+    /// anchor is declared at once, with no node yet, so that an alias
+    /// inside the collection is seen to be recursive.
+    fn open_collection(
+        &mut self,
+        kind: Kind,
+        anchor: Option<String>,
+        tag: Option<String>,
+        line: u32,
+        column: u32,
+    ) -> Node {
+        let resolved = match tag {
+            Some(t) if t != "!" => short_tag(&t),
+            _ if kind == Kind::Sequence => "!!seq".to_string(),
+            _ => "!!map".to_string(),
+        };
+        if let Some(name) = &anchor {
+            self.anchors.push(AnchorDef {
+                name: name.clone(),
+                line,
+                column,
+                node: None,
+                used: false,
+            });
+        }
+        Node {
+            kind,
+            tag: resolved,
+            value: String::new(),
+            quoted: false,
+            line,
+            column,
+            content: Vec::new(),
+            anchor,
+        }
+    }
+
+    /// A sequence or a mapping is complete: so is its anchor.
+    fn close_collection(&mut self, node: &Node) {
+        if let Some(name) = &node.anchor {
+            self.complete_anchor(name, node);
+        }
+    }
+
+    /// An alias: the node its anchor names.
+    fn compose_alias(&mut self, anchor: String, line: u32, column: u32) -> Result<Node, YamlError> {
+        // The latest definition of the name, as go-yaml resolves it.
+        let Some(def) = self.anchors.iter_mut().rev().find(|d| d.name == anchor) else {
+            return Err(YamlError {
+                message: format!("yaml: unknown anchor '{anchor}' referenced"),
+                line: 0,
+                column: 0,
+            });
+        };
+        def.used = true;
+        if let Some(target) = &def.node {
+            // actionlint replaces the alias by the anchored node
+            // itself, positions included.
+            return Ok(target.clone());
+        }
+        // Recursive: the anchored node is still being built.
+        let (decl_line, decl_column) = (def.line, def.column);
+        self.anchor_errors.push((
+            format!(
+                "recursive alias {} is found. anchor was declared at line:{decl_line}, column:{decl_column}",
+                go_quote(&anchor)
+            ),
+            line,
+            column,
+        ));
+        Ok(Node {
+            kind: Kind::Alias,
+            tag: String::new(),
+            value: anchor,
+            quoted: false,
+            line,
+            column,
+            content: Vec::new(),
+            anchor: None,
+        })
     }
 }
 

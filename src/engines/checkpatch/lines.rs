@@ -39,6 +39,26 @@ const DO_WHILE_0_ADVICE: &str = "
    Enjoy this qualification while we work to improve our heuristics.
 ";
 
+/// One operator of a line, as `operator_spacing` sees it.
+struct OpSite {
+    /// The operator.
+    op: Vec<u8>,
+    /// The operator with its variant (`*U`, `:C`).
+    opv: Vec<u8>,
+    /// What is before and after it, as in `(ctx:WxV)`.
+    ctx: Vec<u8>,
+    /// The line before the operator.
+    ca: Vec<u8>,
+    /// The line after the operator.
+    cc: Vec<u8>,
+    /// The `(ctx:...)` text of the message.
+    at_: Vec<u8>,
+    /// The line with a pointer to the operator under it.
+    hereptr: Vec<u8>,
+    /// Whether the line goes on after the operator.
+    has_next: bool,
+}
+
 /// `process`'s variables that live across lines.
 #[derive(Default)]
 struct P {
@@ -2495,6 +2515,178 @@ impl Checker {
         }
     }
 
+    /// What is before an operator: `ca` is the line up to it, `el` the
+    /// element right before it.
+    fn spacing_before(&self, ca: &[u8], el: &[u8]) -> u8 {
+        // The Perl assigns these in turn, the last matching one wins:
+        // here the tests run from the last assignment to the first.
+        if self.t(r"^\s*$", ca) {
+            b'E'
+        } else if el.is_empty() {
+            b'O'
+        } else if self.t(r"(\[|\()$", el) {
+            b'B'
+        } else if self.t(r"$;$", el) {
+            b'C'
+        } else if self.t(r"\s$", el) {
+            b'W'
+        } else {
+            b'V'
+        }
+    }
+
+    /// What is after an operator: `next` is the element that follows it.
+    fn spacing_after(&self, next: &[u8]) -> u8 {
+        // As for `spacing_before`: the Perl's last matching assignment
+        // wins, so the tests run from the last to the first.
+        if self.t(r"^\s*\\$", next) {
+            b'E'
+        } else if next.is_empty() {
+            b'O'
+        } else if self.t(r"^(\)|\]|;)", next) {
+            b'B'
+        } else if self.t(r"^$;", next) {
+            b'C'
+        } else if self.t(r"^\s", next) {
+            b'W'
+        } else {
+            b'V'
+        }
+    }
+
+    /// Whether the spacing around the operator matches `tpl`.
+    fn op_ctx(&self, s: &OpSite, tpl: &'static str) -> bool {
+        self.t(tpl, &s.ctx)
+    }
+
+    /// Report the spacing of the operator, as an error or as a check.
+    fn op_report(&mut self, s: &OpSite, error: bool, what: &[u8]) {
+        let msg = cat(&[what, b" '", &s.op, b"' ", &s.at_, b"\n", &s.hereptr]);
+        if error {
+            self.error("SPACING", &msg);
+        } else {
+            self.chk("SPACING", &msg);
+        }
+    }
+
+    /// The spacing rules of one operator: the separators and the unary
+    /// operators here, the rest in `check_binary_operator`.
+    fn check_operator(&mut self, p: &P, s: &OpSite) {
+        let op = s.op.as_slice();
+        let opv = s.opv.as_slice();
+        if op == b";" {
+            // ; should have either the end of line or a space or \ after it
+            if !self.op_ctx(s, r".x[WEBC]") && !self.t(r"^\\", &s.cc) && !self.t(r"^;", &s.cc) {
+                self.op_report(s, true, b"space required after that");
+            }
+        } else if op == b"//" || opv == b":B" {
+            // a comment, or a bitfield's colon
+        } else if op == b"->" {
+            // No spaces for: ->
+            if self.op_ctx(s, r"Wx.|.xW") {
+                self.op_report(s, true, b"spaces prohibited around that");
+            }
+        } else if op == b"," {
+            // , must not have a space before and must have a space on the right.
+            if self.op_ctx(s, r"Wx.") {
+                self.op_report(s, true, b"space prohibited before that");
+            }
+            if !self.op_ctx(s, r".x[WEC]") && !self.t(r"^}", &s.cc) {
+                self.op_report(s, true, b"space required after that");
+            }
+        } else if opv == b"*_" {
+            // '*' as part of a type definition -- reported already.
+        } else if op == b"!"
+            || op == b"~"
+            || opv == b"*U"
+            || opv == b"-U"
+            || opv == b"&U"
+            || opv == b"&&U"
+        {
+            // unary operators should have a space before and
+            // none after.  May be left adjacent to another
+            // unary operator, or a cast
+            if !self.op_ctx(s, r"[WEBC]x.")
+                && !self.t(r"(?:\)|!|~|\*|-|\&|\||\+\+|\-\-|\{)$", &s.ca)
+            {
+                self.op_report(s, true, b"space required before that");
+            }
+            if op == b"*" && self.t(r"\s*$Modifier\b", &s.cc) {
+                // A unary '*' may be const
+            } else if self.op_ctx(s, r".xW") {
+                self.op_report(s, true, b"space prohibited after that");
+            }
+        } else if op == b"++" || op == b"--" {
+            // unary ++ and unary -- are allowed no space on one side.
+            if !self.op_ctx(s, r"[WEOBC]x[^W]") && !self.op_ctx(s, r"[^W]x[WOBEC]") {
+                self.op_report(s, true, b"space required one side of that");
+            }
+            if self.op_ctx(s, r"Wx[BE]") || (self.op_ctx(s, r"Wx.") && self.t(r"^;", &s.cc)) {
+                self.op_report(s, true, b"space prohibited before that");
+            }
+            if self.op_ctx(s, r"ExW") {
+                self.op_report(s, true, b"space prohibited after that");
+            }
+        } else {
+            self.check_binary_operator(p, s);
+        }
+    }
+
+    /// The spacing rules of the binary operators, the colons and
+    /// everything `check_operator` does not name.
+    fn check_binary_operator(&mut self, p: &P, s: &OpSite) {
+        let op = s.op.as_slice();
+        let opv = s.opv.as_slice();
+        if [
+            &b"<<"[..],
+            b">>",
+            b"&",
+            b"^",
+            b"|",
+            b"+",
+            b"-",
+            b"*",
+            b"/",
+            b"%",
+        ]
+        .contains(&op)
+        {
+            // << and >> may either have or not have spaces both sides
+            if self.switches.check {
+                if s.has_next && !self.op_ctx(s, r"[EW]x[EW]") {
+                    self.op_report(s, false, b"spaces preferred around that");
+                } else if !s.has_next && !self.op_ctx(s, r"Wx[OE]") {
+                    self.op_report(s, false, b"space preferred before that");
+                }
+            } else if self.op_ctx(s, r"Wx[^WCE]|[^WCE]xW") {
+                self.op_report(s, true, b"need consistent spacing around");
+            }
+        } else if opv == b":C" || opv == b":L" {
+            // A colon needs no spaces before when it is
+            // terminating a case value or a label.
+            if self.op_ctx(s, r"Wx.") && !self.t(r".*\.lds\.h$", &p.realfile) {
+                self.op_report(s, true, b"space prohibited before that");
+            }
+        } else if !self.op_ctx(s, r"[EWC]x[CWE]") {
+            // All the others need spaces both sides.
+            // Ignore email addresses <foo@bar>
+            let email = (op == b"<" && self.t(r"^\S+\@\S+>", &s.cc))
+                || (op == b">" && self.t(r"<\S+\@\S+$", &s.ca));
+
+            // for asm volatile statements
+            // ignore a colon with another
+            // colon immediately before or after
+            let asm_colon = op == b":" && (self.t(r":$", &s.ca) || self.t(r"^:", &s.cc));
+            let ok = email || asm_colon;
+
+            // messages are ERROR, but ?: are CHK
+            if !ok {
+                let chk = (op == b"?:" || op == b"?" || op == b":") && self.op_ctx(s, r"VxV");
+                self.op_report(s, !chk, b"spaces required around that");
+            }
+        }
+    }
+
     fn operator_spacing(&mut self, p: &P, l: &L) {
         let opline = &l.opline;
         let elements = split(&self.re(r"($ops|;)", ""), opline);
@@ -2518,42 +2710,11 @@ impl Checker {
                 Vec::new()
             };
 
-            let el = &elements[idx];
-            // The Perl assigns these in turn, the last matching one wins:
-            // here the tests run from the last assignment to the first.
-            let a: u8 = if self.t(r"^\s*$", &ca) {
-                b'E'
-            } else if el.is_empty() {
-                b'O'
-            } else if self.t(r"(\[|\()$", el) {
-                b'B'
-            } else if self.t(r"$;$", el) {
-                b'C'
-            } else if self.t(r"\s$", el) {
-                b'W'
-            } else {
-                b'V'
-            };
-
+            let a = self.spacing_before(&ca, &elements[idx]);
             let op = elements[idx + 1].clone();
-
-            // As for `a`: the Perl's last matching assignment wins, so the
-            // tests run from the last to the first.
-            let c: u8 = elements.get(idx + 2).map_or(b'E', |next| {
-                if self.t(r"^\s*\\$", next) {
-                    b'E'
-                } else if next.is_empty() {
-                    b'O'
-                } else if self.t(r"^(\)|\]|;)", next) {
-                    b'B'
-                } else if self.t(r"^$;", next) {
-                    b'C'
-                } else if self.t(r"^\s", next) {
-                    b'W'
-                } else {
-                    b'V'
-                }
-            });
+            let c = elements
+                .get(idx + 2)
+                .map_or(b'E', |next| self.spacing_after(next));
 
             let mut ctx = Vec::new();
             if a != 0 {
@@ -2573,121 +2734,20 @@ impl Checker {
             // Get the full operator variant.
             let opv = cat(&[&op, &substr_s(&l.curr_vars, off, Some(1))]);
 
-            let ctx_m = |this: &Self, tpl: &'static str| this.t(tpl, &ctx);
-            let report = |this: &mut Self, error: bool, what: &[u8]| {
-                let msg = cat(&[what, b" '", &op, b"' ", &at_, b"\n", &hereptr]);
-                if error {
-                    this.error("SPACING", &msg);
-                } else {
-                    this.chk("SPACING", &msg);
-                }
-            };
-
             // Ignore operators passed as parameters.
-            if op_type != b"V" && self.t(r"\s$", &ca) && self.t(r"^\s*[,\)]", &cc) {
-            } else if op == b";" {
-                // ; should have either the end of line or a space or \ after it
-                if !ctx_m(self, r".x[WEBC]") && !self.t(r"^\\", &cc) && !self.t(r"^;", &cc) {
-                    report(self, true, b"space required after that");
-                }
-            } else if op == b"//" || opv == b":B" {
-                // a comment, or a bitfield's colon
-            } else if op == b"->" {
-                // No spaces for: ->
-                if ctx_m(self, r"Wx.|.xW") {
-                    report(self, true, b"spaces prohibited around that");
-                }
-            } else if op == b"," {
-                // , must not have a space before and must have a space on the right.
-                if ctx_m(self, r"Wx.") {
-                    report(self, true, b"space prohibited before that");
-                }
-                if !ctx_m(self, r".x[WEC]") && !self.t(r"^}", &cc) {
-                    report(self, true, b"space required after that");
-                }
-            } else if opv == b"*_" {
-                // '*' as part of a type definition -- reported already.
-            } else if op == b"!"
-                || op == b"~"
-                || opv == b"*U"
-                || opv == b"-U"
-                || opv == b"&U"
-                || opv == b"&&U"
-            {
-                // unary operators should have a space before and
-                // none after.  May be left adjacent to another
-                // unary operator, or a cast
-                if !ctx_m(self, r"[WEBC]x.") && !self.t(r"(?:\)|!|~|\*|-|\&|\||\+\+|\-\-|\{)$", &ca)
-                {
-                    report(self, true, b"space required before that");
-                }
-                if op == b"*" && self.t(r"\s*$Modifier\b", &cc) {
-                    // A unary '*' may be const
-                } else if ctx_m(self, r".xW") {
-                    report(self, true, b"space prohibited after that");
-                }
-            } else if op == b"++" || op == b"--" {
-                // unary ++ and unary -- are allowed no space on one side.
-                if !ctx_m(self, r"[WEOBC]x[^W]") && !ctx_m(self, r"[^W]x[WOBEC]") {
-                    report(self, true, b"space required one side of that");
-                }
-                if ctx_m(self, r"Wx[BE]") || (ctx_m(self, r"Wx.") && self.t(r"^;", &cc)) {
-                    report(self, true, b"space prohibited before that");
-                }
-                if ctx_m(self, r"ExW") {
-                    report(self, true, b"space prohibited after that");
-                }
-            } else if [
-                &b"<<"[..],
-                b">>",
-                b"&",
-                b"^",
-                b"|",
-                b"+",
-                b"-",
-                b"*",
-                b"/",
-                b"%",
-            ]
-            .contains(&op.as_slice())
-            {
-                // << and >> may either have or not have spaces both sides
-                if self.switches.check {
-                    if fix_elements.get(idx + 2).is_some_and(Option::is_some)
-                        && !ctx_m(self, r"[EW]x[EW]")
-                    {
-                        report(self, false, b"spaces preferred around that");
-                    } else if !fix_elements.get(idx + 2).is_some_and(Option::is_some)
-                        && !ctx_m(self, r"Wx[OE]")
-                    {
-                        report(self, false, b"space preferred before that");
-                    }
-                } else if ctx_m(self, r"Wx[^WCE]|[^WCE]xW") {
-                    report(self, true, b"need consistent spacing around");
-                }
-            } else if opv == b":C" || opv == b":L" {
-                // A colon needs no spaces before when it is
-                // terminating a case value or a label.
-                if ctx_m(self, r"Wx.") && !self.t(r".*\.lds\.h$", &p.realfile) {
-                    report(self, true, b"space prohibited before that");
-                }
-            } else if !ctx_m(self, r"[EWC]x[CWE]") {
-                // All the others need spaces both sides.
-                // Ignore email addresses <foo@bar>
-                let email = (op == b"<" && self.t(r"^\S+\@\S+>", &cc))
-                    || (op == b">" && self.t(r"<\S+\@\S+$", &ca));
-
-                // for asm volatile statements
-                // ignore a colon with another
-                // colon immediately before or after
-                let asm_colon = op == b":" && (self.t(r":$", &ca) || self.t(r"^:", &cc));
-                let ok = email || asm_colon;
-
-                // messages are ERROR, but ?: are CHK
-                if !ok {
-                    let chk = (op == b"?:" || op == b"?" || op == b":") && ctx_m(self, r"VxV");
-                    report(self, !chk, b"spaces required around that");
-                }
+            let parameter = op_type != b"V" && self.t(r"\s$", &ca) && self.t(r"^\s*[,\)]", &cc);
+            if !parameter {
+                let site = OpSite {
+                    op,
+                    opv,
+                    ctx,
+                    ca,
+                    cc,
+                    at_,
+                    hereptr,
+                    has_next: fix_elements.get(idx + 2).is_some_and(Option::is_some),
+                };
+                self.check_operator(p, &site);
             }
             off += len(&elements[idx + 1]);
             idx += 2;
