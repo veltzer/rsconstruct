@@ -78,7 +78,7 @@ fn header_starts(table: &toml_edit::Table, starts: &mut Vec<usize>) {
     }
 }
 
-/// Remove the [vars] section from TOML content by blanking its lines.
+/// Remove the `[vars]` section from TOML content by blanking its lines.
 /// Blanking (instead of deleting) keeps every remaining line at its original
 /// line number, so provenance spans built from the result stay correct.
 ///
@@ -252,10 +252,10 @@ fn var_names_of(parsed: &toml::Value) -> Vec<String> {
         .unwrap_or_default()
 }
 
-/// Substitute variables defined in [vars] section throughout the config.
+/// Substitute variables defined in `[vars]` section throughout the config.
 /// Variables are referenced using `${var_name}` syntax.
 /// The entire `"${var_name}"` (including quotes) is replaced with the TOML-serialized value.
-/// After substitution, the [vars] section is removed from the output.
+/// After substitution, the `[vars]` section is removed from the output.
 pub(super) fn substitute_variables(content: &str) -> Result<String> {
     // Check for undefined variables first (before any TOML parsing)
     // This gives a clear error message for undefined vars even without a [vars] section

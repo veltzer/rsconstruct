@@ -257,7 +257,7 @@ pub enum Commands {
     },
     /// Initialize a new rsconstruct project (no config needed)
     Init,
-    /// Query GitHub Pages publishing settings from [pages] (requires config)
+    /// Query GitHub Pages publishing settings from `[pages]` (requires config)
     Page {
         #[command(subcommand)]
         action: PageAction,
@@ -505,7 +505,7 @@ pub enum ProductAction {
 pub enum ProcessorAction {
     /// Add a processor to rsconstruct.toml with must-fill fields pre-populated and comments
     Add {
-        /// Processor name (pname) — the full name, processor.<type>.<name> (e.g., processor.checker.ruff, `processor.mass_generator.pip`)
+        /// Processor name (pname) — the full name, `processor.<type>.<name>` (e.g., processor.checker.ruff, `processor.mass_generator.pip`)
         #[arg(value_parser = crate::registries::processor_name_parser())]
         pname: String,
         /// Print the generated TOML snippet to stdout instead of writing to rsconstruct.toml
@@ -524,7 +524,7 @@ pub enum ProcessorAction {
     },
     /// Show default configuration for a processor type by pname (no config needed)
     Defconfig {
-        /// Processor name (pname) — the full name, processor.<type>.<name> (e.g., processor.checker.ruff, `processor.mass_generator.pip`)
+        /// Processor name (pname) — the full name, `processor.<type>.<name>` (e.g., processor.checker.ruff, `processor.mass_generator.pip`)
         #[arg(value_parser = crate::registries::processor_name_parser())]
         pname: String,
     },
@@ -547,7 +547,7 @@ pub enum ProcessorAction {
     Files {
         /// Instance name (iname) as declared in rsconstruct.toml (omit to show all)
         iname: Option<String>,
-        /// Show processor headers (e.g., "[ruff] (42 products)")
+        /// Show processor headers (e.g., `[ruff] (42 products)`)
         #[arg(long)]
         headers: bool,
     },
@@ -559,7 +559,7 @@ pub enum ProcessorAction {
     },
     /// Show a processor's description and config fields (no config needed)
     Info {
-        /// Processor name (pname) — the full name, processor.<type>.<name> (omit to show all)
+        /// Processor name (pname) — the full name, `processor.<type>.<name>` (omit to show all)
         #[arg(value_parser = crate::registries::processor_name_parser())]
         pname: Option<String>,
     },
@@ -587,7 +587,7 @@ pub enum ProcessorAction {
 #[derive(Subcommand)]
 pub enum PageAction {
     /// Print the directory published to GitHub Pages. Prints nothing (still
-    /// exit 0) when [pages] is not configured, so CI can branch on the
+    /// exit 0) when `[pages]` is not configured, so CI can branch on the
     /// output being empty without parsing exit codes.
     Dir,
 }
@@ -686,7 +686,7 @@ pub enum ToolCacheAction {
 
 #[derive(Subcommand)]
 pub enum InstallAction {
-    /// Install onto the machine: [dependencies] system packages and the tools whose preferred target is the machine (uses config if available)
+    /// Install onto the machine: `[dependencies]` system packages and the tools whose preferred target is the machine (uses config if available)
     Machine {
         /// Tool name to install through its machine install (omit to
         /// install what this project needs on the machine)

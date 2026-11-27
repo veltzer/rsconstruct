@@ -114,8 +114,8 @@ fn should_exclude_for_profile(source: &Path, profile_name: &str) -> bool {
 ///   // `EXTRA_LINK_SHELL=echo` -L$(pkg-config --variable=libdir openssl)
 ///
 /// Compiler profile-specific flags (only applied when compiling with the named profile):
-///   // `EXTRA_COMPILE_FLAGS_BEFORE`[gcc]=-femit-struct-debug-baseonly
-///   // `EXTRA_COMPILE_FLAGS_BEFORE`[clang]=-gline-tables-only
+///   // `EXTRA_COMPILE_FLAGS_BEFORE[gcc]=-femit-struct-debug-baseonly`
+///   // `EXTRA_COMPILE_FLAGS_BEFORE[clang]=-gline-tables-only`
 ///
 /// Exclude file from specific profiles:
 ///   // `EXCLUDE_PROFILE=clang`
@@ -216,8 +216,8 @@ fn parse_source_flags(
 ///
 /// Examples:
 ///   "EXTRA_COMPILE_FLAGS_BEFORE=-g" with profile "gcc" -> Some(("=-g", true))
-///   "`EXTRA_COMPILE_FLAGS_BEFORE`[gcc]=-g" with profile "gcc" -> Some(("=-g", true))
-///   "`EXTRA_COMPILE_FLAGS_BEFORE`[clang]=-g" with profile "gcc" -> Some(("=-g", false))
+///   `EXTRA_COMPILE_FLAGS_BEFORE[gcc]=-g` with profile "gcc" -> Some(("=-g", true))
+///   `EXTRA_COMPILE_FLAGS_BEFORE[clang]=-g` with profile "gcc" -> Some(("=-g", false))
 fn match_directive_with_profile<'a>(
     line: &'a str,
     directive: &str,

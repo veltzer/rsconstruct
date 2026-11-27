@@ -3,9 +3,9 @@
 //! rsconstruct has two independent plugin registries collected via the `inventory`
 //! crate at link time:
 //!
-//! - [`processor`] — [`ProcessorPlugin`](processor::ProcessorPlugin) entries for
+//! - [`processor`] — [`processor::ProcessorPlugin`] entries for
 //!   every built-in processor (checkers, generators, explicit, mass-generators).
-//! - [`analyzer`] — [`AnalyzerPlugin`](analyzer::AnalyzerPlugin) entries for
+//! - [`analyzer`] — [`analyzer::AnalyzerPlugin`] entries for
 //!   every dependency analyzer.
 //!
 //! Both submodules are re-exported here so callers can keep using

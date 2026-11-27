@@ -83,7 +83,7 @@ pub enum FieldType {
     Bool,
     Integer,
     StringArray,
-    /// Array of tables (e.g., [[`processor.cc_single_file.compilers`]])
+    /// Array of tables (e.g., `[[processor.cc_single_file.compilers]]`)
     TableArray,
     /// Inline table (e.g., `tags.field_types` = { author = "string" })
     Table,

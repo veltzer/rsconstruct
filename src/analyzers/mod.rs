@@ -88,7 +88,7 @@ pub trait DepAnalyzer: Sync + Send {
     /// found missing before settling on its answer — the deps cache drops
     /// the entry once one of them appears. Iterating products, the deps
     /// cache and applying the result to the graph are the framework's job
-    /// (see [`analyze_graph`]).
+    /// (see [`Analysis::analyze_graph`]).
     fn scan(
         &self,
         ctx: &crate::build_context::BuildContext,

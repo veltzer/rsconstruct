@@ -433,7 +433,7 @@ pub fn print(def: &TableDef, verbose: bool, rows: &[Vec<String>]) {
     render(def, def.columns, verbose, rows, None);
 }
 
-/// [`print`] with a summary ("Total") row, set off by a separator.
+/// [`print()`] with a summary ("Total") row, set off by a separator.
 pub fn print_with_total(def: &TableDef, verbose: bool, rows: &[Vec<String>], total: &[String]) {
     debug_assert!(def.dynamic.is_none(), "{} has run-time columns", def.name);
     render(def, def.columns, verbose, rows, Some(total));

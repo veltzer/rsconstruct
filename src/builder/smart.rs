@@ -33,7 +33,7 @@ fn save_doc(doc: &toml_edit::DocumentMut) -> Result<()> {
         .with_context(|| format!("Failed to write {CONFIG_FILE}"))
 }
 
-/// Get or create the [processor] table in the document.
+/// Get or create the `[processor]` table in the document.
 fn processor_table(doc: &mut toml_edit::DocumentMut) -> Result<&mut toml_edit::Table> {
     doc.entry("processor")
         .or_insert_with(|| toml_edit::Item::Table(toml_edit::Table::new()))
@@ -398,7 +398,7 @@ pub fn auto(available: &HashSet<String>) -> Result<()> {
     Ok(())
 }
 
-/// Get or create the [analyzer] table in the document.
+/// Get or create the `[analyzer]` table in the document.
 fn analyzer_table(doc: &mut toml_edit::DocumentMut) -> Result<&mut toml_edit::Table> {
     doc.entry("analyzer")
         .or_insert_with(|| toml_edit::Item::Table(toml_edit::Table::new()))

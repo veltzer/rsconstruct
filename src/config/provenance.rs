@@ -51,7 +51,7 @@ pub enum Section {
 
 /// A map from (section, `instance_name`, field) to the line number in the user's
 /// rsconstruct.toml where the field was set. Populated by walking a
-/// [`DocumentMut`] once at config load time.
+/// [`toml_edit::DocumentMut`] once at config load time.
 ///
 /// `instance_name` is what ProcessorInstance/AnalyzerInstance use: "ruff" for
 /// single-instance, "pylint.core" for multi-instance.
