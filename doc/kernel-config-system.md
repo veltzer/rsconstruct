@@ -206,7 +206,7 @@ overwrite.
 It is the simplest thing that gives users *named, versioned configs*
 they can switch between with one command.
 
-### Estimated cost
+### Estimated cost of defconfig
 
 ~250 lines for the four subcommands plus integration tests. No new
 deps. Schema reuse is 100% — `configs/X.toml` is just a regular
@@ -236,7 +236,7 @@ default-derived. We add a new query: "which fields exist in the
 schema but are missing from the user's config?". Compare against the
 processor's `KnownFields::known_fields()` list.
 
-### Estimated cost
+### Estimated cost of field reconciliation
 
 ~150 lines. Reuses `KnownFields`, provenance tracking, and the
 existing config-validation pipeline.

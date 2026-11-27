@@ -16,7 +16,7 @@ config/project.lua:4:1: (E011) expected 'end' (to close 'if' on line 1) near 'lo
 
 All the files of a stanza are checked together, as one `luacheck` run checks the files given to it: with `allow_defined` or `allow_defined_top`, a global set in one file is defined for all the others, and an implicitly defined global no file reads is reported as unused (`W131`). The processor therefore makes a single product of all its files, rechecked as a whole when any of them changes.
 
-### Configuration
+### Configuration files
 
 `.luacheckrc` is found and run as luacheck runs it: looked up from the project root upwards, executed as Lua (in the embedded interpreter) in an environment that falls back to the standard globals, with `files["glob"]` per-path overrides, custom `stds`, and a returned table merged in. luacheck's default per-path stds apply (`busted` for `*_spec.lua` under `spec/`, `test/` or `tests/`, `rockspec`, `luacheckrc`, `ldoc`). `exclude_files` and `include_files` filter the checked files as in luacheck. `config_file` names a different file; empty means no configuration file (`--no-config`).
 

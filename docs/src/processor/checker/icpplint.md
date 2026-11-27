@@ -17,7 +17,7 @@ src/main.cc:2:  Using C-style cast.  Use static_cast<int>(...) instead  [readabi
 
 Header guards are derived the way cpplint derives them: from the path relative to the repository root (the nearest directory with `.git`, `.hg` or `.svn`, or `repository`), adjusted by `root`. The file name cpplint sees is the path relative to the project root, which is what `cpplint src/foo.cc` run from the project root would see, so filters with a file part (`-whitespace:src/foo.cc:14`) use that path.
 
-### Configuration
+### Configuration files
 
 cpplint's per-directory configuration files work as they do in cpplint: `CPPLINT.cfg` (or the file `config_file` names) is read from the file's directory upwards until one says `set noparent`, with `filter`, `exclude_files`, `linelength`, `root`, `headers`, `extensions` and `includeorder`. Every such file between a source file and the project root is an input of that file's product, so editing one re-checks the files under it; there is no need to list them in `dep_inputs`. The TOML fields are cpplint's command-line options:
 

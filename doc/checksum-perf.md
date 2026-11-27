@@ -70,7 +70,7 @@ Not worth pursuing for rsconstruct's typical workload. If we ever want
 this, the right model is a content-addressed store keyed by `(stat()
 ino + dev + mtime)` shared across users, but that's a different feature.
 
-### Recommendation
+### Recommendation for sub-question 1
 
 Document that we already do this, and why we chose centralized over
 distributed. Don't change the mechanism. Update the
@@ -157,7 +157,7 @@ The only workloads where mmap clearly wins are projects that hash
 processor outputs for big projects, PDFs from large LaTeX runs) but
 aren't the norm.
 
-### Recommendation
+### Recommendation for sub-question 2
 
 **Do (A), skip (B) and (C).**
 

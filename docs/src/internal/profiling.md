@@ -71,7 +71,7 @@ CPU-bound, memory-bound, or branch-mispredict-bound."
 
 ## Run: 2026-04-12 — rsconstruct 0.8.1 — `status` on `teaching-slides`
 
-### Target
+### Target (2026-04-12)
 
 - Command: `rsconstruct --quiet --color=never status`
 - Project: `../teaching-slides` (10,027 products across 10 processors).
@@ -86,7 +86,7 @@ CPU-bound, memory-bound, or branch-mispredict-bound."
   slow to post-process on this host).
 - Counters: `perf stat -d`.
 
-### Wall-clock and counters
+### Wall-clock and counters (2026-04-12)
 
 | Metric | Value |
 | --- | --- |
@@ -186,7 +186,7 @@ on-disk-format changes.
 
 ## Run: 2026-04-12 (later) — HEAD after HashMap dedup fix
 
-### Wall-clock and counters
+### Wall-clock and counters (2026-04-12, later)
 
 | Metric | Value | vs. 0.8.1 tag |
 | --- | --- | --- |
@@ -223,7 +223,7 @@ of using `PathBuf` as HashMap keys.
 backed by an in-memory `PathInterner`. See
 [Path Interning](path-interning.md) for design.
 
-### Wall-clock and counters
+### Wall-clock and counters (2026-04-12, later still)
 
 | Metric | Value | vs. previous |
 | --- | --- | --- |
@@ -263,7 +263,7 @@ half.
 
 ## Run: 2026-11-21 — rsconstruct 0.9.195 — no-op `build` on `teaching-slides`
 
-### Target
+### Target (2026-11-21)
 
 - Command: `rsconstruct --quiet --color=never build`, nothing to do.
 - Project: `../teaching-slides`, now 18,018 products and 74,705 input
@@ -303,7 +303,7 @@ half.
    trivial skip units spent their time contending for the allocator lock
    and the shared stats locks (perf: `futex_wait` under `free`).
 
-### After
+### After (2026-11-21)
 
 | Threads | 0.9.195 | after |
 | --- | --- | --- |
@@ -327,7 +327,7 @@ half.
 
 ## Run: 2026-11-22 — one `stat` per input per build
 
-### Target
+### Target (2026-11-22)
 
 No-op `build` of a synthetic project: 20,000 JSON files, each checked by
 `processor.checker.ijsonlint` (one input per product, no shared inputs),
@@ -342,7 +342,7 @@ output directories). Before classify, every distinct input is checked on
 `parallel` threads (`checksum::fill_session`). See [Checksum
 Cache](checksum-cache.md).
 
-### After
+### After (2026-11-22)
 
 | | 0.9.197 | after |
 | --- | --- | --- |

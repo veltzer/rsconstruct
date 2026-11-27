@@ -13,7 +13,7 @@ mass generators, which take every input in one invocation by construction.
 
 A checker validates input files without producing any output. If the check passes, the result is cached — if the inputs haven't changed on the next build, the check is skipped entirely.
 
-### How it works
+### Checker: how it works
 
 1. Scans for files matching `src_extensions` in `src_dirs`
 2. Creates one product per input file
@@ -21,11 +21,11 @@ A checker validates input files without producing any output. If the check passe
 4. If the tool exits successfully, records a marker in the cache
 5. On the next build, if inputs are unchanged, the check is skipped
 
-### What gets cached
+### Checker: what gets cached
 
 A marker entry — no files, no blobs. The marker's presence means "this check passed with these inputs."
 
-### Examples
+### Checker: examples
 
 **Lint Python files with ruff:**
 
@@ -80,7 +80,7 @@ actionlint, ascii, aspell, biome, black, checkpatch, checkstyle, clang_tidy, cli
 
 A generator transforms each input file into one or more output files. It creates one product per input file (or one per input x format pair for multi-format generators like pandoc).
 
-### How it works
+### Generator: how it works
 
 1. Scans for files matching `src_extensions` in `src_dirs`
 2. For each input file, computes the output path from the input path, output directory, and format
@@ -88,11 +88,11 @@ A generator transforms each input file into one or more output files. It creates
 4. Runs the tool to produce the output file
 5. Stores the output as a content-addressed blob in the cache
 
-### What gets cached
+### Generator: what gets cached
 
 One blob per output file. The blob is the raw file content, stored by its SHA-256 hash. On restore, the blob is hardlinked (or copied) to the output path.
 
-### Examples
+### Generator: examples
 
 **Render Tera templates:**
 
@@ -179,18 +179,18 @@ a2x, cc_single_file, chromium, generic, ijinja2, imarkdown2html, ipdfunite, ipro
 
 An explicit processor aggregates many inputs into (possibly) many output files and/or directories. Unlike other types which create one product per discovered file, explicit creates a single product with all declared inputs and outputs.
 
-### How it works
+### Explicit: how it works
 
 1. Inputs are listed explicitly via `inputs` and `input_globs` in the config
 2. Creates a single product with all inputs and all outputs
 3. Runs the command, passing `--inputs` and `--outputs` on the command line
 4. Stores each output file as a content-addressed blob
 
-### What gets cached
+### Explicit: what gets cached
 
 One blob per output file (like generator).
 
-### Examples
+### Explicit: examples
 
 **Build a static site from generated HTML:**
 
@@ -228,7 +228,7 @@ generic
 
 A mass generator runs a tool that produces many files in one invocation and enumerates them in advance. Every planned file becomes a product of its own with its own inputs and blob cache entry, while the underlying build tool runs at most once per manifest per build: once for the whole instance when the tool has a single plan (`generic`), once per manifest file when the processor scans for them (one `make` per `linux-module.yaml`, one `cargo build` per `Cargo.toml`).
 
-### How it works
+### Mass Generator: how it works
 
 1. At graph-build time, computes the output plan (natively or via a planner command)
 2. Creates one product per planned file: `inputs` = the entry's `sources`, `outputs` = its `path`
@@ -237,11 +237,11 @@ A mass generator runs a tool that produces many files in one invocation and enum
 5. Compares the files the tool wrote against the plan — a missing predicted file or an off-plan write fails the build. Files another product declares, as `output_files` or under its `output_dirs`, are that product's and are not reported even when it writes them during the tool's run
 6. Stores each predicted file as a content-addressed blob
 
-### What gets cached
+### Mass Generator: what gets cached
 
 One blob per predicted file (like generator). When every product is clean the tool does not run at all; when some are, the tool runs once and every dirty product caches its own file.
 
-### Examples
+### Mass Generator: examples
 
 **A static site generator with a plan mode:**
 

@@ -4,12 +4,12 @@ This guide walks through setting up an rsconstruct project for the two primary s
 
 ## Python
 
-### Prerequisites
+### Python prerequisites
 
 - rsconstruct installed ([Installation](installation.md))
 - [ruff](https://docs.astral.sh/ruff/) on PATH
 
-### Setup
+### Python setup
 
 Create a project directory and configuration:
 
@@ -104,12 +104,12 @@ Create a `.zspell-words` file in the project root with any custom words (one per
 
 ## C++
 
-### Prerequisites
+### C++ prerequisites
 
 - rsconstruct installed ([Installation](installation.md))
 - gcc/g++ on PATH
 
-### Setup
+### C++ setup
 
 Create a project directory and configuration:
 

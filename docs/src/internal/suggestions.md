@@ -448,8 +448,6 @@ Grades:
 - Helps users identify optimization opportunities.
 - **Urgency**: medium | **Complexity**: medium
 
-## CLI & UX
-
 ## Configuration
 
 ### Environment variable expansion in config

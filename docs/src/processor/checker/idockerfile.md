@@ -19,7 +19,7 @@ Dockerfile:7 DL3059 info: Multiple consecutive `RUN` instructions. Consider cons
 
 A file fails when any finding is at least as severe as the failure threshold (`info` by default, like hadolint: `error` and `warning` and `info` fail, `style` does not). A file whose only findings are below the threshold passes, and nothing is printed for it. A Dockerfile hadolint's parser cannot read fails with the position of the problem.
 
-### Configuration
+### Configuration files
 
 idockerfile reads `.hadolint.yaml` (or `.hadolint.yml`) from the project root when one exists, exactly as `hadolint` run from there would, with the keys hadolint's checks use: `ignored`, `override` (`error`, `warning`, `info`, `style` lists), `trustedRegistries`, `label-schema`, `strict-labels`, `disable-ignore-pragma`, `failure-threshold`, `no-fail`. `config_file` names a different file. The TOML fields below add to or override what the file says. Inline pragmas work as in hadolint: `# hadolint ignore=DL3008,DL3015` for the next instruction, `# hadolint stage ignore=...` for the rest of the stage, `# hadolint global ignore=...` for the file.
 

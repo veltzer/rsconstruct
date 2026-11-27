@@ -580,7 +580,7 @@ Two of the project's own rules feed this deficiency:
 Both rules are defensible. Their combined price is this deficiency, and the
 price is currently paid silently.
 
-#### Fix shape
+#### Fix shape for problem 1
 
 The H1-shaped refactor: a data/constructor split of the plugin entry that
 absorbs the three match tables into the plugin file (defaults and scan
@@ -690,7 +690,7 @@ progressively hardened into construction (`register_product`, output
 conflict checks — good, deliberate work); the mutable back door walks
 around all of it on every build.
 
-#### Fix shape
+#### Fix shape for problem 2
 
 `CacheKey` is the in-repo proof of the cure — it turned an opaque string
 assembled at five uncoordinated sites into typed, ordered, attributable
@@ -734,7 +734,7 @@ instantiation, whole-registry tests, static clap completion); the cost is
 that a capability a processor only has under some configuration has to be
 answered twice.
 
-#### Fix shape
+#### Fix shape for problem 3
 
 When a capability next depends on configuration, give it one query on the
 configured processor that consults the registry flag, instead of an ad-hoc
@@ -794,7 +794,7 @@ by four different mechanisms (`OnceLock` globals, a hand-threaded `verbose`
 parameter in 72 signatures, `BuildOptions` fields, a `BuildContext`
 setter), and `--quiet` appears in zero tests.
 
-#### Fix shape
+#### Fix shape for problem 4
 
 Not more extraction — `cache_cmd.rs`'s header records that extracting the
 biggest match arm just relocated the pattern. Two structural moves:
@@ -860,7 +860,7 @@ suite — `HttpBackend` has zero tests, and the good round-trip tests all
 run against `FileBackend` only. The write-only-remote and torn-write bugs
 fixed in 2026-08 could exist *because* nothing pins the contract.
 
-#### Fix shape
+#### Fix shape for problem 5
 
 A `Store` trait with declared schema version and an open/verify/repair
 lifecycle; one policy for absence, one for corruption, per-store repair so
