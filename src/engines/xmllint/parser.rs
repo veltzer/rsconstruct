@@ -214,6 +214,96 @@ impl<'a> Parser<'a> {
         self.problems.iter().any(|p| p.kind.is_fatal())
     }
 
+    /// Handle one token. `pending` is the start tag being read, until its end
+    /// comes.
+    fn token(&mut self, token: Token<'a>, pending: &mut Option<Pending<'a>>) {
+        match token {
+            Token::Declaration { version, .. } => {
+                if version.as_str() != "1.0" {
+                    self.report(
+                        1,
+                        Kind::ParserWarning,
+                        format!("Unsupported version '{}'", version.as_str()),
+                    );
+                }
+            }
+            Token::ProcessingInstruction { .. } | Token::Comment { .. } | Token::DtdEnd { .. } => {}
+            Token::DtdStart { external_id, .. } | Token::EmptyDtd { external_id, .. } => {
+                self.external_subset = external_id.is_some();
+            }
+            Token::EntityDeclaration {
+                name, definition, ..
+            } => {
+                // The first declaration of an entity is binding.
+                self.entities
+                    .entry(name.as_str().to_string())
+                    .or_insert_with(|| match definition {
+                        EntityDefinition::EntityValue(value) => {
+                            Entity::Internal(value.as_str().to_string())
+                        }
+                        EntityDefinition::ExternalId(_) => Entity::External,
+                    });
+            }
+            Token::ElementStart {
+                prefix,
+                local,
+                span,
+            } => {
+                let line = self.lines.line_of(span.start());
+                *pending = Some(Pending {
+                    prefix: prefix.as_str(),
+                    local: local.as_str(),
+                    line,
+                    end_line: line,
+                    attributes: Vec::new(),
+                });
+            }
+            Token::Attribute {
+                prefix,
+                local,
+                value,
+                span,
+            } => {
+                if let Some(p) = pending.as_mut() {
+                    p.attributes.push(RawAttribute {
+                        prefix: prefix.as_str(),
+                        local: local.as_str(),
+                        value: value.as_str(),
+                        line: self.lines.line_of(span.start()),
+                    });
+                }
+            }
+            Token::ElementEnd { end, span } => match end {
+                ElementEnd::Open | ElementEnd::Empty => {
+                    if let Some(mut p) = pending.take() {
+                        p.end_line = self.lines.line_of(span.start());
+                        let element = self.open_element(&p);
+                        if end == ElementEnd::Open {
+                            self.stack.push(element);
+                        } else {
+                            self.attach(element);
+                        }
+                    }
+                }
+                ElementEnd::Close(prefix, local) => {
+                    self.close_element(
+                        prefix.as_str(),
+                        local.as_str(),
+                        self.lines.line_of(span.start()),
+                    );
+                }
+            },
+            Token::Text { text } => {
+                let line = self.lines.line_of(text.start());
+                let expanded = self.expand_references(text.as_str(), line, 0);
+                self.add_child(Child::Text(expanded));
+            }
+            Token::Cdata { text, .. } => {
+                self.add_child(Child::Text(text.as_str().to_string()));
+            }
+        }
+    }
+
     fn run(&mut self) {
         let mut pending: Option<Pending<'a>> = None;
         let mut stopped = false;
@@ -226,93 +316,7 @@ impl<'a> Parser<'a> {
                     break;
                 }
             };
-            match token {
-                Token::Declaration { version, .. } => {
-                    if version.as_str() != "1.0" {
-                        self.report(
-                            1,
-                            Kind::ParserWarning,
-                            format!("Unsupported version '{}'", version.as_str()),
-                        );
-                    }
-                }
-                Token::ProcessingInstruction { .. }
-                | Token::Comment { .. }
-                | Token::DtdEnd { .. } => {}
-                Token::DtdStart { external_id, .. } | Token::EmptyDtd { external_id, .. } => {
-                    self.external_subset = external_id.is_some();
-                }
-                Token::EntityDeclaration {
-                    name, definition, ..
-                } => {
-                    // The first declaration of an entity is binding.
-                    self.entities
-                        .entry(name.as_str().to_string())
-                        .or_insert_with(|| match definition {
-                            EntityDefinition::EntityValue(value) => {
-                                Entity::Internal(value.as_str().to_string())
-                            }
-                            EntityDefinition::ExternalId(_) => Entity::External,
-                        });
-                }
-                Token::ElementStart {
-                    prefix,
-                    local,
-                    span,
-                } => {
-                    let line = self.lines.line_of(span.start());
-                    pending = Some(Pending {
-                        prefix: prefix.as_str(),
-                        local: local.as_str(),
-                        line,
-                        end_line: line,
-                        attributes: Vec::new(),
-                    });
-                }
-                Token::Attribute {
-                    prefix,
-                    local,
-                    value,
-                    span,
-                } => {
-                    if let Some(p) = pending.as_mut() {
-                        p.attributes.push(RawAttribute {
-                            prefix: prefix.as_str(),
-                            local: local.as_str(),
-                            value: value.as_str(),
-                            line: self.lines.line_of(span.start()),
-                        });
-                    }
-                }
-                Token::ElementEnd { end, span } => match end {
-                    ElementEnd::Open | ElementEnd::Empty => {
-                        if let Some(mut p) = pending.take() {
-                            p.end_line = self.lines.line_of(span.start());
-                            let element = self.open_element(&p);
-                            if end == ElementEnd::Open {
-                                self.stack.push(element);
-                            } else {
-                                self.attach(element);
-                            }
-                        }
-                    }
-                    ElementEnd::Close(prefix, local) => {
-                        self.close_element(
-                            prefix.as_str(),
-                            local.as_str(),
-                            self.lines.line_of(span.start()),
-                        );
-                    }
-                },
-                Token::Text { text } => {
-                    let line = self.lines.line_of(text.start());
-                    let expanded = self.expand_references(text.as_str(), line, 0);
-                    self.add_child(Child::Text(expanded));
-                }
-                Token::Cdata { text, .. } => {
-                    self.add_child(Child::Text(text.as_str().to_string()));
-                }
-            }
+            self.token(token, &mut pending);
         }
         if stopped {
             return;

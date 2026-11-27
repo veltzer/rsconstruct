@@ -420,6 +420,20 @@ impl Parser {
         {
             return Ok(token_is(Class::StructureToken, b"("));
         }
+        self.continues_foreach(token, last, kind, open_curly)
+    }
+
+    /// The `foreach` cases of `continues`, and its failure when no case applies.
+    fn continues_foreach(
+        &self,
+        token: Id,
+        last: Id,
+        kind: Option<&str>,
+        open_curly: bool,
+    ) -> Result<bool, Error> {
+        let doc = &self.doc;
+        let token_is =
+            |class: Class, content: &[u8]| doc.isa(token, class) && doc.text(token) == content;
         if kind == Some("foreach") {
             if doc.isa(last, Class::Symbol) {
                 return Ok(

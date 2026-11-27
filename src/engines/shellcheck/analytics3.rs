@@ -297,6 +297,44 @@ pub fn check_unassigned_references_globals(params: &Parameters<'_>, t: &Token) -
     check_unassigned_references_ext(true, params, t)
 }
 
+/// Whether the reference at `id` sits in a braced expansion that tests or
+/// defaults `var` rather than reading it.
+fn is_unassigned_exception(params: &Parameters<'_>, var: &str, id: Id) -> bool {
+    let Some(this) = params.id_map.get(&id) else {
+        return false;
+    };
+    get_path(&params.parent_map, this)
+        .iter()
+        .any(|t| match &t.inner {
+            TDollarBraced(_, l) => {
+                let s = concat_oversimplify(l);
+                let r = get_braced_reference(&s);
+                let m = get_braced_modifier(&s);
+                r != var || m.starts_with('+') || m.starts_with(":+")
+            }
+            _ => false,
+        })
+}
+
+/// Whether the reference at `id` carries a `${var:-default}` style guard.
+fn is_guarded_reference(params: &Parameters<'_>, id: Id) -> bool {
+    let Some(t) = params.id_map.get(&id) else {
+        return false;
+    };
+    match &t.inner {
+        TDollarBraced(_, v) => {
+            let name = concat_oversimplify(v);
+            let rest: String = name
+                .trim_start_matches(['#', '!'])
+                .chars()
+                .skip_while(|&c| is_variable_char(c))
+                .collect();
+            GUARD_RE.with(|re| re.is_match(&rest))
+        }
+        _ => false,
+    }
+}
+
 fn check_unassigned_references_ext(
     include_globals: bool,
     params: &Parameters<'_>,
@@ -346,45 +384,12 @@ fn check_unassigned_references_ext(
             None
         }
     };
-    let is_exception = |var: &str, id: Id| -> bool {
-        let Some(this) = params.id_map.get(&id) else {
-            return false;
-        };
-        get_path(&params.parent_map, this)
-            .iter()
-            .any(|t| match &t.inner {
-                TDollarBraced(_, l) => {
-                    let s = concat_oversimplify(l);
-                    let r = get_braced_reference(&s);
-                    let m = get_braced_modifier(&s);
-                    r != var || m.starts_with('+') || m.starts_with(":+")
-                }
-                _ => false,
-            })
-    };
-    let is_guarded = |id: Id| -> bool {
-        let Some(t) = params.id_map.get(&id) else {
-            return false;
-        };
-        match &t.inner {
-            TDollarBraced(_, v) => {
-                let name = concat_oversimplify(v);
-                let rest: String = name
-                    .trim_start_matches(['#', '!'])
-                    .chars()
-                    .skip_while(|&c| is_variable_char(c))
-                    .collect();
-                GUARD_RE.with(|re| re.is_match(&rest))
-            }
-            _ => false,
-        }
-    };
     let mut out = Vec::new();
     for (var, place) in unassigned {
         if !is_variable_name(var) {
             continue;
         }
-        if is_exception(var, *place) || is_guarded(*place) {
+        if is_unassigned_exception(params, var, *place) || is_guarded_reference(params, *place) {
             continue;
         }
         let is_local = var.chars().any(hchar::is_lower);
@@ -997,25 +1002,51 @@ pub fn check_set_e_suppressed(params: &Parameters<'_>, t: &Token) -> Out {
     out
 }
 
-pub fn check_extra_masked_returns(params: &Parameters<'_>, t: &Token) -> Out {
-    fn contains_simple_command(t: &Token) -> bool {
-        let mut found = false;
-        do_analysis(t, &mut |x| {
-            if matches!(x.inner, TSimpleCommand(..)) {
-                found = true;
-            }
-        });
-        found
-    }
-    fn all_but_last_simple_commands(cmds: &[Token]) -> Vec<&Token> {
-        let simple: Vec<&Token> = cmds.iter().filter(|c| contains_simple_command(c)).collect();
-        if simple.is_empty() {
-            simple
-        } else {
-            simple[..simple.len() - 1].to_vec()
+fn contains_simple_command(t: &Token) -> bool {
+    let mut found = false;
+    do_analysis(t, &mut |x| {
+        if matches!(x.inner, TSimpleCommand(..)) {
+            found = true;
         }
+    });
+    found
+}
+fn all_but_last_simple_commands(cmds: &[Token]) -> Vec<&Token> {
+    let simple: Vec<&Token> = cmds.iter().filter(|c| contains_simple_command(c)).collect();
+    if simple.is_empty() {
+        simple
+    } else {
+        simple[..simple.len() - 1].to_vec()
     }
+}
 
+/// Whether a command's exit status is masked on purpose, with `|| true`.
+fn is_mask_deliberate(params: &Parameters<'_>, t: &Token) -> bool {
+    let ancestors = |t: &Token| get_parents_of_id(&params.parent_map, t.id);
+    // NE.init of the path: the token and its ancestors, without the root.
+    let mut path: Vec<&Token> = vec![t];
+    path.extend(ancestors(t));
+    path.pop();
+    path.iter().any(|x| match &x.inner {
+        TOrIf(_, rhs) => match &rhs.inner {
+            TPipeline(_, cmds) => match cmds.as_slice() {
+                [
+                    Token {
+                        inner: TRedirecting(_, cmd),
+                        ..
+                    },
+                ] => {
+                    matches!(get_command_basename(cmd).as_deref(), Some("true" | ":"))
+                }
+                _ => false,
+            },
+            _ => false,
+        },
+        _ => false,
+    })
+}
+
+pub fn check_extra_masked_returns(params: &Parameters<'_>, t: &Token) -> Out {
     let is_transparent_command = |t: &Token| get_command_basename(t).as_deref() == Some("time");
     let mut transformed = t.clone();
     do_transform(&mut transformed, &mut |x| {
@@ -1028,29 +1059,6 @@ pub fn check_extra_masked_returns(params: &Parameters<'_>, t: &Token) -> Out {
         }
     });
     let ancestors = |t: &Token| get_parents_of_id(&params.parent_map, t.id);
-    let is_mask_deliberate = |t: &Token| -> bool {
-        // NE.init of the path: the token and its ancestors, without the root.
-        let mut path: Vec<&Token> = vec![t];
-        path.extend(ancestors(t));
-        path.pop();
-        path.iter().any(|x| match &x.inner {
-            TOrIf(_, rhs) => match &rhs.inner {
-                TPipeline(_, cmds) => match cmds.as_slice() {
-                    [
-                        Token {
-                            inner: TRedirecting(_, cmd),
-                            ..
-                        },
-                    ] => {
-                        matches!(get_command_basename(cmd).as_deref(), Some("true" | ":"))
-                    }
-                    _ => false,
-                },
-                _ => false,
-            },
-            _ => false,
-        })
-    };
     let is_checked_elsewhere = |t: &Token| -> bool {
         ancestors(t).iter().any(|x| {
             let Some(cmd) = get_command(x) else {
@@ -1071,8 +1079,9 @@ pub fn check_extra_masked_returns(params: &Parameters<'_>, t: &Token) -> Out {
             ["echo", "basename", "dirname", "printf", "set", "shopt"].contains(&b.as_str())
         })
     };
-    let is_masked_node =
-        |t: &Token| !(is_harmless_command(t) || is_checked_elsewhere(t) || is_mask_deliberate(t));
+    let is_masked_node = |t: &Token| {
+        !(is_harmless_command(t) || is_checked_elsewhere(t) || is_mask_deliberate(params, t))
+    };
     let mut out = Vec::new();
     let find_masked_in_list = |list: &[&Token], out: &mut Out| {
         for l in list {

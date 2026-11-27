@@ -390,6 +390,70 @@ fn strip_chunk_prefix(message: &str) -> String {
         .map_or_else(|| format!("line {message}"), |rest| format!("line {rest}"))
 }
 
+/// The environment a configuration file runs in, and the table that
+/// collects its `files` and `stds`.
+fn config_env(lua: &Lua, anchor_dir: Option<&str>) -> mlua::Result<(Table, Table)> {
+    let globals = lua.globals();
+    // Modules next to an anchored configuration can be required from it.
+    if let Some(anchor_dir) = anchor_dir {
+        let package: Table = globals.get("package")?;
+        let package_path: String = package.get("path")?;
+        package.set(
+            "path",
+            format!("{anchor_dir}/?.lua;{anchor_dir}/?/init.lua;{package_path}"),
+        )?;
+    }
+    let special: Table = lua.create_table()?;
+    let files = lua.create_table()?;
+    let files_mt = lua.create_table()?;
+    files_mt.set(
+        "__index",
+        lua.create_function(|lua, (files, key): (Table, Value)| {
+            let t = lua.create_table()?;
+            files.raw_set(key, t.clone())?;
+            Ok(t)
+        })?,
+    )?;
+    files.set_metatable(Some(files_mt.clone()))?;
+    special.set("files", files)?;
+    special.set("stds", lua.create_table()?)?;
+    let env = lua.create_table()?;
+    let env_mt = lua.create_table()?;
+    let special_index = special.clone();
+    let globals_index = globals;
+    env_mt.set(
+        "__index",
+        lua.create_function(move |_, (_env, key): (Table, Value)| {
+            if let Value::String(s) = &key
+                && matches!(&*s.as_bytes(), b"files" | b"stds")
+            {
+                return special_index.raw_get::<Value>(key);
+            }
+            globals_index.get::<Value>(key)
+        })?,
+    )?;
+    let special_newindex = special.clone();
+    let files_mt_newindex = files_mt;
+    env_mt.set(
+        "__newindex",
+        lua.create_function(move |_, (env, key, value): (Table, Value, Value)| {
+            if let Value::String(s) = &key
+                && matches!(&*s.as_bytes(), b"files" | b"stds")
+            {
+                if let Value::Table(t) = &value
+                    && &*s.as_bytes() == b"files"
+                {
+                    t.set_metatable(Some(files_mt_newindex.clone()))?;
+                }
+                return special_newindex.raw_set(key, value);
+            }
+            env.raw_set(key, value)
+        })?,
+    )?;
+    env.set_metatable(Some(env_mt))?;
+    Ok((env, special))
+}
+
 /// Runs a configuration file the way `config.load_config` does and returns
 /// the resulting option table.
 fn run_config(path: &str, anchor_dir: Option<&str>) -> Result<LVal, String> {
@@ -401,68 +465,8 @@ fn run_config(path: &str, anchor_dir: Option<&str>) -> Result<LVal, String> {
     let fail = |kind: &str, msg: String| {
         format!("Couldn't load configuration from {path}: {kind} error ({msg})")
     };
-    let setup = || -> mlua::Result<(Table, Table)> {
-        let globals = lua.globals();
-        // Modules next to an anchored configuration can be required from it.
-        if let Some(anchor_dir) = anchor_dir {
-            let package: Table = globals.get("package")?;
-            let package_path: String = package.get("path")?;
-            package.set(
-                "path",
-                format!("{anchor_dir}/?.lua;{anchor_dir}/?/init.lua;{package_path}"),
-            )?;
-        }
-        let special: Table = lua.create_table()?;
-        let files = lua.create_table()?;
-        let files_mt = lua.create_table()?;
-        files_mt.set(
-            "__index",
-            lua.create_function(|lua, (files, key): (Table, Value)| {
-                let t = lua.create_table()?;
-                files.raw_set(key, t.clone())?;
-                Ok(t)
-            })?,
-        )?;
-        files.set_metatable(Some(files_mt.clone()))?;
-        special.set("files", files)?;
-        special.set("stds", lua.create_table()?)?;
-        let env = lua.create_table()?;
-        let env_mt = lua.create_table()?;
-        let special_index = special.clone();
-        let globals_index = globals;
-        env_mt.set(
-            "__index",
-            lua.create_function(move |_, (_env, key): (Table, Value)| {
-                if let Value::String(s) = &key
-                    && matches!(&*s.as_bytes(), b"files" | b"stds")
-                {
-                    return special_index.raw_get::<Value>(key);
-                }
-                globals_index.get::<Value>(key)
-            })?,
-        )?;
-        let special_newindex = special.clone();
-        let files_mt_newindex = files_mt;
-        env_mt.set(
-            "__newindex",
-            lua.create_function(move |_, (env, key, value): (Table, Value, Value)| {
-                if let Value::String(s) = &key
-                    && matches!(&*s.as_bytes(), b"files" | b"stds")
-                {
-                    if let Value::Table(t) = &value
-                        && &*s.as_bytes() == b"files"
-                    {
-                        t.set_metatable(Some(files_mt_newindex.clone()))?;
-                    }
-                    return special_newindex.raw_set(key, value);
-                }
-                env.raw_set(key, value)
-            })?,
-        )?;
-        env.set_metatable(Some(env_mt))?;
-        Ok((env, special))
-    };
-    let (env, special) = setup().map_err(|e| fail("runtime", e.to_string()))?;
+    let (env, special) =
+        config_env(&lua, anchor_dir).map_err(|e| fail("runtime", e.to_string()))?;
     let func = lua
         .load(src.as_slice())
         .set_name("chunk")

@@ -439,6 +439,18 @@ impl NestingState {
             self.stack
                 .push(BlockInfo::new(Kind::MemInitList, linenum, false));
         }
+        self.consume_braces(sink, cl, line, linenum);
+    }
+
+    /// Consume the braces, semicolons and closing parentheses of `line`,
+    /// opening and closing blocks as they come.
+    fn consume_braces(
+        &mut self,
+        sink: &mut Lint<'_>,
+        cl: &CleansedLines,
+        mut line: String,
+        linenum: usize,
+    ) {
         while let Some(m) = pmatch(r"[^{;)}]*([{;)}])(.*)$", &line) {
             let token = g(&m, 1);
             let rest = g(&m, 2).to_string();

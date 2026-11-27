@@ -55,6 +55,37 @@ fn is_command(strings: &[&str], t: &Token) -> bool {
     }
 }
 
+/// The command, its id and its arguments, when `t` is a simple command.
+fn source_command(t: &Token) -> Option<(Id, Token, Vec<Token>)> {
+    let TRedirecting(_, inner) = &t.inner else {
+        return None;
+    };
+    let TSimpleCommand(_, words) = &inner.inner else {
+        return None;
+    };
+    let (cmd, args) = words.split_first()?;
+    Some((inner.id, cmd.clone(), args.to_vec()))
+}
+
+/// `$dir/file` as `./file`: a sourced path that starts with one expansion
+/// is looked for next to the script.
+fn strip_dynamic_prefix(word: &Token) -> Option<String> {
+    let parts = get_word_parts(word);
+    let (exp, rest) = parts.split_first()?;
+    if !is_string_expansion(exp) {
+        return None;
+    }
+    let rest_word = Token::new(
+        Id(0),
+        TNormalWord(rest.iter().map(|t| (*t).clone()).collect()),
+    );
+    let s = get_literal_string(&rest_word)?;
+    if !s.starts_with('/') {
+        return None;
+    }
+    Some(format!(".{s}"))
+}
+
 impl P {
     // ----- tokens
 
@@ -595,17 +626,8 @@ impl P {
     }
 
     fn read_source(&mut self, t: Token) -> R<Token> {
-        let (cmd_id, cmd, args) = {
-            let TRedirecting(_, inner) = &t.inner else {
-                return Ok(t);
-            };
-            let TSimpleCommand(_, words) = &inner.inner else {
-                return Ok(t);
-            };
-            let Some((cmd, args)) = words.split_first() else {
-                return Ok(t);
-            };
-            (inner.id, cmd.clone(), args.to_vec())
+        let Some((cmd_id, cmd, args)) = source_command(&t) else {
+            return Ok(t);
         };
         let file: Option<&Token> =
             args.first()
@@ -615,22 +637,6 @@ impl P {
                     _ => Some(first),
                 });
         let override_ = self.get_source_override();
-        let strip_dynamic_prefix = |word: &Token| -> Option<String> {
-            let parts = get_word_parts(word);
-            let (exp, rest) = parts.split_first()?;
-            if !is_string_expansion(exp) {
-                return None;
-            }
-            let rest_word = Token::new(
-                Id(0),
-                TNormalWord(rest.iter().map(|t| (*t).clone()).collect()),
-            );
-            let s = get_literal_string(&rest_word)?;
-            if !s.starts_with('/') {
-                return None;
-            }
-            Some(format!(".{s}"))
-        };
         let literal_file = override_
             .or_else(|| file.and_then(get_literal_string))
             .or_else(|| file.and_then(strip_dynamic_prefix))

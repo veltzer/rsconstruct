@@ -349,6 +349,19 @@ const RESERVED: &[&str] = &[
     "coproc",
 ];
 
+/// Where `script_words` is in the script.
+#[derive(Default)]
+struct ScriptState {
+    /// The words of the command being read.
+    words: Vec<Word>,
+    /// Inside the patterns of a `case` arm.
+    in_case_pattern: bool,
+    /// Inside the list of a `for` or `select`.
+    expect_for_list: bool,
+    /// Inside `[[ ... ]]`.
+    skip_cond: bool,
+}
+
 impl Reader {
     fn peek(&self) -> Option<char> {
         self.chars.get(self.pos).copied()
@@ -472,6 +485,22 @@ impl Reader {
         }
     }
 
+    /// The text between the brace at the cursor and its closing brace, when
+    /// that comes before the word ends.
+    fn brace_text(&self) -> Option<String> {
+        let close = self.chars[self.pos + 1..]
+            .iter()
+            .position(|&c| c == '}' || c == ' ' || c == '\n' || c == '\t');
+        let text: Option<String> = close.and_then(|n| {
+            if self.chars.get(self.pos + 1 + n) == Some(&'}') {
+                Some(self.chars[self.pos + 1..self.pos + 1 + n].iter().collect())
+            } else {
+                None
+            }
+        });
+        text
+    }
+
     fn word(&mut self) -> Word {
         let mut word = Word::default();
         let mut lit = String::new();
@@ -547,16 +576,7 @@ impl Reader {
                 }
                 '{' => {
                     // brace expansion: {a,b} or {1..3} with no spaces
-                    let close = self.chars[self.pos + 1..]
-                        .iter()
-                        .position(|&c| c == '}' || c == ' ' || c == '\n' || c == '\t');
-                    let text: Option<String> = close.and_then(|n| {
-                        if self.chars.get(self.pos + 1 + n) == Some(&'}') {
-                            Some(self.chars[self.pos + 1..self.pos + 1 + n].iter().collect())
-                        } else {
-                            None
-                        }
-                    });
+                    let text = self.brace_text();
                     match text {
                         Some(t) if t.contains(',') || t.contains("..") => {
                             flush(&mut lit, &mut word);
@@ -788,60 +808,77 @@ impl Reader {
         self.script_words();
     }
 
+    /// An operator: it ends the command, a `case` arm or a `for` list.
+    fn script_op(&mut self, op: &str, st: &mut ScriptState, all_words: &mut String) {
+        match op {
+            ")" if st.in_case_pattern => {
+                st.in_case_pattern = false;
+                st.words.clear();
+                return;
+            }
+            ";;" | ";&" | ";;&" => {
+                self.flush_command(&mut st.words, all_words);
+                st.in_case_pattern = true;
+                return;
+            }
+            _ => {}
+        }
+        if st.expect_for_list && matches!(op, ";" | "\n") {
+            st.expect_for_list = false;
+            st.words.clear();
+            return;
+        }
+        self.flush_command(&mut st.words, all_words);
+        st.skip_cond = false;
+    }
+
+    /// Consume the `( )` of a function definition; false, with nothing
+    /// consumed, when the next tokens are not that.
+    fn skip_function_parens(&mut self) -> bool {
+        let save = self.pos;
+        let save_pipes = self.pipes;
+        if let Token::Op(o) = self.next_token()
+            && o == "("
+            && let Token::Op(c) = self.next_token()
+            && c == ")"
+        {
+            return true;
+        }
+        self.pos = save;
+        self.pipes = save_pipes;
+        false
+    }
+
     /// Read the whole script; returns the simplified words of all its
     /// simple commands run together (what `simplify` makes of `$(...)`).
     fn script_words(&mut self) -> String {
         let mut all_words = String::new();
-        let mut words: Vec<Word> = Vec::new();
+        let mut st = ScriptState::default();
+        // The next word starts a command.
         let mut at_start = true;
-        let mut in_case_pattern = false;
-        let mut expect_for_list = false;
-        let mut skip_cond = false;
         loop {
             let tok = self.next_token();
             match tok {
                 Token::End => {
-                    self.flush_command(&mut words, &mut all_words);
+                    self.flush_command(&mut st.words, &mut all_words);
                     break;
                 }
                 Token::Op(op) => {
-                    match op.as_str() {
-                        ")" if in_case_pattern => {
-                            in_case_pattern = false;
-                            words.clear();
-                            at_start = true;
-                            continue;
-                        }
-                        ";;" | ";&" | ";;&" => {
-                            self.flush_command(&mut words, &mut all_words);
-                            in_case_pattern = true;
-                            at_start = true;
-                            continue;
-                        }
-                        _ => {}
-                    }
-                    if expect_for_list && matches!(op.as_str(), ";" | "\n") {
-                        expect_for_list = false;
-                        words.clear();
-                        at_start = true;
-                        continue;
-                    }
-                    self.flush_command(&mut words, &mut all_words);
+                    self.script_op(&op, &mut st, &mut all_words);
                     at_start = true;
-                    skip_cond = false;
                 }
                 Token::Word(w) => {
-                    if in_case_pattern && w.literal().as_deref() == Some("esac") {
-                        in_case_pattern = false;
+                    if st.in_case_pattern && w.literal().as_deref() == Some("esac") {
+                        st.in_case_pattern = false;
                         at_start = true;
                         continue;
                     }
-                    if in_case_pattern || expect_for_list {
+                    if st.in_case_pattern || st.expect_for_list {
                         continue;
                     }
-                    if skip_cond {
+                    if st.skip_cond {
                         if w.literal().as_deref() == Some("]]") {
-                            skip_cond = false;
+                            st.skip_cond = false;
                         }
                         continue;
                     }
@@ -849,14 +886,14 @@ impl Reader {
                         let lit = w.literal();
                         match lit.as_deref() {
                             Some("[[") => {
-                                skip_cond = true;
+                                st.skip_cond = true;
                                 continue;
                             }
                             Some("case") => {
                                 // case WORD in
                                 let _subject = self.next_token();
                                 let _in = self.next_token();
-                                in_case_pattern = true;
+                                st.in_case_pattern = true;
                                 continue;
                             }
                             Some("esac") => {
@@ -866,7 +903,7 @@ impl Reader {
                             Some("for" | "select") => {
                                 let _name = self.next_token();
                                 // optional `in list...` up to ; or newline
-                                expect_for_list = true;
+                                st.expect_for_list = true;
                                 continue;
                             }
                             Some("function") => {
@@ -875,7 +912,7 @@ impl Reader {
                             }
                             Some("in") => {
                                 // `for x` followed by `in` on the next line
-                                expect_for_list = true;
+                                st.expect_for_list = true;
                                 continue;
                             }
                             Some(r) if RESERVED.contains(&r) => continue,
@@ -889,20 +926,12 @@ impl Reader {
                             continue;
                         }
                         // function definition: name ( )
-                        let save = self.pos;
-                        let save_pipes = self.pipes;
-                        if let Token::Op(o) = self.next_token()
-                            && o == "("
-                            && let Token::Op(c) = self.next_token()
-                            && c == ")"
-                        {
+                        if self.skip_function_parens() {
                             continue;
                         }
-                        self.pos = save;
-                        self.pipes = save_pipes;
                         at_start = false;
                     }
-                    words.push(w);
+                    st.words.push(w);
                 }
             }
         }

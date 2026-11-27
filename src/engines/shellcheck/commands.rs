@@ -1682,6 +1682,14 @@ fn command_checks() -> Vec<(CommandName, CheckFn)> {
         (Basename("echo"), check_unquoted_echo_spaces),
         (Exactly("eval"), check_eval_array),
     ];
+    push_declaring_checks(&mut v);
+    v
+}
+
+/// The checks every declaring command (`local`, `declare`, `export`, ...)
+/// gets, one entry per command name.
+fn push_declaring_checks(v: &mut Vec<(CommandName, CheckFn)>) {
+    use CommandName::Exactly;
     // map checkArgComparison ("alias" : declaringCommands)
     v.push((Exactly("alias"), |_, t, o| {
         check_arg_comparison("alias", t, o);
@@ -1741,7 +1749,6 @@ fn command_checks() -> Vec<(CommandName, CheckFn)> {
     v.push((Exactly("let"), |p, t, o| {
         check_backreferencing_declaration("let", p, t, o);
     }));
-    v
 }
 
 /// `optionalCommandChecks`.

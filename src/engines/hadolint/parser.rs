@@ -1257,6 +1257,12 @@ impl Parser {
         if self.attempt(|p| p.string("Z")).is_ok() {
             return Ok(MountArg::Relabel(Relabel::Private));
         }
+        self.mount_arg_rest()
+    }
+
+    /// The mount arguments `mount_arg` did not try: `required`, `sharing`,
+    /// `size`, `source`, `target`, `type` and `uid`.
+    fn mount_arg_rest(&mut self) -> PResult<MountArg> {
         if self.attempt(|p| p.string("required=true")).is_ok()
             || self.attempt(|p| p.string("required=True")).is_ok()
         {

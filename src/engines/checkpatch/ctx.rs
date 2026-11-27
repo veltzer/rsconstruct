@@ -211,6 +211,38 @@ impl Checker {
     pub(super) fn rawline_at(&self, i: i64) -> Option<&[u8]> {
         at(&self.rawlines, i).map(Vec::as_slice)
     }
+    /// Append the next line that is not a removed one to `blk`. Returns the
+    /// block's length before the append, None when no line is left.
+    fn append_line(&self, line: &mut i64, remain: &mut i64, blk: &mut Vec<u8>) -> Option<i64> {
+        while *remain > 0 {
+            let l = self.line_at(*line)?;
+            if self.t(r"^-", l) {
+                *line += 1;
+                continue;
+            }
+            *remain -= 1;
+            let before = len(blk);
+            blk.extend_from_slice(l);
+            blk.push(b'\n');
+            *line += 1;
+            return Some(before);
+        }
+        None
+    }
+
+    /// The length of the `else` that `remainder` starts with, when it is a
+    /// bare one (not an `else if`) and `p`, the byte before it, lets a
+    /// keyword start there.
+    fn bare_else_len(&self, p: Option<u8>, remainder: &[u8]) -> Option<i64> {
+        if !p.is_none_or(|p| self.t(r"(?:\s|\}|\+)", &[p])) {
+            return None;
+        }
+        let m = self.m(r"^(else)(?:\s|{)", remainder)?;
+        if self.t(r"^else\s+if\b", remainder) {
+            return None;
+        }
+        Some(len(&m.s(1)))
+    }
 
     /// `ctx_statement_block`: the statement starting at offset `off` of
     /// line `linenr`, and its condition.
@@ -237,21 +269,9 @@ impl Checker {
                 stack.push((0, 0));
             }
             if off >= blen {
-                while remain > 0 {
-                    let Some(l) = self.line_at(line) else {
-                        break;
-                    };
-                    if self.t(r"^-", l) {
-                        line += 1;
-                        continue;
-                    }
-                    remain -= 1;
-                    loff = blen;
-                    blk.extend_from_slice(l);
-                    blk.push(b'\n');
+                if let Some(before) = self.append_line(&mut line, &mut remain, &mut blk) {
+                    loff = before;
                     blen = len(&blk);
-                    line += 1;
-                    break;
                 }
                 if off >= blen {
                     break;
@@ -282,11 +302,9 @@ impl Checker {
 
             if level == 0
                 && !coff_set
-                && p.is_none_or(|p| self.t(r"(?:\s|\}|\+)", &[p]))
-                && let Some(m) = self.m(r"^(else)(?:\s|{)", remainder)
-                && !self.t(r"^else\s+if\b", remainder)
+                && let Some(n) = self.bare_else_len(p, remainder)
             {
-                coff = off + len(&m.s(1)) - 1;
+                coff = off + n - 1;
                 coff_set = true;
             }
 

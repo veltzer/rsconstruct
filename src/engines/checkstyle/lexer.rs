@@ -683,25 +683,50 @@ impl Lexer<'_> {
 
     // ---- GeneratedJavaLexer --------------------------------------------------
 
+    /// The token type of a character that is a token by itself.
+    fn single_char_token(c1: u16) -> Option<u16> {
+        match u8::try_from(c1).unwrap_or(0) {
+            b'?' => Some(QUESTION),
+            b'(' => Some(LPAREN),
+            b')' => Some(RPAREN),
+            b'[' => Some(LBRACK),
+            b']' => Some(RBRACK),
+            b'{' => Some(LCURLY),
+            b'}' => Some(RCURLY),
+            b',' => Some(COMMA),
+            b'~' => Some(BNOT),
+            b';' => Some(SEMI),
+            b'@' => Some(AT),
+            _ => None,
+        }
+    }
+
+    /// The one-character operator `c1` is, with its token type.
+    fn single_char_operator(c1: u16) -> Option<(&'static [u8], u16)> {
+        match u8::try_from(c1).unwrap_or(0) {
+            b':' => Some((b":", COLON)),
+            b'=' => Some((b"=", ASSIGN)),
+            b'!' => Some((b"!", LNOT)),
+            b'/' => Some((b"/", DIV)),
+            b'+' => Some((b"+", PLUS)),
+            b'-' => Some((b"-", MINUS)),
+            b'*' => Some((b"*", STAR)),
+            b'%' => Some((b"%", MOD)),
+            b'>' => Some((b">", GT)),
+            b'<' => Some((b"<", LT)),
+            b'^' => Some((b"^", BXOR)),
+            b'|' => Some((b"|", BOR)),
+            b'&' => Some((b"&", BAND)),
+            _ => None,
+        }
+    }
+
     /// `GeneratedJavaLexer.nextToken()`.
     fn java_next(&mut self) -> LexResult<Token> {
         loop {
             self.reset_text();
             let (c1, c2, c3, c4) = (self.la(1), self.la(2), self.la(3), self.la(4));
-            let single = match u8::try_from(c1).unwrap_or(0) {
-                b'?' => Some(QUESTION),
-                b'(' => Some(LPAREN),
-                b')' => Some(RPAREN),
-                b'[' => Some(LBRACK),
-                b']' => Some(RBRACK),
-                b'{' => Some(LCURLY),
-                b'}' => Some(RCURLY),
-                b',' => Some(COMMA),
-                b'~' => Some(BNOT),
-                b';' => Some(SEMI),
-                b'@' => Some(AT),
-                _ => None,
-            };
+            let single = Self::single_char_token(c1);
             if let Some(ty) = single {
                 self.consume();
                 return Ok(self.make_token(ty));
@@ -776,22 +801,7 @@ impl Lexer<'_> {
             } else if is(c1, b'"') && c2 != EOF_CHAR {
                 return self.string_literal();
             } else {
-                match u8::try_from(c1).unwrap_or(0) {
-                    b':' => Some((b":", COLON)),
-                    b'=' => Some((b"=", ASSIGN)),
-                    b'!' => Some((b"!", LNOT)),
-                    b'/' => Some((b"/", DIV)),
-                    b'+' => Some((b"+", PLUS)),
-                    b'-' => Some((b"-", MINUS)),
-                    b'*' => Some((b"*", STAR)),
-                    b'%' => Some((b"%", MOD)),
-                    b'>' => Some((b">", GT)),
-                    b'<' => Some((b"<", LT)),
-                    b'^' => Some((b"^", BXOR)),
-                    b'|' => Some((b"|", BOR)),
-                    b'&' => Some((b"&", BAND)),
-                    _ => None,
-                }
+                Self::single_char_operator(c1)
             };
             if let Some((text, ty)) = fixed {
                 self.match_str(text)?;

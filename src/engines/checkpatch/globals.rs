@@ -541,6 +541,11 @@ impl Vars {
         self.set("all", group(&all));
         self.set("Misordered", group(&misordered));
         self.set("allWithAttr", group(&with_attr));
+        self.build_type_patterns();
+    }
+
+    /// The type patterns built on the lists `build_types` set.
+    fn build_type_patterns(&mut self) {
         self.qr("Modifier", r"(?:$Attribute|$Sparse|$mods)", "");
         self.qr(
             "BasicType",

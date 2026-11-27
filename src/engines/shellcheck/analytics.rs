@@ -2108,6 +2108,37 @@ pub fn check_backticks(params: &Parameters<'_>, t: &Token, out: &mut Out) {
     }
 }
 
+/// Whether a part of a braced expansion is an expansion itself; None for
+/// a plain variable name.
+fn indirection_part(t: &Token) -> Option<bool> {
+    match &t.inner {
+        TDollarExpansion(_) | TBackticked(_) | TDollarBraced(..) | TDollarArithmetic(_) => {
+            Some(true)
+        }
+        TLiteral(s) => {
+            if s.chars().all(is_variable_char) {
+                None
+            } else {
+                Some(false)
+            }
+        }
+        _ => Some(false),
+    }
+}
+
+/// Whether `s` names a variable, special and positional ones included.
+fn is_variable(s: &str) -> bool {
+    let cs: Vec<char> = s.chars().collect();
+    match cs.as_slice() {
+        [c] => {
+            super::astlib::is_variable_start_char(*c)
+                || super::astlib::is_special_variable_char(*c)
+                || c.is_ascii_digit()
+        }
+        _ => is_variable_name(s),
+    }
+}
+
 pub fn check_bad_parameter_substitution(_: &Parameters<'_>, t: &Token, out: &mut Out) {
     let TDollarBraced(_, w) = &t.inner else {
         return;
@@ -2117,21 +2148,6 @@ pub fn check_bad_parameter_substitution(_: &Parameters<'_>, t: &Token, out: &mut
     };
     let Some(first) = contents.first() else {
         return;
-    };
-    let indirection_part = |t: &Token| -> Option<bool> {
-        match &t.inner {
-            TDollarExpansion(_) | TBackticked(_) | TDollarBraced(..) | TDollarArithmetic(_) => {
-                Some(true)
-            }
-            TLiteral(s) => {
-                if s.chars().all(is_variable_char) {
-                    None
-                } else {
-                    Some(false)
-                }
-            }
-            _ => Some(false),
-        }
     };
     let list: Vec<bool> = contents.iter().filter_map(indirection_part).collect();
     if !list.is_empty() && list.iter().all(|b| *b) {
@@ -2143,17 +2159,6 @@ pub fn check_bad_parameter_substitution(_: &Parameters<'_>, t: &Token, out: &mut
         );
         return;
     }
-    let is_variable = |s: &str| -> bool {
-        let cs: Vec<char> = s.chars().collect();
-        match cs.as_slice() {
-            [c] => {
-                super::astlib::is_variable_start_char(*c)
-                    || super::astlib::is_special_variable_char(*c)
-                    || c.is_ascii_digit()
-            }
-            _ => is_variable_name(s),
-        }
-    };
     match &first.inner {
         TLiteral(s) if !s.is_empty() => {
             let c = s.chars().next().expect("non-empty");

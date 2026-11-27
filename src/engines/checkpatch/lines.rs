@@ -363,6 +363,12 @@ impl Checker {
             self.cnt_lines += 1;
         }
 
+        self.header_content_checks(p, l)
+    }
+
+    /// The second half of `header_checks`: what a line of any file is checked
+    /// for. False for non-hunk lines and lines being removed.
+    fn header_content_checks(&mut self, p: &mut P, l: &L) -> bool {
         // Check for mailing list archives other than lore.kernel.org
         if self.t(r"http.*\b$obsolete_archives", &l.rawline) {
             let msg = cat(&[
@@ -1212,6 +1218,12 @@ impl Checker {
             self.bare_types(p, l);
         }
 
+        self.switch_and_block_checks(p, l)
+    }
+
+    /// The second half of `c_checks`: switch and block layout, and the values
+    /// tracked across lines. False when the line is not an added one.
+    fn switch_and_block_checks(&mut self, p: &mut P, l: &mut L) -> bool {
         // Check for switch () and associated case and default
         // statements should be at the same indent.
         if self.t(r"\bswitch\s*\(.*\)", &l.line) {

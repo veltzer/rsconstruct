@@ -220,6 +220,62 @@ fn compile_js_regex(source: &str, flags: &str) -> Result<Regex, String> {
 }
 
 impl AttrRule {
+    /// What the configuration expects of attribute `key`.
+    fn attr_expect(key: &str, value: &toml::Value) -> Result<AttrExpect, String> {
+        let expect = match value {
+            toml::Value::Boolean(true) => AttrExpect::Allowed,
+            toml::Value::Boolean(false) => AttrExpect::Forbidden,
+            toml::Value::String(s) => AttrExpect::Exact(s.clone()),
+            toml::Value::Array(items) => {
+                let mut values = Vec::new();
+                for item in items {
+                    match item {
+                        toml::Value::String(s) => values.push(s.clone()),
+                        other => {
+                            return Err(format!(
+                                "attr {key:?}: allowed values must be strings, got {}",
+                                type_name(other)
+                            ));
+                        }
+                    }
+                }
+                AttrExpect::OneOf(values)
+            }
+            toml::Value::Table(t) => {
+                let Some(toml::Value::String(source)) = t.get("regex") else {
+                    return Err(format!(
+                        "attr {key:?}: a table value must be {{ regex = \"...\" }}"
+                    ));
+                };
+                let flags = match t.get("flags") {
+                    None => "",
+                    Some(toml::Value::String(s)) => s.as_str(),
+                    Some(other) => {
+                        return Err(format!(
+                            "attr {key:?}: flags must be a string, got {}",
+                            type_name(other)
+                        ));
+                    }
+                };
+                if let Some(extra) = t.keys().find(|k| *k != "regex" && *k != "flags") {
+                    return Err(format!("attr {key:?}: unknown regex key {extra:?}"));
+                }
+                AttrExpect::Pattern {
+                    regex: compile_js_regex(source, flags)
+                        .map_err(|e| format!("attr {key:?}: {e}"))?,
+                    display: format!("/{source}/{flags}"),
+                }
+            }
+            other => {
+                return Err(format!(
+                    "attr {key:?}: expected true, false, a string, an array of strings or {{ regex = \"...\" }}, got {}",
+                    type_name(other)
+                ));
+            }
+        };
+        Ok(expect)
+    }
+
     pub fn from_toml(table: &toml::Table) -> Result<Self, String> {
         let selector_text = match table.get("rule::selector") {
             None => "*",
@@ -272,57 +328,7 @@ impl AttrRule {
             if SPECIAL_KEYS.contains(&key.as_str()) {
                 continue;
             }
-            let expect = match value {
-                toml::Value::Boolean(true) => AttrExpect::Allowed,
-                toml::Value::Boolean(false) => AttrExpect::Forbidden,
-                toml::Value::String(s) => AttrExpect::Exact(s.clone()),
-                toml::Value::Array(items) => {
-                    let mut values = Vec::new();
-                    for item in items {
-                        match item {
-                            toml::Value::String(s) => values.push(s.clone()),
-                            other => {
-                                return Err(format!(
-                                    "attr {key:?}: allowed values must be strings, got {}",
-                                    type_name(other)
-                                ));
-                            }
-                        }
-                    }
-                    AttrExpect::OneOf(values)
-                }
-                toml::Value::Table(t) => {
-                    let Some(toml::Value::String(source)) = t.get("regex") else {
-                        return Err(format!(
-                            "attr {key:?}: a table value must be {{ regex = \"...\" }}"
-                        ));
-                    };
-                    let flags = match t.get("flags") {
-                        None => "",
-                        Some(toml::Value::String(s)) => s.as_str(),
-                        Some(other) => {
-                            return Err(format!(
-                                "attr {key:?}: flags must be a string, got {}",
-                                type_name(other)
-                            ));
-                        }
-                    };
-                    if let Some(extra) = t.keys().find(|k| *k != "regex" && *k != "flags") {
-                        return Err(format!("attr {key:?}: unknown regex key {extra:?}"));
-                    }
-                    AttrExpect::Pattern {
-                        regex: compile_js_regex(source, flags)
-                            .map_err(|e| format!("attr {key:?}: {e}"))?,
-                        display: format!("/{source}/{flags}"),
-                    }
-                }
-                other => {
-                    return Err(format!(
-                        "attr {key:?}: expected true, false, a string, an array of strings or {{ regex = \"...\" }}, got {}",
-                        type_name(other)
-                    ));
-                }
-            };
+            let expect = Self::attr_expect(key, value)?;
             attrs.push((key.clone(), expect));
         }
         Ok(Self {
@@ -352,6 +358,53 @@ impl AttrRule {
             .map(|(_, e)| e)
     }
 
+    /// Report the attributes of `element` when they are out of `order`.
+    fn check_order(
+        order: &Order,
+        remaining: &[(String, String)],
+        element: NodeId,
+        out: &mut Vec<Message>,
+    ) {
+        let report = |out: &mut Vec<Message>, text: String| {
+            out.push(Message {
+                text,
+                node: Some(element),
+            });
+        };
+        let names: Vec<&str> = remaining.iter().map(|(n, _)| n.as_str()).collect();
+        if !names.is_empty() {
+            let order: Vec<String> = match order {
+                Order::Alphabetical => {
+                    let mut sorted: Vec<String> = names.iter().map(|n| (*n).to_string()).collect();
+                    sorted.sort_by(|a, b| a.encode_utf16().cmp(b.encode_utf16()));
+                    sorted
+                }
+                Order::Given(list) => list.clone(),
+            };
+            let index_of = |name: &str| -> Option<usize> { order.iter().position(|o| o == name) };
+            let mut previous = index_of(names[0]);
+            for name in &names[1..] {
+                let Some(index) = index_of(name) else {
+                    continue;
+                };
+                if let Some(prev) = previous
+                    && index < prev
+                {
+                    report(
+                        out,
+                        format!(
+                            "Wrong ordering of attributes, found \"{}\", expected \"{}\"",
+                            names.join(", "),
+                            order.join(", ")
+                        ),
+                    );
+                    break;
+                }
+                previous = Some(index);
+            }
+        }
+    }
+
     fn run_on_element(&self, dom: &Dom, element: NodeId, out: &mut Vec<Message>) {
         let report = |out: &mut Vec<Message>, text: String| {
             out.push(Message {
@@ -373,40 +426,7 @@ impl AttrRule {
 
         // Ordering.
         if let Some(order) = &self.order {
-            let names: Vec<&str> = remaining.iter().map(|(n, _)| n.as_str()).collect();
-            if !names.is_empty() {
-                let order: Vec<String> = match order {
-                    Order::Alphabetical => {
-                        let mut sorted: Vec<String> =
-                            names.iter().map(|n| (*n).to_string()).collect();
-                        sorted.sort_by(|a, b| a.encode_utf16().cmp(b.encode_utf16()));
-                        sorted
-                    }
-                    Order::Given(list) => list.clone(),
-                };
-                let index_of =
-                    |name: &str| -> Option<usize> { order.iter().position(|o| o == name) };
-                let mut previous = index_of(names[0]);
-                for name in &names[1..] {
-                    let Some(index) = index_of(name) else {
-                        continue;
-                    };
-                    if let Some(prev) = previous
-                        && index < prev
-                    {
-                        report(
-                            out,
-                            format!(
-                                "Wrong ordering of attributes, found \"{}\", expected \"{}\"",
-                                names.join(", "),
-                                order.join(", ")
-                            ),
-                        );
-                        break;
-                    }
-                    previous = Some(index);
-                }
-            }
+            Self::check_order(order, &remaining, element, out);
         }
 
         // Values.

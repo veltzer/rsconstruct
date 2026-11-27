@@ -856,6 +856,79 @@ fn type_of_action_outputs(meta: &ActionMetadata) -> ObjectType {
     ObjectType::strict(props)
 }
 
+impl RuleExpression<'_> {
+    /// The expressions of a `workflow_call` event.
+    fn check_workflow_call_event(
+        &mut self,
+        e: &crate::engines::actionlint::ast::WorkflowCallEvent,
+    ) {
+        // `inputs` is set before the inputs are checked: a
+        // default may refer to an earlier input.
+        self.inputs_ty = Some(ObjectType::empty_strict());
+        for i in &e.inputs {
+            self.check_string(i.description.as_ref(), "");
+            let ts = self.check_string(
+                i.default.as_ref(),
+                "on.workflow_call.inputs.<inputs_id>.default",
+            );
+            let ty = match i.ty {
+                WorkflowCallInputType::String => ExprType::String,
+                WorkflowCallInputType::Boolean => {
+                    if let Some(ts) = &ts
+                        && ts.len() == 1
+                        && i.default.as_ref().is_some_and(Str::is_expression_assigned)
+                        && !matches!(ts[0].ty, ExprType::Bool | ExprType::Any)
+                    {
+                        let pos = i.default.as_ref().map_or_else(Pos::default, |d| d.pos);
+                        self.base.error(
+                            pos,
+                            format!(
+                                "type of input {} must be bool but found type {}",
+                                go_quote(&i.name.value),
+                                ts[0].ty
+                            ),
+                        );
+                    }
+                    ExprType::Bool
+                }
+                WorkflowCallInputType::Number => {
+                    if let Some(ts) = &ts
+                        && ts.len() == 1
+                        && i.default.as_ref().is_some_and(Str::is_expression_assigned)
+                        && !matches!(ts[0].ty, ExprType::Number | ExprType::Any)
+                    {
+                        let pos = i.default.as_ref().map_or_else(Pos::default, |d| d.pos);
+                        self.base.error(
+                            pos,
+                            format!(
+                                "type of input {} must be number but found type {}",
+                                go_quote(&i.name.value),
+                                ts[0].ty
+                            ),
+                        );
+                    }
+                    ExprType::Number
+                }
+                WorkflowCallInputType::Invalid => ExprType::Any,
+            };
+            if let Some(ity) = &mut self.inputs_ty {
+                ity.props.insert(i.id.clone(), ty);
+            }
+        }
+        if let Some(secrets) = &e.secrets {
+            let mut sty = ObjectType::empty_strict();
+            for (id, s) in secrets {
+                sty.props.insert(id.clone(), ExprType::String);
+                self.check_string(s.description.as_ref(), "");
+            }
+            self.secrets_ty = Some(sty);
+        }
+        for o in e.outputs.values() {
+            self.check_string(o.description.as_ref(), "");
+        }
+    }
+}
+
 impl Rule for RuleExpression<'_> {
     fn base(&mut self) -> &mut RuleBase {
         &mut self.base
@@ -902,72 +975,7 @@ impl Rule for RuleExpression<'_> {
                 }
                 Event::RepositoryDispatch(e) => self.check_strings(&e.types, ""),
                 Event::WorkflowCall(e) => {
-                    // `inputs` is set before the inputs are checked: a
-                    // default may refer to an earlier input.
-                    self.inputs_ty = Some(ObjectType::empty_strict());
-                    for i in &e.inputs {
-                        self.check_string(i.description.as_ref(), "");
-                        let ts = self.check_string(
-                            i.default.as_ref(),
-                            "on.workflow_call.inputs.<inputs_id>.default",
-                        );
-                        let ty = match i.ty {
-                            WorkflowCallInputType::String => ExprType::String,
-                            WorkflowCallInputType::Boolean => {
-                                if let Some(ts) = &ts
-                                    && ts.len() == 1
-                                    && i.default.as_ref().is_some_and(Str::is_expression_assigned)
-                                    && !matches!(ts[0].ty, ExprType::Bool | ExprType::Any)
-                                {
-                                    let pos =
-                                        i.default.as_ref().map_or_else(Pos::default, |d| d.pos);
-                                    self.base.error(
-                                        pos,
-                                        format!(
-                                            "type of input {} must be bool but found type {}",
-                                            go_quote(&i.name.value),
-                                            ts[0].ty
-                                        ),
-                                    );
-                                }
-                                ExprType::Bool
-                            }
-                            WorkflowCallInputType::Number => {
-                                if let Some(ts) = &ts
-                                    && ts.len() == 1
-                                    && i.default.as_ref().is_some_and(Str::is_expression_assigned)
-                                    && !matches!(ts[0].ty, ExprType::Number | ExprType::Any)
-                                {
-                                    let pos =
-                                        i.default.as_ref().map_or_else(Pos::default, |d| d.pos);
-                                    self.base.error(
-                                        pos,
-                                        format!(
-                                            "type of input {} must be number but found type {}",
-                                            go_quote(&i.name.value),
-                                            ts[0].ty
-                                        ),
-                                    );
-                                }
-                                ExprType::Number
-                            }
-                            WorkflowCallInputType::Invalid => ExprType::Any,
-                        };
-                        if let Some(ity) = &mut self.inputs_ty {
-                            ity.props.insert(i.id.clone(), ty);
-                        }
-                    }
-                    if let Some(secrets) = &e.secrets {
-                        let mut sty = ObjectType::empty_strict();
-                        for (id, s) in secrets {
-                            sty.props.insert(id.clone(), ExprType::String);
-                            self.check_string(s.description.as_ref(), "");
-                        }
-                        self.secrets_ty = Some(sty);
-                    }
-                    for o in e.outputs.values() {
-                        self.check_string(o.description.as_ref(), "");
-                    }
+                    self.check_workflow_call_event(e);
                 }
                 Event::ImageVersion(e) => {
                     self.check_strings(&e.names, "");

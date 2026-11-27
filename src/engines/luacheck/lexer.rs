@@ -322,6 +322,48 @@ impl<'a> Lexer<'a> {
         )
     }
 
+    /// The rest of a `\u{XXX}` escape, after the `u`: the byte that follows the
+    /// escape, and the code point's UTF-8 encoding.
+    fn lex_utf8_escape(&mut self) -> Result<(Option<u32>, Vec<u8>), Lexed> {
+        let mut b = self.next_byte();
+        if b != Some(0x7B) {
+            return Err(Lexed::Error("invalid UTF-8 escape sequence", Some(-2)));
+        }
+        b = self.next_byte();
+        let Some(mut codepoint) = b.and_then(to_hex) else {
+            return Err(Lexed::Error("invalid UTF-8 escape sequence", Some(-3)));
+        };
+        let mut hexdigits: isize = 0;
+        loop {
+            b = self.next_byte();
+            match b.and_then(to_hex) {
+                Some(hex) => {
+                    hexdigits += 1;
+                    let next = codepoint
+                        .checked_mul(16)
+                        .and_then(|c| c.checked_add(hex))
+                        .filter(|&n| n <= 0x7FFF_FFFF);
+                    let Some(next) = next else {
+                        return Err(Lexed::Error(
+                            "invalid UTF-8 escape sequence",
+                            Some(-hexdigits - 3),
+                        ));
+                    };
+                    codepoint = next;
+                }
+                None => break,
+            }
+        }
+        if b != Some(0x7D) {
+            return Err(Lexed::Error(
+                "invalid UTF-8 escape sequence",
+                Some(-hexdigits - 4),
+            ));
+        }
+        b = self.next_byte();
+        Ok((b, to_utf(codepoint)))
+    }
+
     fn lex_short_string(&mut self, quote: u32) -> Lexed {
         let mut b = self.next_byte();
         let mut chunks: Option<Vec<Vec<u8>>> = None;
@@ -354,40 +396,13 @@ impl<'a> Lexer<'a> {
                     b = self.next_byte();
                     s = Some(vec![byte(c1 * 16 + c2)]);
                 } else if b == Some(0x75) {
-                    b = self.next_byte();
-                    if b != Some(0x7B) {
-                        return Lexed::Error("invalid UTF-8 escape sequence", Some(-2));
-                    }
-                    b = self.next_byte();
-                    let Some(mut codepoint) = b.and_then(to_hex) else {
-                        return Lexed::Error("invalid UTF-8 escape sequence", Some(-3));
-                    };
-                    let mut hexdigits: isize = 0;
-                    loop {
-                        b = self.next_byte();
-                        match b.and_then(to_hex) {
-                            Some(hex) => {
-                                hexdigits += 1;
-                                let next = codepoint
-                                    .checked_mul(16)
-                                    .and_then(|c| c.checked_add(hex))
-                                    .filter(|&n| n <= 0x7FFF_FFFF);
-                                let Some(next) = next else {
-                                    return Lexed::Error(
-                                        "invalid UTF-8 escape sequence",
-                                        Some(-hexdigits - 3),
-                                    );
-                                };
-                                codepoint = next;
-                            }
-                            None => break,
+                    match self.lex_utf8_escape() {
+                        Ok((next, bytes)) => {
+                            b = next;
+                            s = Some(bytes);
                         }
+                        Err(e) => return e,
                     }
-                    if b != Some(0x7D) {
-                        return Lexed::Error("invalid UTF-8 escape sequence", Some(-hexdigits - 4));
-                    }
-                    b = self.next_byte();
-                    s = Some(to_utf(codepoint));
                 } else if b == Some(0x7A) {
                     let next = self.next_byte();
                     b = self.skip_space(next);
