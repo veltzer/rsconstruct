@@ -85,8 +85,13 @@ impl Processor for ScriptProcessor {
         for ai in &self.config.standard.dep_auto {
             dep_inputs.extend(config_file_inputs(ai));
         }
-        // If the command is a local file, depend on its contents
-        dep_inputs.extend(config_file_inputs(&self.config.standard.command));
+        // A command with a path separator is a script of the repository:
+        // depend on its contents. A bare name is a tool on PATH, whatever
+        // the project happens to hold under that name (a `terraform/`
+        // directory beside `command = "terraform"`).
+        if self.config.standard.command.contains('/') {
+            dep_inputs.extend(config_file_inputs(&self.config.standard.command));
+        }
         let extra = resolve_extra_inputs(&dep_inputs)?;
         for file in files {
             let mut inputs = Vec::with_capacity(1 + extra.len());

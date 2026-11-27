@@ -1627,6 +1627,14 @@ fn binary_recipe(pkg: &str) -> Option<BinaryRecipe> {
             archive: ArchiveKind::Raw,
             dest: "biome",
         }),
+        // Pinned like actionlint: HashiCorp's release URLs carry the version
+        // in the path and in the filename, with no `latest` to track. Bump
+        // this deliberately.
+        "terraform" => Some(BinaryRecipe {
+            url: "https://releases.hashicorp.com/terraform/1.17.2/terraform_1.17.2_linux_amd64.zip",
+            archive: ArchiveKind::Zip { inner: "terraform" },
+            dest: "terraform",
+        }),
         // Pinned like actionlint: shellcheck's release assets embed the
         // version in the filename and in the tarball's top directory. The
         // binary is statically linked. Bump this deliberately.
@@ -2135,6 +2143,39 @@ pub static TOOLS: &[ToolInfo] = &[
         sandbox_writable: &[],
         needs_network: false,
     },
+    // No processor runs Go or Terraform: a project names them in the
+    // `required_tools` of the script that checks its `.go` or `.tf` files.
+    // `gofmt` comes with the Go toolchain.
+    ToolInfo {
+        name: "go",
+        runtime: "system",
+        project: None,
+        machine: Some(InstallMethod::new("apt", "golang-go")),
+        alternatives: &[],
+        prefer: None,
+        sandbox_writable: &[],
+        needs_network: false,
+    },
+    ToolInfo {
+        name: "gofmt",
+        runtime: "system",
+        project: None,
+        machine: Some(InstallMethod::new("apt", "golang-go")),
+        alternatives: &[],
+        prefer: None,
+        sandbox_writable: &[],
+        needs_network: false,
+    },
+    ToolInfo {
+        name: "terraform",
+        runtime: "system",
+        project: Some(InstallMethod::new("binary", "terraform")),
+        machine: Some(InstallMethod::new("binary", "terraform")),
+        alternatives: &[],
+        prefer: None,
+        sandbox_writable: &[],
+        needs_network: false,
+    },
     // Debian/Ubuntu package the Clojure CLI, which is what makes this
     // installable without the official shell installer.
     // See https://clojure.org/guides/install_clojure
@@ -2624,6 +2665,7 @@ mod tests {
             "oxlint",
             "selene",
             "shellcheck",
+            "terraform",
             "jq",
             "pandoc",
             "rspandoc",

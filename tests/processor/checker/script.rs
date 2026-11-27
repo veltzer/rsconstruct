@@ -37,6 +37,34 @@ fn script_valid_file() {
     );
 }
 
+/// A bare command name is a tool on PATH even when the project has a
+/// directory of the same name: the directory is not read as the script.
+#[test]
+fn script_command_named_like_a_project_directory() {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let project_path = temp_dir.path();
+
+    fs::write(
+        project_path.join("rsconstruct.toml"),
+        concat!(
+            "[processor.checker.script]\n",
+            "command = \"true\"\n",
+            "src_extensions = [\".txt\"]\n",
+            "src_dirs = [\"true\"]\n",
+        ),
+    )
+    .unwrap();
+    fs::create_dir(project_path.join("true")).unwrap();
+    fs::write(project_path.join("true/test.txt"), "hello world\n").unwrap();
+
+    let output = run_rsconstruct_with_env(project_path, &["build"], &[("NO_COLOR", "1")]);
+    assert!(
+        output.status.success(),
+        "a directory named like the command must not break the build: stderr={}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
 #[test]
 fn script_incremental_skip() {
     let temp_dir = TempDir::new().expect("Failed to create temp dir");
