@@ -505,235 +505,284 @@ impl Parser {
         while usize::try_from(self.index).is_ok_and(|i| i < self.buffer.len()) {
             let c = self.at(self.index);
             match self.state {
-                State::Text => {
-                    if c == u16::from(b'<') {
-                        if self.index > self.section_start {
-                            let s = self.section();
-                            self.ontext(&s);
-                        }
-                        self.state = State::BeforeTagName;
-                        self.section_start = self.index;
-                    }
-                }
-                State::BeforeTagName => {
-                    if c == u16::from(b'/') {
-                        self.state = State::BeforeClosingTagName;
-                    } else if c == u16::from(b'<') {
-                        let s = self.section();
-                        self.ontext(&s);
-                        self.section_start = self.index;
-                    } else if c == u16::from(b'>') || is_whitespace(c) {
-                        self.state = State::Text;
-                    } else if c == u16::from(b'!') {
-                        self.state = State::BeforeDeclaration;
-                        self.section_start = self.index + 1;
-                    } else if c == u16::from(b'?') {
-                        self.state = State::InProcessingInstruction;
-                        self.section_start = self.index + 1;
-                    } else {
-                        self.state = State::InTagName;
-                        self.section_start = self.index;
-                    }
-                }
-                State::InTagName => {
-                    if c == u16::from(b'/') || c == u16::from(b'>') || is_whitespace(c) {
-                        self.emit_token(Token::OpenTagName);
-                        self.state = State::BeforeAttributeName;
-                        self.index -= 1;
-                    }
-                }
-                State::BeforeClosingTagName => {
-                    if is_whitespace(c) {
-                        // skip
-                    } else if c == u16::from(b'>') {
-                        self.state = State::Text;
-                    } else {
-                        self.state = State::InClosingTagName;
-                        self.section_start = self.index;
-                    }
-                }
-                State::InClosingTagName => {
-                    if c == u16::from(b'>') || is_whitespace(c) {
-                        self.emit_token(Token::CloseTag);
-                        self.state = State::AfterClosingTagName;
-                        self.index -= 1;
-                    }
-                }
-                State::AfterClosingTagName => {
-                    if c == u16::from(b'>') {
-                        self.state = State::Text;
-                        self.section_start = self.index + 1;
-                    }
-                }
-                State::BeforeAttributeName => {
-                    if c == u16::from(b'>') {
-                        self.onopentagend();
-                        self.state = State::Text;
-                        self.section_start = self.index + 1;
-                    } else if c == u16::from(b'/') {
-                        self.state = State::InSelfClosingTag;
-                    } else if !is_whitespace(c) {
-                        self.state = State::InAttributeName;
-                        self.section_start = self.index;
-                    }
-                }
-                State::InSelfClosingTag => {
-                    if c == u16::from(b'>') {
-                        self.onselfclosingtag();
-                        self.state = State::Text;
-                        self.section_start = self.index + 1;
-                    } else if !is_whitespace(c) {
-                        self.state = State::BeforeAttributeName;
-                        self.index -= 1;
-                    }
-                }
-                State::InAttributeName => {
-                    if c == u16::from(b'=')
-                        || c == u16::from(b'/')
-                        || c == u16::from(b'>')
-                        || is_whitespace(c)
-                    {
-                        let s = self.section();
-                        self.onattribname(&s);
-                        self.section_start = -1;
-                        self.state = State::AfterAttributeName;
-                        self.index -= 1;
-                    }
-                }
-                State::AfterAttributeName => {
-                    if c == u16::from(b'=') {
-                        self.state = State::BeforeAttributeValue;
-                    } else if c == u16::from(b'/') || c == u16::from(b'>') {
-                        self.onattribend();
-                        self.state = State::BeforeAttributeName;
-                        self.index -= 1;
-                    } else if !is_whitespace(c) {
-                        self.onattribend();
-                        self.state = State::InAttributeName;
-                        self.section_start = self.index;
-                    }
-                }
-                State::BeforeAttributeValue => {
-                    if c == u16::from(b'"') {
-                        self.state = State::InAttributeValueDq;
-                        self.section_start = self.index + 1;
-                    } else if c == u16::from(b'\'') {
-                        self.state = State::InAttributeValueSq;
-                        self.section_start = self.index + 1;
-                    } else if !is_whitespace(c) {
-                        self.state = State::InAttributeValueNq;
-                        self.section_start = self.index;
-                        self.index -= 1;
-                    }
-                }
-                State::InAttributeValueDq => {
-                    if c == u16::from(b'"') {
-                        self.emit_token(Token::AttribData);
-                        self.onattribend();
-                        self.state = State::BeforeAttributeName;
-                    }
-                }
-                State::InAttributeValueSq => {
-                    if c == u16::from(b'\'') {
-                        self.emit_token(Token::AttribData);
-                        self.onattribend();
-                        self.state = State::BeforeAttributeName;
-                    }
-                }
-                State::InAttributeValueNq => {
-                    if is_whitespace(c) || c == u16::from(b'>') {
-                        self.emit_token(Token::AttribData);
-                        self.onattribend();
-                        self.state = State::BeforeAttributeName;
-                        self.index -= 1;
-                    }
-                }
-                State::BeforeDeclaration => {
-                    self.state = if c == u16::from(b'[') {
-                        State::BeforeCdata1
-                    } else if c == u16::from(b'-') {
-                        State::BeforeComment
-                    } else {
-                        State::InDeclaration
-                    };
-                }
-                State::InDeclaration | State::InProcessingInstruction => {
-                    if c == u16::from(b'>') {
-                        self.oninstruction();
-                        self.state = State::Text;
-                        self.section_start = self.index + 1;
-                    }
-                }
-                State::BeforeComment => {
-                    if c == u16::from(b'-') {
-                        self.state = State::InComment;
-                        self.section_start = self.index + 1;
-                    } else {
-                        self.state = State::InDeclaration;
-                    }
-                }
-                State::InComment => {
-                    if c == u16::from(b'-') {
-                        self.state = State::AfterComment1;
-                    }
-                }
-                State::AfterComment1 => {
-                    self.state = if c == u16::from(b'-') {
-                        State::AfterComment2
-                    } else {
-                        State::InComment
-                    };
-                }
-                State::AfterComment2 => {
-                    if c == u16::from(b'>') {
-                        let data = self.slice(self.section_start, self.index - 2);
-                        self.oncomment(&data);
-                        self.state = State::Text;
-                        self.section_start = self.index + 1;
-                    } else if c != u16::from(b'-') {
-                        self.state = State::InComment;
-                    }
-                }
-                State::BeforeCdata1 => self.expect_cdata_char(c, b'C', State::BeforeCdata2),
-                State::BeforeCdata2 => self.expect_cdata_char(c, b'D', State::BeforeCdata3),
-                State::BeforeCdata3 => self.expect_cdata_char(c, b'A', State::BeforeCdata4),
-                State::BeforeCdata4 => self.expect_cdata_char(c, b'T', State::BeforeCdata5),
-                State::BeforeCdata5 => self.expect_cdata_char(c, b'A', State::BeforeCdata6),
-                State::BeforeCdata6 => {
-                    if c == u16::from(b'[') {
-                        self.state = State::InCdata;
-                        self.section_start = self.index + 1;
-                    } else {
-                        self.state = State::InDeclaration;
-                        self.index -= 1;
-                    }
-                }
-                State::InCdata => {
-                    if c == u16::from(b']') {
-                        self.state = State::AfterCdata1;
-                    }
-                }
-                State::AfterCdata1 => {
-                    self.state = if c == u16::from(b']') {
-                        State::AfterCdata2
-                    } else {
-                        State::InCdata
-                    };
-                }
-                State::AfterCdata2 => {
-                    if c == u16::from(b'>') {
-                        let data = self.slice(self.section_start, self.index - 2);
-                        self.oncdata(&data);
-                        self.state = State::Text;
-                        self.section_start = self.index + 1;
-                    } else if c != u16::from(b']') {
-                        self.state = State::InCdata;
-                    }
-                }
+                State::Text
+                | State::BeforeTagName
+                | State::InTagName
+                | State::BeforeClosingTagName
+                | State::InClosingTagName
+                | State::AfterClosingTagName => self.step_tag(c),
+                State::BeforeAttributeName
+                | State::InSelfClosingTag
+                | State::InAttributeName
+                | State::AfterAttributeName
+                | State::BeforeAttributeValue
+                | State::InAttributeValueDq
+                | State::InAttributeValueSq
+                | State::InAttributeValueNq => self.step_attribute(c),
+                State::BeforeDeclaration
+                | State::InDeclaration
+                | State::InProcessingInstruction
+                | State::BeforeComment
+                | State::InComment
+                | State::AfterComment1
+                | State::AfterComment2
+                | State::BeforeCdata1
+                | State::BeforeCdata2
+                | State::BeforeCdata3
+                | State::BeforeCdata4
+                | State::BeforeCdata5
+                | State::BeforeCdata6
+                | State::InCdata
+                | State::AfterCdata1
+                | State::AfterCdata2 => self.step_markup(c),
             }
             self.index += 1;
         }
         self.cleanup();
+    }
+
+    /// One unit of text or of a tag name. As in the two functions after
+    /// this one, `parse` only calls it in the states it has an arm for.
+    fn step_tag(&mut self, c: u16) {
+        match self.state {
+            State::Text => {
+                if c == u16::from(b'<') {
+                    if self.index > self.section_start {
+                        let s = self.section();
+                        self.ontext(&s);
+                    }
+                    self.state = State::BeforeTagName;
+                    self.section_start = self.index;
+                }
+            }
+            State::BeforeTagName => {
+                if c == u16::from(b'/') {
+                    self.state = State::BeforeClosingTagName;
+                } else if c == u16::from(b'<') {
+                    let s = self.section();
+                    self.ontext(&s);
+                    self.section_start = self.index;
+                } else if c == u16::from(b'>') || is_whitespace(c) {
+                    self.state = State::Text;
+                } else if c == u16::from(b'!') {
+                    self.state = State::BeforeDeclaration;
+                    self.section_start = self.index + 1;
+                } else if c == u16::from(b'?') {
+                    self.state = State::InProcessingInstruction;
+                    self.section_start = self.index + 1;
+                } else {
+                    self.state = State::InTagName;
+                    self.section_start = self.index;
+                }
+            }
+            State::InTagName => {
+                if c == u16::from(b'/') || c == u16::from(b'>') || is_whitespace(c) {
+                    self.emit_token(Token::OpenTagName);
+                    self.state = State::BeforeAttributeName;
+                    self.index -= 1;
+                }
+            }
+            State::BeforeClosingTagName => {
+                if is_whitespace(c) {
+                    // skip
+                } else if c == u16::from(b'>') {
+                    self.state = State::Text;
+                } else {
+                    self.state = State::InClosingTagName;
+                    self.section_start = self.index;
+                }
+            }
+            State::InClosingTagName => {
+                if c == u16::from(b'>') || is_whitespace(c) {
+                    self.emit_token(Token::CloseTag);
+                    self.state = State::AfterClosingTagName;
+                    self.index -= 1;
+                }
+            }
+            State::AfterClosingTagName if c == u16::from(b'>') => {
+                self.state = State::Text;
+                self.section_start = self.index + 1;
+            }
+            _ => {}
+        }
+    }
+
+    /// One unit inside a start tag, after its name.
+    fn step_attribute(&mut self, c: u16) {
+        match self.state {
+            State::BeforeAttributeName => {
+                if c == u16::from(b'>') {
+                    self.onopentagend();
+                    self.state = State::Text;
+                    self.section_start = self.index + 1;
+                } else if c == u16::from(b'/') {
+                    self.state = State::InSelfClosingTag;
+                } else if !is_whitespace(c) {
+                    self.state = State::InAttributeName;
+                    self.section_start = self.index;
+                }
+            }
+            State::InSelfClosingTag => {
+                if c == u16::from(b'>') {
+                    self.onselfclosingtag();
+                    self.state = State::Text;
+                    self.section_start = self.index + 1;
+                } else if !is_whitespace(c) {
+                    self.state = State::BeforeAttributeName;
+                    self.index -= 1;
+                }
+            }
+            State::InAttributeName => {
+                if c == u16::from(b'=')
+                    || c == u16::from(b'/')
+                    || c == u16::from(b'>')
+                    || is_whitespace(c)
+                {
+                    let s = self.section();
+                    self.onattribname(&s);
+                    self.section_start = -1;
+                    self.state = State::AfterAttributeName;
+                    self.index -= 1;
+                }
+            }
+            State::AfterAttributeName => {
+                if c == u16::from(b'=') {
+                    self.state = State::BeforeAttributeValue;
+                } else if c == u16::from(b'/') || c == u16::from(b'>') {
+                    self.onattribend();
+                    self.state = State::BeforeAttributeName;
+                    self.index -= 1;
+                } else if !is_whitespace(c) {
+                    self.onattribend();
+                    self.state = State::InAttributeName;
+                    self.section_start = self.index;
+                }
+            }
+            State::BeforeAttributeValue => {
+                if c == u16::from(b'"') {
+                    self.state = State::InAttributeValueDq;
+                    self.section_start = self.index + 1;
+                } else if c == u16::from(b'\'') {
+                    self.state = State::InAttributeValueSq;
+                    self.section_start = self.index + 1;
+                } else if !is_whitespace(c) {
+                    self.state = State::InAttributeValueNq;
+                    self.section_start = self.index;
+                    self.index -= 1;
+                }
+            }
+            State::InAttributeValueDq => {
+                if c == u16::from(b'"') {
+                    self.emit_token(Token::AttribData);
+                    self.onattribend();
+                    self.state = State::BeforeAttributeName;
+                }
+            }
+            State::InAttributeValueSq => {
+                if c == u16::from(b'\'') {
+                    self.emit_token(Token::AttribData);
+                    self.onattribend();
+                    self.state = State::BeforeAttributeName;
+                }
+            }
+            State::InAttributeValueNq if is_whitespace(c) || c == u16::from(b'>') => {
+                self.emit_token(Token::AttribData);
+                self.onattribend();
+                self.state = State::BeforeAttributeName;
+                self.index -= 1;
+            }
+            _ => {}
+        }
+    }
+
+    /// One unit of a declaration, a processing instruction, a comment or
+    /// a CDATA section.
+    fn step_markup(&mut self, c: u16) {
+        match self.state {
+            State::BeforeDeclaration => {
+                self.state = if c == u16::from(b'[') {
+                    State::BeforeCdata1
+                } else if c == u16::from(b'-') {
+                    State::BeforeComment
+                } else {
+                    State::InDeclaration
+                };
+            }
+            State::InDeclaration | State::InProcessingInstruction => {
+                if c == u16::from(b'>') {
+                    self.oninstruction();
+                    self.state = State::Text;
+                    self.section_start = self.index + 1;
+                }
+            }
+            State::BeforeComment => {
+                if c == u16::from(b'-') {
+                    self.state = State::InComment;
+                    self.section_start = self.index + 1;
+                } else {
+                    self.state = State::InDeclaration;
+                }
+            }
+            State::InComment => {
+                if c == u16::from(b'-') {
+                    self.state = State::AfterComment1;
+                }
+            }
+            State::AfterComment1 => {
+                self.state = if c == u16::from(b'-') {
+                    State::AfterComment2
+                } else {
+                    State::InComment
+                };
+            }
+            State::AfterComment2 => {
+                if c == u16::from(b'>') {
+                    let data = self.slice(self.section_start, self.index - 2);
+                    self.oncomment(&data);
+                    self.state = State::Text;
+                    self.section_start = self.index + 1;
+                } else if c != u16::from(b'-') {
+                    self.state = State::InComment;
+                }
+            }
+            State::BeforeCdata1 => self.expect_cdata_char(c, b'C', State::BeforeCdata2),
+            State::BeforeCdata2 => self.expect_cdata_char(c, b'D', State::BeforeCdata3),
+            State::BeforeCdata3 => self.expect_cdata_char(c, b'A', State::BeforeCdata4),
+            State::BeforeCdata4 => self.expect_cdata_char(c, b'T', State::BeforeCdata5),
+            State::BeforeCdata5 => self.expect_cdata_char(c, b'A', State::BeforeCdata6),
+            State::BeforeCdata6 => {
+                if c == u16::from(b'[') {
+                    self.state = State::InCdata;
+                    self.section_start = self.index + 1;
+                } else {
+                    self.state = State::InDeclaration;
+                    self.index -= 1;
+                }
+            }
+            State::InCdata => {
+                if c == u16::from(b']') {
+                    self.state = State::AfterCdata1;
+                }
+            }
+            State::AfterCdata1 => {
+                self.state = if c == u16::from(b']') {
+                    State::AfterCdata2
+                } else {
+                    State::InCdata
+                };
+            }
+            State::AfterCdata2 => {
+                if c == u16::from(b'>') {
+                    let data = self.slice(self.section_start, self.index - 2);
+                    self.oncdata(&data);
+                    self.state = State::Text;
+                    self.section_start = self.index + 1;
+                } else if c != u16::from(b']') {
+                    self.state = State::InCdata;
+                }
+            }
+            _ => {}
+        }
     }
 
     /// The `ifElseState` helpers for `<![CDATA[`: either case of the letter

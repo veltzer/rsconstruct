@@ -3202,51 +3202,65 @@ impl Checker {
                     split(&self.re(r",", ""), &args)
                 });
 
-        dstat.retain(|&b| b != SUBSEP);
-        self.s(r"\\\n.", "", &mut dstat, true, &mut |_| Vec::new());
-        self.s(r"^\s*", "s", &mut dstat, false, &mut |_| Vec::new());
-        self.s(r"\s*$", "s", &mut dstat, false, &mut |_| Vec::new());
-
-        // Flatten any parentheses and braces
-        while self.s(r"\([^\(\)]*\)", "", &mut dstat, false, &mut |_| {
-            b"1u".to_vec()
-        }) > 0
-            || self.s(r"\{[^\{\}]*\}", "", &mut dstat, false, &mut |_| {
-                b"1u".to_vec()
-            }) > 0
-            || self.s(r".\[[^\[\]]*\]", "", &mut dstat, false, &mut |_| {
-                b"1u".to_vec()
-            }) > 0
-        {}
-
-        // Flatten any obvious string concatenation.
-        while self.s(r"($String)\s*$Ident", "", &mut dstat, false, &mut |c| {
-            c.s(1)
-        }) > 0
-            || self.s(r"$Ident\s*($String)", "", &mut dstat, false, &mut |c| {
-                c.s(1)
-            }) > 0
-        {}
-
-        // Make asm volatile uses seem like a generic function
-        self.s(
-            r"\b_*asm_*\s+_*volatile_*\b",
-            "",
-            &mut dstat,
-            true,
-            &mut |_| b"asm_volatile".to_vec(),
-        );
+        self.flatten_macro_body(&mut dstat);
 
         self.s(r"\n*$", "", &mut ctx, false, &mut |_| Vec::new());
         let stmt_cnt = count(&ctx, b'\n') + 1;
         let herectx = self.get_stat_here(l.linenr, stmt_cnt, &l.here);
 
+        self.complex_macro_value(&dstat, &ctx, &herectx);
+
+        let define_stmt = self.single_line_define(&define_stmt);
+
+        self.macro_argument_checks(def_args, &define_stmt, &herectx);
+
+        // check for macros with flow control, but without ## concatenation
+        // ## concatenation is commonly a macro that defines a function so ignore those
+        if has_flow_statement && !has_arg_concat {
+            let cnt = count(&ctx, b'\n') + 1;
+            let herectx = self.get_stat_here(l.linenr, cnt, &l.here);
+            let msg = cat(&[
+                b"Macros with flow control statements should be avoided\n",
+                &herectx,
+            ]);
+            self.warn("MACRO_WITH_FLOW_CONTROL", &msg);
+        }
+    }
+
+    /// Reduce the body of a macro to its shape: continuations joined,
+    /// every bracketed group and string concatenation flattened.
+    fn flatten_macro_body(&self, dstat: &mut Vec<u8>) {
+        dstat.retain(|&b| b != SUBSEP);
+        self.s(r"\\\n.", "", dstat, true, &mut |_| Vec::new());
+        self.s(r"^\s*", "s", dstat, false, &mut |_| Vec::new());
+        self.s(r"\s*$", "s", dstat, false, &mut |_| Vec::new());
+
+        // Flatten any parentheses and braces
+        while self.s(r"\([^\(\)]*\)", "", dstat, false, &mut |_| b"1u".to_vec()) > 0
+            || self.s(r"\{[^\{\}]*\}", "", dstat, false, &mut |_| b"1u".to_vec()) > 0
+            || self.s(r".\[[^\[\]]*\]", "", dstat, false, &mut |_| b"1u".to_vec()) > 0
+        {}
+
+        // Flatten any obvious string concatenation.
+        while self.s(r"($String)\s*$Ident", "", dstat, false, &mut |c| c.s(1)) > 0
+            || self.s(r"$Ident\s*($String)", "", dstat, false, &mut |c| c.s(1)) > 0
+        {}
+
+        // Make asm volatile uses seem like a generic function
+        self.s(r"\b_*asm_*\s+_*volatile_*\b", "", dstat, true, &mut |_| {
+            b"asm_volatile".to_vec()
+        });
+    }
+
+    /// A macro whose flattened body `dstat` is more than one value must be
+    /// in parentheses or in a do - while loop.
+    fn complex_macro_value(&mut self, dstat: &[u8], ctx: &[u8], herectx: &[u8]) {
         if !dstat.is_empty()
-            && !self.t(r"^(?:$Ident|-?$Constant),$", &dstat)
-            && !self.t(r"^(?:$Ident|-?$Constant);$", &dstat)
-            && !self.t(r"^[!~-]?(?:$Lval|$Constant)$", &dstat)
-            && !self.t(r"^'X'$", &dstat)
-            && !self.t(r"^'XX'$", &dstat)
+            && !self.t(r"^(?:$Ident|-?$Constant),$", dstat)
+            && !self.t(r"^(?:$Ident|-?$Constant);$", dstat)
+            && !self.t(r"^[!~-]?(?:$Lval|$Constant)$", dstat)
+            && !self.t(r"^'X'$", dstat)
+            && !self.t(r"^'XX'$", dstat)
             && !self.tf(
                 r#"
 				$Declare|
@@ -3265,32 +3279,32 @@ impl Checker {
 				^\[
 			"#,
                 "x",
-                &dstat,
+                dstat,
             )
-            && !self.t(r"^\.$Ident\s*=", &dstat)
-            && !self.t(r"^(?:\#\s*$Ident|\#\s*$Constant)\s*$", &dstat)
-            && !self.t(r"^case\b", &dstat)
-            && !self.t(r"^do\s*$Constant\s*while\s*$Constant;?$", &dstat)
-            && !self.t(r"^while\s*$Constant\s*$Constant\s*$", &dstat)
-            && !self.t(r"^for\s*$Constant$", &dstat)
-            && !self.t(r"^for\s*$Constant\s+(?:$Ident|-?$Constant)$", &dstat)
-            && !self.t(r"^do\s*{", &dstat)
-            && !self.t(r"^\(\{", &dstat)
+            && !self.t(r"^\.$Ident\s*=", dstat)
+            && !self.t(r"^(?:\#\s*$Ident|\#\s*$Constant)\s*$", dstat)
+            && !self.t(r"^case\b", dstat)
+            && !self.t(r"^do\s*$Constant\s*while\s*$Constant;?$", dstat)
+            && !self.t(r"^while\s*$Constant\s*$Constant\s*$", dstat)
+            && !self.t(r"^for\s*$Constant$", dstat)
+            && !self.t(r"^for\s*$Constant\s+(?:$Ident|-?$Constant)$", dstat)
+            && !self.t(r"^do\s*{", dstat)
+            && !self.t(r"^\(\{", dstat)
             && !self.t(
                 r"^.\s*#\s*define\s+TRACE_(?:SYSTEM|INCLUDE_FILE|INCLUDE_PATH)\b",
-                &ctx,
+                ctx,
             )
         {
-            if self.t(r"^\s*if\b", &dstat) {
+            if self.t(r"^\s*if\b", dstat) {
                 let msg = cat(&[
                     b"Macros starting with if should be enclosed by a do - while loop to avoid possible if/else logic defects\n",
-                    &herectx,
+                    herectx,
                 ]);
                 self.error("MULTISTATEMENT_MACRO_USE_DO_WHILE", &msg);
             } else if dstat.contains(&b';') {
                 let msg = cat(&[
                     b"Non-declarative macros with multiple statements should be enclosed in a do - while loop\n",
-                    &herectx,
+                    herectx,
                     b"\nBUT SEE:\n",
                     DO_WHILE_0_ADVICE.as_bytes(),
                 ]);
@@ -3298,17 +3312,20 @@ impl Checker {
             } else {
                 let msg = cat(&[
                     b"Macros with complex values should be enclosed in parentheses\n",
-                    &herectx,
+                    herectx,
                     b"\nBUT SEE:\n",
                     DO_WHILE_0_ADVICE.as_bytes(),
                 ]);
                 self.error("COMPLEX_MACRO", &msg);
             }
         }
+    }
 
+    /// The text of a define on one line, without continuations.
+    fn single_line_define(&self, define_stmt: &[u8]) -> Vec<u8> {
         // Make $define_stmt single line, comment-free, etc
         let mut stmt: Vec<u8> = Vec::new();
-        for (i, mut piece) in split(&self.re(r"\n", ""), &define_stmt)
+        for (i, mut piece) in split(&self.re(r"\n", ""), define_stmt)
             .into_iter()
             .enumerate()
         {
@@ -3321,8 +3338,17 @@ impl Checker {
         }
         stmt.retain(|&b| b != SUBSEP);
         self.s(r"\s+", "", &mut stmt, true, &mut |_| b" ".to_vec());
-        let define_stmt = self.trim(&stmt);
+        self.trim(&stmt)
+    }
 
+    /// The arguments of a function-like macro: used twice, used where
+    /// precedence may bite, or not used.
+    fn macro_argument_checks(
+        &mut self,
+        def_args: Vec<Vec<u8>>,
+        define_stmt: &[u8],
+        herectx: &[u8],
+    ) {
         // check if any macro arguments are reused (ignore '...' and 'type')
         for arg in def_args {
             if self.t(r"\.\.\.", &arg) {
@@ -3332,7 +3358,7 @@ impl Checker {
                 continue;
             }
             let a = [("arg", &arg[..])];
-            let mut tmp_stmt = define_stmt.clone();
+            let mut tmp_stmt = define_stmt.to_vec();
             let re = self.rel(
                 r"\b(__must_be_array|offsetof|sizeof|sizeof_field|__stringify|typeof|__typeof__|__builtin\w+|typecheck\s*\(\s*$Type\s*,|\#+)\s*\(*\s*$arg\s*\)*\b",
                 "",
@@ -3357,7 +3383,7 @@ impl Checker {
                     b"Macro argument reuse '",
                     &arg,
                     b"' - possible side-effects?\n",
-                    &herectx,
+                    herectx,
                 ]);
                 self.chk("MACRO_ARG_REUSE", &msg);
             }
@@ -3375,33 +3401,21 @@ impl Checker {
                     b"' may be better as '(",
                     &arg,
                     b")' to avoid precedence issues\n",
-                    &herectx,
+                    herectx,
                 ]);
                 self.chk("MACRO_ARG_PRECEDENCE", &msg);
             }
 
             // check if this is an unused argument
-            if !self.tl(r"\b$arg\b", &a, &define_stmt) && truthy(&define_stmt) {
+            if !self.tl(r"\b$arg\b", &a, define_stmt) && truthy(define_stmt) {
                 let msg = cat(&[
                     b"Argument '",
                     &arg,
                     b"' is not used in function-like macro\n",
-                    &herectx,
+                    herectx,
                 ]);
                 self.warn("MACRO_ARG_UNUSED", &msg);
             }
-        }
-
-        // check for macros with flow control, but without ## concatenation
-        // ## concatenation is commonly a macro that defines a function so ignore those
-        if has_flow_statement && !has_arg_concat {
-            let cnt = count(&ctx, b'\n') + 1;
-            let herectx = self.get_stat_here(l.linenr, cnt, &l.here);
-            let msg = cat(&[
-                b"Macros with flow control statements should be avoided\n",
-                &herectx,
-            ]);
-            self.warn("MACRO_WITH_FLOW_CONTROL", &msg);
         }
     }
 

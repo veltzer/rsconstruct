@@ -240,6 +240,171 @@ pub fn scalar_bool(n: &Node) -> Result<bool, String> {
     Err(cannot_unmarshal(n, "bool"))
 }
 
+/// The `inputs` of an action.
+fn parse_inputs(meta: &mut ActionMetadata, v: &Node, type_errors: &mut Vec<String>) {
+    if v.kind == Kind::Scalar && v.tag == "!!null" {
+        return;
+    }
+    // Errors from go-yaml's custom unmarshaler are prefixed with
+    // the line of the node it was given, and parsing goes on.
+    if v.kind != Kind::Mapping {
+        type_errors.push(format!(
+            "line {}: {}",
+            v.line,
+            expected_mapping("inputs", v)
+        ));
+        return;
+    }
+    let mut failed: Option<String> = None;
+    let mut pending_error: Option<String> = None;
+    for (ik, iv) in v.pairs() {
+        let id = ik.value.to_lowercase();
+        if meta.inputs.contains_key(&id) {
+            failed = Some(format!("input {} is duplicated", go_quote(&ik.value)));
+            break;
+        }
+        let mut input = ActionMetadataInput {
+            name: ik.value.clone(),
+            ..ActionMetadataInput::default()
+        };
+        let mut required = false;
+        let mut has_default = false;
+        if iv.kind == Kind::Mapping {
+            for (fk, fv) in iv.pairs() {
+                match fk.value.as_str() {
+                    "required" => match scalar_bool(fv) {
+                        Ok(b) => required = b,
+                        Err(e) => {
+                            failed = Some(e);
+                            break;
+                        }
+                    },
+                    "default" => {
+                        has_default = !(fv.kind == Kind::Scalar && fv.tag == "!!null");
+                    }
+                    "deprecationMessage" => {
+                        input.deprecated = true;
+                        input.deprecation_message =
+                            scalar_string(fv).unwrap_or_default().trim().to_string();
+                    }
+                    "description" => {}
+                    other => {
+                        pending_error = Some(format!(
+                            "unexpected key {} for definition of input {}",
+                            go_quote(other),
+                            go_quote(&ik.value)
+                        ));
+                    }
+                }
+            }
+            if failed.is_some() {
+                break;
+            }
+        } else if !(iv.kind == Kind::Scalar && iv.tag == "!!null") {
+            failed = Some(cannot_unmarshal(
+                iv,
+                "struct { Required bool \"yaml:\\\"required\\\"\"; Default *string \"yaml:\\\"default\\\"\"; DeprecationMessage string \"yaml:\\\"deprecationMessage\\\"\" }",
+            ));
+            break;
+        }
+        input.required = required && !has_default;
+        meta.inputs.insert(id, input);
+    }
+    if let Some(e) = failed.or(pending_error) {
+        // A nested type error already names its own line and is
+        // merged as is; a message from the unmarshaler gets the
+        // line of the node it was given.
+        if e.starts_with("line ") {
+            type_errors.push(e);
+        } else {
+            type_errors.push(format!("line {}: {e}", v.line));
+        }
+    }
+}
+
+/// The `outputs` of an action.
+fn parse_outputs(meta: &mut ActionMetadata, v: &Node, type_errors: &mut Vec<String>) {
+    if v.kind == Kind::Scalar && v.tag == "!!null" {
+        return;
+    }
+    if v.kind != Kind::Mapping {
+        type_errors.push(format!(
+            "line {}: {}",
+            v.line,
+            expected_mapping("outputs", v)
+        ));
+        return;
+    }
+    for (ok, _) in v.pairs() {
+        let id = ok.value.to_lowercase();
+        if meta.outputs.contains_key(&id) {
+            type_errors.push(format!(
+                "line {}: output {} is duplicated",
+                v.line,
+                go_quote(&ok.value)
+            ));
+            break;
+        }
+        meta.outputs.insert(id, ok.value.clone());
+    }
+}
+
+/// The `runs` section of an action.
+fn parse_runs(meta: &mut ActionMetadata, v: &Node, type_errors: &mut Vec<String>) {
+    if v.kind != Kind::Mapping {
+        if !(v.kind == Kind::Scalar && v.tag == "!!null") {
+            type_errors.push(cannot_unmarshal(v, "actionlint.ActionMetadataRuns"));
+        }
+        return;
+    }
+    for (rk, rv) in v.pairs() {
+        let field = match rk.value.as_str() {
+            "using" => Some(&mut meta.runs.using),
+            "main" => Some(&mut meta.runs.main),
+            "pre" => Some(&mut meta.runs.pre),
+            "pre-if" => Some(&mut meta.runs.pre_if),
+            "post" => Some(&mut meta.runs.post),
+            "post-if" => Some(&mut meta.runs.post_if),
+            "image" => Some(&mut meta.runs.image),
+            "pre-entrypoint" => Some(&mut meta.runs.pre_entrypoint),
+            "entrypoint" => Some(&mut meta.runs.entrypoint),
+            "post-entrypoint" => Some(&mut meta.runs.post_entrypoint),
+            _ => None,
+        };
+        if let Some(field) = field {
+            match scalar_string(rv) {
+                Ok(s) => *field = s,
+                Err(e) => type_errors.push(e),
+            }
+            continue;
+        }
+        match rk.value.as_str() {
+            "steps" => {
+                if rv.kind == Kind::Sequence {
+                    meta.runs.steps = Some(rv.content.len());
+                } else if !(rv.kind == Kind::Scalar && rv.tag == "!!null") {
+                    type_errors.push(cannot_unmarshal(rv, "[]interface {}"));
+                }
+            }
+            "args" => {
+                if rv.kind == Kind::Sequence {
+                    meta.runs.args = true;
+                } else if !(rv.kind == Kind::Scalar && rv.tag == "!!null") {
+                    type_errors.push(cannot_unmarshal(rv, "[]interface {}"));
+                }
+            }
+            "env" => {
+                if rv.kind == Kind::Mapping {
+                    meta.runs.env = true;
+                } else if !(rv.kind == Kind::Scalar && rv.tag == "!!null") {
+                    type_errors.push(cannot_unmarshal(rv, "map[string]interface {}"));
+                }
+            }
+            _ => {}
+        }
+    }
+}
+
 /// Parses an `action.yml`, with go-yaml's error texts where actionlint
 /// would show them.
 pub fn parse_action_metadata(bytes: &[u8]) -> Result<ActionMetadata, String> {
@@ -266,165 +431,9 @@ pub fn parse_action_metadata(bytes: &[u8]) -> Result<ActionMetadata, String> {
                 Ok(s) => meta.description = s,
                 Err(e) => type_errors.push(e),
             },
-            "inputs" => {
-                if v.kind == Kind::Scalar && v.tag == "!!null" {
-                    continue;
-                }
-                // Errors from go-yaml's custom unmarshaler are prefixed with
-                // the line of the node it was given, and parsing goes on.
-                if v.kind != Kind::Mapping {
-                    type_errors.push(format!(
-                        "line {}: {}",
-                        v.line,
-                        expected_mapping("inputs", v)
-                    ));
-                    continue;
-                }
-                let mut failed: Option<String> = None;
-                let mut pending_error: Option<String> = None;
-                for (ik, iv) in v.pairs() {
-                    let id = ik.value.to_lowercase();
-                    if meta.inputs.contains_key(&id) {
-                        failed = Some(format!("input {} is duplicated", go_quote(&ik.value)));
-                        break;
-                    }
-                    let mut input = ActionMetadataInput {
-                        name: ik.value.clone(),
-                        ..ActionMetadataInput::default()
-                    };
-                    let mut required = false;
-                    let mut has_default = false;
-                    if iv.kind == Kind::Mapping {
-                        for (fk, fv) in iv.pairs() {
-                            match fk.value.as_str() {
-                                "required" => match scalar_bool(fv) {
-                                    Ok(b) => required = b,
-                                    Err(e) => {
-                                        failed = Some(e);
-                                        break;
-                                    }
-                                },
-                                "default" => {
-                                    has_default = !(fv.kind == Kind::Scalar && fv.tag == "!!null");
-                                }
-                                "deprecationMessage" => {
-                                    input.deprecated = true;
-                                    input.deprecation_message =
-                                        scalar_string(fv).unwrap_or_default().trim().to_string();
-                                }
-                                "description" => {}
-                                other => {
-                                    pending_error = Some(format!(
-                                        "unexpected key {} for definition of input {}",
-                                        go_quote(other),
-                                        go_quote(&ik.value)
-                                    ));
-                                }
-                            }
-                        }
-                        if failed.is_some() {
-                            break;
-                        }
-                    } else if !(iv.kind == Kind::Scalar && iv.tag == "!!null") {
-                        failed = Some(cannot_unmarshal(
-                            iv,
-                            "struct { Required bool \"yaml:\\\"required\\\"\"; Default *string \"yaml:\\\"default\\\"\"; DeprecationMessage string \"yaml:\\\"deprecationMessage\\\"\" }",
-                        ));
-                        break;
-                    }
-                    input.required = required && !has_default;
-                    meta.inputs.insert(id, input);
-                }
-                if let Some(e) = failed.or(pending_error) {
-                    // A nested type error already names its own line and is
-                    // merged as is; a message from the unmarshaler gets the
-                    // line of the node it was given.
-                    if e.starts_with("line ") {
-                        type_errors.push(e);
-                    } else {
-                        type_errors.push(format!("line {}: {e}", v.line));
-                    }
-                }
-            }
-            "outputs" => {
-                if v.kind == Kind::Scalar && v.tag == "!!null" {
-                    continue;
-                }
-                if v.kind != Kind::Mapping {
-                    type_errors.push(format!(
-                        "line {}: {}",
-                        v.line,
-                        expected_mapping("outputs", v)
-                    ));
-                    continue;
-                }
-                for (ok, _) in v.pairs() {
-                    let id = ok.value.to_lowercase();
-                    if meta.outputs.contains_key(&id) {
-                        type_errors.push(format!(
-                            "line {}: output {} is duplicated",
-                            v.line,
-                            go_quote(&ok.value)
-                        ));
-                        break;
-                    }
-                    meta.outputs.insert(id, ok.value.clone());
-                }
-            }
-            "runs" => {
-                if v.kind != Kind::Mapping {
-                    if !(v.kind == Kind::Scalar && v.tag == "!!null") {
-                        type_errors.push(cannot_unmarshal(v, "actionlint.ActionMetadataRuns"));
-                    }
-                    continue;
-                }
-                for (rk, rv) in v.pairs() {
-                    let field = match rk.value.as_str() {
-                        "using" => Some(&mut meta.runs.using),
-                        "main" => Some(&mut meta.runs.main),
-                        "pre" => Some(&mut meta.runs.pre),
-                        "pre-if" => Some(&mut meta.runs.pre_if),
-                        "post" => Some(&mut meta.runs.post),
-                        "post-if" => Some(&mut meta.runs.post_if),
-                        "image" => Some(&mut meta.runs.image),
-                        "pre-entrypoint" => Some(&mut meta.runs.pre_entrypoint),
-                        "entrypoint" => Some(&mut meta.runs.entrypoint),
-                        "post-entrypoint" => Some(&mut meta.runs.post_entrypoint),
-                        _ => None,
-                    };
-                    if let Some(field) = field {
-                        match scalar_string(rv) {
-                            Ok(s) => *field = s,
-                            Err(e) => type_errors.push(e),
-                        }
-                        continue;
-                    }
-                    match rk.value.as_str() {
-                        "steps" => {
-                            if rv.kind == Kind::Sequence {
-                                meta.runs.steps = Some(rv.content.len());
-                            } else if !(rv.kind == Kind::Scalar && rv.tag == "!!null") {
-                                type_errors.push(cannot_unmarshal(rv, "[]interface {}"));
-                            }
-                        }
-                        "args" => {
-                            if rv.kind == Kind::Sequence {
-                                meta.runs.args = true;
-                            } else if !(rv.kind == Kind::Scalar && rv.tag == "!!null") {
-                                type_errors.push(cannot_unmarshal(rv, "[]interface {}"));
-                            }
-                        }
-                        "env" => {
-                            if rv.kind == Kind::Mapping {
-                                meta.runs.env = true;
-                            } else if !(rv.kind == Kind::Scalar && rv.tag == "!!null") {
-                                type_errors.push(cannot_unmarshal(rv, "map[string]interface {}"));
-                            }
-                        }
-                        _ => {}
-                    }
-                }
-            }
+            "inputs" => parse_inputs(&mut meta, v, &mut type_errors),
+            "outputs" => parse_outputs(&mut meta, v, &mut type_errors),
+            "runs" => parse_runs(&mut meta, v, &mut type_errors),
             "branding" => {
                 if v.kind != Kind::Mapping {
                     continue;

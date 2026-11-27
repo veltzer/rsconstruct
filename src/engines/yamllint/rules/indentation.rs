@@ -229,18 +229,73 @@ fn compute_expected_indent(token: &Token, st: &mut Inner, found_indent: i64) -> 
     }
 }
 
-/// Mirrors `_check`. `Err(())` stands for the `AssertionError` yamllint
-/// raises on a token sequence its model does not expect.
-fn check_inner(
-    conf: &RuleConf,
-    ctx: &Ctx<'_, '_>,
-    st: &mut Inner,
-    out: &mut Vec<Problem>,
-) -> Result<(), ()> {
+/// The indentation of the value of a mapping, whose first token is `n`
+/// and whose `:` follows `prev`.
+fn value_indent(st: &mut Inner, n: &Token, prev: &Token) -> i64 {
+    let last = st.last();
+    let n_col = to_i64(n.start.column);
+    if last.explicit_key {
+        //   ? k
+        //   : value
+        // or
+        //   ? k
+        //   :
+        //     value
+        st.detect_indent(last.indent, n_col)
+    } else if n.start.line == prev.start.line {
+        //   k: value
+        n_col
+    } else if matches!(n.kind, Kind::BlockSequenceStart | Kind::BlockEntry) {
+        // BlockEntryToken is tested too because sometimes
+        // BlockSequenceStartTokens are not issued, e.g. for
+        //     '- lib:\n'
+        //     '  - var\n'
+        match st.indent_sequences {
+            IndentSequences::No => last.indent,
+            IndentSequences::Yes => {
+                if st.spaces == Spaces::Consistent && n_col - last.indent == 0 {
+                    // The block sequence item is not indented
+                    // (while it should be), but the indentation
+                    // it should have is not known yet: `spaces`
+                    // is `consistent` and still undecided, so
+                    // this is probably the start of the
+                    // document. Use an unknown value (-1).
+                    -1
+                } else {
+                    st.detect_indent(last.indent, n_col)
+                }
+            }
+            IndentSequences::Whatever | IndentSequences::Consistent => {
+                if n_col == last.indent {
+                    //   key:
+                    //   - e1
+                    //   - e2
+                    if st.indent_sequences == IndentSequences::Consistent {
+                        st.indent_sequences = IndentSequences::No;
+                    }
+                    last.indent
+                } else {
+                    if st.indent_sequences == IndentSequences::Consistent {
+                        st.indent_sequences = IndentSequences::Yes;
+                    }
+                    //   key:
+                    //     - e1
+                    //     - e2
+                    st.detect_indent(last.indent, n_col)
+                }
+            }
+        }
+    } else {
+        //   k:
+        //     value
+        st.detect_indent(last.indent, n_col)
+    }
+}
+
+/// `_check`, step 1 and 2.a: report the indentation of a token that is
+/// first on its line, and note the line it ends on.
+fn lint_token(conf: &RuleConf, ctx: &Ctx<'_, '_>, st: &mut Inner, out: &mut Vec<Problem>) {
     let token = ctx.token();
-    let prev = ctx.prev();
-    let next = ctx.next();
-    let nextnext = ctx.nextnext();
     let buffer = ctx.buffer();
 
     // Step 1: Lint
@@ -292,6 +347,15 @@ fn check_inner(
             st.cur_line_indent = found_indentation;
         }
     }
+}
+
+/// `_check`, step 2.b: the parents the token opens.
+fn push_parents(ctx: &Ctx<'_, '_>, st: &mut Inner) -> Result<(), ()> {
+    let token = ctx.token();
+    let prev = ctx.prev();
+    let next = ctx.next();
+    let nextnext = ctx.nextnext();
+    let buffer = ctx.buffer();
 
     // Step 2.b: Update state
 
@@ -420,69 +484,19 @@ fn check_inner(
                     Kind::BlockEnd | Kind::FlowMappingEnd | Kind::FlowSequenceEnd | Kind::Key
                 )
             {
-                let last = st.last();
-                let n_col = to_i64(n.start.column);
-                let indent = if last.explicit_key {
-                    //   ? k
-                    //   : value
-                    // or
-                    //   ? k
-                    //   :
-                    //     value
-                    st.detect_indent(last.indent, n_col)
-                } else if n.start.line == prev.start.line {
-                    //   k: value
-                    n_col
-                } else if matches!(n.kind, Kind::BlockSequenceStart | Kind::BlockEntry) {
-                    // BlockEntryToken is tested too because sometimes
-                    // BlockSequenceStartTokens are not issued, e.g. for
-                    //     '- lib:\n'
-                    //     '  - var\n'
-                    match st.indent_sequences {
-                        IndentSequences::No => last.indent,
-                        IndentSequences::Yes => {
-                            if st.spaces == Spaces::Consistent && n_col - last.indent == 0 {
-                                // The block sequence item is not indented
-                                // (while it should be), but the indentation
-                                // it should have is not known yet: `spaces`
-                                // is `consistent` and still undecided, so
-                                // this is probably the start of the
-                                // document. Use an unknown value (-1).
-                                -1
-                            } else {
-                                st.detect_indent(last.indent, n_col)
-                            }
-                        }
-                        IndentSequences::Whatever | IndentSequences::Consistent => {
-                            if n_col == last.indent {
-                                //   key:
-                                //   - e1
-                                //   - e2
-                                if st.indent_sequences == IndentSequences::Consistent {
-                                    st.indent_sequences = IndentSequences::No;
-                                }
-                                last.indent
-                            } else {
-                                if st.indent_sequences == IndentSequences::Consistent {
-                                    st.indent_sequences = IndentSequences::Yes;
-                                }
-                                //   key:
-                                //     - e1
-                                //     - e2
-                                st.detect_indent(last.indent, n_col)
-                            }
-                        }
-                    }
-                } else {
-                    //   k:
-                    //     value
-                    st.detect_indent(last.indent, n_col)
-                };
+                let indent = value_indent(st, n, prev);
                 st.stack.push(Parent::new(ParentType::Val, indent));
             }
         }
         _ => {}
     }
+    Ok(())
+}
+
+/// `_check`, the end of step 2.b: the parents the token closes.
+fn pop_parents(ctx: &Ctx<'_, '_>, st: &mut Inner) -> Result<(), ()> {
+    let token = ctx.token();
+    let next = ctx.next();
 
     let next_is = |kinds: &dyn Fn(&Kind) -> bool| next.is_some_and(|n| kinds(&n.kind));
     let token_is_property = matches!(token.kind, Kind::Anchor(_) | Kind::Tag { .. });
@@ -536,6 +550,20 @@ fn check_inner(
     if st.stack.is_empty() {
         st.stack.push(Parent::new(ParentType::Root, 0));
     }
+    Ok(())
+}
+
+/// Mirrors `_check`. `Err(())` stands for the `AssertionError` yamllint
+/// raises on a token sequence its model does not expect.
+fn check_inner(
+    conf: &RuleConf,
+    ctx: &Ctx<'_, '_>,
+    st: &mut Inner,
+    out: &mut Vec<Problem>,
+) -> Result<(), ()> {
+    lint_token(conf, ctx, st, out);
+    push_parents(ctx, st)?;
+    pop_parents(ctx, st)?;
     let _ = st.last_mut();
     Ok(())
 }

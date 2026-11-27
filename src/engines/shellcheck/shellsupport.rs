@@ -228,63 +228,103 @@ fn check_bashisms(params: &Parameters<'_>, t: &Token, out: &mut Out) {
     bashism(&c, t, out);
 }
 
-fn bashism(c: &Ctx<'_, '_>, t: &Token, out: &mut Out) {
+/// The syntax that is not POSIX whatever is inside it. As for the three
+/// functions after it: true when the token is dealt with.
+fn bashism_syntax(c: &Ctx<'_, '_>, t: &Token, out: &mut Out) -> bool {
     let id = t.id;
     match &t.inner {
-        TProcSub(..) => return c.warn_msg(out, id, 3001, "process substitution is"),
-        TExtglob(..) => return c.warn_msg(out, id, 3002, "extglob is"),
+        TProcSub(..) => c.warn_msg(out, id, 3001, "process substitution is"),
+        TExtglob(..) => c.warn_msg(out, id, 3002, "extglob is"),
         TDollarSingleQuoted(_) => {
             if !c.is_busybox {
                 c.warn_msg(out, id, 3003, "$'..' is");
             }
-            return;
         }
-        TDollarDoubleQuoted(_) => return c.warn_msg(out, id, 3004, "$\"..\" is"),
-        TForArithmetic(..) => return c.warn_msg(out, id, 3005, "arithmetic for loops are"),
-        TArithmetic(_) => return c.warn_msg(out, id, 3006, "standalone ((..)) is"),
-        TDollarBracket(_) => return c.warn_msg(out, id, 3007, "$[..] in place of $((..)) is"),
-        TSelectIn(..) => return c.warn_msg(out, id, 3008, "select loops are"),
-        TBraceExpansion(_) => return c.warn_msg(out, id, 3009, "brace expansion is"),
+        TDollarDoubleQuoted(_) => c.warn_msg(out, id, 3004, "$\"..\" is"),
+        TForArithmetic(..) => c.warn_msg(out, id, 3005, "arithmetic for loops are"),
+        TArithmetic(_) => c.warn_msg(out, id, 3006, "standalone ((..)) is"),
+        TDollarBracket(_) => c.warn_msg(out, id, 3007, "$[..] in place of $((..)) is"),
+        TSelectIn(..) => c.warn_msg(out, id, 3008, "select loops are"),
+        TBraceExpansion(_) => c.warn_msg(out, id, 3009, "brace expansion is"),
         TCondition(ConditionType::DoubleBracket, _) => {
             if !c.is_busybox {
                 c.warn_msg(out, id, 3010, "[[ ]] is");
             }
-            return;
         }
-        THereString(_) => return c.warn_msg(out, id, 3011, "here-strings are"),
-        TcBinary(_, op, _, _) => return c.check_test_op(out, true, op, id),
-        _ => {}
+        THereString(_) => c.warn_msg(out, id, 3011, "here-strings are"),
+        TcBinary(_, op, _, _) => c.check_test_op(out, true, op, id),
+        _ => return false,
     }
+    true
+}
+
+/// The operators of `[ ]` and of `test`.
+fn bashism_test_op(c: &Ctx<'_, '_>, t: &Token, out: &mut Out) -> bool {
+    let id = t.id;
     if let TSimpleCommand(_, words) = &t.inner
         && let [w0, _, w2, _] = words.as_slice()
         && get_literal_string(w0).as_deref() == Some("test")
         && let Some(op) = get_literal_string(w2)
     {
-        return c.check_test_op(out, true, &op, id);
+        c.check_test_op(out, true, &op, id);
+        return true;
     }
     if let TcUnary(_, op, _) = &t.inner {
-        return c.check_test_op(out, false, op, id);
+        c.check_test_op(out, false, op, id);
+        return true;
     }
     if let TSimpleCommand(_, words) = &t.inner
         && let [w0, w1, _] = words.as_slice()
         && get_literal_string(w0).as_deref() == Some("test")
         && let Some(op) = get_literal_string(w1)
     {
-        return c.check_test_op(out, false, &op, id);
+        c.check_test_op(out, false, &op, id);
+        return true;
     }
+    false
+}
+
+/// `${..}`: the expansions and the variables that are not POSIX.
+fn bashism_braced(c: &Ctx<'_, '_>, id: Id, token: &Token, out: &mut Out) {
+    let s = concat_oversimplify(token);
+    let var = get_braced_reference(&s);
+    if !c.is_busybox {
+        SIMPLE.with(|list| {
+            for (re, code, feature) in list {
+                if re.match_groups(&s).is_some() {
+                    c.warn_msg(out, id, *code, feature);
+                }
+            }
+        });
+    }
+    ADVANCED.with(|list| {
+        for (re, code, feature) in list {
+            if re.match_groups(&s).is_some() {
+                c.warn_msg(out, id, *code, feature);
+            }
+        }
+    });
+    if c.is_bash_variable(&var) {
+        c.warn_msg(out, id, 3028, &format!("{var} is"));
+    }
+}
+
+/// Arithmetic, redirections, expansions and the other tokens whose content
+/// decides.
+fn bashism_expansion(c: &Ctx<'_, '_>, t: &Token, out: &mut Out) -> bool {
+    let id = t.id;
     match &t.inner {
         TaUnary(op, _) if ["|++", "|--", "++|", "--|"].contains(&op.as_str()) => {
             let o: String = op.chars().filter(|&ch| ch != '|').collect();
-            return c.warn_msg(out, id, 3018, &format!("{o} is"));
+            c.warn_msg(out, id, 3018, &format!("{o} is"));
         }
-        TaBinary(op, _, _) if op == "**" => return c.warn_msg(out, id, 3019, "exponentials are"),
+        TaBinary(op, _, _) if op == "**" => c.warn_msg(out, id, 3019, "exponentials are"),
         TFdRedirect(fd, x)
             if fd == "&" && matches!(&x.inner, TIoFile(op, _) if matches!(op.inner, TGreater)) =>
         {
             if !c.is_busybox {
                 c.warn_msg(out, id, 3020, "&> is");
             }
-            return;
         }
         TFdRedirect(fd, x)
             if fd.is_empty()
@@ -299,27 +339,26 @@ fn bashism(c: &Ctx<'_, '_>, t: &Token, out: &mut Out) {
             {
                 c.warn_msg(out, id, 3021, ">& filename (as opposed to >& fd) is");
             }
-            return;
         }
         TFdRedirect(fd, _) if fd.starts_with('{') => {
-            return c.warn_msg(out, id, 3022, "named file descriptors are");
+            c.warn_msg(out, id, 3022, "named file descriptors are");
         }
         TFdRedirect(num, _)
             if num.chars().all(|ch| ch.is_ascii_digit()) && num.chars().count() > 1 =>
         {
-            return c.warn_msg(out, id, 3023, "FDs outside 0-9 are");
+            c.warn_msg(out, id, 3023, "FDs outside 0-9 are");
         }
-        TAssignment(AssignmentMode::Append, ..) => return c.warn_msg(out, id, 3024, "+= is"),
+        TAssignment(AssignmentMode::Append, ..) => c.warn_msg(out, id, 3024, "+= is"),
         TIoFile(_, word)
             if {
                 let file = only_literal_string(word);
                 file.starts_with("/dev/tcp") || file.starts_with("/dev/udp")
             } =>
         {
-            return c.warn_msg(out, id, 3025, "/dev/{tcp,udp} is");
+            c.warn_msg(out, id, 3025, "/dev/{tcp,udp} is");
         }
         TGlob(s) if s.contains("[^") => {
-            return c.warn_msg(
+            c.warn_msg(
                 out,
                 id,
                 3026,
@@ -327,40 +366,17 @@ fn bashism(c: &Ctx<'_, '_>, t: &Token, out: &mut Out) {
             );
         }
         TaVariable(s, _) if c.is_bash_variable(s) => {
-            return c.warn_msg(out, id, 3028, &format!("{s} is"));
+            c.warn_msg(out, id, 3028, &format!("{s} is"));
         }
-        TDollarBraced(_, token) => {
-            let s = concat_oversimplify(token);
-            let var = get_braced_reference(&s);
-            if !c.is_busybox {
-                SIMPLE.with(|list| {
-                    for (re, code, feature) in list {
-                        if re.match_groups(&s).is_some() {
-                            c.warn_msg(out, id, *code, feature);
-                        }
-                    }
-                });
-            }
-            ADVANCED.with(|list| {
-                for (re, code, feature) in list {
-                    if re.match_groups(&s).is_some() {
-                        c.warn_msg(out, id, *code, feature);
-                    }
-                }
-            });
-            if c.is_bash_variable(&var) {
-                c.warn_msg(out, id, 3028, &format!("{var} is"));
-            }
-            return;
-        }
-        TPipe(s) if s == "|&" => return c.warn_msg(out, id, 3029, "|& in place of 2>&1 | is"),
-        TArray(_) => return c.warn_msg(out, id, 3030, "arrays are"),
+        TDollarBraced(_, token) => bashism_braced(c, id, token, out),
+        TPipe(s) if s == "|&" => c.warn_msg(out, id, 3029, "|& in place of 2>&1 | is"),
+        TArray(_) => c.warn_msg(out, id, 3030, "arrays are"),
         TIoFile(_, w) if is_glob(w) => {
-            return c.warn_msg(out, id, 3031, "redirecting to/from globs is");
+            c.warn_msg(out, id, 3031, "redirecting to/from globs is");
         }
-        TCoProc(..) => return c.warn_msg(out, id, 3032, "coproc is"),
+        TCoProc(..) => c.warn_msg(out, id, 3032, "coproc is"),
         TFunction(_, _, s, _) if !is_variable_name(s) => {
-            return c.warn_msg(
+            c.warn_msg(
                 out,
                 id,
                 3033,
@@ -368,50 +384,69 @@ fn bashism(c: &Ctx<'_, '_>, t: &Token, out: &mut Out) {
             );
         }
         TDollarExpansion(l) if l.len() == 1 && is_only_redirection(&l[0]) => {
-            return c.warn_msg(out, id, 3034, "$(<file) to read files is");
+            c.warn_msg(out, id, 3034, "$(<file) to read files is");
         }
         TBackticked(l) if l.len() == 1 && is_only_redirection(&l[0]) => {
-            return c.warn_msg(out, id, 3035, "`<file` to read files is");
+            c.warn_msg(out, id, 3035, "`<file` to read files is");
         }
-        _ => {}
+        _ => return false,
     }
-    if let TSimpleCommand(_, words) = &t.inner {
-        if let [_, arg, ..] = words.as_slice() {
-            let arg_string = concat_oversimplify(arg);
-            if is_command(t, "echo") && ECHO_FLAG_RE.with(|re| re.is_match(&arg_string)) {
-                if c.is_busybox {
-                    if !BUSYBOX_FLAG_RE.with(|re| re.is_match(&arg_string)) {
-                        c.warn_msg(out, arg.id, 3036, "echo flags besides -n and -e");
-                    }
-                } else if c.is_dash {
-                    if arg_string != "-n" {
-                        c.warn_msg(out, arg.id, 3036, "echo flags besides -n");
-                    }
-                } else {
-                    c.warn_msg(out, arg.id, 3037, "echo flags are");
+    true
+}
+
+/// The commands and their flags.
+fn bashism_command(c: &Ctx<'_, '_>, t: &Token, out: &mut Out) -> bool {
+    let TSimpleCommand(_, words) = &t.inner else {
+        return false;
+    };
+    let id = t.id;
+    if let [_, arg, ..] = words.as_slice() {
+        let arg_string = concat_oversimplify(arg);
+        if is_command(t, "echo") && ECHO_FLAG_RE.with(|re| re.is_match(&arg_string)) {
+            if c.is_busybox {
+                if !BUSYBOX_FLAG_RE.with(|re| re.is_match(&arg_string)) {
+                    c.warn_msg(out, arg.id, 3036, "echo flags besides -n and -e");
                 }
-                return;
+            } else if c.is_dash {
+                if arg_string != "-n" {
+                    c.warn_msg(out, arg.id, 3036, "echo flags besides -n");
+                }
+            } else {
+                c.warn_msg(out, arg.id, 3037, "echo flags are");
             }
-            if get_literal_string(&words[0]).as_deref() == Some("exec")
-                && arg_string.starts_with('-')
-            {
-                return c.warn_msg(out, arg.id, 3038, "exec flags are");
-            }
+            return true;
         }
-        if is_command(t, "let") {
-            return c.warn_msg(out, id, 3039, "'let' is");
-        }
-        if !words.is_empty() && is_command(t, "set") {
-            if !c.is_dash {
-                check_set_options(c, &words[1..], out);
-            }
-            return;
-        }
-        if let Some((cmd, rest)) = words.split_first() {
-            general_command(c, t, cmd, rest, out);
-            return;
+        if get_literal_string(&words[0]).as_deref() == Some("exec") && arg_string.starts_with('-') {
+            c.warn_msg(out, arg.id, 3038, "exec flags are");
+            return true;
         }
     }
+    if is_command(t, "let") {
+        c.warn_msg(out, id, 3039, "'let' is");
+        return true;
+    }
+    if !words.is_empty() && is_command(t, "set") {
+        if !c.is_dash {
+            check_set_options(c, &words[1..], out);
+        }
+        return true;
+    }
+    if let Some((cmd, rest)) = words.split_first() {
+        general_command(c, t, cmd, rest, out);
+        return true;
+    }
+    false
+}
+
+fn bashism(c: &Ctx<'_, '_>, t: &Token, out: &mut Out) {
+    if bashism_syntax(c, t, out)
+        || bashism_test_op(c, t, out)
+        || bashism_expansion(c, t, out)
+        || bashism_command(c, t, out)
+    {
+        return;
+    }
+    let id = t.id;
     match &t.inner {
         TSourceCommand(src, _) if get_command_name(src).as_deref() == Some("source") => {
             if !c.is_busybox {

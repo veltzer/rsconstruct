@@ -2134,35 +2134,9 @@ pub fn check_assign_to_self(_: &Parameters<'_>, t: &Token, out: &mut Out) {
     }
 }
 
-pub fn check_equals_in_command(params: &Parameters<'_>, original: &Token, out: &mut Out) {
-    let TSimpleCommand(vars, words) = &original.inner else {
-        return;
-    };
-    let Some(word) = words.first() else {
-        return;
-    };
-    let TNormalWord(list) = &word.inner else {
-        return;
-    };
-    let has_equals = |t: &Token| matches!(&t.inner, TLiteral(s) if s.contains('='));
-    let Some(pos) = list.iter().position(has_equals) else {
-        return;
-    };
-    let mut leading: &[Token] = &list[..pos];
-    if let Some(Token {
-        inner: TLiteral(s), ..
-    }) = leading.last()
-        && s == "+"
-    {
-        leading = &leading[..leading.len() - 1];
-    }
-    let eq = &list[pos];
-    let TLiteral(s) = &eq.inner else {
-        return;
-    };
-    let lit_id = eq.id;
-    let cmd = word;
-    let assign0 = |id: Id, bashfix: Fix, out: &mut Out| match params.shell_type {
+/// An assignment to `$0`, which each shell refuses in its own way.
+fn assign0(params: &Parameters<'_>, id: Id, bashfix: Fix, out: &mut Out) {
+    match params.shell_type {
         Shell::Bash => err_with_fix(
             out,
             id,
@@ -2194,78 +2168,176 @@ pub fn check_equals_in_command(params: &Parameters<'_>, original: &Token, out: &
             2280,
             "$0 can't be assigned this way, and there is no portable alternative.",
         ),
+    }
+}
+
+fn positional(id: Id, out: &mut Out) {
+    err(
+        out,
+        id,
+        2270,
+        "To assign positional parameters, use 'set -- first second ..' (or use [ ] to compare).",
+    );
+}
+
+fn indirection(id: Id, out: &mut Out) {
+    err(
+        out,
+        id,
+        2271,
+        "For indirection, use arrays, declare \"var$n=value\", or (for sh) read/eval.",
+    );
+}
+
+fn generic(id: Id, out: &mut Out) {
+    err(
+        out,
+        id,
+        2276,
+        "This is interpreted as a command name containing '='. Bad assignment or comparison?",
+    );
+}
+
+fn is_conflict_marker(cmd: &Token) -> bool {
+    get_unquoted_literal(cmd).is_some_and(|s| {
+        let n = s.chars().count();
+        s.chars().all(|c| c == '=') && (4..=12).contains(&n)
+    })
+}
+
+fn may_be_variable_name(l: &[Token]) -> bool {
+    if l.iter().any(is_quotes) || l.iter().any(will_become_multiple_args) {
+        return false;
+    }
+    let w = Token::new(Id(0), TNormalWord(l.to_vec()));
+    get_literal_string_ext(&w, &|_| Some("x".to_string())).is_some_and(|s| is_variable_name(&s))
+}
+
+fn is_leading_number_var(s: &str) -> bool {
+    let lead: String = s.chars().take_while(|&c| c != '=').collect();
+    lead.chars().next().is_some_and(|x| {
+        x.is_ascii_digit()
+            && lead.chars().all(is_variable_char)
+            && !lead.chars().all(|c| c.is_ascii_digit())
+    })
+}
+
+/// A command name that starts with `=`: `s` is the literal with the `=`.
+fn leading_equals(original: &Token, s: &str, out: &mut Out) {
+    let TSimpleCommand(vars, words) = &original.inner else {
+        return;
     };
-    let positional = |id: Id, out: &mut Out| {
+    let Some(cmd) = words.first() else {
+        return;
+    };
+    if vars.is_empty() && words.len() == 1 && is_conflict_marker(cmd) {
         err(
             out,
-            id,
-            2270,
-            "To assign positional parameters, use 'set -- first second ..' (or use [ ] to compare).",
+            original.id,
+            2273,
+            "Sequence of ===s found. Merge conflict or intended as a commented border?",
         );
-    };
-    let indirection = |id: Id, out: &mut Out| {
+    } else if s.starts_with("===") {
         err(
             out,
-            id,
-            2271,
-            "For indirection, use arrays, declare \"var$n=value\", or (for sh) read/eval.",
+            original.id,
+            2274,
+            "Command name starts with ===. Intended as a commented border?",
         );
-    };
-    let generic = |id: Id, out: &mut Out| {
+    } else {
         err(
             out,
-            id,
-            2276,
-            "This is interpreted as a command name containing '='. Bad assignment or comparison?",
+            cmd.id,
+            2275,
+            "Command name starts with =. Bad line break?",
         );
+    }
+}
+
+/// `${var}=value` as a command name: `l` is what the braces hold.
+fn braced_assignment(
+    params: &Parameters<'_>,
+    cmd_id: Id,
+    id: Id,
+    braced: bool,
+    l: &Token,
+    out: &mut Out,
+) {
+    let variable_str = concat_oversimplify(l);
+    let variable_reference = get_braced_reference(&variable_str);
+    let variable_modifier = get_braced_modifier(&variable_str);
+    let is_plain = is_variable_name(&variable_str);
+    let is_positional = variable_str.chars().all(|c| c.is_ascii_digit());
+    let is_array = !variable_reference.is_empty()
+        && variable_modifier.starts_with('[')
+        && variable_modifier.ends_with(']');
+    if variable_str.is_empty() || variable_str.starts_with('#') {
+        generic(cmd_id, out);
+    } else if variable_str == "0" {
+        assign0(
+            params,
+            id,
+            fix_with(vec![replace_token(id, params, "BASH_ARGV0")]),
+            out,
+        );
+    } else if is_positional {
+        positional(id, out);
+    } else if is_array || is_plain {
+        err_with_fix(
+            out,
+            id,
+            2281,
+            &format!(
+                "Don't use {} on the left side of assignments.",
+                if braced { "${}" } else { "$" }
+            ),
+            fix_with(if braced {
+                vec![
+                    replace_start(id, params, 2, ""),
+                    replace_end(id, params, 1, ""),
+                ]
+            } else {
+                vec![replace_start(id, params, 1, "")]
+            }),
+        );
+    } else {
+        indirection(id, out);
+    }
+}
+
+pub fn check_equals_in_command(params: &Parameters<'_>, original: &Token, out: &mut Out) {
+    let TSimpleCommand(_, words) = &original.inner else {
+        return;
     };
-    let is_conflict_marker = |cmd: &Token| {
-        get_unquoted_literal(cmd).is_some_and(|s| {
-            let n = s.chars().count();
-            s.chars().all(|c| c == '=') && (4..=12).contains(&n)
-        })
+    let Some(word) = words.first() else {
+        return;
     };
-    let may_be_variable_name = |l: &[Token]| -> bool {
-        if l.iter().any(is_quotes) || l.iter().any(will_become_multiple_args) {
-            return false;
-        }
-        let w = Token::new(Id(0), TNormalWord(l.to_vec()));
-        get_literal_string_ext(&w, &|_| Some("x".to_string())).is_some_and(|s| is_variable_name(&s))
+    let TNormalWord(list) = &word.inner else {
+        return;
     };
-    let is_leading_number_var = |s: &str| {
-        let lead: String = s.chars().take_while(|&c| c != '=').collect();
-        lead.chars().next().is_some_and(|x| {
-            x.is_ascii_digit()
-                && lead.chars().all(is_variable_char)
-                && !lead.chars().all(|c| c.is_ascii_digit())
-        })
+    let has_equals = |t: &Token| matches!(&t.inner, TLiteral(s) if s.contains('='));
+    let Some(pos) = list.iter().position(has_equals) else {
+        return;
     };
+    let mut leading: &[Token] = &list[..pos];
+    if let Some(Token {
+        inner: TLiteral(s), ..
+    }) = leading.last()
+        && s == "+"
+    {
+        leading = &leading[..leading.len() - 1];
+    }
+    let eq = &list[pos];
+    let TLiteral(s) = &eq.inner else {
+        return;
+    };
+    let lit_id = eq.id;
+    let cmd = word;
     if leading.is_empty() && s.starts_with('-') {
         return;
     }
     if leading.is_empty() && s.starts_with('=') {
-        if vars.is_empty() && words.len() == 1 && is_conflict_marker(word) {
-            err(
-                out,
-                original.id,
-                2273,
-                "Sequence of ===s found. Merge conflict or intended as a commented border?",
-            );
-        } else if s.starts_with("===") {
-            err(
-                out,
-                original.id,
-                2274,
-                "Command name starts with ===. Intended as a commented border?",
-            );
-        } else {
-            err(
-                out,
-                cmd.id,
-                2275,
-                "Command name starts with =. Bad line break?",
-            );
-        }
+        leading_equals(original, s, out);
         return;
     }
     if s.contains("==") {
@@ -2285,51 +2357,13 @@ pub fn check_equals_in_command(params: &Parameters<'_>, original: &Token, out: &
     ] = leading
         && s.starts_with('=')
     {
-        let id = *id;
-        let variable_str = concat_oversimplify(l);
-        let variable_reference = get_braced_reference(&variable_str);
-        let variable_modifier = get_braced_modifier(&variable_str);
-        let is_plain = is_variable_name(&variable_str);
-        let is_positional = variable_str.chars().all(|c| c.is_ascii_digit());
-        let is_array = !variable_reference.is_empty()
-            && variable_modifier.starts_with('[')
-            && variable_modifier.ends_with(']');
-        if variable_str.is_empty() || variable_str.starts_with('#') {
-            generic(cmd.id, out);
-        } else if variable_str == "0" {
-            assign0(
-                id,
-                fix_with(vec![replace_token(id, params, "BASH_ARGV0")]),
-                out,
-            );
-        } else if is_positional {
-            positional(id, out);
-        } else if is_array || is_plain {
-            err_with_fix(
-                out,
-                id,
-                2281,
-                &format!(
-                    "Don't use {} on the left side of assignments.",
-                    if *braced { "${}" } else { "$" }
-                ),
-                fix_with(if *braced {
-                    vec![
-                        replace_start(id, params, 2, ""),
-                        replace_end(id, params, 1, ""),
-                    ]
-                } else {
-                    vec![replace_start(id, params, 1, "")]
-                }),
-            );
-        } else {
-            indirection(id, out);
-        }
+        braced_assignment(params, cmd.id, *id, *braced, l, out);
         return;
     }
     if leading.is_empty() && POSITIONAL_ASSIGNMENT_RE.with(|re| re.is_match(s)) {
         if s.starts_with("0=") {
             assign0(
+                params,
                 lit_id,
                 fix_with(vec![replace_start(lit_id, params, 1, "BASH_ARGV0")]),
                 out,

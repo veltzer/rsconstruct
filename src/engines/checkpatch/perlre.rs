@@ -1451,186 +1451,260 @@ impl Regex {
             Node::GPos => pos == st.gpos && k(pos, st),
             Node::Group(n, inner) => match n {
                 None => self.m(inner, pos, st, k),
-                Some(n) => {
-                    let n = *n;
-                    let (old_s, old_e) = (st.caps[2 * n], st.caps[2 * n + 1]);
-                    let ok = self.m(inner, pos, st, &mut |p, st| {
-                        let (ps, pe) = (st.caps[2 * n], st.caps[2 * n + 1]);
-                        st.caps[2 * n] = pos;
-                        st.caps[2 * n + 1] = p;
-                        if k(p, st) {
-                            return true;
-                        }
-                        st.caps[2 * n] = ps;
-                        st.caps[2 * n + 1] = pe;
-                        false
-                    });
-                    if !ok {
-                        st.caps[2 * n] = old_s;
-                        st.caps[2 * n + 1] = old_e;
-                    }
-                    ok
-                }
+                Some(n) => self.m_capture(*n, inner, pos, st, k),
             },
             Node::Concat(items) => self.concat(items, 0, pos, st, k),
             Node::Alt(alts, groups) if groups.iter().all(Vec::is_empty) => {
                 // No group inside: a failed alternative leaves no capture.
                 alts.iter().any(|alt| self.m(alt, pos, st, k))
             }
-            Node::Alt(alts, groups) => {
-                let before = st.caps.clone();
-                for (alt, inside) in alts.iter().zip(groups) {
-                    if self.m(alt, pos, st, k) {
-                        return true;
-                    }
-                    for &g in inside {
-                        st.caps[2 * g] = usize::MAX;
-                        st.caps[2 * g + 1] = usize::MAX;
-                    }
-                }
-                st.caps = before;
-                false
-            }
+            Node::Alt(alts, groups) => self.m_alt(alts, groups, pos, st, k),
             Node::Repeat(inner, min, max, greed) => {
-                if let Some(set) = single_byte(inner) {
-                    return Self::repeat_simple(&set, pos, (*min, *max), *greed, st, k);
-                }
-                let memo = RefCell::new(FastSet::default());
-                let lp = Loop {
-                    inner,
-                    min: *min,
-                    max: *max,
-                    memo: self.memo_ok.then_some(&memo),
-                    failures: std::cell::Cell::new(0),
-                };
-                match greed {
-                    Greed::Possessive => {
-                        let mut end = None;
-                        let mut saved = Vec::new();
-                        if self.repeat(&lp, 0, pos, Greed::Greedy, st, &mut |p, st| {
-                            end = Some(p);
-                            saved.clone_from(&st.caps);
-                            true
-                        }) {
-                            let caps = std::mem::take(&mut saved);
-                            let before = std::mem::replace(&mut st.caps, caps);
-                            if k(end.expect("an end"), st) {
-                                return true;
-                            }
-                            st.caps = before;
-                        }
-                        false
-                    }
-                    _ => self.repeat(&lp, 0, pos, *greed, st, k),
-                }
+                self.m_repeat(inner, (*min, *max), *greed, pos, st, k)
             }
-            Node::Atomic(inner) => {
-                let before = st.caps.clone();
-                let mut end = None;
-                let mut saved = Vec::new();
-                if self.m(inner, pos, st, &mut |p, st| {
-                    end = Some(p);
-                    saved.clone_from(&st.caps);
-                    true
-                }) {
-                    st.caps = saved;
-                    if k(end.expect("an end"), st) {
-                        return true;
-                    }
-                }
-                st.caps = before;
-                false
-            }
-            Node::Look {
-                ahead,
-                negate,
-                node,
-                min,
-                max,
-            } => {
-                let before = st.caps.clone();
-                let mut saved = Vec::new();
-                let found = if *ahead {
-                    self.m(node, pos, st, &mut |_, st| {
-                        saved.clone_from(&st.caps);
-                        true
-                    })
-                } else {
-                    let lowest = max.map_or(0, |m| pos.saturating_sub(m));
-                    let highest = pos.checked_sub(*min);
-                    highest.is_some_and(|hi| {
-                        (lowest..=hi).rev().any(|from| {
-                            self.m(node, from, st, &mut |p, st| {
-                                if p != pos {
-                                    return false;
-                                }
-                                saved.clone_from(&st.caps);
-                                true
-                            })
-                        })
-                    })
-                };
-                if found == *negate {
-                    st.caps = before;
-                    return false;
-                }
-                if found {
-                    st.caps = saved;
-                } else {
-                    st.caps.clone_from(&before);
-                }
-                if k(pos, st) {
-                    return true;
-                }
-                st.caps = before;
-                false
-            }
-            Node::Backref(n, ci) => {
-                let (s, e) = (st.caps.get(2 * n).copied(), st.caps.get(2 * n + 1).copied());
-                let (Some(s), Some(e)) = (s, e) else {
-                    return false;
-                };
-                if s == usize::MAX || e == usize::MAX {
-                    return false;
-                }
-                let len = e - s;
-                if pos + len > hay.len() {
-                    return false;
-                }
-                let ok = if *ci {
-                    hay[s..e].eq_ignore_ascii_case(&hay[pos..pos + len])
-                } else {
-                    hay[s..e] == hay[pos..pos + len]
-                };
-                ok && k(pos + len, st)
-            }
+            Node::Atomic(inner) => self.m_atomic(inner, pos, st, k),
+            look @ Node::Look { .. } => self.m_look(look, pos, st, k),
+            Node::Backref(n, ci) => Self::m_backref(*n, *ci, pos, st, k),
             Node::NamedBackref(..) => false,
             Node::Cond(n, yes, no) => {
                 let set = st.caps.get(2 * n + 1).is_some_and(|&e| e != usize::MAX);
                 self.m(if set { yes } else { no }, pos, st, k)
             }
-            Node::Recurse(n) => {
-                // `check_references` keeps every target within `groups`;
-                // an unknown one matches nothing rather than panicking.
-                let Some(Node::Group(_, inner)) = self.groups.get(*n) else {
-                    return false;
-                };
-                // Captures set inside a recursion are undone when it returns.
-                let before = st.caps.clone();
-                let ok = self.m(inner, pos, st, &mut |p, st| {
-                    let inside = std::mem::replace(&mut st.caps, before.clone());
-                    if k(p, st) {
-                        return true;
-                    }
-                    st.caps = inside;
-                    false
-                });
-                if !ok {
-                    st.caps = before;
-                }
-                ok
+            Node::Recurse(n) => self.m_recurse(*n, pos, st, k),
+        }
+    }
+
+    /// A capturing group: its span is set while the rest of the pattern
+    /// is tried, and restored when that fails.
+    fn m_capture<'h>(
+        &self,
+        n: usize,
+        inner: &Node,
+        pos: usize,
+        st: &mut State<'h>,
+        k: &mut Cont<'_, 'h>,
+    ) -> bool {
+        let (old_s, old_e) = (st.caps[2 * n], st.caps[2 * n + 1]);
+        let ok = self.m(inner, pos, st, &mut |p, st| {
+            let (ps, pe) = (st.caps[2 * n], st.caps[2 * n + 1]);
+            st.caps[2 * n] = pos;
+            st.caps[2 * n + 1] = p;
+            if k(p, st) {
+                return true;
+            }
+            st.caps[2 * n] = ps;
+            st.caps[2 * n + 1] = pe;
+            false
+        });
+        if !ok {
+            st.caps[2 * n] = old_s;
+            st.caps[2 * n + 1] = old_e;
+        }
+        ok
+    }
+
+    /// Alternatives that hold capturing groups.
+    fn m_alt<'h>(
+        &self,
+        alts: &[Node],
+        groups: &[Vec<usize>],
+        pos: usize,
+        st: &mut State<'h>,
+        k: &mut Cont<'_, 'h>,
+    ) -> bool {
+        let before = st.caps.clone();
+        for (alt, inside) in alts.iter().zip(groups) {
+            if self.m(alt, pos, st, k) {
+                return true;
+            }
+            for &g in inside {
+                st.caps[2 * g] = usize::MAX;
+                st.caps[2 * g + 1] = usize::MAX;
             }
         }
+        st.caps = before;
+        false
+    }
+
+    /// A repetition, `min` to `max` times.
+    fn m_repeat<'h>(
+        &self,
+        inner: &Node,
+        (min, max): (usize, Option<usize>),
+        greed: Greed,
+        pos: usize,
+        st: &mut State<'h>,
+        k: &mut Cont<'_, 'h>,
+    ) -> bool {
+        if let Some(set) = single_byte(inner) {
+            return Self::repeat_simple(&set, pos, (min, max), greed, st, k);
+        }
+        let memo = RefCell::new(FastSet::default());
+        let lp = Loop {
+            inner,
+            min,
+            max,
+            memo: self.memo_ok.then_some(&memo),
+            failures: std::cell::Cell::new(0),
+        };
+        match greed {
+            Greed::Possessive => {
+                let mut end = None;
+                let mut saved = Vec::new();
+                if self.repeat(&lp, 0, pos, Greed::Greedy, st, &mut |p, st| {
+                    end = Some(p);
+                    saved.clone_from(&st.caps);
+                    true
+                }) {
+                    let caps = std::mem::take(&mut saved);
+                    let before = std::mem::replace(&mut st.caps, caps);
+                    if k(end.expect("an end"), st) {
+                        return true;
+                    }
+                    st.caps = before;
+                }
+                false
+            }
+            _ => self.repeat(&lp, 0, pos, greed, st, k),
+        }
+    }
+
+    /// An atomic group: its first match is the only one tried.
+    fn m_atomic<'h>(
+        &self,
+        inner: &Node,
+        pos: usize,
+        st: &mut State<'h>,
+        k: &mut Cont<'_, 'h>,
+    ) -> bool {
+        let before = st.caps.clone();
+        let mut end = None;
+        let mut saved = Vec::new();
+        if self.m(inner, pos, st, &mut |p, st| {
+            end = Some(p);
+            saved.clone_from(&st.caps);
+            true
+        }) {
+            st.caps = saved;
+            if k(end.expect("an end"), st) {
+                return true;
+            }
+        }
+        st.caps = before;
+        false
+    }
+
+    /// A lookahead or a lookbehind.
+    fn m_look<'h>(
+        &self,
+        look: &Node,
+        pos: usize,
+        st: &mut State<'h>,
+        k: &mut Cont<'_, 'h>,
+    ) -> bool {
+        let Node::Look {
+            ahead,
+            negate,
+            node,
+            min,
+            max,
+        } = look
+        else {
+            return false;
+        };
+        let before = st.caps.clone();
+        let mut saved = Vec::new();
+        let found = if *ahead {
+            self.m(node, pos, st, &mut |_, st| {
+                saved.clone_from(&st.caps);
+                true
+            })
+        } else {
+            let lowest = max.map_or(0, |m| pos.saturating_sub(m));
+            let highest = pos.checked_sub(*min);
+            highest.is_some_and(|hi| {
+                (lowest..=hi).rev().any(|from| {
+                    self.m(node, from, st, &mut |p, st| {
+                        if p != pos {
+                            return false;
+                        }
+                        saved.clone_from(&st.caps);
+                        true
+                    })
+                })
+            })
+        };
+        if found == *negate {
+            st.caps = before;
+            return false;
+        }
+        if found {
+            st.caps = saved;
+        } else {
+            st.caps.clone_from(&before);
+        }
+        if k(pos, st) {
+            return true;
+        }
+        st.caps = before;
+        false
+    }
+
+    /// A backreference to group `n`.
+    fn m_backref<'h>(
+        n: usize,
+        ci: bool,
+        pos: usize,
+        st: &mut State<'h>,
+        k: &mut Cont<'_, 'h>,
+    ) -> bool {
+        let hay = st.hay;
+        let (s, e) = (st.caps.get(2 * n).copied(), st.caps.get(2 * n + 1).copied());
+        let (Some(s), Some(e)) = (s, e) else {
+            return false;
+        };
+        if s == usize::MAX || e == usize::MAX {
+            return false;
+        }
+        let len = e - s;
+        if pos + len > hay.len() {
+            return false;
+        }
+        let ok = if ci {
+            hay[s..e].eq_ignore_ascii_case(&hay[pos..pos + len])
+        } else {
+            hay[s..e] == hay[pos..pos + len]
+        };
+        ok && k(pos + len, st)
+    }
+
+    /// A recursion into group `n`.
+    fn m_recurse<'h>(
+        &self,
+        n: usize,
+        pos: usize,
+        st: &mut State<'h>,
+        k: &mut Cont<'_, 'h>,
+    ) -> bool {
+        // `check_references` keeps every target within `groups`;
+        // an unknown one matches nothing rather than panicking.
+        let Some(Node::Group(_, inner)) = self.groups.get(n) else {
+            return false;
+        };
+        // Captures set inside a recursion are undone when it returns.
+        let before = st.caps.clone();
+        let ok = self.m(inner, pos, st, &mut |p, st| {
+            let inside = std::mem::replace(&mut st.caps, before.clone());
+            if k(p, st) {
+                return true;
+            }
+            st.caps = inside;
+            false
+        });
+        if !ok {
+            st.caps = before;
+        }
+        ok
     }
 
     fn concat<'h>(
