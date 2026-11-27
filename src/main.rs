@@ -1,3 +1,5 @@
+//! rsconstruct: Rust based fast build system.
+
 mod analyzers;
 mod build_context;
 mod builder;

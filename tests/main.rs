@@ -1,4 +1,5 @@
-// Everything here is test code; clippy.toml lets test code unwrap.
+//! Integration tests of rsconstruct. Everything here is test code;
+//! clippy.toml lets test code unwrap.
 #![cfg(test)]
 
 #[macro_use]
