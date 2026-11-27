@@ -499,6 +499,119 @@ pub(super) fn validate_no_dot_src_dirs(
     )))
 }
 
+/// Validate the processors declared under one `[processor.<type>]` table:
+/// each must name a processor of that type, and its section or instances
+/// must hold valid fields.
+fn validate_type_table(
+    type_key: &str,
+    type_table: &toml::map::Map<String, toml::Value>,
+    errors: &mut Vec<ConfigIssue>,
+) {
+    for (short, value) in type_table {
+        let Some(table) = value.as_table() else {
+            add(
+                errors,
+                &["processor", type_key, short],
+                format!(
+                    "[processor.{type_key}]: '{short}' must be a section (e.g. [processor.{type_key}.{short}]), got {}",
+                    FieldType::describe_value(value),
+                ),
+            );
+            continue;
+        };
+        let pname = registry::pname_from_parts(type_key, short);
+
+        if !is_builtin_type(&pname) {
+            let elsewhere: Vec<String> = registry::all_plugins()
+                .filter(|p| p.name == short)
+                .map(ProcessorPlugin::pname)
+                .collect();
+            let hint = if elsewhere.is_empty() {
+                format!(" (run `rsconstruct processor list --type {type_key}`)")
+            } else {
+                format!(" — did you mean [{}]?", elsewhere.join("] or ["))
+            };
+            add(
+                errors,
+                &["processor", type_key, short],
+                format!("[{pname}]: there is no {type_key} processor named '{short}'{hint}"),
+            );
+            continue;
+        }
+
+        // Check if multi-instance
+        match ProcessorConfig::classify_section(&pname, table) {
+            SectionShape::MultiInstance => {
+                for (inst_name, inst_value) in table {
+                    // An instance is addressed as `<pname>.<instance>`
+                    // everywhere (`-p`, the cache key, the output
+                    // directory): an empty segment or one with a dot
+                    // in it is a name `parse_name` cannot take apart.
+                    if inst_name.is_empty() || inst_name.contains('.') {
+                        add(
+                            errors,
+                            &["processor", type_key, short, inst_name],
+                            format!(
+                                "[{pname}]: invalid instance name '{inst_name}': an instance \
+                             name must be non-empty and contain no '.'"
+                            ),
+                        );
+                        continue;
+                    }
+                    if let Some(inst_table) = inst_value.as_table() {
+                        let section = format!("{pname}.{inst_name}");
+                        validate_single_processor(
+                            &pname,
+                            &section,
+                            &["processor", type_key, short, inst_name],
+                            inst_table,
+                            errors,
+                        );
+                    }
+                }
+            }
+            SectionShape::SingleInstance => {
+                validate_single_processor(
+                    &pname,
+                    &pname,
+                    &["processor", type_key, short],
+                    table,
+                    errors,
+                );
+            }
+            // The section reads as both a config-field table and a set of
+            // named instances. Guessing here is what let a config silently
+            // change meaning when a future release added a field whose name
+            // matched an existing user's instance — so it is rejected
+            // instead, naming the exact keys to rename.
+            SectionShape::Ambiguous { colliding } => {
+                add(
+                    errors,
+                    &["processor", type_key, short],
+                    format!(
+                        "[{pname}]: ambiguous section — {} also {} a config field of \
+                 '{pname}', so this could be read either as config or as named \
+                 instance{}. Rename the instance{}, or move the config fields to \
+                 [{pname}] and keep only instances as sub-tables.",
+                        colliding
+                            .iter()
+                            .map(|c| format!("'{c}'"))
+                            .collect::<Vec<_>>()
+                            .join(", "),
+                        if colliding.len() == 1 {
+                            "names"
+                        } else {
+                            "name"
+                        },
+                        if colliding.len() == 1 { "" } else { "s" },
+                        if colliding.len() == 1 { "" } else { "s" },
+                    ),
+                );
+            }
+        }
+    }
+}
+
 /// Validate that all fields in `[processor.X]` sections are known fields for that processor
 /// and have the correct TOML types. Supports both single-instance and multi-instance formats.
 /// Returns a list of error strings (empty if valid). `Config::load` combines this with the
@@ -550,109 +663,7 @@ pub(super) fn validate_processor_fields_raw(raw: &toml::Value) -> Vec<ConfigIssu
             continue;
         }
 
-        for (short, value) in type_table {
-            let Some(table) = value.as_table() else {
-                add(
-                    &mut errors,
-                    &["processor", type_key, short],
-                    format!(
-                        "[processor.{type_key}]: '{short}' must be a section (e.g. [processor.{type_key}.{short}]), got {}",
-                        FieldType::describe_value(value),
-                    ),
-                );
-                continue;
-            };
-            let pname = registry::pname_from_parts(type_key, short);
-
-            if !is_builtin_type(&pname) {
-                let elsewhere: Vec<String> = registry::all_plugins()
-                    .filter(|p| p.name == short)
-                    .map(ProcessorPlugin::pname)
-                    .collect();
-                let hint = if elsewhere.is_empty() {
-                    format!(" (run `rsconstruct processor list --type {type_key}`)")
-                } else {
-                    format!(" — did you mean [{}]?", elsewhere.join("] or ["))
-                };
-                add(
-                    &mut errors,
-                    &["processor", type_key, short],
-                    format!("[{pname}]: there is no {type_key} processor named '{short}'{hint}"),
-                );
-                continue;
-            }
-
-            // Check if multi-instance
-            match ProcessorConfig::classify_section(&pname, table) {
-                SectionShape::MultiInstance => {
-                    for (inst_name, inst_value) in table {
-                        // An instance is addressed as `<pname>.<instance>`
-                        // everywhere (`-p`, the cache key, the output
-                        // directory): an empty segment or one with a dot
-                        // in it is a name `parse_name` cannot take apart.
-                        if inst_name.is_empty() || inst_name.contains('.') {
-                            add(
-                                &mut errors,
-                                &["processor", type_key, short, inst_name],
-                                format!(
-                                    "[{pname}]: invalid instance name '{inst_name}': an instance \
-                                 name must be non-empty and contain no '.'"
-                                ),
-                            );
-                            continue;
-                        }
-                        if let Some(inst_table) = inst_value.as_table() {
-                            let section = format!("{pname}.{inst_name}");
-                            validate_single_processor(
-                                &pname,
-                                &section,
-                                &["processor", type_key, short, inst_name],
-                                inst_table,
-                                &mut errors,
-                            );
-                        }
-                    }
-                }
-                SectionShape::SingleInstance => {
-                    validate_single_processor(
-                        &pname,
-                        &pname,
-                        &["processor", type_key, short],
-                        table,
-                        &mut errors,
-                    );
-                }
-                // The section reads as both a config-field table and a set of
-                // named instances. Guessing here is what let a config silently
-                // change meaning when a future release added a field whose name
-                // matched an existing user's instance — so it is rejected
-                // instead, naming the exact keys to rename.
-                SectionShape::Ambiguous { colliding } => {
-                    add(
-                        &mut errors,
-                        &["processor", type_key, short],
-                        format!(
-                            "[{pname}]: ambiguous section — {} also {} a config field of \
-                     '{pname}', so this could be read either as config or as named \
-                     instance{}. Rename the instance{}, or move the config fields to \
-                     [{pname}] and keep only instances as sub-tables.",
-                            colliding
-                                .iter()
-                                .map(|c| format!("'{c}'"))
-                                .collect::<Vec<_>>()
-                                .join(", "),
-                            if colliding.len() == 1 {
-                                "names"
-                            } else {
-                                "name"
-                            },
-                            if colliding.len() == 1 { "" } else { "s" },
-                            if colliding.len() == 1 { "" } else { "s" },
-                        ),
-                    );
-                }
-            }
-        }
+        validate_type_table(type_key, type_table, &mut errors);
     }
 
     errors

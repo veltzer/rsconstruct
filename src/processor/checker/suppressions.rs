@@ -121,6 +121,66 @@ fn refused(name: &'static str, pattern: &str, why: &'static str) -> Directive {
     }
 }
 
+/// The suppression comments of the Python linters: ruff, flake8, pyrefly, mypy and pylint.
+fn python_directives() -> Vec<Directive> {
+    vec![
+        refused(
+            "ruff: noqa",
+            r"#\s*(?:ruff|flake8):\s*noqa",
+            "covers the whole file: suppress the one line with `# noqa: CODE`",
+        ),
+        refused(
+            "pyrefly: ignore-errors",
+            r"#\s*pyrefly:\s*ignore-errors",
+            "covers the whole file: suppress the one line with `# pyrefly: ignore[code]`",
+        ),
+        directive(
+            "type: ignore",
+            r"#\s*type:\s*ignore(?P<rule>\[[^\]]+\])?(?P<rest>.*)",
+        ),
+        directive(
+            "pyrefly: ignore",
+            r"#\s*pyrefly:\s*ignore(?P<rule>\[[^\]]+\])?(?P<rest>.*)",
+        ),
+        directive(
+            "noqa",
+            r"#\s*noqa\b(?::\s*(?P<rule>[A-Z]+[0-9]+(?:\s*,\s*[A-Z]+[0-9]+)*))?(?P<rest>.*)",
+        ),
+        directive(
+            "pylint: disable",
+            r"#\s*pylint:\s*disable=(?P<rule>[\w-]+(?:,[\w-]+)*)(?P<rest>.*)",
+        ),
+    ]
+}
+
+/// The suppression comments of the JavaScript and TypeScript linters.
+fn script_directives() -> Vec<Directive> {
+    vec![
+        scoped(
+            "eslint-disable",
+            r"\b(?:eslint|oxlint)-disable(?P<scope>-next-line|-line)?\b(?:\s+(?P<rule>[@\w/-]+(?:\s*,\s*[@\w/-]+)*))?(?P<rest>.*)",
+        ),
+        directive(
+            "biome-ignore",
+            r"\bbiome-ignore\b(?:\s+(?P<rule>lint/[\w/-]+))?(?P<rest>.*)",
+        ),
+    ]
+}
+
+/// The suppression comments of the CSS linters.
+fn css_directives() -> Vec<Directive> {
+    vec![
+        directive(
+            "biome-ignore",
+            r"\bbiome-ignore\b(?:\s+(?P<rule>lint/[\w/-]+))?(?P<rest>.*)",
+        ),
+        scoped(
+            "stylelint-disable",
+            r"\bstylelint-disable(?P<scope>-next-line|-line)?\b(?:\s+(?P<rule>[\w/-]+(?:\s*,\s*[\w/-]+)*))?(?P<rest>.*)",
+        ),
+    ]
+}
+
 fn build_table() -> Vec<(Kind, Vec<Directive>)> {
     let shellcheck = || {
         directive(
@@ -129,37 +189,7 @@ fn build_table() -> Vec<(Kind, Vec<Directive>)> {
         )
     };
     vec![
-        (
-            Kind::Python,
-            vec![
-                refused(
-                    "ruff: noqa",
-                    r"#\s*(?:ruff|flake8):\s*noqa",
-                    "covers the whole file: suppress the one line with `# noqa: CODE`",
-                ),
-                refused(
-                    "pyrefly: ignore-errors",
-                    r"#\s*pyrefly:\s*ignore-errors",
-                    "covers the whole file: suppress the one line with `# pyrefly: ignore[code]`",
-                ),
-                directive(
-                    "type: ignore",
-                    r"#\s*type:\s*ignore(?P<rule>\[[^\]]+\])?(?P<rest>.*)",
-                ),
-                directive(
-                    "pyrefly: ignore",
-                    r"#\s*pyrefly:\s*ignore(?P<rule>\[[^\]]+\])?(?P<rest>.*)",
-                ),
-                directive(
-                    "noqa",
-                    r"#\s*noqa\b(?::\s*(?P<rule>[A-Z]+[0-9]+(?:\s*,\s*[A-Z]+[0-9]+)*))?(?P<rest>.*)",
-                ),
-                directive(
-                    "pylint: disable",
-                    r"#\s*pylint:\s*disable=(?P<rule>[\w-]+(?:,[\w-]+)*)(?P<rest>.*)",
-                ),
-            ],
-        ),
+        (Kind::Python, python_directives()),
         (Kind::Shell, vec![shellcheck()]),
         (
             Kind::C,
@@ -188,32 +218,8 @@ fn build_table() -> Vec<(Kind, Vec<Directive>)> {
                 r"##\s*no\s+critic\b\s*(?P<rule>\([^)]+\))?(?P<rest>.*)",
             )],
         ),
-        (
-            Kind::Script,
-            vec![
-                scoped(
-                    "eslint-disable",
-                    r"\b(?:eslint|oxlint)-disable(?P<scope>-next-line|-line)?\b(?:\s+(?P<rule>[@\w/-]+(?:\s*,\s*[@\w/-]+)*))?(?P<rest>.*)",
-                ),
-                directive(
-                    "biome-ignore",
-                    r"\bbiome-ignore\b(?:\s+(?P<rule>lint/[\w/-]+))?(?P<rest>.*)",
-                ),
-            ],
-        ),
-        (
-            Kind::Css,
-            vec![
-                directive(
-                    "biome-ignore",
-                    r"\bbiome-ignore\b(?:\s+(?P<rule>lint/[\w/-]+))?(?P<rest>.*)",
-                ),
-                scoped(
-                    "stylelint-disable",
-                    r"\bstylelint-disable(?P<scope>-next-line|-line)?\b(?:\s+(?P<rule>[\w/-]+(?:\s*,\s*[\w/-]+)*))?(?P<rest>.*)",
-                ),
-            ],
-        ),
+        (Kind::Script, script_directives()),
+        (Kind::Css, css_directives()),
         (
             Kind::Yaml,
             vec![

@@ -1557,6 +1557,8 @@ enum DebSource {
     Url(&'static str),
 }
 
+/// How to fetch the prebuilt binary of `pkg`, when it has one. The linters
+/// are here; everything else is in [`document_tool_recipe`].
 fn binary_recipe(pkg: &str) -> Option<BinaryRecipe> {
     match pkg {
         // Pinned like actionlint: oxlint lives in the oxc monorepo, whose
@@ -1635,6 +1637,14 @@ fn binary_recipe(pkg: &str) -> Option<BinaryRecipe> {
             },
             dest: "shellcheck",
         }),
+        _ => document_tool_recipe(pkg),
+    }
+}
+
+/// The recipes of the tools that are not linters: converters, compilers and
+/// the runtimes other tools need.
+fn document_tool_recipe(pkg: &str) -> Option<BinaryRecipe> {
+    match pkg {
         // Tracks latest like hadolint: every jq release carries the raw,
         // statically linked `jq-linux-amd64` asset under that same name.
         "jq" => Some(BinaryRecipe {

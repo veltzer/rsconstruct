@@ -414,6 +414,73 @@ impl Builder {
         })
     }
 
+    /// Remove the sandbox runs a killed build left behind. Done whatever the
+    /// execution model: an earlier build may have been sandboxed.
+    fn remove_sandbox_leftovers() -> Result<()> {
+        // Sandbox runs a killed build left behind. Done whatever the
+        // execution model: an earlier build may have been sandboxed.
+        let root = std::env::current_dir()
+            .context("Failed to determine the project root to clean the sandbox")?;
+        let leftovers = crate::sandbox::remove_leftover_runs(&root)?;
+        if leftovers > 0 {
+            crate::output::info(&format!(
+                "[build] removed {leftovers} sandbox run(s) left by an interrupted build"
+            ));
+        }
+        Ok(())
+    }
+
+    /// The classify phase: decide for every product whether it is skipped,
+    /// restored or built. Returns the build order, the classification and the
+    /// number of threads the build will use.
+    fn classify_phase(
+        &self,
+        ctx: &crate::build_context::BuildContext,
+        opts: &BuildOptions,
+        graph: &crate::graph::BuildGraph,
+        phase_timings: &mut Vec<(String, Duration)>,
+    ) -> Result<(Vec<usize>, crate::executor::Classification, usize)> {
+        // Phase: Classify products (skip/restore/build). Printed in two lines,
+        // matching the dep-scan phase style:
+        //   - forward-looking total before classify runs (this is the checksum
+        //     pass, which is the expensive work for large graphs)
+        //   - post-classify breakdown showing what will actually be built
+        if phases_debug() {
+            eprintln!("{}", color::dim("  Phase: classify"));
+        }
+        let t = Instant::now();
+        let order = graph.topological_sort()?;
+        if crate::json_output::human_output_enabled() {
+            for (name, dir) in self.config.dir_condition_skips() {
+                println!("[build] {name} skipped: {dir} does not exist");
+            }
+            println!("[build] {} products to check for updates", order.len());
+        }
+        let effective_parallel = self.effective_parallel(opts);
+        let policy = crate::executor::IncrementalPolicy;
+        let classification = crate::executor::classify_products(
+            ctx,
+            &policy,
+            graph,
+            &order,
+            &self.object_store,
+            opts.run.force,
+            effective_parallel,
+        );
+        // Classify checksummed every input; write those entries before the
+        // long phase starts, so an interrupted build keeps them.
+        crate::checksum::flush_mtime_cache(ctx)?;
+        phase_timings.push(("classify".to_string(), t.elapsed()));
+        if crate::json_output::human_output_enabled() {
+            println!(
+                "[build] {} to build, {} to restore ({} up-to-date)",
+                classification.build_count, classification.restore_count, classification.skip_count
+            );
+        }
+        print_graph_stats(GraphSnapshot::AfterClassify, graph);
+        Ok((order, classification, effective_parallel))
+    }
+
     /// Execute an incremental build using the dependency graph.
     ///
     /// Three phases: [`apply_cli_overrides`](Self::apply_cli_overrides)
@@ -434,16 +501,7 @@ impl Builder {
             self.config.build.execution_model,
         )?;
 
-        // Sandbox runs a killed build left behind. Done whatever the
-        // execution model: an earlier build may have been sandboxed.
-        let root = std::env::current_dir()
-            .context("Failed to determine the project root to clean the sandbox")?;
-        let leftovers = crate::sandbox::remove_leftover_runs(&root)?;
-        if leftovers > 0 {
-            crate::output::info(&format!(
-                "[build] removed {leftovers} sandbox run(s) left by an interrupted build"
-            ));
-        }
+        Self::remove_sandbox_leftovers()?;
 
         let BuildPlan {
             processors,
@@ -471,44 +529,9 @@ impl Builder {
             return Ok(());
         }
 
-        // Phase: Classify products (skip/restore/build). Printed in two lines,
-        // matching the dep-scan phase style:
-        //   - forward-looking total before classify runs (this is the checksum
-        //     pass, which is the expensive work for large graphs)
-        //   - post-classify breakdown showing what will actually be built
-        if phases_debug() {
-            eprintln!("{}", color::dim("  Phase: classify"));
-        }
-        let t = Instant::now();
-        let order = graph.topological_sort()?;
-        if crate::json_output::human_output_enabled() {
-            for (name, dir) in self.config.dir_condition_skips() {
-                println!("[build] {name} skipped: {dir} does not exist");
-            }
-            println!("[build] {} products to check for updates", order.len());
-        }
-        let effective_parallel = self.effective_parallel(opts);
         let policy = crate::executor::IncrementalPolicy;
-        let classification = crate::executor::classify_products(
-            ctx,
-            &policy,
-            &graph,
-            &order,
-            &self.object_store,
-            opts.run.force,
-            effective_parallel,
-        );
-        // Classify checksummed every input; write those entries before the
-        // long phase starts, so an interrupted build keeps them.
-        crate::checksum::flush_mtime_cache(ctx)?;
-        phase_timings.push(("classify".to_string(), t.elapsed()));
-        if crate::json_output::human_output_enabled() {
-            println!(
-                "[build] {} to build, {} to restore ({} up-to-date)",
-                classification.build_count, classification.restore_count, classification.skip_count
-            );
-        }
-        print_graph_stats(GraphSnapshot::AfterClassify, &graph);
+        let (_order, classification, effective_parallel) =
+            self.classify_phase(ctx, opts, &graph, &mut phase_timings)?;
 
         if opts.stop_after == BuildPhase::Classify {
             return Ok(());

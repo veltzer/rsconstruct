@@ -1136,6 +1136,130 @@ impl Executor<'_> {
         }
     }
 
+    /// Say that a batch is starting: a full line when verbose, otherwise the
+    /// progress bar's message.
+    fn announce_batch(
+        &self,
+        proc_name: &str,
+        product_refs: &[&crate::graph::Product],
+        proc_current: usize,
+        proc_total: usize,
+        lctx: &LevelContext,
+    ) {
+        if self.verbose {
+            let display = product_refs
+                .iter()
+                .map(|p| self.product_display(p))
+                .collect::<Vec<_>>()
+                .join(", ");
+            let gc = lctx.shared.global_current.load(Ordering::SeqCst);
+            crate::output::info(&format!(
+                "[{}] ({}/{}) ({}/{}) {} {} files: {}",
+                proc_name,
+                gc + 1,
+                lctx.shared.global_total,
+                proc_current,
+                proc_total,
+                color::green("Processing batch:"),
+                product_refs.len(),
+                display
+            ));
+        } else {
+            lctx.pb.set_message(format!(
+                "[{}] batch {} files",
+                proc_name,
+                product_refs.len()
+            ));
+        }
+    }
+
+    /// Run one batch, retrying the products that fail. Returns the final
+    /// result of every product of the chunk, in order.
+    fn run_batch_with_retry(
+        &self,
+        proc_name: &str,
+        processor: &dyn crate::processor::Processor,
+        chunk: &[&WorkItem],
+        product_refs: &[&crate::graph::Product],
+        lctx: &LevelContext,
+    ) -> Vec<Option<anyhow::Result<()>>> {
+        // Retry: the first attempt covers the whole chunk; each retry
+        // re-runs only the products that failed the previous attempt, so
+        // `--retry` keeps its per-product meaning on the batch path
+        // (it used to be silently ignored here).
+        let max_attempts = 1 + self.retry;
+        let mut final_results: Vec<Option<anyhow::Result<()>>> =
+            (0..chunk.len()).map(|_| None).collect();
+        let mut pending: Vec<usize> = (0..chunk.len()).collect();
+        crate::processor::set_declared_tools(self.declared_tools(proc_name, processor));
+        // A batched invocation may write the outputs of any product in
+        // the chunk; retries re-run a subset, which the union covers.
+        crate::sandbox::set_spec(self.sandbox_spec(proc_name, processor, chunk, lctx.object_store));
+        crate::read_trace::set_spec(self.read_trace_spec(proc_name, processor, chunk));
+        for attempt in 1..=max_attempts {
+            let refs: Vec<&crate::graph::Product> =
+                pending.iter().map(|&i| product_refs[i]).collect();
+            let results = match guard_panic(
+                || format!("[{proc_name}] batch of {} products", refs.len()),
+                || self.execute_products(proc_name, processor, &refs),
+            ) {
+                Ok(results) => results,
+                Err(e) => refs.iter().map(|_| Err(anyhow::anyhow!("{e:#}"))).collect(),
+            };
+
+            // Validate batch returned correct number of results
+            assert_eq!(
+                results.len(),
+                refs.len(),
+                "execute_batch returned {} results for {} products (processor: {})",
+                results.len(),
+                refs.len(),
+                proc_name
+            );
+
+            let mut still_failing: Vec<usize> = Vec::new();
+            for (&idx, result) in pending.iter().zip(results) {
+                if result.is_err() && attempt < max_attempts {
+                    crate::output::info(&format!(
+                        "[{}] {} {} (attempt {}/{}, retrying...)",
+                        proc_name,
+                        color::yellow("Retry:"),
+                        self.product_display(product_refs[idx]),
+                        attempt,
+                        max_attempts
+                    ));
+                    still_failing.push(idx);
+                } else {
+                    if result.is_ok() && attempt > 1 {
+                        // Passed on a retry: report flaky, like the non-batch path.
+                        lctx.shared
+                            .stats
+                            .lock()
+                            .entry(proc_name.to_string())
+                            .or_default()
+                            .flaky += 1;
+                        crate::output::info(&format!(
+                            "[{}] {} {} (passed on attempt {})",
+                            proc_name,
+                            color::yellow("FLAKY:"),
+                            self.product_display(product_refs[idx]),
+                            attempt
+                        ));
+                    }
+                    final_results[idx] = Some(result);
+                }
+            }
+            pending = still_failing;
+            if pending.is_empty() {
+                break;
+            }
+        }
+        crate::processor::set_declared_tools(None);
+        crate::sandbox::set_spec(None);
+        crate::read_trace::set_spec(None);
+        final_results
+    }
+
     /// Process one batch unit: a chunk of a batching processor's products,
     /// run in one invocation of its tool.
     fn process_batch_group(&self, proc_name: &str, items: &[WorkItem], lctx: &LevelContext) {
@@ -1183,31 +1307,7 @@ impl Executor<'_> {
                 chunk.iter().map(|item| &item.product).collect();
 
             proc_current += chunk.len();
-            if self.verbose {
-                let display = product_refs
-                    .iter()
-                    .map(|p| self.product_display(p))
-                    .collect::<Vec<_>>()
-                    .join(", ");
-                let gc = lctx.shared.global_current.load(Ordering::SeqCst);
-                crate::output::info(&format!(
-                    "[{}] ({}/{}) ({}/{}) {} {} files: {}",
-                    proc_name,
-                    gc + 1,
-                    lctx.shared.global_total,
-                    proc_current,
-                    proc_total,
-                    color::green("Processing batch:"),
-                    product_refs.len(),
-                    display
-                ));
-            } else {
-                lctx.pb.set_message(format!(
-                    "[{}] batch {} files",
-                    proc_name,
-                    product_refs.len()
-                ));
-            }
+            self.announce_batch(proc_name, &product_refs, proc_current, proc_total, lctx);
 
             // Stale outputs were removed per product in try_skip_or_restore
             // (or are removed by the sandbox); just announce starts.
@@ -1217,87 +1317,13 @@ impl Executor<'_> {
 
             let batch_start = Instant::now();
 
-            // Retry: the first attempt covers the whole chunk; each retry
-            // re-runs only the products that failed the previous attempt, so
-            // `--retry` keeps its per-product meaning on the batch path
-            // (it used to be silently ignored here).
-            let max_attempts = 1 + self.retry;
-            let mut final_results: Vec<Option<anyhow::Result<()>>> =
-                (0..chunk.len()).map(|_| None).collect();
-            let mut pending: Vec<usize> = (0..chunk.len()).collect();
-            crate::processor::set_declared_tools(
-                self.declared_tools(proc_name, processor.as_ref()),
-            );
-            // A batched invocation may write the outputs of any product in
-            // the chunk; retries re-run a subset, which the union covers.
-            crate::sandbox::set_spec(self.sandbox_spec(
+            let final_results = self.run_batch_with_retry(
                 proc_name,
                 processor.as_ref(),
                 chunk,
-                lctx.object_store,
-            ));
-            crate::read_trace::set_spec(self.read_trace_spec(proc_name, processor.as_ref(), chunk));
-            for attempt in 1..=max_attempts {
-                let refs: Vec<&crate::graph::Product> =
-                    pending.iter().map(|&i| product_refs[i]).collect();
-                let results = match guard_panic(
-                    || format!("[{proc_name}] batch of {} products", refs.len()),
-                    || self.execute_products(proc_name, processor.as_ref(), &refs),
-                ) {
-                    Ok(results) => results,
-                    Err(e) => refs.iter().map(|_| Err(anyhow::anyhow!("{e:#}"))).collect(),
-                };
-
-                // Validate batch returned correct number of results
-                assert_eq!(
-                    results.len(),
-                    refs.len(),
-                    "execute_batch returned {} results for {} products (processor: {})",
-                    results.len(),
-                    refs.len(),
-                    proc_name
-                );
-
-                let mut still_failing: Vec<usize> = Vec::new();
-                for (&idx, result) in pending.iter().zip(results) {
-                    if result.is_err() && attempt < max_attempts {
-                        crate::output::info(&format!(
-                            "[{}] {} {} (attempt {}/{}, retrying...)",
-                            proc_name,
-                            color::yellow("Retry:"),
-                            self.product_display(product_refs[idx]),
-                            attempt,
-                            max_attempts
-                        ));
-                        still_failing.push(idx);
-                    } else {
-                        if result.is_ok() && attempt > 1 {
-                            // Passed on a retry: report flaky, like the non-batch path.
-                            lctx.shared
-                                .stats
-                                .lock()
-                                .entry(proc_name.to_string())
-                                .or_default()
-                                .flaky += 1;
-                            crate::output::info(&format!(
-                                "[{}] {} {} (passed on attempt {})",
-                                proc_name,
-                                color::yellow("FLAKY:"),
-                                self.product_display(product_refs[idx]),
-                                attempt
-                            ));
-                        }
-                        final_results[idx] = Some(result);
-                    }
-                }
-                pending = still_failing;
-                if pending.is_empty() {
-                    break;
-                }
-            }
-            crate::processor::set_declared_tools(None);
-            crate::sandbox::set_spec(None);
-            crate::read_trace::set_spec(None);
+                &product_refs,
+                lctx,
+            );
             let batch_duration = batch_start.elapsed();
 
             // Process per-product results
@@ -1343,6 +1369,98 @@ impl Executor<'_> {
         }
     }
 
+    /// Count the product against its processor's total and say that it is
+    /// starting: a full line when verbose, otherwise the progress bar's message.
+    fn announce_product(
+        &self,
+        product: &crate::graph::Product,
+        lctx: &LevelContext,
+        total_per_processor: &HashMap<String, usize>,
+        current_per_processor: &Mutex<HashMap<String, usize>>,
+    ) {
+        // Update progress counter
+        let current = *current_per_processor
+            .lock()
+            .entry(product.processor.clone())
+            .and_modify(|c| *c += 1)
+            .or_insert(1);
+        let total = total_per_processor
+            .get(&product.processor)
+            .copied()
+            .expect(errors::PROCESSOR_NOT_IN_TOTALS);
+
+        let variant_tag = product
+            .variant
+            .as_ref()
+            .map(|v| format!(":{v}"))
+            .unwrap_or_default();
+        if self.verbose {
+            let gc = lctx.shared.global_current.load(Ordering::SeqCst) + 1;
+            crate::output::info(&format!(
+                "[{}{}] ({}/{}) ({}/{}) {} {}",
+                product.processor,
+                variant_tag,
+                gc,
+                lctx.shared.global_total,
+                current,
+                total,
+                color::green("Processing:"),
+                self.product_display(product)
+            ));
+        } else {
+            lctx.pb.set_message(format!(
+                "[{}{}] {}",
+                product.processor,
+                variant_tag,
+                self.product_display(product)
+            ));
+        }
+    }
+
+    /// Book a product that built: flaky when it needed a retry, and its
+    /// duration (non-batch only).
+    fn record_success(
+        &self,
+        product: &crate::graph::Product,
+        attempt: usize,
+        duration: std::time::Duration,
+        product_start: Instant,
+        lctx: &LevelContext,
+    ) {
+        // Mark as flaky if it passed on a retry
+        if attempt > 1 {
+            lctx.shared
+                .stats
+                .lock()
+                .entry(product.processor.clone())
+                .or_default()
+                .flaky += 1;
+            crate::output::info(&format!(
+                "[{}] {} {} (passed on attempt {})",
+                product.processor,
+                color::yellow("FLAKY:"),
+                self.product_display(product),
+                attempt
+            ));
+        }
+
+        // Record per-product duration (non-batch only)
+        {
+            let mut stats = lctx.shared.stats.lock();
+            let proc_stats = stats.entry(product.processor.clone()).or_default();
+            proc_stats.duration += duration;
+            if lctx.timings {
+                proc_stats.product_timings.push(ProductTiming {
+                    display: self.product_display(product),
+                    processor: product.processor.clone(),
+                    duration,
+                    start_offset: Some(product_start.duration_since(lctx.build_start)),
+                });
+            }
+            drop(stats);
+        }
+    }
+
     /// Process non-batch work items, one after another.
     fn process_non_batch_chunk(
         &self,
@@ -1375,43 +1493,7 @@ impl Executor<'_> {
                     pb: lctx.pb,
                 };
 
-                // Update progress counter
-                let current = *current_per_processor
-                    .lock()
-                    .entry(product.processor.clone())
-                    .and_modify(|c| *c += 1)
-                    .or_insert(1);
-                let total = total_per_processor
-                    .get(&product.processor)
-                    .copied()
-                    .expect(errors::PROCESSOR_NOT_IN_TOTALS);
-
-                let variant_tag = product
-                    .variant
-                    .as_ref()
-                    .map(|v| format!(":{v}"))
-                    .unwrap_or_default();
-                if self.verbose {
-                    let gc = lctx.shared.global_current.load(Ordering::SeqCst) + 1;
-                    crate::output::info(&format!(
-                        "[{}{}] ({}/{}) ({}/{}) {} {}",
-                        product.processor,
-                        variant_tag,
-                        gc,
-                        lctx.shared.global_total,
-                        current,
-                        total,
-                        color::green("Processing:"),
-                        self.product_display(product)
-                    ));
-                } else {
-                    lctx.pb.set_message(format!(
-                        "[{}{}] {}",
-                        product.processor,
-                        variant_tag,
-                        self.product_display(product)
-                    ));
-                }
+                self.announce_product(product, lctx, total_per_processor, current_per_processor);
 
                 json_output::emit_product_start(&self.product_display(product), &product.processor);
                 let product_start = Instant::now();
@@ -1452,41 +1534,7 @@ impl Executor<'_> {
                                 break;
                             }
 
-                            // Mark as flaky if it passed on a retry
-                            if attempt > 1 {
-                                lctx.shared
-                                    .stats
-                                    .lock()
-                                    .entry(product.processor.clone())
-                                    .or_default()
-                                    .flaky += 1;
-                                crate::output::info(&format!(
-                                    "[{}] {} {} (passed on attempt {})",
-                                    product.processor,
-                                    color::yellow("FLAKY:"),
-                                    self.product_display(product),
-                                    attempt
-                                ));
-                            }
-
-                            // Record per-product duration (non-batch only)
-                            {
-                                let mut stats = lctx.shared.stats.lock();
-                                let proc_stats =
-                                    stats.entry(product.processor.clone()).or_default();
-                                proc_stats.duration += duration;
-                                if lctx.timings {
-                                    proc_stats.product_timings.push(ProductTiming {
-                                        display: self.product_display(product),
-                                        processor: product.processor.clone(),
-                                        duration,
-                                        start_offset: Some(
-                                            product_start.duration_since(lctx.build_start),
-                                        ),
-                                    });
-                                }
-                                drop(stats);
-                            }
+                            self.record_success(product, attempt, duration, product_start, lctx);
                             break;
                         }
                         Err(e) => {
