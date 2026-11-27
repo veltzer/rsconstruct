@@ -410,6 +410,343 @@ impl Builder {
     }
 }
 
+/// The installed/total tool counts per runtime, as a table.
+fn print_runtime_summary(runtime_stats: &[json_output::RuntimeStat]) {
+    println!();
+    println!("Runtime summary:");
+    let runtime_display: &[(&str, &str)] = &[
+        ("python", "Python"),
+        ("node", "Node.js"),
+        ("ruby", "Ruby"),
+        ("rust", "Rust"),
+        ("perl", "Perl"),
+        ("jvm", "JVM"),
+        ("system", "System"),
+    ];
+    let rt_rows: Vec<Vec<String>> = runtime_display
+        .iter()
+        .filter_map(|(key, label)| {
+            runtime_stats.iter().find(|r| r.runtime == *key).map(|rs| {
+                let status_str = format!("{}/{}", rs.installed, rs.total);
+                let line = if rs.missing > 0 {
+                    color::yellow(&status_str)
+                } else {
+                    color::green(&status_str)
+                };
+                vec![label.to_string(), line.to_string()]
+            })
+        })
+        .collect();
+    tables::print(&tables::defs::TOOL_RUNTIMES, false, &rt_rows);
+}
+
+/// Each tool with the processors that run it: the enabled ones, or with
+/// `show_all` every declared one.
+fn tools_by_processor(
+    processors: &crate::processor::ProcessorMap,
+    is_enabled: &dyn Fn(&str) -> bool,
+    show_all: bool,
+) -> BTreeMap<String, Vec<String>> {
+    let mut tool_map: BTreeMap<String, Vec<String>> = BTreeMap::new();
+    for name in sorted_keys(processors) {
+        if !show_all && !is_enabled(name) {
+            continue;
+        }
+        for tool in processors[name].required_tools() {
+            let procs = tool_map.entry(tool).or_default();
+            if !procs.contains(name) {
+                procs.push(name.clone());
+            }
+        }
+    }
+    tool_map
+}
+
+/// `tool list`: every tool the registry knows, configured or not.
+fn list_registry_tools(verbose: bool, show_methods: bool) -> Result<()> {
+    // Registry-wide list: every tool rsconstruct knows how to install,
+    // independent of which processors are configured. Mirrors
+    // `processor list`, which shows all built-in processors. So the
+    // Processors column comes from every processor at its default
+    // config, not from the project's: a tool no processor runs is one
+    // a project selects through config (`required_tools`, a cc
+    // profile) or that rsconstruct runs itself.
+    let all_processors = super::create_all_default_processors()?;
+    let mut runners: BTreeMap<&str, Vec<String>> = BTreeMap::new();
+    for name in sorted_keys(&all_processors) {
+        for tool in all_processors[name].required_tools() {
+            if let Some(info) = crate::tools::tool_info(&tool) {
+                runners.entry(info.name).or_default().push(name.clone());
+            }
+        }
+    }
+    if crate::json_output::is_json_mode() {
+        let entries: Vec<json_output::ToolListEntry> = crate::tools::all_tools()
+            .map(|info| {
+                json_output::ToolListEntry::new(
+                    info.name,
+                    Some(info),
+                    runners.get(info.name).cloned().unwrap_or_default(),
+                )
+            })
+            .collect();
+        println!("{}", serde_json::to_string_pretty(&entries)?);
+        return Ok(());
+    }
+
+    let mut tools: Vec<&crate::tools::ToolInfo> = crate::tools::all_tools().collect();
+    tools.sort_by_key(|t| t.name);
+
+    // The install command is noise for the common "what tools exist?"
+    // question, so the Install column is hidden by default — shown
+    // with --verbose (or --methods for every method), or when --all
+    // or the user's [tables] config asks for it. JSON always carries it.
+    let show_install = verbose || show_methods;
+    let rows: Vec<Vec<String>> = tools
+        .iter()
+        .map(|info| {
+            let status = if which::which(info.name).is_ok() {
+                color::green("installed")
+            } else {
+                color::red("missing")
+            };
+            let procs = runners.get(info.name).map_or_else(
+                || color::yellow("(none)").to_string(),
+                |names| tables::processor_names_cell(names, TOOL_LIST_MAX_PROCESSORS),
+            );
+            let target = info
+                .preferred_target()
+                .map_or("?", crate::tools::InstallTarget::as_str);
+            vec![
+                info.name.to_string(),
+                status.to_string(),
+                info.runtime.to_string(),
+                target.to_string(),
+                procs,
+                install_cell(Some(info), show_methods),
+            ]
+        })
+        .collect();
+    tables::print(&tables::defs::TOOL_LIST, show_install, &rows);
+    Ok(())
+}
+
+/// `tool list-configured`: the tools this project's processors run.
+fn list_configured_tools(
+    tool_map: &BTreeMap<String, Vec<String>>,
+    show_methods: bool,
+) -> Result<()> {
+    if crate::json_output::is_json_mode() {
+        let entries: Vec<json_output::ToolListEntry> = tool_map
+            .iter()
+            .map(|(tool, procs)| {
+                json_output::ToolListEntry::new(tool, crate::tools::tool_info(tool), procs.clone())
+            })
+            .collect();
+        println!("{}", serde_json::to_string_pretty(&entries)?);
+        return Ok(());
+    }
+
+    for (tool, procs) in tool_map {
+        let installed = if which::which(tool).is_ok() {
+            color::green("installed")
+        } else {
+            color::red("missing")
+        };
+        let info = crate::tools::tool_info(tool);
+        let runtime = info.map_or("unknown", |i| i.runtime);
+        let install_str = install_cell(info, show_methods);
+        println!(
+            "{} [{}] [{}] ({}) — {}",
+            tool,
+            installed,
+            runtime,
+            procs.join(", "),
+            color::dim(&install_str)
+        );
+    }
+    Ok(())
+}
+
+/// `tool check`: the installed tools against rsconstruct.lock.
+fn check_tools(
+    ctx: &crate::build_context::BuildContext,
+    processors: &crate::processor::ProcessorMap,
+    is_enabled: &dyn Fn(&str) -> bool,
+    builder: Option<&Builder>,
+) -> Result<()> {
+    let builder = builder.ok_or_else(|| {
+        crate::exit_code::config_error("tool check requires a project with rsconstruct.toml")
+    })?;
+    let wanted = project_wanted(builder, processors, is_enabled)?;
+    tool_lock::verify(ctx, &wanted, tool_lock::Coverage::Exact)?;
+    if crate::json_output::is_json_mode() {
+        let out = serde_json::json!({
+            "lock_file": tool_lock::LOCK_FILE,
+            "match": true,
+        });
+        println!("{}", serde_json::to_string_pretty(&out)?);
+    } else {
+        println!(
+            "{}",
+            color::green(&format!("Installed tools match {}.", tool_lock::LOCK_FILE))
+        );
+    }
+    Ok(())
+}
+
+/// `tool lock`: fill rsconstruct.lock, or upgrade what it pins.
+fn lock_tools(
+    ctx: &crate::build_context::BuildContext,
+    processors: &crate::processor::ProcessorMap,
+    is_enabled: &dyn Fn(&str) -> bool,
+    builder: Option<&Builder>,
+    upgrade: Option<Vec<String>>,
+    verbose: bool,
+) -> Result<()> {
+    let builder = builder.ok_or_else(|| {
+        crate::exit_code::config_error("tool lock requires a project with rsconstruct.toml")
+    })?;
+    let wanted = project_wanted(builder, processors, is_enabled)?;
+    let synced = match upgrade {
+        None => tool_lock::sync(ctx, &wanted, tool_lock::LockMode::Fill, verbose)?,
+        Some(names) if names.is_empty() => {
+            tool_lock::sync(ctx, &wanted, tool_lock::LockMode::Upgrade, verbose)?
+        }
+        Some(names) => tool_lock::upgrade_named(ctx, &wanted, &names, verbose)?,
+    };
+    if crate::json_output::is_json_mode() {
+        let out = serde_json::json!({
+            "lock_file": tool_lock::LOCK_FILE,
+            "created": synced.created,
+            "changes": synced.changes,
+        });
+        println!("{}", serde_json::to_string_pretty(&out)?);
+    } else if synced.changes.is_empty() && !synced.created {
+        println!("{} is up to date.", color::bold(tool_lock::LOCK_FILE));
+    } else {
+        synced.report();
+    }
+    Ok(())
+}
+
+/// `tool graph`: tools and the processors that run them, printed or viewed.
+fn tools_graph(
+    ctx: &crate::build_context::BuildContext,
+    tool_map: &BTreeMap<String, Vec<String>>,
+    builder: Option<&Builder>,
+    format: GraphFormat,
+    view: bool,
+) -> Result<()> {
+    if view {
+        let html_content = tools_graph_html(tool_map);
+        let html_path = std::env::temp_dir().join("rsconstruct_tools_graph.html");
+        std::fs::write(&html_path, &html_content)
+            .with_context(|| format!("Failed to write HTML file: {}", html_path.display()))?;
+        if let Some(b) = builder {
+            b.open_file(&html_path)?;
+            println!("Opened tools graph in browser: {}", html_path.display());
+        } else {
+            println!("Wrote tools graph to: {}", html_path.display());
+        }
+    } else {
+        let effective_format = if crate::json_output::is_json_mode() {
+            GraphFormat::Json
+        } else {
+            format
+        };
+        let output = match effective_format {
+            GraphFormat::Dot => tools_graph_dot(tool_map),
+            GraphFormat::Mermaid => tools_graph_mermaid(tool_map),
+            GraphFormat::Text => tools_graph_text(tool_map),
+            GraphFormat::Json => tools_graph_json(tool_map)?,
+            GraphFormat::Svg => tools_graph_svg(ctx, tool_map)?,
+        };
+        println!("{output}");
+    }
+    Ok(())
+}
+
+/// `tool stats`: which tools are installed, per tool and per runtime.
+fn tool_stats(tool_map: &BTreeMap<String, Vec<String>>) -> Result<()> {
+    let mut tool_stats: Vec<json_output::ToolStat> = Vec::new();
+    for (tool, procs) in tool_map {
+        let installed = which::which(tool).is_ok();
+        let runtime = tool_runtime(tool).to_string();
+        let install_command = crate::tools::tool_install_command(tool);
+        tool_stats.push(json_output::ToolStat {
+            name: tool.clone(),
+            installed,
+            runtime,
+            processor: procs.clone(),
+            install_command,
+        });
+    }
+
+    let mut runtime_map: BTreeMap<&str, (usize, usize)> = BTreeMap::new();
+    for stat in &tool_stats {
+        let entry = runtime_map
+            .entry(tool_runtime(&stat.name))
+            .or_insert((0, 0));
+        entry.0 += 1;
+        if stat.installed {
+            entry.1 += 1;
+        }
+    }
+    let runtime_stats: Vec<json_output::RuntimeStat> = runtime_map
+        .iter()
+        .map(|(runtime, (total, installed))| json_output::RuntimeStat {
+            runtime: runtime.to_string(),
+            total: *total,
+            installed: *installed,
+            missing: total - installed,
+        })
+        .collect();
+
+    let total_tools = tool_stats.len();
+    let installed_count = tool_stats.iter().filter(|t| t.installed).count();
+    let missing_count = total_tools - installed_count;
+
+    if crate::json_output::is_json_mode() {
+        let output = json_output::ToolStatsOutput {
+            tools: tool_stats,
+            runtimes: runtime_stats,
+            summary: json_output::StatsSummary {
+                total_tools,
+                installed: installed_count,
+                missing: missing_count,
+            },
+        };
+        println!("{}", serde_json::to_string_pretty(&output)?);
+    } else {
+        let rows: Vec<Vec<String>> = tool_stats
+            .iter()
+            .map(|stat| {
+                let status = if stat.installed {
+                    color::green("\u{2713}")
+                } else {
+                    color::red("\u{2717}")
+                };
+                let procs = tables::processor_names_cell(&stat.processor, TOOL_LIST_MAX_PROCESSORS);
+                let install = stat.install_command.as_deref().unwrap_or("").to_string();
+                vec![stat.name.clone(), status.to_string(), procs, install]
+            })
+            .collect();
+        tables::print(&tables::defs::TOOL_STATS, false, &rows);
+
+        print_runtime_summary(&runtime_stats);
+
+        println!();
+        let total_line = format!("Total: {installed_count}/{total_tools} tools installed");
+        if missing_count > 0 {
+            println!("{}", color::yellow(&total_line));
+        } else {
+            println!("{}", color::green(&total_line));
+        }
+    }
+    Ok(())
+}
+
 /// Core implementation for `tools` subcommands, shared by `Builder::tools()` and `tools_no_config()`.
 /// `builder` is `Some` when running with a project config (needed for `open_file`, `Check`, `Lock`).
 /// `is_enabled` selects the processors whose tools count: `list-configured
@@ -427,299 +764,27 @@ fn run_tools_command(
         &action,
         ToolAction::ListConfigured { methods: true, .. } | ToolAction::List { methods: true }
     );
-    let mut tool_map: BTreeMap<String, Vec<String>> = BTreeMap::new();
-    for name in sorted_keys(processors) {
-        if !show_all && !is_enabled(name) {
-            continue;
-        }
-        for tool in processors[name].required_tools() {
-            let procs = tool_map.entry(tool).or_default();
-            if !procs.contains(name) {
-                procs.push(name.clone());
-            }
-        }
-    }
+    let tool_map = tools_by_processor(processors, is_enabled, show_all);
 
     match action {
         ToolAction::Cache { action } => crate::tool_cache::handle(action)?,
         ToolAction::List { .. } => {
-            // Registry-wide list: every tool rsconstruct knows how to install,
-            // independent of which processors are configured. Mirrors
-            // `processor list`, which shows all built-in processors. So the
-            // Processors column comes from every processor at its default
-            // config, not from the project's: a tool no processor runs is one
-            // a project selects through config (`required_tools`, a cc
-            // profile) or that rsconstruct runs itself.
-            let all_processors = super::create_all_default_processors()?;
-            let mut runners: BTreeMap<&str, Vec<String>> = BTreeMap::new();
-            for name in sorted_keys(&all_processors) {
-                for tool in all_processors[name].required_tools() {
-                    if let Some(info) = crate::tools::tool_info(&tool) {
-                        runners.entry(info.name).or_default().push(name.clone());
-                    }
-                }
-            }
-            if crate::json_output::is_json_mode() {
-                let entries: Vec<json_output::ToolListEntry> = crate::tools::all_tools()
-                    .map(|info| {
-                        json_output::ToolListEntry::new(
-                            info.name,
-                            Some(info),
-                            runners.get(info.name).cloned().unwrap_or_default(),
-                        )
-                    })
-                    .collect();
-                println!("{}", serde_json::to_string_pretty(&entries)?);
-                return Ok(());
-            }
-
-            let mut tools: Vec<&crate::tools::ToolInfo> = crate::tools::all_tools().collect();
-            tools.sort_by_key(|t| t.name);
-
-            // The install command is noise for the common "what tools exist?"
-            // question, so the Install column is hidden by default — shown
-            // with --verbose (or --methods for every method), or when --all
-            // or the user's [tables] config asks for it. JSON always carries it.
-            let show_install = verbose || show_methods;
-            let rows: Vec<Vec<String>> = tools
-                .iter()
-                .map(|info| {
-                    let status = if which::which(info.name).is_ok() {
-                        color::green("installed")
-                    } else {
-                        color::red("missing")
-                    };
-                    let procs = runners.get(info.name).map_or_else(
-                        || color::yellow("(none)").to_string(),
-                        |names| tables::processor_names_cell(names, TOOL_LIST_MAX_PROCESSORS),
-                    );
-                    let target = info
-                        .preferred_target()
-                        .map_or("?", crate::tools::InstallTarget::as_str);
-                    vec![
-                        info.name.to_string(),
-                        status.to_string(),
-                        info.runtime.to_string(),
-                        target.to_string(),
-                        procs,
-                        install_cell(Some(info), show_methods),
-                    ]
-                })
-                .collect();
-            tables::print(&tables::defs::TOOL_LIST, show_install, &rows);
+            list_registry_tools(verbose, show_methods)?;
         }
         ToolAction::ListConfigured { .. } => {
-            if crate::json_output::is_json_mode() {
-                let entries: Vec<json_output::ToolListEntry> = tool_map
-                    .iter()
-                    .map(|(tool, procs)| {
-                        json_output::ToolListEntry::new(
-                            tool,
-                            crate::tools::tool_info(tool),
-                            procs.clone(),
-                        )
-                    })
-                    .collect();
-                println!("{}", serde_json::to_string_pretty(&entries)?);
-                return Ok(());
-            }
-
-            for (tool, procs) in &tool_map {
-                let installed = if which::which(tool).is_ok() {
-                    color::green("installed")
-                } else {
-                    color::red("missing")
-                };
-                let info = crate::tools::tool_info(tool);
-                let runtime = info.map_or("unknown", |i| i.runtime);
-                let install_str = install_cell(info, show_methods);
-                println!(
-                    "{} [{}] [{}] ({}) — {}",
-                    tool,
-                    installed,
-                    runtime,
-                    procs.join(", "),
-                    color::dim(&install_str)
-                );
-            }
+            list_configured_tools(&tool_map, show_methods)?;
         }
         ToolAction::Check => {
-            let builder = builder.ok_or_else(|| {
-                crate::exit_code::config_error(
-                    "tool check requires a project with rsconstruct.toml",
-                )
-            })?;
-            let wanted = project_wanted(builder, processors, is_enabled)?;
-            tool_lock::verify(ctx, &wanted, tool_lock::Coverage::Exact)?;
-            if crate::json_output::is_json_mode() {
-                let out = serde_json::json!({
-                    "lock_file": tool_lock::LOCK_FILE,
-                    "match": true,
-                });
-                println!("{}", serde_json::to_string_pretty(&out)?);
-            } else {
-                println!(
-                    "{}",
-                    color::green(&format!("Installed tools match {}.", tool_lock::LOCK_FILE))
-                );
-            }
+            check_tools(ctx, processors, is_enabled, builder)?;
         }
         ToolAction::Lock { upgrade } => {
-            let builder = builder.ok_or_else(|| {
-                crate::exit_code::config_error("tool lock requires a project with rsconstruct.toml")
-            })?;
-            let wanted = project_wanted(builder, processors, is_enabled)?;
-            let synced = match upgrade {
-                None => tool_lock::sync(ctx, &wanted, tool_lock::LockMode::Fill, verbose)?,
-                Some(names) if names.is_empty() => {
-                    tool_lock::sync(ctx, &wanted, tool_lock::LockMode::Upgrade, verbose)?
-                }
-                Some(names) => tool_lock::upgrade_named(ctx, &wanted, &names, verbose)?,
-            };
-            if crate::json_output::is_json_mode() {
-                let out = serde_json::json!({
-                    "lock_file": tool_lock::LOCK_FILE,
-                    "created": synced.created,
-                    "changes": synced.changes,
-                });
-                println!("{}", serde_json::to_string_pretty(&out)?);
-            } else if synced.changes.is_empty() && !synced.created {
-                println!("{} is up to date.", color::bold(tool_lock::LOCK_FILE));
-            } else {
-                synced.report();
-            }
+            lock_tools(ctx, processors, is_enabled, builder, upgrade, verbose)?;
         }
         ToolAction::Graph { format, view } => {
-            if view {
-                let html_content = tools_graph_html(&tool_map);
-                let html_path = std::env::temp_dir().join("rsconstruct_tools_graph.html");
-                std::fs::write(&html_path, &html_content).with_context(|| {
-                    format!("Failed to write HTML file: {}", html_path.display())
-                })?;
-                if let Some(b) = builder {
-                    b.open_file(&html_path)?;
-                    println!("Opened tools graph in browser: {}", html_path.display());
-                } else {
-                    println!("Wrote tools graph to: {}", html_path.display());
-                }
-            } else {
-                let effective_format = if crate::json_output::is_json_mode() {
-                    GraphFormat::Json
-                } else {
-                    format
-                };
-                let output = match effective_format {
-                    GraphFormat::Dot => tools_graph_dot(&tool_map),
-                    GraphFormat::Mermaid => tools_graph_mermaid(&tool_map),
-                    GraphFormat::Text => tools_graph_text(&tool_map),
-                    GraphFormat::Json => tools_graph_json(&tool_map)?,
-                    GraphFormat::Svg => tools_graph_svg(ctx, &tool_map)?,
-                };
-                println!("{output}");
-            }
+            tools_graph(ctx, &tool_map, builder, format, view)?;
         }
         ToolAction::Stats => {
-            let mut tool_stats: Vec<json_output::ToolStat> = Vec::new();
-            for (tool, procs) in &tool_map {
-                let installed = which::which(tool).is_ok();
-                let runtime = tool_runtime(tool).to_string();
-                let install_command = crate::tools::tool_install_command(tool);
-                tool_stats.push(json_output::ToolStat {
-                    name: tool.clone(),
-                    installed,
-                    runtime,
-                    processor: procs.clone(),
-                    install_command,
-                });
-            }
-
-            let mut runtime_map: BTreeMap<&str, (usize, usize)> = BTreeMap::new();
-            for stat in &tool_stats {
-                let entry = runtime_map
-                    .entry(tool_runtime(&stat.name))
-                    .or_insert((0, 0));
-                entry.0 += 1;
-                if stat.installed {
-                    entry.1 += 1;
-                }
-            }
-            let runtime_stats: Vec<json_output::RuntimeStat> = runtime_map
-                .iter()
-                .map(|(runtime, (total, installed))| json_output::RuntimeStat {
-                    runtime: runtime.to_string(),
-                    total: *total,
-                    installed: *installed,
-                    missing: total - installed,
-                })
-                .collect();
-
-            let total_tools = tool_stats.len();
-            let installed_count = tool_stats.iter().filter(|t| t.installed).count();
-            let missing_count = total_tools - installed_count;
-
-            if crate::json_output::is_json_mode() {
-                let output = json_output::ToolStatsOutput {
-                    tools: tool_stats,
-                    runtimes: runtime_stats,
-                    summary: json_output::StatsSummary {
-                        total_tools,
-                        installed: installed_count,
-                        missing: missing_count,
-                    },
-                };
-                println!("{}", serde_json::to_string_pretty(&output)?);
-            } else {
-                let rows: Vec<Vec<String>> = tool_stats
-                    .iter()
-                    .map(|stat| {
-                        let status = if stat.installed {
-                            color::green("\u{2713}")
-                        } else {
-                            color::red("\u{2717}")
-                        };
-                        let procs =
-                            tables::processor_names_cell(&stat.processor, TOOL_LIST_MAX_PROCESSORS);
-                        let install = stat.install_command.as_deref().unwrap_or("").to_string();
-                        vec![stat.name.clone(), status.to_string(), procs, install]
-                    })
-                    .collect();
-                tables::print(&tables::defs::TOOL_STATS, false, &rows);
-
-                println!();
-                println!("Runtime summary:");
-                let runtime_display: &[(&str, &str)] = &[
-                    ("python", "Python"),
-                    ("node", "Node.js"),
-                    ("ruby", "Ruby"),
-                    ("rust", "Rust"),
-                    ("perl", "Perl"),
-                    ("jvm", "JVM"),
-                    ("system", "System"),
-                ];
-                let rt_rows: Vec<Vec<String>> = runtime_display
-                    .iter()
-                    .filter_map(|(key, label)| {
-                        runtime_stats.iter().find(|r| r.runtime == *key).map(|rs| {
-                            let status_str = format!("{}/{}", rs.installed, rs.total);
-                            let line = if rs.missing > 0 {
-                                color::yellow(&status_str)
-                            } else {
-                                color::green(&status_str)
-                            };
-                            vec![label.to_string(), line.to_string()]
-                        })
-                    })
-                    .collect();
-                tables::print(&tables::defs::TOOL_RUNTIMES, false, &rt_rows);
-
-                println!();
-                let total_line = format!("Total: {installed_count}/{total_tools} tools installed");
-                if missing_count > 0 {
-                    println!("{}", color::yellow(&total_line));
-                } else {
-                    println!("{}", color::green(&total_line));
-                }
-            }
+            tool_stats(&tool_map)?;
         }
         ToolAction::Install { target } => match target {
             InstallAction::Machine {
@@ -925,13 +990,6 @@ fn print_install_groups(groups: &[(&str, Vec<String>)], ctx: &crate::tools::Inst
     println!();
 }
 
-/// `tool install machine`: install onto the machine, each tool through its
-/// machine install (a system package manager or a user-wide prefix; see
-/// `tools::run`). With a `name`, that one tool; with `all`, every tool in the
-/// registry, config or not; otherwise what this project needs on the
-/// machine: its `[dependencies]` system packages and the tools of its enabled
-/// processors whose preferred target is the machine. Nothing here goes
-/// into the project.
 /// Fail on a tool name the registry does not know, before an install does
 /// anything: checked only where the name was used, `tool install machine
 /// nosuch` first created `rsconstruct.lock` and then rejected the name.
@@ -944,6 +1002,120 @@ fn require_known_tool(name: Option<&str>) -> Result<()> {
     }
 }
 
+/// The machine installs of every registry tool that is not on PATH.
+fn missing_registry_wide() -> Result<Vec<&'static crate::tools::InstallMethod>> {
+    let mut missing = Vec::new();
+    // Registry-wide, like `tool list`. Nothing is skipped: a tool with
+    // no machine install is a hard error, not a warning to scroll past,
+    // since --all claiming success while a tool is absent is exactly the
+    // silent gap the strict-by-default rule exists to prevent.
+    let mut no_machine: Vec<&str> = Vec::new();
+    for info in crate::tools::all_tools() {
+        if which::which(info.name).is_ok() {
+            continue;
+        }
+        match &info.machine {
+            Some(method) => missing.push(method),
+            None => no_machine.push(info.name),
+        }
+    }
+    if !no_machine.is_empty() {
+        return Err(tool_error(format!(
+            "{} tool(s) have no machine install: {}",
+            no_machine.len(),
+            no_machine.join(", ")
+        )));
+    }
+    Ok(missing)
+}
+
+/// The machine installs this project's enabled processors still need.
+fn missing_project_machine_tools(
+    processors: &crate::processor::ProcessorMap,
+    is_enabled: &dyn Fn(&str) -> bool,
+    builder: &Builder,
+    drift: &std::collections::BTreeSet<(String, String)>,
+) -> Vec<&'static crate::tools::InstallMethod> {
+    let mut missing = Vec::new();
+    // The tools of the enabled processors. A stanza with `enabled =
+    // false` is skipped: it is kept precisely so its tool need not be
+    // installed. auto_detect is not checked, because the tool itself may
+    // need to be installed before detection can succeed.
+    let mut tools: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
+    for pname in sorted_keys(processors) {
+        if is_enabled(pname) {
+            tools.extend(processors[pname].required_tools());
+        }
+    }
+    // A sandboxed build runs its processors through bwrap, and its
+    // preflight fails without it; install it with the rest.
+    if !crate::sandbox::sandboxed_processors(
+        processors,
+        is_enabled,
+        builder.config.build.execution_model,
+    )
+    .is_empty()
+    {
+        tools.insert(crate::sandbox::SANDBOX_TOOL.to_string());
+    }
+    // Likewise strace, for the undeclared-reads report.
+    if builder.config.build.undeclared_reads == crate::config::UndeclaredReads::Report {
+        tools.insert(crate::read_trace::TRACE_TOOL.to_string());
+    }
+    for tool in &tools {
+        if !is_installable_tool_name(tool) {
+            continue;
+        }
+        // A tool the registry does not know is a binary of one of the
+        // project's `[dependencies]` packages (cargo-deny from the crate
+        // of that name), which `tool install project` installs and
+        // checks for.
+        let Some(info) = crate::tools::tool_info(tool) else {
+            continue;
+        };
+        if info.preferred_target() != Some(crate::tools::InstallTarget::Machine) {
+            continue;
+        }
+        let Some(method) = &info.machine else {
+            continue;
+        };
+        // Present on PATH counts as installed, unless it was found at
+        // a version other than the locked one that may be replaced (see
+        // `lock_for_install`).
+        let drifted = drift.contains(&(method.method.to_string(), method.package.to_string()));
+        if which::which(tool).is_err() || drifted {
+            missing.push(method);
+        }
+    }
+    missing
+}
+
+/// Fail when a pip install would land in the project's own venv.
+fn refuse_project_venv_pip(missing: &[&crate::tools::InstallMethod]) -> Result<()> {
+    let root = std::path::Path::new(".");
+    // A machine install never goes into the project's own venv, which is
+    // uv's (see `tool install project`).
+    if missing.iter().any(|m| m.method == "pip")
+        && let Ok(pip) = which::which("pip")
+        && let (Ok(pip), Ok(here)) = (pip.canonicalize(), root.canonicalize())
+        && pip.starts_with(&here)
+    {
+        return Err(tool_error(format!(
+            "pip on PATH ({}) belongs to this project's venv, which `uv sync` owns; \
+             activate a venv outside the project for a machine install",
+            pip.display()
+        )));
+    }
+    Ok(())
+}
+
+/// `tool install machine`: install onto the machine, each tool through its
+/// machine install (a system package manager or a user-wide prefix; see
+/// `tools::run`). With a `name`, that one tool; with `all`, every tool in the
+/// registry, config or not; otherwise what this project needs on the
+/// machine: its `[dependencies]` system packages and the tools of its enabled
+/// processors whose preferred target is the machine. Nothing here goes
+/// into the project.
 fn install_machine(
     ctx: &crate::build_context::BuildContext,
     processors: &crate::processor::ProcessorMap,
@@ -953,7 +1125,7 @@ fn install_machine(
     all: bool,
     flags: &InstallFlags,
 ) -> Result<()> {
-    let root = std::path::Path::new(".");
+    let _root = std::path::Path::new(".");
     require_known_tool(name)?;
     // In a project, each tool is requested at its rsconstruct.lock version
     // (a `.deb` at its locked asset). `--all` is the config-independent
@@ -970,27 +1142,7 @@ fn install_machine(
     let mut missing: Vec<&crate::tools::InstallMethod> = Vec::new();
     let mut system_packages: Vec<String> = Vec::new();
     if all {
-        // Registry-wide, like `tool list`. Nothing is skipped: a tool with
-        // no machine install is a hard error, not a warning to scroll past,
-        // since --all claiming success while a tool is absent is exactly the
-        // silent gap the strict-by-default rule exists to prevent.
-        let mut no_machine: Vec<&str> = Vec::new();
-        for info in crate::tools::all_tools() {
-            if which::which(info.name).is_ok() {
-                continue;
-            }
-            match &info.machine {
-                Some(method) => missing.push(method),
-                None => no_machine.push(info.name),
-            }
-        }
-        if !no_machine.is_empty() {
-            return Err(tool_error(format!(
-                "{} tool(s) have no machine install: {}",
-                no_machine.len(),
-                no_machine.join(", ")
-            )));
-        }
+        missing = missing_registry_wide()?;
     } else if let Some(name) = name {
         let info = crate::tools::tool_info(name)
             .ok_or_else(|| tool_error(format!("Unknown tool '{name}'")))?;
@@ -1014,71 +1166,10 @@ fn install_machine(
             .filter(|pkg| !is_system_package_installed(ctx, pkg))
             .cloned()
             .collect();
-        // The tools of the enabled processors. A stanza with `enabled =
-        // false` is skipped: it is kept precisely so its tool need not be
-        // installed. auto_detect is not checked, because the tool itself may
-        // need to be installed before detection can succeed.
-        let mut tools: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
-        for pname in sorted_keys(processors) {
-            if is_enabled(pname) {
-                tools.extend(processors[pname].required_tools());
-            }
-        }
-        // A sandboxed build runs its processors through bwrap, and its
-        // preflight fails without it; install it with the rest.
-        if !crate::sandbox::sandboxed_processors(
-            processors,
-            is_enabled,
-            builder.config.build.execution_model,
-        )
-        .is_empty()
-        {
-            tools.insert(crate::sandbox::SANDBOX_TOOL.to_string());
-        }
-        // Likewise strace, for the undeclared-reads report.
-        if builder.config.build.undeclared_reads == crate::config::UndeclaredReads::Report {
-            tools.insert(crate::read_trace::TRACE_TOOL.to_string());
-        }
-        for tool in &tools {
-            if !is_installable_tool_name(tool) {
-                continue;
-            }
-            // A tool the registry does not know is a binary of one of the
-            // project's `[dependencies]` packages (cargo-deny from the crate
-            // of that name), which `tool install project` installs and
-            // checks for.
-            let Some(info) = crate::tools::tool_info(tool) else {
-                continue;
-            };
-            if info.preferred_target() != Some(crate::tools::InstallTarget::Machine) {
-                continue;
-            }
-            let Some(method) = &info.machine else {
-                continue;
-            };
-            // Present on PATH counts as installed, unless it was found at
-            // a version other than the locked one that may be replaced (see
-            // `lock_for_install`).
-            let drifted = drift.contains(&(method.method.to_string(), method.package.to_string()));
-            if which::which(tool).is_err() || drifted {
-                missing.push(method);
-            }
-        }
+        missing = missing_project_machine_tools(processors, is_enabled, builder, &drift);
     }
 
-    // A machine install never goes into the project's own venv, which is
-    // uv's (see `tool install project`).
-    if missing.iter().any(|m| m.method == "pip")
-        && let Ok(pip) = which::which("pip")
-        && let (Ok(pip), Ok(here)) = (pip.canonicalize(), root.canonicalize())
-        && pip.starts_with(&here)
-    {
-        return Err(tool_error(format!(
-            "pip on PATH ({}) belongs to this project's venv, which `uv sync` owns; \
-             activate a venv outside the project for a machine install",
-            pip.display()
-        )));
-    }
+    refuse_project_venv_pip(&missing)?;
 
     // Grouped by method, each package at its locked version when the
     // project's lock has one, in the fixed machine order.
@@ -1134,6 +1225,143 @@ fn install_machine(
     Ok(())
 }
 
+/// `tool install project NAME`: narrow the install to that one tool.
+fn plan_named_tool(
+    name: &str,
+    root: &std::path::Path,
+    tool_dir: &mut Option<ProjectTools>,
+    groups: &mut Vec<(&'static str, Vec<String>)>,
+) -> Result<()> {
+    let info = crate::tools::tool_info(name)
+        .ok_or_else(|| tool_error(format!("Unknown tool '{name}'")))?;
+    let method = info.project.as_ref().ok_or_else(|| {
+        tool_error(format!(
+            "'{name}' has no project install; install it onto the machine with \
+             `rsconstruct tool install machine {name}`"
+        ))
+    })?;
+    if method.method == "pip" {
+        let wanted_name = crate::config::normalized_distribution_name(method.package);
+        let pinned = crate::config::python_deps(root)?
+            .iter()
+            .any(|req| crate::config::normalized_distribution_name(req) == wanted_name);
+        if !pinned {
+            return Err(crate::exit_code::config_error(format!(
+                "{} is not pinned by uv.lock. The repo's .venv is uv's, so add it to \
+                 pyproject.toml's dev dependency group (`uv add --dev {}`)",
+                method.package, method.package
+            )));
+        }
+        groups.push(("uv-sync", vec![method.package.to_string()]));
+        *tool_dir = None;
+    } else {
+        let dir = tool_dir.take().expect("set above");
+        if !dir.covers(method.method, method.package) {
+            return Err(tool_error(format!(
+                "'{name}' is not one of this project's tools: enable a processor that \
+                 runs it, or add {} to [dependencies] {}",
+                method.package, method.method
+            )));
+        }
+        // An npm package runs on the project's node, so node stays.
+        let mut only = vec![(method.method, method.package)];
+        if method.method == "npm" && dir.covers("binary", "node") {
+            only.push(("binary", "node"));
+        }
+        *tool_dir = Some(dir.with_only(&only));
+    }
+    Ok(())
+}
+
+/// The project's package environments that need their package manager run.
+fn plan_environments(
+    root: &std::path::Path,
+    deps: &crate::config::DependenciesConfig,
+    groups: &mut Vec<(&'static str, Vec<String>)>,
+    up_to_date: &mut Vec<String>,
+) -> Result<()> {
+    // uv audits the whole set itself in one pass, so it always runs.
+    if crate::config::has_python_deps(root)? {
+        groups.push(("uv-sync", vec!["uv.lock".to_string()]));
+    }
+    // package.json declares the names, and in package-lock mode `npm
+    // ci` installs exactly the pinned closure into ./node_modules.
+    // Skipped only when every declared package is already there at the
+    // locked version: `npm ci` wipes node_modules first, so a needless
+    // run is not cheap.
+    let node_deps = deps.node_deps(root)?;
+    if !node_deps.is_empty() {
+        let (method, current) = match deps.npm_source {
+            crate::config::NpmSource::PackageLock => {
+                let pins = crate::config::package_lock_pins(&root.join("package-lock.json"))?;
+                let current = node_deps.iter().all(|name| {
+                    let installed = crate::config::installed_node_package_version(root, name);
+                    installed.is_some() && installed == pins.get(name).cloned()
+                });
+                ("npm-ci", current)
+            }
+            crate::config::NpmSource::PackageJson => {
+                let current = node_deps.iter().all(|name| {
+                    crate::config::installed_node_package_version(root, name).is_some()
+                });
+                ("npm-install", current)
+            }
+        };
+        if current {
+            up_to_date.extend(node_deps.iter().map(|n| format!("[{method}] {n}")));
+        } else {
+            groups.push((method, node_deps));
+        }
+    }
+    Ok(())
+}
+
+/// An installer the project does not lock must already be on the machine.
+fn require_unlocked_installers(installers: &[(&str, &str)], only: &[(&str, &str)]) -> Result<()> {
+    for (package, program) in installers {
+        if only.iter().any(|(_, locked)| locked == package) {
+            continue;
+        }
+        if which::which(program).is_err() {
+            return Err(tool_error(format!(
+                "{program} is not installed; install it onto the machine with \
+                 `rsconstruct tool install machine {program}`"
+            )));
+        }
+    }
+    Ok(())
+}
+
+/// Fail on a processor tool that nothing installs.
+fn require_provided_tools(
+    processors: &crate::processor::ProcessorMap,
+    is_enabled: &dyn Fn(&str) -> bool,
+) -> Result<()> {
+    let mut unprovided: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
+    for pname in sorted_keys(processors) {
+        if !is_enabled(pname) {
+            continue;
+        }
+        for tool in processors[pname].required_tools() {
+            if is_installable_tool_name(&tool)
+                && crate::tools::tool_info(&tool).is_none()
+                && which::which(&tool).is_err()
+            {
+                unprovided.insert(tool);
+            }
+        }
+    }
+    if !unprovided.is_empty() {
+        let names: Vec<&str> = unprovided.iter().map(String::as_str).collect();
+        return Err(tool_error(format!(
+            "No install method known for: {} (not in the tool registry and not \
+             provided by [dependencies])",
+            names.join(", ")
+        )));
+    }
+    Ok(())
+}
+
 /// `tool install project`: install into the project, from its lockfiles:
 /// `uv sync` builds the repo's `.venv` from uv.lock (the code's Python
 /// dependencies and the Python tools its processors run), `npm ci` fills
@@ -1163,78 +1391,9 @@ fn install_project(
     let mut up_to_date: Vec<String> = Vec::new();
 
     if let Some(name) = name {
-        let info = crate::tools::tool_info(name)
-            .ok_or_else(|| tool_error(format!("Unknown tool '{name}'")))?;
-        let method = info.project.as_ref().ok_or_else(|| {
-            tool_error(format!(
-                "'{name}' has no project install; install it onto the machine with \
-                 `rsconstruct tool install machine {name}`"
-            ))
-        })?;
-        if method.method == "pip" {
-            let wanted_name = crate::config::normalized_distribution_name(method.package);
-            let pinned = crate::config::python_deps(root)?
-                .iter()
-                .any(|req| crate::config::normalized_distribution_name(req) == wanted_name);
-            if !pinned {
-                return Err(crate::exit_code::config_error(format!(
-                    "{} is not pinned by uv.lock. The repo's .venv is uv's, so add it to \
-                     pyproject.toml's dev dependency group (`uv add --dev {}`)",
-                    method.package, method.package
-                )));
-            }
-            groups.push(("uv-sync", vec![method.package.to_string()]));
-            tool_dir = None;
-        } else {
-            let dir = tool_dir.take().expect("set above");
-            if !dir.covers(method.method, method.package) {
-                return Err(tool_error(format!(
-                    "'{name}' is not one of this project's tools: enable a processor that \
-                     runs it, or add {} to [dependencies] {}",
-                    method.package, method.method
-                )));
-            }
-            // An npm package runs on the project's node, so node stays.
-            let mut only = vec![(method.method, method.package)];
-            if method.method == "npm" && dir.covers("binary", "node") {
-                only.push(("binary", "node"));
-            }
-            tool_dir = Some(dir.with_only(&only));
-        }
+        plan_named_tool(name, root, &mut tool_dir, &mut groups)?;
     } else {
-        // uv audits the whole set itself in one pass, so it always runs.
-        if crate::config::has_python_deps(root)? {
-            groups.push(("uv-sync", vec!["uv.lock".to_string()]));
-        }
-        // package.json declares the names, and in package-lock mode `npm
-        // ci` installs exactly the pinned closure into ./node_modules.
-        // Skipped only when every declared package is already there at the
-        // locked version: `npm ci` wipes node_modules first, so a needless
-        // run is not cheap.
-        let node_deps = deps.node_deps(root)?;
-        if !node_deps.is_empty() {
-            let (method, current) = match deps.npm_source {
-                crate::config::NpmSource::PackageLock => {
-                    let pins = crate::config::package_lock_pins(&root.join("package-lock.json"))?;
-                    let current = node_deps.iter().all(|name| {
-                        let installed = crate::config::installed_node_package_version(root, name);
-                        installed.is_some() && installed == pins.get(name).cloned()
-                    });
-                    ("npm-ci", current)
-                }
-                crate::config::NpmSource::PackageJson => {
-                    let current = node_deps.iter().all(|name| {
-                        crate::config::installed_node_package_version(root, name).is_some()
-                    });
-                    ("npm-install", current)
-                }
-            };
-            if current {
-                up_to_date.extend(node_deps.iter().map(|n| format!("[{method}] {n}")));
-            } else {
-                groups.push((method, node_deps));
-            }
-        }
+        plan_environments(root, deps, &mut groups, &mut up_to_date)?;
     }
 
     // The installers the steps below run are release binaries in the
@@ -1260,17 +1419,7 @@ fn install_project(
     let installer_dir = (!only.is_empty()).then(|| all_tools.with_only(&only));
     // An installer the project does not lock is a machine install; this
     // command does not make it.
-    for (package, program) in &installers {
-        if only.iter().any(|(_, locked)| locked == package) {
-            continue;
-        }
-        if which::which(program).is_err() {
-            return Err(tool_error(format!(
-                "{program} is not installed; install it onto the machine with \
-                 `rsconstruct tool install machine {program}`"
-            )));
-        }
-    }
+    require_unlocked_installers(&installers, &only)?;
 
     if !up_to_date.is_empty() {
         println!("{}:", color::dim("Already installed (skipping)"));
@@ -1332,28 +1481,7 @@ fn install_project(
     // project's `[dependencies]` (a crate's binary), so after the installs
     // above it must be on PATH; otherwise nothing will ever install it.
     if name.is_none() {
-        let mut unprovided: std::collections::BTreeSet<String> = std::collections::BTreeSet::new();
-        for pname in sorted_keys(processors) {
-            if !is_enabled(pname) {
-                continue;
-            }
-            for tool in processors[pname].required_tools() {
-                if is_installable_tool_name(&tool)
-                    && crate::tools::tool_info(&tool).is_none()
-                    && which::which(&tool).is_err()
-                {
-                    unprovided.insert(tool);
-                }
-            }
-        }
-        if !unprovided.is_empty() {
-            let names: Vec<&str> = unprovided.iter().map(String::as_str).collect();
-            return Err(tool_error(format!(
-                "No install method known for: {} (not in the tool registry and not \
-                 provided by [dependencies])",
-                names.join(", ")
-            )));
-        }
+        require_provided_tools(processors, is_enabled)?;
     }
     if has_work {
         println!("{}", color::green("All project installs succeeded."));

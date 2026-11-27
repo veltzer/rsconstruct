@@ -47,11 +47,8 @@ fn section(extra: &str) -> String {
     format!("+++\ntitle = \"Section\"\n{extra}+++\n")
 }
 
-/// A site touching every path rule the planner implements.
-fn setup_zola_site(config_extra: &str) -> TempDir {
-    let temp_dir = TempDir::new().expect("Failed to create temp dir");
-    let root = temp_dir.path();
-    write_file(root, "config.toml", SITE_CONFIG);
+/// The site's templates, static files and sass sources.
+fn write_templates_and_assets(root: &Path) {
     for (name, body) in [
         ("base.html", BASE_TEMPLATE),
         ("index.html", SECTION_TEMPLATE),
@@ -78,16 +75,11 @@ fn setup_zola_site(config_extra: &str) -> TempDir {
     );
     write_file(root, "sass/_vars.scss", "$c: red;\n");
     write_file(root, "sass/_partials/skip.scss", "a { b: c; }\n");
+}
 
-    // Root sections for both languages.
-    write_file(root, "content/_index.md", &section(""));
-    write_file(root, "content/_index.fr.md", &section(""));
-    write_file(
-        root,
-        "content/top.md",
-        &page("Top", "aliases = [\"old-top\"]\n"),
-    );
-
+/// The blog section: dated, undated, hidden, unrendered, draft and translated
+/// pages, and a colocated page with assets.
+fn write_blog(root: &Path) {
     // A date-sorted, paginated blog with feeds: an undated page there is
     // not rendered at all, a hidden page renders but is not listed.
     write_file(
@@ -147,6 +139,25 @@ fn setup_zola_site(config_extra: &str) -> TempDir {
     write_file(root, "content/blog/gallery/photo.jpg", "jpg\n");
     write_file(root, "content/blog/gallery/sub/thumb.jpg", "jpg\n");
     write_file(root, "content/blog/banner.png", "png\n");
+}
+
+/// A site touching every path rule the planner implements.
+fn setup_zola_site(config_extra: &str) -> TempDir {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let root = temp_dir.path();
+    write_file(root, "config.toml", SITE_CONFIG);
+    write_templates_and_assets(root);
+
+    // Root sections for both languages.
+    write_file(root, "content/_index.md", &section(""));
+    write_file(root, "content/_index.fr.md", &section(""));
+    write_file(
+        root,
+        "content/top.md",
+        &page("Top", "aliases = [\"old-top\"]\n"),
+    );
+
+    write_blog(root);
 
     // A transparent section passes its pages up; a section that does not
     // render still renders its pages; a draft section hides everything below.

@@ -677,6 +677,165 @@ impl Builder {
         processor.scan_config().enabled
     }
 
+    /// Forgive missing entries: under `--phases` say which, then drop them.
+    fn skip_missing(entries: &mut Vec<String>, debug: bool) {
+        if debug {
+            for entry in entries.iter() {
+                eprintln!(
+                    "{}",
+                    color::dim(&format!("  {} (skipped)", entry.trim_start()))
+                );
+            }
+        }
+        entries.clear();
+    }
+
+    /// The `src_dirs` and `src_files` entries of the active processors that
+    /// nothing backs, as two lists of error lines.
+    fn missing_sources(
+        processors: &ProcessorMap,
+        active: &[impl AsRef<str>],
+        file_index: &FileIndex,
+    ) -> (Vec<String>, Vec<String>) {
+        // After the fixed-point loop has settled, check every src_dirs and
+        // src_files entry is backed by something: a real directory or file on
+        // disk, or virtual files injected by an upstream processor's declared
+        // outputs (paths that only exist once that processor has run).
+        //
+        // A missing entry is a config error. src_dirs and src_files are claims
+        // about where this project keeps its sources; an entry naming a path
+        // that is not there is a typo, a stale stanza from a path that moved,
+        // or a copy of another repo's config — and in every case a processor
+        // that silently checks nothing while the build stays green.
+        //
+        // `[build] allow_missing_src_dirs = true` restores the old skip for
+        // directories only, reported under --phases. A missing src_files
+        // entry is never forgiven: a directory can at least plausibly be
+        // empty, a named file that is not there is simply wrong.
+        //
+        // Clean and repair tolerate missing entries too: `clean` must be able
+        // to remove the outputs of a build whose sources have since gone, and
+        // `smart remove-no-file-processors` exists to delete the very stanzas
+        // this check rejects.
+        let mut missing_dirs: Vec<String> = Vec::new();
+        let mut missing_files: Vec<String> = Vec::new();
+        for name in active {
+            let name = name.as_ref();
+            let scan = processors[name].scan_config();
+            if !scan.enabled {
+                continue;
+            }
+            for dir in scan.src_dirs() {
+                if dir.is_empty() || dir == "." {
+                    continue;
+                }
+                if std::path::Path::new(dir).is_dir() {
+                    continue;
+                }
+                let prefix = std::path::PathBuf::from(dir);
+                let covered_by_virtual = file_index.files().iter().any(|f| f.starts_with(&prefix));
+                if !covered_by_virtual {
+                    missing_dirs.push(format!(
+                        "  [{name}] src_dirs entry '{dir}' does not exist or is not a directory"
+                    ));
+                }
+            }
+            for file in scan.src_files() {
+                if std::path::Path::new(file).is_file() {
+                    continue;
+                }
+                let path = std::path::PathBuf::from(file);
+                let covered_by_virtual = file_index.files().contains(&path);
+                if !covered_by_virtual {
+                    missing_files.push(format!(
+                        "  [{name}] src_files entry '{file}' does not exist or is not a file"
+                    ));
+                }
+            }
+        }
+        (missing_dirs, missing_files)
+    }
+
+    /// The literal `inputs` and `dep_inputs` entries that name no file, and the
+    /// explicit stanzas left without any input, as error lines.
+    fn missing_explicit_inputs(
+        graph: &BuildGraph,
+        processors: &ProcessorMap,
+        active: &[impl AsRef<str>],
+        file_index: &FileIndex,
+    ) -> Vec<String> {
+        let mut missing_inputs: Vec<String> = Vec::new();
+        let explicit_prefix = format!("{}.", crate::processor::names::EXPLICIT);
+        for product in graph.products() {
+            if !product.processor.starts_with(&explicit_prefix) {
+                continue;
+            }
+            for input in &product.inputs {
+                if input.is_file() || file_index.contains(input) {
+                    continue;
+                }
+                missing_inputs.push(format!(
+                    "  [{}] inputs entry '{}' does not exist and no processor declares it as an output",
+                    product.processor,
+                    input.display()
+                ));
+            }
+        }
+        // A literal `dep_inputs` entry is the same kind of claim again:
+        // a file on disk, or one an upstream processor declares as its
+        // output (a spellcheck's `dep_inputs` naming the dictionary a
+        // generator compiles, which is what orders the two). Processors
+        // put the entry on their products unchecked, so it is checked
+        // here, for every processor that has a product to read it.
+        // Globs are not claims about one file and match what they match.
+        let with_products: std::collections::HashSet<&str> = graph
+            .products()
+            .iter()
+            .map(|p| p.processor.as_str())
+            .collect();
+        for name in active {
+            let name = name.as_ref();
+            let scan = processors[name].scan_config();
+            if !scan.enabled || !with_products.contains(name) {
+                continue;
+            }
+            for dep in &scan.dep_inputs {
+                if dep.contains('*') || dep.contains('?') || dep.contains('[') {
+                    continue;
+                }
+                let path = std::path::Path::new(dep);
+                if path.exists() || file_index.contains(path) {
+                    continue;
+                }
+                missing_inputs.push(format!(
+                    "  [{name}] dep_inputs file not found: {dep} (not on disk, and no processor declares it as an output)"
+                ));
+            }
+        }
+        // A stanza whose inputs resolved to nothing waits round by
+        // round for an upstream output to appear (see its `discover`).
+        // Still without a product now, nothing will ever feed it: a
+        // mistyped input_globs made the stanza vanish from the build
+        // with exit 0 and its output never produced.
+        for name in active {
+            let name = name.as_ref();
+            if name != crate::processor::names::EXPLICIT && !name.starts_with(&explicit_prefix) {
+                continue;
+            }
+            let processor = &processors[name];
+            if !processor.scan_config().enabled || !processor.auto_detect(file_index) {
+                continue;
+            }
+            if !graph.products().iter().any(|p| p.processor == name) {
+                missing_inputs.push(format!(
+                    "  [{name}] no input: its inputs and input_globs resolve to no file, so \
+                     the stanza would never run"
+                ));
+            }
+        }
+        missing_inputs
+    }
+
     /// Product discovery, routing generated files to the processors that
     /// consume them (docs/src/internal/output-routing.md).
     ///
@@ -777,85 +936,15 @@ impl Builder {
             routed = Some(FileIndex::from_paths(added));
         }
 
-        // After the fixed-point loop has settled, check every src_dirs and
-        // src_files entry is backed by something: a real directory or file on
-        // disk, or virtual files injected by an upstream processor's declared
-        // outputs (paths that only exist once that processor has run).
-        //
-        // A missing entry is a config error. src_dirs and src_files are claims
-        // about where this project keeps its sources; an entry naming a path
-        // that is not there is a typo, a stale stanza from a path that moved,
-        // or a copy of another repo's config — and in every case a processor
-        // that silently checks nothing while the build stays green.
-        //
-        // `[build] allow_missing_src_dirs = true` restores the old skip for
-        // directories only, reported under --phases. A missing src_files
-        // entry is never forgiven: a directory can at least plausibly be
-        // empty, a named file that is not there is simply wrong.
-        //
-        // Clean and repair tolerate missing entries too: `clean` must be able
-        // to remove the outputs of a build whose sources have since gone, and
-        // `smart remove-no-file-processors` exists to delete the very stanzas
-        // this check rejects.
-        let mut missing_dirs: Vec<String> = Vec::new();
-        let mut missing_files: Vec<String> = Vec::new();
-        for name in active {
-            let name = name.as_ref();
-            let scan = processors[name].scan_config();
-            if !scan.enabled {
-                continue;
-            }
-            for dir in scan.src_dirs() {
-                if dir.is_empty() || dir == "." {
-                    continue;
-                }
-                if std::path::Path::new(dir).is_dir() {
-                    continue;
-                }
-                let prefix = std::path::PathBuf::from(dir);
-                let covered_by_virtual = file_index.files().iter().any(|f| f.starts_with(&prefix));
-                if !covered_by_virtual {
-                    missing_dirs.push(format!(
-                        "  [{name}] src_dirs entry '{dir}' does not exist or is not a directory"
-                    ));
-                }
-            }
-            for file in scan.src_files() {
-                if std::path::Path::new(file).is_file() {
-                    continue;
-                }
-                let path = std::path::PathBuf::from(file);
-                let covered_by_virtual = file_index.files().contains(&path);
-                if !covered_by_virtual {
-                    missing_files.push(format!(
-                        "  [{name}] src_files entry '{file}' does not exist or is not a file"
-                    ));
-                }
-            }
-        }
+        let (mut missing_dirs, mut missing_files) =
+            Self::missing_sources(processors, active, &file_index);
         let tolerant = mode != GraphBuildMode::Normal;
         if tolerant || self.config.build.allow_missing_src_dirs == crate::config::MissingEntry::Skip
         {
-            if debug {
-                for entry in &missing_dirs {
-                    eprintln!(
-                        "{}",
-                        color::dim(&format!("  {} (skipped)", entry.trim_start()))
-                    );
-                }
-            }
-            missing_dirs.clear();
+            Self::skip_missing(&mut missing_dirs, debug);
         }
         if tolerant {
-            if debug {
-                for entry in &missing_files {
-                    eprintln!(
-                        "{}",
-                        color::dim(&format!("  {} (skipped)", entry.trim_start()))
-                    );
-                }
-            }
-            missing_files.clear();
+            Self::skip_missing(&mut missing_files, debug);
         }
         // The explicit processor's literal `inputs` are the same kind of
         // claim as src_files, with the same proviso: an entry may name a
@@ -866,78 +955,11 @@ impl Builder {
         // input that is neither on disk nor a declared output is a typo or
         // a stale stanza, and the command would run against a file that is
         // not there.
-        let mut missing_inputs: Vec<String> = Vec::new();
-        if !tolerant {
-            let explicit_prefix = format!("{}.", crate::processor::names::EXPLICIT);
-            for product in graph.products() {
-                if !product.processor.starts_with(&explicit_prefix) {
-                    continue;
-                }
-                for input in &product.inputs {
-                    if input.is_file() || file_index.contains(input) {
-                        continue;
-                    }
-                    missing_inputs.push(format!(
-                        "  [{}] inputs entry '{}' does not exist and no processor declares it as an output",
-                        product.processor,
-                        input.display()
-                    ));
-                }
-            }
-            // A literal `dep_inputs` entry is the same kind of claim again:
-            // a file on disk, or one an upstream processor declares as its
-            // output (a spellcheck's `dep_inputs` naming the dictionary a
-            // generator compiles, which is what orders the two). Processors
-            // put the entry on their products unchecked, so it is checked
-            // here, for every processor that has a product to read it.
-            // Globs are not claims about one file and match what they match.
-            let with_products: std::collections::HashSet<&str> = graph
-                .products()
-                .iter()
-                .map(|p| p.processor.as_str())
-                .collect();
-            for name in active {
-                let name = name.as_ref();
-                let scan = processors[name].scan_config();
-                if !scan.enabled || !with_products.contains(name) {
-                    continue;
-                }
-                for dep in &scan.dep_inputs {
-                    if dep.contains('*') || dep.contains('?') || dep.contains('[') {
-                        continue;
-                    }
-                    let path = std::path::Path::new(dep);
-                    if path.exists() || file_index.contains(path) {
-                        continue;
-                    }
-                    missing_inputs.push(format!(
-                        "  [{name}] dep_inputs file not found: {dep} (not on disk, and no processor declares it as an output)"
-                    ));
-                }
-            }
-            // A stanza whose inputs resolved to nothing waits round by
-            // round for an upstream output to appear (see its `discover`).
-            // Still without a product now, nothing will ever feed it: a
-            // mistyped input_globs made the stanza vanish from the build
-            // with exit 0 and its output never produced.
-            for name in active {
-                let name = name.as_ref();
-                if name != crate::processor::names::EXPLICIT && !name.starts_with(&explicit_prefix)
-                {
-                    continue;
-                }
-                let processor = &processors[name];
-                if !processor.scan_config().enabled || !processor.auto_detect(&file_index) {
-                    continue;
-                }
-                if !graph.products().iter().any(|p| p.processor == name) {
-                    missing_inputs.push(format!(
-                        "  [{name}] no input: its inputs and input_globs resolve to no file, so \
-                         the stanza would never run"
-                    ));
-                }
-            }
-        }
+        let missing_inputs = if tolerant {
+            Vec::new()
+        } else {
+            Self::missing_explicit_inputs(graph, processors, active, &file_index)
+        };
         if missing_dirs.is_empty() && missing_files.is_empty() && missing_inputs.is_empty() {
             return Ok(file_index);
         }

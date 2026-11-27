@@ -481,6 +481,33 @@ impl Builder {
         Ok((order, classification, effective_parallel))
     }
 
+    /// The executor's settings for this build: the command line over the config.
+    fn executor_options(&self, opts: &BuildOptions, effective_parallel: usize) -> ExecutorOptions {
+        // CLI overrides config for batch_size (CLI -1 maps to None = disable)
+        let batch_size = match opts.batch_size {
+            Some(crate::cli::BatchSizeOverride::Disabled) => None,
+            Some(crate::cli::BatchSizeOverride::Size(n)) => Some(n),
+            None => Some(self.config.build.batch_size),
+        };
+        ExecutorOptions {
+            parallel: effective_parallel,
+            verbose: opts.verbose,
+            display_opts: opts.display_opts,
+            batch_size,
+            explain: opts.explain,
+            retry: opts.retry,
+            run: crate::executor::RunFlags {
+                force: opts.run.force,
+                keep_going: opts.run.keep_going,
+                // Enable timings collection if trace output is requested
+                timings: opts.run.timings || opts.trace.is_some(),
+            },
+            worker_stack_bytes: self.config.build.worker_stack_mib * 1024 * 1024,
+            builtin_setup: crate::sandbox::BuiltinSetup::from_config(&self.config),
+            sandbox_builtin_children: self.config.build.sandbox_builtin_children,
+        }
+    }
+
     /// Execute an incremental build using the dependency graph.
     ///
     /// Three phases: [`apply_cli_overrides`](Self::apply_cli_overrides)
@@ -546,33 +573,11 @@ impl Builder {
         if crate::json_output::human_output_enabled() {
             println!("[rsconstruct] using {effective_parallel} threads");
         }
-        // CLI overrides config for batch_size (CLI -1 maps to None = disable)
-        let batch_size = match opts.batch_size {
-            Some(crate::cli::BatchSizeOverride::Disabled) => None,
-            Some(crate::cli::BatchSizeOverride::Size(n)) => Some(n),
-            None => Some(self.config.build.batch_size),
-        };
         let executor = Executor::new(
             &processors,
             ctx,
             &policy,
-            ExecutorOptions {
-                parallel: effective_parallel,
-                verbose: opts.verbose,
-                display_opts: opts.display_opts,
-                batch_size,
-                explain: opts.explain,
-                retry: opts.retry,
-                run: crate::executor::RunFlags {
-                    force: opts.run.force,
-                    keep_going: opts.run.keep_going,
-                    // Enable timings collection if trace output is requested
-                    timings: opts.run.timings || opts.trace.is_some(),
-                },
-                worker_stack_bytes: self.config.build.worker_stack_mib * 1024 * 1024,
-                builtin_setup: crate::sandbox::BuiltinSetup::from_config(&self.config),
-                sandbox_builtin_children: self.config.build.sandbox_builtin_children,
-            },
+            self.executor_options(opts, effective_parallel),
         );
 
         // A product that regenerates a source some analyzer scans makes the

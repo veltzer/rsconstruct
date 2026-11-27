@@ -180,205 +180,206 @@ pub fn list_processors_no_config(verbose: bool, type_filter: Option<&str>) -> Re
     Ok(())
 }
 
+/// The recommended processor per file extension or file name:
+/// (extension, processor, reason).
+const RECOMMENDATIONS: &[(&str, &str, &str)] = &[
+    (
+        ".py",
+        "processor.checker.ruff",
+        "fastest Python linter, replaces flake8/pylint",
+    ),
+    (
+        ".c",
+        "processor.checker.cppcheck",
+        "best static analysis for C",
+    ),
+    (
+        ".cc",
+        "processor.checker.cppcheck",
+        "best static analysis for C++",
+    ),
+    (
+        ".h",
+        "processor.checker.cppcheck",
+        "best static analysis for C/C++ headers",
+    ),
+    (
+        ".hh",
+        "processor.checker.cppcheck",
+        "best static analysis for C++ headers",
+    ),
+    (".rs", "processor.checker.clippy", "official Rust linter"),
+    (
+        ".js",
+        "processor.checker.eslint",
+        "industry standard JS/TS linter",
+    ),
+    (
+        ".jsx",
+        "processor.checker.eslint",
+        "industry standard JS/TS linter",
+    ),
+    (
+        ".ts",
+        "processor.checker.eslint",
+        "industry standard JS/TS linter",
+    ),
+    (
+        ".tsx",
+        "processor.checker.eslint",
+        "industry standard JS/TS linter",
+    ),
+    (
+        ".html",
+        "processor.checker.tidy",
+        "most thorough HTML validator",
+    ),
+    (
+        ".htm",
+        "processor.checker.tidy",
+        "most thorough HTML validator",
+    ),
+    (
+        ".css",
+        "processor.checker.stylelint",
+        "industry standard CSS linter",
+    ),
+    (
+        ".scss",
+        "processor.checker.stylelint",
+        "industry standard CSS/SCSS linter",
+    ),
+    (
+        ".sass",
+        "processor.checker.stylelint",
+        "industry standard CSS/Sass linter",
+    ),
+    (
+        ".md",
+        "processor.checker.markdownlint",
+        "comprehensive markdown linting",
+    ),
+    (
+        ".yml",
+        "processor.checker.yamllint",
+        "best YAML syntax and style checker",
+    ),
+    (
+        ".yaml",
+        "processor.checker.yamllint",
+        "best YAML syntax and style checker",
+    ),
+    (
+        ".json",
+        "processor.checker.jsonlint",
+        "JSON syntax validator",
+    ),
+    (
+        ".toml",
+        "processor.checker.taplo",
+        "TOML formatter and validator",
+    ),
+    (".xml", "processor.checker.xmllint", "XML/DTD validator"),
+    (
+        ".svg",
+        "processor.checker.xmllint",
+        "SVG is XML — xmllint validates structure",
+    ),
+    (
+        ".java",
+        "processor.checker.checkstyle",
+        "Java style and static analysis",
+    ),
+    (
+        ".sh",
+        "processor.checker.shellcheck",
+        "best shell script analyzer",
+    ),
+    (
+        ".bash",
+        "processor.checker.shellcheck",
+        "best shell script analyzer",
+    ),
+    (".lua", "processor.checker.luacheck", "Lua static analyzer"),
+    (
+        ".pl",
+        "processor.checker.perlcritic",
+        "Perl best-practice checker",
+    ),
+    (
+        ".pm",
+        "processor.checker.perlcritic",
+        "Perl module best-practice checker",
+    ),
+    (".php", "processor.checker.php_lint", "PHP syntax checker"),
+    (
+        ".tex",
+        "processor.generator.pdflatex",
+        "compile and validate LaTeX",
+    ),
+    (
+        ".proto",
+        "processor.generator.protobuf",
+        "Protocol Buffer compiler",
+    ),
+    (
+        ".mmd",
+        "processor.generator.mermaid",
+        "render Mermaid diagrams",
+    ),
+    (
+        ".tera",
+        "processor.generator.tera",
+        "Tera template renderer",
+    ),
+    (
+        ".j2",
+        "processor.generator.jinja2",
+        "Jinja2 template renderer",
+    ),
+    (
+        ".mako",
+        "processor.generator.mako",
+        "Mako template renderer",
+    ),
+    (
+        "Dockerfile",
+        "processor.checker.hadolint",
+        "best Dockerfile linter",
+    ),
+    ("Makefile", "processor.checker.make", "run make to validate"),
+    (
+        "Cargo.toml",
+        "processor.mass_generator.cargo",
+        "build and validate Rust project",
+    ),
+    (
+        "book.toml",
+        "processor.mass_generator.mdbook",
+        "build mdBook documentation",
+    ),
+    (
+        "package.json",
+        "processor.mass_generator.npm",
+        "run npm to validate Node project",
+    ),
+    (
+        "Gemfile",
+        "processor.mass_generator.gem",
+        "run bundler to validate Ruby project",
+    ),
+    (
+        "conf.py",
+        "processor.mass_generator.sphinx",
+        "build Sphinx documentation",
+    ),
+];
+
 /// Print a table mapping file extensions to the recommended processor for each.
 pub fn list_recommendations() {
-    // Each entry: (extension, processor, reason)
-    let recommendations: &[(&str, &str, &str)] = &[
-        (
-            ".py",
-            "processor.checker.ruff",
-            "fastest Python linter, replaces flake8/pylint",
-        ),
-        (
-            ".c",
-            "processor.checker.cppcheck",
-            "best static analysis for C",
-        ),
-        (
-            ".cc",
-            "processor.checker.cppcheck",
-            "best static analysis for C++",
-        ),
-        (
-            ".h",
-            "processor.checker.cppcheck",
-            "best static analysis for C/C++ headers",
-        ),
-        (
-            ".hh",
-            "processor.checker.cppcheck",
-            "best static analysis for C++ headers",
-        ),
-        (".rs", "processor.checker.clippy", "official Rust linter"),
-        (
-            ".js",
-            "processor.checker.eslint",
-            "industry standard JS/TS linter",
-        ),
-        (
-            ".jsx",
-            "processor.checker.eslint",
-            "industry standard JS/TS linter",
-        ),
-        (
-            ".ts",
-            "processor.checker.eslint",
-            "industry standard JS/TS linter",
-        ),
-        (
-            ".tsx",
-            "processor.checker.eslint",
-            "industry standard JS/TS linter",
-        ),
-        (
-            ".html",
-            "processor.checker.tidy",
-            "most thorough HTML validator",
-        ),
-        (
-            ".htm",
-            "processor.checker.tidy",
-            "most thorough HTML validator",
-        ),
-        (
-            ".css",
-            "processor.checker.stylelint",
-            "industry standard CSS linter",
-        ),
-        (
-            ".scss",
-            "processor.checker.stylelint",
-            "industry standard CSS/SCSS linter",
-        ),
-        (
-            ".sass",
-            "processor.checker.stylelint",
-            "industry standard CSS/Sass linter",
-        ),
-        (
-            ".md",
-            "processor.checker.markdownlint",
-            "comprehensive markdown linting",
-        ),
-        (
-            ".yml",
-            "processor.checker.yamllint",
-            "best YAML syntax and style checker",
-        ),
-        (
-            ".yaml",
-            "processor.checker.yamllint",
-            "best YAML syntax and style checker",
-        ),
-        (
-            ".json",
-            "processor.checker.jsonlint",
-            "JSON syntax validator",
-        ),
-        (
-            ".toml",
-            "processor.checker.taplo",
-            "TOML formatter and validator",
-        ),
-        (".xml", "processor.checker.xmllint", "XML/DTD validator"),
-        (
-            ".svg",
-            "processor.checker.xmllint",
-            "SVG is XML — xmllint validates structure",
-        ),
-        (
-            ".java",
-            "processor.checker.checkstyle",
-            "Java style and static analysis",
-        ),
-        (
-            ".sh",
-            "processor.checker.shellcheck",
-            "best shell script analyzer",
-        ),
-        (
-            ".bash",
-            "processor.checker.shellcheck",
-            "best shell script analyzer",
-        ),
-        (".lua", "processor.checker.luacheck", "Lua static analyzer"),
-        (
-            ".pl",
-            "processor.checker.perlcritic",
-            "Perl best-practice checker",
-        ),
-        (
-            ".pm",
-            "processor.checker.perlcritic",
-            "Perl module best-practice checker",
-        ),
-        (".php", "processor.checker.php_lint", "PHP syntax checker"),
-        (
-            ".tex",
-            "processor.generator.pdflatex",
-            "compile and validate LaTeX",
-        ),
-        (
-            ".proto",
-            "processor.generator.protobuf",
-            "Protocol Buffer compiler",
-        ),
-        (
-            ".mmd",
-            "processor.generator.mermaid",
-            "render Mermaid diagrams",
-        ),
-        (
-            ".tera",
-            "processor.generator.tera",
-            "Tera template renderer",
-        ),
-        (
-            ".j2",
-            "processor.generator.jinja2",
-            "Jinja2 template renderer",
-        ),
-        (
-            ".mako",
-            "processor.generator.mako",
-            "Mako template renderer",
-        ),
-        (
-            "Dockerfile",
-            "processor.checker.hadolint",
-            "best Dockerfile linter",
-        ),
-        ("Makefile", "processor.checker.make", "run make to validate"),
-        (
-            "Cargo.toml",
-            "processor.mass_generator.cargo",
-            "build and validate Rust project",
-        ),
-        (
-            "book.toml",
-            "processor.mass_generator.mdbook",
-            "build mdBook documentation",
-        ),
-        (
-            "package.json",
-            "processor.mass_generator.npm",
-            "run npm to validate Node project",
-        ),
-        (
-            "Gemfile",
-            "processor.mass_generator.gem",
-            "run bundler to validate Ruby project",
-        ),
-        (
-            "conf.py",
-            "processor.mass_generator.sphinx",
-            "build Sphinx documentation",
-        ),
-    ];
-
     // Where a Rust processor can replace the recommended one, it comes first
     // and the other is listed as "also".
-    let resolved: Vec<(&str, Vec<&str>, Vec<&str>, &str)> = recommendations
+    let resolved: Vec<(&str, Vec<&str>, Vec<&str>, &str)> = RECOMMENDATIONS
         .iter()
         .map(|&(ext, proc, reason)| {
             let alternatives = crate::registries::rust_alternatives(proc);
@@ -672,6 +673,287 @@ pub fn processor_info(pname: Option<&str>) -> Result<()> {
 }
 
 impl Builder {
+    /// `processor used`: the enabled processors and whether each detects files.
+    fn processors_used(
+        &self,
+        processors: &crate::processor::ProcessorMap,
+        enabled_names: &[&String],
+        verbose: bool,
+    ) -> Result<()> {
+        // Turned off on this machine by `enabled_if_dir_exists`: not
+        // used, but shown, so a missing directory never hides a
+        // processor silently.
+        let skips = self.config.dir_condition_skips();
+        if crate::json_output::is_json_mode() {
+            let mut entries: Vec<serde_json::Value> = enabled_names.iter().map(|name| {
+                let proc = &processors[name.as_str()];
+                serde_json::json!({
+                    "name": name,
+                    "type": crate::registries::processor::processor_type_of(name.as_str()).as_str(),
+                    "detected": proc.auto_detect(&self.file_index),
+                    "description": crate::registries::processor::description_of(name.as_str()),
+                })
+            }).collect();
+            entries.extend(skips.iter().map(|(name, dir)| {
+                serde_json::json!({
+                    "name": name,
+                    "type": crate::registries::processor::processor_type_of(name.as_str()).as_str(),
+                    "skipped": format!("{dir} does not exist"),
+                    "description": crate::registries::processor::description_of(name.as_str()),
+                })
+            }));
+            println!("{}", serde_json::to_string_pretty(&entries)?);
+        } else {
+            let rows: Vec<Vec<String>> = enabled_names
+                .iter()
+                .map(|name| {
+                    let proc = &processors[name.as_str()];
+                    let detected_str = tables::yes_no(proc.auto_detect(&self.file_index));
+                    vec![
+                        tables::short_processor_name(name).to_string(),
+                        crate::registries::processor::processor_type_of(name.as_str())
+                            .as_str()
+                            .to_string(),
+                        detected_str.to_string(),
+                        crate::registries::processor::description_of(name.as_str()).to_string(),
+                    ]
+                })
+                .collect();
+            tables::print(&tables::defs::PROCESSOR_USED, verbose, &rows);
+            for (name, dir) in &skips {
+                println!("Skipped on this machine: {name} ({dir} does not exist)");
+            }
+        }
+        Ok(())
+    }
+
+    /// `processor config`: the configuration of one instance, or of all.
+    fn processors_config(
+        processors: &crate::processor::ProcessorMap,
+        proc_names: &[&String],
+        iname: Option<&String>,
+        diff: bool,
+        verbose: bool,
+    ) -> Result<()> {
+        let names: Vec<&str> = if let Some(n) = iname {
+            if !processors.contains_key(n.as_str()) {
+                bail!(
+                    "Unknown processor: '{n}'. Run 'rsconstruct processor list' to see available processors."
+                );
+            }
+            vec![n.as_str()]
+        } else {
+            proc_names.iter().map(|s| s.as_str()).collect()
+        };
+
+        if crate::json_output::is_json_mode() {
+            let mut map = serde_json::Map::new();
+            for n in &names {
+                let proc = &processors[*n];
+                if let Some(json) = proc.config_json() {
+                    let value: serde_json::Value = serde_json::from_str(&json)?;
+                    let value = if diff { config_diff(n, &value) } else { value };
+                    map.insert(n.to_string(), value);
+                }
+            }
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&serde_json::Value::Object(map))?
+            );
+            return Ok(());
+        }
+
+        for (i, n) in names.iter().enumerate() {
+            let proc = &processors[*n];
+            if let Some(json) = proc.config_json() {
+                let value: serde_json::Value = serde_json::from_str(&json)?;
+                let value = if diff { config_diff(n, &value) } else { value };
+                if names.len() > 1 {
+                    println!("{n}:");
+                }
+                let rows: Vec<Vec<String>> = match &value {
+                    serde_json::Value::Object(map) => map
+                        .iter()
+                        .map(|(k, v)| vec![k.clone(), format_config_value(v)])
+                        .collect(),
+                    other => vec![vec!["(value)".to_string(), format_config_value(other)]],
+                };
+                crate::tables::print(&crate::tables::defs::PROCESSOR_CONFIG, false, &rows);
+                // The registry lookup strips an instance suffix itself.
+                println!("\nParameters:");
+                print_processor_metadata(n, verbose);
+                if i + 1 < names.len() {
+                    println!();
+                }
+            } else if iname.is_some() {
+                println!("Processor '{n}' does not expose configuration.");
+            }
+        }
+        Ok(())
+    }
+
+    /// `processor graph`: which processor feeds which, in the asked format.
+    fn processors_graph(
+        &self,
+        ctx: &crate::build_context::BuildContext,
+        format: crate::cli::GraphFormat,
+    ) -> Result<()> {
+        let graph = self.build_graph(ctx)?;
+        let proc_deps = graph.processor_dependencies();
+        let effective_format = if crate::json_output::is_json_mode() {
+            crate::cli::GraphFormat::Json
+        } else {
+            format
+        };
+        match effective_format {
+            crate::cli::GraphFormat::Text => {
+                for (proc, deps) in &proc_deps {
+                    if deps.is_empty() {
+                        println!("{proc}");
+                    } else {
+                        println!(
+                            "{} \u{2192} {}",
+                            proc,
+                            deps.iter().cloned().collect::<Vec<_>>().join(", ")
+                        );
+                    }
+                }
+            }
+            crate::cli::GraphFormat::Dot => {
+                println!("digraph processors {{");
+                println!("    rankdir=LR;");
+                println!(
+                    "    node [fontname=\"sans-serif\" shape=box style=filled fillcolor=lightyellow];"
+                );
+                for (proc, deps) in &proc_deps {
+                    for dep in deps {
+                        println!("    \"{proc}\" -> \"{dep}\";");
+                    }
+                }
+                println!("}}");
+            }
+            crate::cli::GraphFormat::Mermaid => {
+                println!("graph LR");
+                for (proc, deps) in &proc_deps {
+                    for dep in deps {
+                        println!("    {proc} --> {dep}");
+                    }
+                }
+            }
+            crate::cli::GraphFormat::Json => {
+                println!("{}", serde_json::to_string_pretty(&proc_deps)?);
+            }
+            crate::cli::GraphFormat::Svg => {
+                let mut dot = String::from(
+                    "digraph processors {\n    rankdir=LR;\n    node [fontname=\"sans-serif\" shape=box style=filled fillcolor=lightyellow];\n",
+                );
+                for (proc, deps) in &proc_deps {
+                    for dep in deps {
+                        let _ = writeln!(dot, "    \"{proc}\" -> \"{dep}\";");
+                    }
+                }
+                dot.push_str("}\n");
+                let svg = crate::processor::dot_to_svg(ctx, &dot)?;
+                println!("{svg}");
+            }
+        }
+        Ok(())
+    }
+
+    /// `processor files`: the products of one processor, or of all.
+    fn processors_files(
+        &self,
+        ctx: &crate::build_context::BuildContext,
+        processors: &crate::processor::ProcessorMap,
+        name: Option<&str>,
+        headers: bool,
+    ) -> Result<()> {
+        if let Some(n) = name
+            && !processors.contains_key(n)
+        {
+            bail!(
+                "Unknown processor: '{n}'. Run 'rsconstruct processor list' to see available processors."
+            );
+        }
+
+        // The whole graph, so a processor's products include inputs
+        // generated by other processors; the listing then narrows.
+        let graph = self.build_graph_with_processors(ctx, processors)?;
+        let products: Vec<&crate::graph::Product> = graph
+            .products()
+            .iter()
+            .filter(|p| name.is_none_or(|n| p.processor == n))
+            .collect();
+
+        if crate::json_output::is_json_mode() {
+            let entries: Vec<crate::json_output::ProcessorFileEntry> = products
+                .iter()
+                .map(|p| {
+                    let proc_type =
+                        crate::registries::processor::processor_type_of(p.processor.as_str())
+                            .as_str();
+                    crate::json_output::ProcessorFileEntry {
+                        processor: p.processor.clone(),
+                        processor_type: proc_type.to_string(),
+                        inputs: p.inputs.iter().map(|i| i.display().to_string()).collect(),
+                        outputs: p.outputs.iter().map(|o| o.display().to_string()).collect(),
+                    }
+                })
+                .collect();
+            println!("{}", serde_json::to_string_pretty(&entries)?);
+            return Ok(());
+        }
+
+        if products.is_empty() {
+            if let Some(n) = name {
+                println!("[{n}] (no files)");
+            } else {
+                println!("No files discovered by any processor.");
+            }
+            return Ok(());
+        }
+
+        let mut counts: HashMap<&str, usize> = HashMap::new();
+        for p in &products {
+            *counts.entry(p.processor.as_str()).or_insert(0) += 1;
+        }
+
+        let mut current_processor = "";
+        for product in &products {
+            if product.processor.as_str() != current_processor {
+                if headers && !current_processor.is_empty() {
+                    println!();
+                }
+                current_processor = product.processor.as_str();
+                if headers {
+                    let n = counts.get(current_processor).copied().unwrap_or(0);
+                    println!(
+                        "[{}] ({} {})",
+                        current_processor,
+                        n,
+                        if n == 1 { "product" } else { "products" }
+                    );
+                }
+            }
+            let inputs: Vec<String> = product
+                .inputs
+                .iter()
+                .map(|p| p.display().to_string())
+                .collect();
+            if product.outputs.is_empty() {
+                println!("{} \u{2192} {}", inputs.join(", "), color::dim("(checker)"));
+            } else {
+                let outputs: Vec<String> = product
+                    .outputs
+                    .iter()
+                    .map(|p| p.display().to_string())
+                    .collect();
+                println!("{} \u{2192} {}", inputs.join(", "), outputs.join(", "));
+            }
+        }
+        Ok(())
+    }
+
     /// Handle `rsconstruct processor` subcommands
     pub fn processor(
         &self,
@@ -706,107 +988,10 @@ impl Builder {
                 unreachable!("handled before Builder is constructed")
             }
             ProcessorAction::Used => {
-                // Turned off on this machine by `enabled_if_dir_exists`: not
-                // used, but shown, so a missing directory never hides a
-                // processor silently.
-                let skips = self.config.dir_condition_skips();
-                if crate::json_output::is_json_mode() {
-                    let mut entries: Vec<serde_json::Value> = enabled_names.iter().map(|name| {
-                        let proc = &processors[name.as_str()];
-                        serde_json::json!({
-                            "name": name,
-                            "type": crate::registries::processor::processor_type_of(name.as_str()).as_str(),
-                            "detected": proc.auto_detect(&self.file_index),
-                            "description": crate::registries::processor::description_of(name.as_str()),
-                        })
-                    }).collect();
-                    entries.extend(skips.iter().map(|(name, dir)| {
-                        serde_json::json!({
-                            "name": name,
-                            "type": crate::registries::processor::processor_type_of(name.as_str()).as_str(),
-                            "skipped": format!("{dir} does not exist"),
-                            "description": crate::registries::processor::description_of(name.as_str()),
-                        })
-                    }));
-                    println!("{}", serde_json::to_string_pretty(&entries)?);
-                } else {
-                    let rows: Vec<Vec<String>> = enabled_names
-                        .iter()
-                        .map(|name| {
-                            let proc = &processors[name.as_str()];
-                            let detected_str = tables::yes_no(proc.auto_detect(&self.file_index));
-                            vec![
-                                tables::short_processor_name(name).to_string(),
-                                crate::registries::processor::processor_type_of(name.as_str())
-                                    .as_str()
-                                    .to_string(),
-                                detected_str.to_string(),
-                                crate::registries::processor::description_of(name.as_str())
-                                    .to_string(),
-                            ]
-                        })
-                        .collect();
-                    tables::print(&tables::defs::PROCESSOR_USED, verbose, &rows);
-                    for (name, dir) in &skips {
-                        println!("Skipped on this machine: {name} ({dir} does not exist)");
-                    }
-                }
+                self.processors_used(&processors, &enabled_names, verbose)?;
             }
             ProcessorAction::Config { ref iname, diff } => {
-                let names: Vec<&str> = if let Some(n) = iname {
-                    if !processors.contains_key(n.as_str()) {
-                        bail!(
-                            "Unknown processor: '{n}'. Run 'rsconstruct processor list' to see available processors."
-                        );
-                    }
-                    vec![n.as_str()]
-                } else {
-                    proc_names.iter().map(|s| s.as_str()).collect()
-                };
-
-                if crate::json_output::is_json_mode() {
-                    let mut map = serde_json::Map::new();
-                    for n in &names {
-                        let proc = &processors[*n];
-                        if let Some(json) = proc.config_json() {
-                            let value: serde_json::Value = serde_json::from_str(&json)?;
-                            let value = if diff { config_diff(n, &value) } else { value };
-                            map.insert(n.to_string(), value);
-                        }
-                    }
-                    println!(
-                        "{}",
-                        serde_json::to_string_pretty(&serde_json::Value::Object(map))?
-                    );
-                    return Ok(());
-                }
-
-                for (i, n) in names.iter().enumerate() {
-                    let proc = &processors[*n];
-                    if let Some(json) = proc.config_json() {
-                        let value: serde_json::Value = serde_json::from_str(&json)?;
-                        let value = if diff { config_diff(n, &value) } else { value };
-                        if names.len() > 1 {
-                            println!("{n}:");
-                        }
-                        let rows: Vec<Vec<String>> = match &value {
-                            serde_json::Value::Object(map) => map
-                                .iter()
-                                .map(|(k, v)| vec![k.clone(), format_config_value(v)])
-                                .collect(),
-                            other => vec![vec!["(value)".to_string(), format_config_value(other)]],
-                        };
-                        crate::tables::print(&crate::tables::defs::PROCESSOR_CONFIG, false, &rows);
-                        // The registry lookup strips an instance suffix itself.
-                        println!("\nParameters:");
-                        print_processor_metadata(n, verbose);
-                        if i + 1 < names.len() {
-                            println!();
-                        }
-                    } else if iname.is_some() {
-                        println!("Processor '{n}' does not expose configuration.");
-                    }
-                }
+                Self::processors_config(&processors, &proc_names, iname.as_ref(), diff, verbose)?;
             }
             ProcessorAction::Defconfig { ref pname } => {
                 processor_defconfig(pname, verbose)?;
@@ -836,158 +1021,13 @@ impl Builder {
                 }
             }
             ProcessorAction::Graph { format } => {
-                let graph = self.build_graph(ctx)?;
-                let proc_deps = graph.processor_dependencies();
-                let effective_format = if crate::json_output::is_json_mode() {
-                    crate::cli::GraphFormat::Json
-                } else {
-                    format
-                };
-                match effective_format {
-                    crate::cli::GraphFormat::Text => {
-                        for (proc, deps) in &proc_deps {
-                            if deps.is_empty() {
-                                println!("{proc}");
-                            } else {
-                                println!(
-                                    "{} \u{2192} {}",
-                                    proc,
-                                    deps.iter().cloned().collect::<Vec<_>>().join(", ")
-                                );
-                            }
-                        }
-                    }
-                    crate::cli::GraphFormat::Dot => {
-                        println!("digraph processors {{");
-                        println!("    rankdir=LR;");
-                        println!(
-                            "    node [fontname=\"sans-serif\" shape=box style=filled fillcolor=lightyellow];"
-                        );
-                        for (proc, deps) in &proc_deps {
-                            for dep in deps {
-                                println!("    \"{proc}\" -> \"{dep}\";");
-                            }
-                        }
-                        println!("}}");
-                    }
-                    crate::cli::GraphFormat::Mermaid => {
-                        println!("graph LR");
-                        for (proc, deps) in &proc_deps {
-                            for dep in deps {
-                                println!("    {proc} --> {dep}");
-                            }
-                        }
-                    }
-                    crate::cli::GraphFormat::Json => {
-                        println!("{}", serde_json::to_string_pretty(&proc_deps)?);
-                    }
-                    crate::cli::GraphFormat::Svg => {
-                        let mut dot = String::from(
-                            "digraph processors {\n    rankdir=LR;\n    node [fontname=\"sans-serif\" shape=box style=filled fillcolor=lightyellow];\n",
-                        );
-                        for (proc, deps) in &proc_deps {
-                            for dep in deps {
-                                let _ = writeln!(dot, "    \"{proc}\" -> \"{dep}\";");
-                            }
-                        }
-                        dot.push_str("}\n");
-                        let svg = crate::processor::dot_to_svg(ctx, &dot)?;
-                        println!("{svg}");
-                    }
-                }
+                self.processors_graph(ctx, format)?;
             }
             ProcessorAction::Files {
                 iname: name,
                 headers,
             } => {
-                if let Some(ref n) = name
-                    && !processors.contains_key(n.as_str())
-                {
-                    bail!(
-                        "Unknown processor: '{n}'. Run 'rsconstruct processor list' to see available processors."
-                    );
-                }
-
-                // The whole graph, so a processor's products include inputs
-                // generated by other processors; the listing then narrows.
-                let graph = self.build_graph_with_processors(ctx, &processors)?;
-                let products: Vec<&crate::graph::Product> = graph
-                    .products()
-                    .iter()
-                    .filter(|p| name.as_deref().is_none_or(|n| p.processor == n))
-                    .collect();
-
-                if crate::json_output::is_json_mode() {
-                    let entries: Vec<crate::json_output::ProcessorFileEntry> = products
-                        .iter()
-                        .map(|p| {
-                            let proc_type = crate::registries::processor::processor_type_of(
-                                p.processor.as_str(),
-                            )
-                            .as_str();
-                            crate::json_output::ProcessorFileEntry {
-                                processor: p.processor.clone(),
-                                processor_type: proc_type.to_string(),
-                                inputs: p.inputs.iter().map(|i| i.display().to_string()).collect(),
-                                outputs: p
-                                    .outputs
-                                    .iter()
-                                    .map(|o| o.display().to_string())
-                                    .collect(),
-                            }
-                        })
-                        .collect();
-                    println!("{}", serde_json::to_string_pretty(&entries)?);
-                    return Ok(());
-                }
-
-                if products.is_empty() {
-                    if let Some(ref n) = name {
-                        println!("[{n}] (no files)");
-                    } else {
-                        println!("No files discovered by any processor.");
-                    }
-                    return Ok(());
-                }
-
-                let mut counts: HashMap<&str, usize> = HashMap::new();
-                for p in &products {
-                    *counts.entry(p.processor.as_str()).or_insert(0) += 1;
-                }
-
-                let mut current_processor = "";
-                for product in &products {
-                    if product.processor.as_str() != current_processor {
-                        if headers && !current_processor.is_empty() {
-                            println!();
-                        }
-                        current_processor = product.processor.as_str();
-                        if headers {
-                            let n = counts.get(current_processor).copied().unwrap_or(0);
-                            println!(
-                                "[{}] ({} {})",
-                                current_processor,
-                                n,
-                                if n == 1 { "product" } else { "products" }
-                            );
-                        }
-                    }
-                    let inputs: Vec<String> = product
-                        .inputs
-                        .iter()
-                        .map(|p| p.display().to_string())
-                        .collect();
-                    if product.outputs.is_empty() {
-                        println!("{} \u{2192} {}", inputs.join(", "), color::dim("(checker)"));
-                    } else {
-                        let outputs: Vec<String> = product
-                            .outputs
-                            .iter()
-                            .map(|p| p.display().to_string())
-                            .collect();
-                        println!("{} \u{2192} {}", inputs.join(", "), outputs.join(", "));
-                    }
-                }
+                self.processors_files(ctx, &processors, name.as_deref(), headers)?;
             }
         }
 

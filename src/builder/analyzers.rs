@@ -215,6 +215,327 @@ fn print_deps_stats(
 }
 
 impl Builder {
+    /// `analyzer show files`: the cached dependencies of the named files, with
+    /// their hash pieces when asked.
+    fn show_files(
+        &self,
+        ctx: &crate::build_context::BuildContext,
+        deps_cache: &DepsCache,
+        files: &[String],
+        hash_pieces: bool,
+    ) -> Result<()> {
+        let json_mode = crate::json_output::is_json_mode();
+        // Query specific files. One path can have multiple
+        // entries — one per analyzer that scanned it.
+        let mut collected: Vec<ShowFileEntry> = Vec::new();
+        let mut found_any = false;
+        // Instantiate analyzers up front only when we need to
+        // recompute hash pieces — otherwise stay in pure
+        // deps-cache-read mode like before.
+        let analyzers = if hash_pieces {
+            Some(self.create_analyzers(false)?)
+        } else {
+            None
+        };
+        for file_arg in files {
+            let file_path = super::graph::normalize_query_path(file_arg);
+            let entries = deps_cache.get_raw_for_path(&file_path);
+            if entries.is_empty() {
+                if !json_mode {
+                    eprintln!(
+                        "{}: '{}' not in dependency cache",
+                        color::yellow("Warning"),
+                        file_arg
+                    );
+                }
+            } else {
+                found_any = true;
+                for (deps, analyzer) in entries {
+                    // The entry proves this analyzer scanned
+                    // the file, so a failing rescan is an
+                    // error to report, not a silent "no
+                    // pieces".
+                    let pieces = match &analyzers {
+                        Some(a) => match a.get(&analyzer) {
+                            Some(inst) => {
+                                inst.scan_hash_pieces(ctx, &file_path).with_context(|| {
+                                    format!(
+                                        "Analyzer '{analyzer}' failed to scan {} for hash pieces",
+                                        file_path.display()
+                                    )
+                                })?
+                            }
+                            None => None,
+                        },
+                        None => None,
+                    };
+                    if json_mode {
+                        collected.push((file_path.clone(), deps, analyzer, pieces));
+                    } else {
+                        Self::print_deps(&file_path, &deps, &analyzer);
+                        if hash_pieces {
+                            Self::print_hash_pieces(pieces.as_deref());
+                        }
+                    }
+                }
+            }
+        }
+        if !found_any {
+            bail!("No cached dependencies found for the specified files");
+        }
+        if json_mode {
+            print_deps_json_with_pieces(&collected, hash_pieces)?;
+        }
+        Ok(())
+    }
+
+    /// `analyzer used`: the declared analyzers and whether each detects files.
+    fn analyzers_used(&self, verbose: bool) -> Result<()> {
+        let analyzers = self.create_analyzers(false)?;
+        if crate::json_output::is_json_mode() {
+            let entries: Vec<serde_json::Value> = sorted_keys(&analyzers)
+                .into_iter()
+                .map(|name| {
+                    let analyzer = &analyzers[name];
+                    serde_json::json!({
+                        "name": name,
+                        "detected": analyzer.auto_detect(&self.file_index),
+                        "description": analyzer.description(),
+                    })
+                })
+                .collect();
+            println!("{}", serde_json::to_string_pretty(&entries)?);
+        } else {
+            let rows: Vec<Vec<String>> = sorted_keys(&analyzers)
+                .into_iter()
+                .map(|name| {
+                    let analyzer = &analyzers[name];
+                    let detected = tables::yes_no(analyzer.auto_detect(&self.file_index));
+                    vec![
+                        name.clone(),
+                        detected.to_string(),
+                        analyzer.description().to_string(),
+                    ]
+                })
+                .collect();
+            tables::print(&tables::defs::ANALYZER_USED, verbose, &rows);
+        }
+        Ok(())
+    }
+
+    /// `analyzer build`: discover the products, run the analyzers and print
+    /// what they cached.
+    fn analyzers_build(&self, ctx: &crate::build_context::BuildContext) -> Result<()> {
+        let processors = self.create_processors()?;
+        let mut graph = crate::graph::BuildGraph::new();
+
+        // Phase 1: Discover products (fixed-point loop for cross-processor deps)
+        let active: Vec<String> = sorted_keys(&processors)
+            .into_iter()
+            .filter(|name| Self::is_processor_active(processors[*name].as_ref()))
+            .cloned()
+            .collect();
+        let file_index = self.discover_products(
+            &mut graph,
+            &processors,
+            &active,
+            super::GraphBuildMode::Normal,
+        )?;
+
+        let product_count = graph.products().len();
+        if product_count == 0 {
+            println!("No products discovered.");
+            return Ok(());
+        }
+
+        // Phase 2: Run dependency analyzers. The analysis is dropped
+        // at once: it holds the deps cache, opened again below.
+        self.run_analyzers(ctx, &mut graph, file_index, true)?;
+
+        // Match the main pipeline: resolve edges and validate, so
+        // `analyzer build` and `build` agree on whether the project
+        // is well-formed. This used to skip both and report success
+        // on configs that `build` rejects with a validation error.
+        graph.resolve_dependencies();
+        let validation_errors = graph.validate(&self.config.graph);
+        if !validation_errors.is_empty() {
+            anyhow::bail!("Graph validation failed:\n{}", validation_errors.join("\n"));
+        }
+
+        // Show summary from cache
+        let deps_cache = DepsCache::open()?;
+        let stats = deps_cache.stats_by_analyzer();
+        let declared: Vec<String> = self
+            .config
+            .analyzer
+            .instances
+            .iter()
+            .map(|i| i.instance_name.clone())
+            .collect();
+        if !stats.is_empty() || !declared.is_empty() {
+            print_deps_stats(&stats, &declared)?;
+        }
+        Ok(())
+    }
+
+    /// `analyzer config`: the configuration of one analyzer instance, or of all.
+    fn analyzers_config(&self, iname: Option<&String>) -> Result<()> {
+        let instances: Vec<&crate::config::AnalyzerInstance> = if let Some(n) = iname {
+            let inst = self
+                .config
+                .analyzer
+                .instances
+                .iter()
+                .find(|i| &i.instance_name == n)
+                .ok_or_else(|| {
+                    anyhow::anyhow!("Analyzer instance '{n}' is not declared in rsconstruct.toml")
+                })?;
+            vec![inst]
+        } else {
+            self.config.analyzer.instances.iter().collect()
+        };
+
+        if crate::json_output::is_json_mode() {
+            let mut map = serde_json::Map::new();
+            for inst in &instances {
+                let value: serde_json::Value = inst
+                    .config_toml
+                    .clone()
+                    .try_into()
+                    .unwrap_or(serde_json::Value::Null);
+                map.insert(inst.instance_name.clone(), value);
+            }
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&serde_json::Value::Object(map))?
+            );
+        } else if instances.is_empty() {
+            println!(
+                "No analyzers declared in rsconstruct.toml. Add `[analyzer.NAME]` sections to enable."
+            );
+        } else {
+            for (i, inst) in instances.iter().enumerate() {
+                if i > 0 {
+                    println!();
+                }
+                let toml_str = crate::errors::ctx(
+                    toml::to_string_pretty(&inst.config_toml),
+                    &format!("Failed to serialize {} analyzer config", inst.instance_name),
+                )?;
+                println!("[analyzer.{}]", inst.instance_name);
+                print!("{toml_str}");
+            }
+        }
+        Ok(())
+    }
+
+    /// `analyzer clean`: drop one analyzer's cached dependencies, or all of them.
+    fn analyzers_clean(&self, analyzer: Option<String>) -> Result<()> {
+        if let Some(analyzer_name) = analyzer {
+            // Clear only entries from specific analyzer
+            let deps_cache = DepsCache::open()?;
+            self.require_known_analyzer(&deps_cache, &analyzer_name)?;
+            let removed = deps_cache
+                .remove_by_analyzer(&analyzer_name)
+                .with_context(|| format!("Failed to remove deps for analyzer '{analyzer_name}'"))?;
+            if removed > 0 {
+                println!("Removed {removed} entries from '{analyzer_name}' analyzer.");
+            } else {
+                println!("No entries found for '{analyzer_name}' analyzer.");
+            }
+        } else {
+            // Clear the entire dependency cache
+            let deps_file = PathBuf::from(".rsconstruct/deps.redb");
+            if deps_file.exists() {
+                fs::remove_file(&deps_file).with_context(|| {
+                    format!("Failed to remove dependency cache: {}", deps_file.display())
+                })?;
+                println!("Dependency cache cleared.");
+            } else {
+                println!("Dependency cache is already empty.");
+            }
+        }
+        Ok(())
+    }
+
+    /// `analyzer stats`: files and dependencies cached per analyzer.
+    fn analyzers_stats(&self) -> Result<()> {
+        // Show statistics by analyzer
+        let deps_cache = DepsCache::open()?;
+        let stats = deps_cache.stats_by_analyzer();
+        let declared: Vec<String> = self
+            .config
+            .analyzer
+            .instances
+            .iter()
+            .map(|i| i.instance_name.clone())
+            .collect();
+        if stats.is_empty() && declared.is_empty() {
+            if crate::json_output::is_json_mode() {
+                let out = serde_json::json!({
+                    "analyzers": serde_json::Value::Array(Vec::new()),
+                    "total": { "files": 0, "dependencies": 0 },
+                });
+                println!("{}", serde_json::to_string_pretty(&out)?);
+            } else {
+                println!("Dependency cache is empty. Run a build first.");
+            }
+            return Ok(());
+        }
+        print_deps_stats(&stats, &declared)?;
+        Ok(())
+    }
+
+    /// `analyzer show`: the cached dependencies, all or filtered.
+    fn analyzers_show(
+        &self,
+        ctx: &crate::build_context::BuildContext,
+        filter: crate::cli::AnalyzerShowFilter,
+    ) -> Result<()> {
+        use crate::cli::AnalyzerShowFilter;
+        let deps_cache = DepsCache::open()?;
+
+        let json_mode = crate::json_output::is_json_mode();
+        match filter {
+            AnalyzerShowFilter::All => {
+                let mut entries: Vec<_> = deps_cache.list_all();
+                entries.sort_by(|a, b| a.0.cmp(&b.0));
+                if json_mode {
+                    print_deps_json(&entries)?;
+                } else if entries.is_empty() {
+                    println!("Dependency cache is empty. Run a build first.");
+                } else {
+                    for (source, deps, analyzer) in entries {
+                        Self::print_deps(&source, &deps, &analyzer);
+                    }
+                }
+            }
+            AnalyzerShowFilter::Files { files, hash_pieces } => {
+                self.show_files(ctx, &deps_cache, &files, hash_pieces)?;
+            }
+            AnalyzerShowFilter::Analyzers { analyzers } => {
+                for name in &analyzers {
+                    self.require_known_analyzer(&deps_cache, name)?;
+                }
+                let mut entries: Vec<_> = deps_cache.list_by_analyzers(&analyzers);
+                entries.sort_by(|a, b| a.0.cmp(&b.0));
+                if json_mode {
+                    print_deps_json(&entries)?;
+                } else if entries.is_empty() {
+                    println!(
+                        "No cached dependencies found for analyzers: {}",
+                        analyzers.join(", ")
+                    );
+                } else {
+                    for (source, deps, analyzer) in entries {
+                        Self::print_deps(&source, &deps, &analyzer);
+                    }
+                }
+            }
+        }
+        Ok(())
+    }
+
     /// Handle `rsconstruct analyzer` subcommands
     pub fn analyzers(
         &self,
@@ -232,293 +553,22 @@ impl Builder {
             | AnalyzerAction::Disable { .. }
             | AnalyzerAction::Enable { .. } => unreachable!("handled in main.rs"),
             AnalyzerAction::Used => {
-                let analyzers = self.create_analyzers(false)?;
-                if crate::json_output::is_json_mode() {
-                    let entries: Vec<serde_json::Value> = sorted_keys(&analyzers)
-                        .into_iter()
-                        .map(|name| {
-                            let analyzer = &analyzers[name];
-                            serde_json::json!({
-                                "name": name,
-                                "detected": analyzer.auto_detect(&self.file_index),
-                                "description": analyzer.description(),
-                            })
-                        })
-                        .collect();
-                    println!("{}", serde_json::to_string_pretty(&entries)?);
-                } else {
-                    let rows: Vec<Vec<String>> = sorted_keys(&analyzers)
-                        .into_iter()
-                        .map(|name| {
-                            let analyzer = &analyzers[name];
-                            let detected = tables::yes_no(analyzer.auto_detect(&self.file_index));
-                            vec![
-                                name.clone(),
-                                detected.to_string(),
-                                analyzer.description().to_string(),
-                            ]
-                        })
-                        .collect();
-                    tables::print(&tables::defs::ANALYZER_USED, verbose, &rows);
-                }
+                self.analyzers_used(verbose)?;
             }
             AnalyzerAction::Build => {
-                let processors = self.create_processors()?;
-                let mut graph = crate::graph::BuildGraph::new();
-
-                // Phase 1: Discover products (fixed-point loop for cross-processor deps)
-                let active: Vec<String> = sorted_keys(&processors)
-                    .into_iter()
-                    .filter(|name| Self::is_processor_active(processors[*name].as_ref()))
-                    .cloned()
-                    .collect();
-                let file_index = self.discover_products(
-                    &mut graph,
-                    &processors,
-                    &active,
-                    super::GraphBuildMode::Normal,
-                )?;
-
-                let product_count = graph.products().len();
-                if product_count == 0 {
-                    println!("No products discovered.");
-                    return Ok(());
-                }
-
-                // Phase 2: Run dependency analyzers. The analysis is dropped
-                // at once: it holds the deps cache, opened again below.
-                self.run_analyzers(ctx, &mut graph, file_index, true)?;
-
-                // Match the main pipeline: resolve edges and validate, so
-                // `analyzer build` and `build` agree on whether the project
-                // is well-formed. This used to skip both and report success
-                // on configs that `build` rejects with a validation error.
-                graph.resolve_dependencies();
-                let validation_errors = graph.validate(&self.config.graph);
-                if !validation_errors.is_empty() {
-                    anyhow::bail!("Graph validation failed:\n{}", validation_errors.join("\n"));
-                }
-
-                // Show summary from cache
-                let deps_cache = DepsCache::open()?;
-                let stats = deps_cache.stats_by_analyzer();
-                let declared: Vec<String> = self
-                    .config
-                    .analyzer
-                    .instances
-                    .iter()
-                    .map(|i| i.instance_name.clone())
-                    .collect();
-                if !stats.is_empty() || !declared.is_empty() {
-                    print_deps_stats(&stats, &declared)?;
-                }
+                self.analyzers_build(ctx)?;
             }
             AnalyzerAction::Config { iname } => {
-                let instances: Vec<&crate::config::AnalyzerInstance> = if let Some(ref n) = iname {
-                    let inst = self
-                        .config
-                        .analyzer
-                        .instances
-                        .iter()
-                        .find(|i| &i.instance_name == n)
-                        .ok_or_else(|| {
-                            anyhow::anyhow!(
-                                "Analyzer instance '{n}' is not declared in rsconstruct.toml"
-                            )
-                        })?;
-                    vec![inst]
-                } else {
-                    self.config.analyzer.instances.iter().collect()
-                };
-
-                if crate::json_output::is_json_mode() {
-                    let mut map = serde_json::Map::new();
-                    for inst in &instances {
-                        let value: serde_json::Value = inst
-                            .config_toml
-                            .clone()
-                            .try_into()
-                            .unwrap_or(serde_json::Value::Null);
-                        map.insert(inst.instance_name.clone(), value);
-                    }
-                    println!(
-                        "{}",
-                        serde_json::to_string_pretty(&serde_json::Value::Object(map))?
-                    );
-                } else if instances.is_empty() {
-                    println!(
-                        "No analyzers declared in rsconstruct.toml. Add `[analyzer.NAME]` sections to enable."
-                    );
-                } else {
-                    for (i, inst) in instances.iter().enumerate() {
-                        if i > 0 {
-                            println!();
-                        }
-                        let toml_str = crate::errors::ctx(
-                            toml::to_string_pretty(&inst.config_toml),
-                            &format!("Failed to serialize {} analyzer config", inst.instance_name),
-                        )?;
-                        println!("[analyzer.{}]", inst.instance_name);
-                        print!("{toml_str}");
-                    }
-                }
+                self.analyzers_config(iname.as_ref())?;
             }
             AnalyzerAction::Clean { analyzer } => {
-                if let Some(analyzer_name) = analyzer {
-                    // Clear only entries from specific analyzer
-                    let deps_cache = DepsCache::open()?;
-                    self.require_known_analyzer(&deps_cache, &analyzer_name)?;
-                    let removed =
-                        deps_cache
-                            .remove_by_analyzer(&analyzer_name)
-                            .with_context(|| {
-                                format!("Failed to remove deps for analyzer '{analyzer_name}'")
-                            })?;
-                    if removed > 0 {
-                        println!("Removed {removed} entries from '{analyzer_name}' analyzer.");
-                    } else {
-                        println!("No entries found for '{analyzer_name}' analyzer.");
-                    }
-                } else {
-                    // Clear the entire dependency cache
-                    let deps_file = PathBuf::from(".rsconstruct/deps.redb");
-                    if deps_file.exists() {
-                        fs::remove_file(&deps_file).with_context(|| {
-                            format!("Failed to remove dependency cache: {}", deps_file.display())
-                        })?;
-                        println!("Dependency cache cleared.");
-                    } else {
-                        println!("Dependency cache is already empty.");
-                    }
-                }
+                self.analyzers_clean(analyzer)?;
             }
             AnalyzerAction::Stats => {
-                // Show statistics by analyzer
-                let deps_cache = DepsCache::open()?;
-                let stats = deps_cache.stats_by_analyzer();
-                let declared: Vec<String> = self
-                    .config
-                    .analyzer
-                    .instances
-                    .iter()
-                    .map(|i| i.instance_name.clone())
-                    .collect();
-                if stats.is_empty() && declared.is_empty() {
-                    if crate::json_output::is_json_mode() {
-                        let out = serde_json::json!({
-                            "analyzers": serde_json::Value::Array(Vec::new()),
-                            "total": { "files": 0, "dependencies": 0 },
-                        });
-                        println!("{}", serde_json::to_string_pretty(&out)?);
-                    } else {
-                        println!("Dependency cache is empty. Run a build first.");
-                    }
-                    return Ok(());
-                }
-                print_deps_stats(&stats, &declared)?;
+                self.analyzers_stats()?;
             }
             AnalyzerAction::Show { filter } => {
-                use crate::cli::AnalyzerShowFilter;
-                let deps_cache = DepsCache::open()?;
-
-                let json_mode = crate::json_output::is_json_mode();
-                match filter {
-                    AnalyzerShowFilter::All => {
-                        let mut entries: Vec<_> = deps_cache.list_all();
-                        entries.sort_by(|a, b| a.0.cmp(&b.0));
-                        if json_mode {
-                            print_deps_json(&entries)?;
-                        } else if entries.is_empty() {
-                            println!("Dependency cache is empty. Run a build first.");
-                        } else {
-                            for (source, deps, analyzer) in entries {
-                                Self::print_deps(&source, &deps, &analyzer);
-                            }
-                        }
-                    }
-                    AnalyzerShowFilter::Files { files, hash_pieces } => {
-                        // Query specific files. One path can have multiple
-                        // entries — one per analyzer that scanned it.
-                        let mut collected: Vec<ShowFileEntry> = Vec::new();
-                        let mut found_any = false;
-                        // Instantiate analyzers up front only when we need to
-                        // recompute hash pieces — otherwise stay in pure
-                        // deps-cache-read mode like before.
-                        let analyzers = if hash_pieces {
-                            Some(self.create_analyzers(false)?)
-                        } else {
-                            None
-                        };
-                        for file_arg in &files {
-                            let file_path = super::graph::normalize_query_path(file_arg);
-                            let entries = deps_cache.get_raw_for_path(&file_path);
-                            if entries.is_empty() {
-                                if !json_mode {
-                                    eprintln!(
-                                        "{}: '{}' not in dependency cache",
-                                        color::yellow("Warning"),
-                                        file_arg
-                                    );
-                                }
-                            } else {
-                                found_any = true;
-                                for (deps, analyzer) in entries {
-                                    // The entry proves this analyzer scanned
-                                    // the file, so a failing rescan is an
-                                    // error to report, not a silent "no
-                                    // pieces".
-                                    let pieces = match &analyzers {
-                                        Some(a) => match a.get(&analyzer) {
-                                            Some(inst) => inst
-                                                .scan_hash_pieces(ctx, &file_path)
-                                                .with_context(|| {
-                                                    format!(
-                                                        "Analyzer '{analyzer}' failed to scan {} for hash pieces",
-                                                        file_path.display()
-                                                    )
-                                                })?,
-                                            None => None,
-                                        },
-                                        None => None,
-                                    };
-                                    if json_mode {
-                                        collected.push((file_path.clone(), deps, analyzer, pieces));
-                                    } else {
-                                        Self::print_deps(&file_path, &deps, &analyzer);
-                                        if hash_pieces {
-                                            Self::print_hash_pieces(pieces.as_deref());
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                        if !found_any {
-                            bail!("No cached dependencies found for the specified files");
-                        }
-                        if json_mode {
-                            print_deps_json_with_pieces(&collected, hash_pieces)?;
-                        }
-                    }
-                    AnalyzerShowFilter::Analyzers { analyzers } => {
-                        for name in &analyzers {
-                            self.require_known_analyzer(&deps_cache, name)?;
-                        }
-                        let mut entries: Vec<_> = deps_cache.list_by_analyzers(&analyzers);
-                        entries.sort_by(|a, b| a.0.cmp(&b.0));
-                        if json_mode {
-                            print_deps_json(&entries)?;
-                        } else if entries.is_empty() {
-                            println!(
-                                "No cached dependencies found for analyzers: {}",
-                                analyzers.join(", ")
-                            );
-                        } else {
-                            for (source, deps, analyzer) in entries {
-                                Self::print_deps(&source, &deps, &analyzer);
-                            }
-                        }
-                    }
-                }
+                self.analyzers_show(ctx, filter)?;
             }
         }
 
