@@ -279,6 +279,18 @@ pub fn check_language(
             ),
         );
     }
+    check_language_rest(sink, cl, linenum, file_extension);
+}
+
+/// The second half of `check_language`: `memset`, using-directives,
+/// variable-length arrays and unnamed namespaces in headers.
+fn check_language_rest(
+    sink: &mut Lint<'_>,
+    cl: &CleansedLines,
+    linenum: usize,
+    file_extension: &str,
+) {
+    let line = cl.elided[linenum].as_str();
     if let Some(m) = search(r"memset\s*\(([^,]*),\s*([^,]*),\s*0\s*\)", line)
         && !is_match(r"''|-?[0-9]+|0x[0-9A-Fa-f]$", g(&m, 2))
     {

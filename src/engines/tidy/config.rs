@@ -561,6 +561,55 @@ fn parse_value(option: &str, kind: Kind, value: &str) -> Result<Value, String> {
     })
 }
 
+impl Value {
+    /// The boolean, false for any other kind of value.
+    const fn as_bool(&self) -> bool {
+        match self {
+            Self::Bool(b) => *b,
+            _ => false,
+        }
+    }
+
+    /// The tri-state, `No` for any other kind of value.
+    const fn as_tri(&self) -> TriState {
+        match self {
+            Self::Tri(t) => *t,
+            _ => TriState::No,
+        }
+    }
+
+    /// The integer, 0 for any other kind of value.
+    const fn as_int(&self) -> u32 {
+        match self {
+            Self::Int(i) => *i,
+            _ => 0,
+        }
+    }
+
+    /// The list, empty for any other kind of value.
+    fn as_list(&self) -> Vec<String> {
+        match self {
+            Self::List(l) => l.clone(),
+            _ => Vec::new(),
+        }
+    }
+
+    /// The string, empty for any other kind of value.
+    fn as_str(&self) -> String {
+        match self {
+            Self::Str(s) => s.clone(),
+            _ => String::new(),
+        }
+    }
+}
+
+/// The error for an option value itidy accepts but cannot act on.
+fn unsupported(option: &str, what: &str) -> Result<(), String> {
+    Err(format!(
+        "option \"{option}\" set to {what} is not supported by itidy"
+    ))
+}
+
 impl Options {
     /// Apply one `name: value` setting as tidy would. Unknown options and
     /// the few whose effect itidy cannot reproduce are errors.
@@ -570,38 +619,13 @@ impl Options {
             return Err(format!("unknown option: {}", name.trim()));
         };
         let parsed = parse_value(option, kind, value)?;
-        let as_bool = |v: &Value| match v {
-            Value::Bool(b) => *b,
-            _ => false,
-        };
-        let as_tri = |v: &Value| match v {
-            Value::Tri(t) => *t,
-            _ => TriState::No,
-        };
-        let as_int = |v: &Value| match v {
-            Value::Int(i) => *i,
-            _ => 0,
-        };
-        let as_list = |v: &Value| match v {
-            Value::List(l) => l.clone(),
-            _ => Vec::new(),
-        };
-        let as_str = |v: &Value| match v {
-            Value::Str(s) => s.clone(),
-            _ => String::new(),
-        };
-        let unsupported = |what: &str| -> Result<(), String> {
-            Err(format!(
-                "option \"{option}\" set to {what} is not supported by itidy"
-            ))
-        };
         match option {
             "alt-text" => {
-                let s = as_str(&parsed);
+                let s = parsed.as_str();
                 self.alt_text = if s.is_empty() { None } else { Some(s) };
             }
-            "anchor-as-name" => self.markup.anchor_as_name = as_bool(&parsed),
-            "coerce-endtags" => self.markup.coerce_endtags = as_bool(&parsed),
+            "anchor-as-name" => self.markup.anchor_as_name = parsed.as_bool(),
+            "coerce-endtags" => self.markup.coerce_endtags = parsed.as_bool(),
             "custom-tags" => {
                 self.custom_tags = match parsed {
                     Value::Pick(0) => CustomTags::No,
@@ -611,16 +635,16 @@ impl Options {
                     _ => CustomTags::Pre,
                 }
             }
-            "new-blocklevel-tags" => self.new_blocklevel_tags = as_list(&parsed),
-            "new-inline-tags" => self.new_inline_tags = as_list(&parsed),
-            "new-empty-tags" => self.new_empty_tags = as_list(&parsed),
-            "new-pre-tags" => self.new_pre_tags = as_list(&parsed),
+            "new-blocklevel-tags" => self.new_blocklevel_tags = parsed.as_list(),
+            "new-inline-tags" => self.new_inline_tags = parsed.as_list(),
+            "new-empty-tags" => self.new_empty_tags = parsed.as_list(),
+            "new-pre-tags" => self.new_pre_tags = parsed.as_list(),
             "new-custom-tags" | "mute" => {
-                if !as_list(&parsed).is_empty() {
-                    return unsupported("a list");
+                if !parsed.as_list().is_empty() {
+                    return unsupported(option, "a list");
                 }
             }
-            "decorate-inferred-ul" => self.markup.decorate_inferred_ul = as_bool(&parsed),
+            "decorate-inferred-ul" => self.markup.decorate_inferred_ul = parsed.as_bool(),
             "doctype" | "doctype-mode" => match parsed {
                 Value::DoctypeFpi(fpi) => {
                     self.doctype_mode = DoctypeMode::User;
@@ -638,49 +662,57 @@ impl Options {
                 }
                 _ => {}
             },
-            "drop-empty-elements" => self.drop.drop_empty_elements = as_bool(&parsed),
-            "drop-empty-paras" => self.drop.drop_empty_paras = as_bool(&parsed),
+            "drop-empty-elements" => self.drop.drop_empty_elements = parsed.as_bool(),
+            "drop-empty-paras" => self.drop.drop_empty_paras = parsed.as_bool(),
             "drop-proprietary-attributes" => {
-                self.drop.drop_proprietary_attributes = as_bool(&parsed);
+                self.drop.drop_proprietary_attributes = parsed.as_bool();
             }
             "repeated-attributes" => self.attributes.keep_last_attribute = parsed == Value::Pick(1),
-            "enclose-block-text" => self.enclose.enclose_block_text = as_bool(&parsed),
-            "enclose-text" => self.enclose.enclose_text = as_bool(&parsed),
-            "escape-scripts" => self.enclose.escape_scripts = as_bool(&parsed),
-            "fix-backslash" => self.fix.fix_backslash = as_bool(&parsed),
-            "fix-bad-comments" => self.fix_bad_comments = as_tri(&parsed),
-            "fix-uri" => self.fix.fix_uri = as_bool(&parsed),
-            "force-output" => self.run.force_output = as_bool(&parsed),
-            "join-classes" => self.merge.join_classes = as_bool(&parsed),
-            "join-styles" => self.merge.join_styles = as_bool(&parsed),
-            "keep-tabs" => self.layout.keep_tabs = as_bool(&parsed),
-            "literal-attributes" => self.attributes.literal_attributes = as_bool(&parsed),
-            "lower-literals" => self.attributes.lower_literals = as_bool(&parsed),
-            "merge-emphasis" => self.merge.merge_emphasis = as_bool(&parsed),
-            "add-meta-charset" => self.meta.add_meta_charset = as_bool(&parsed),
-            "show-meta-change" => self.meta.show_meta_change = as_bool(&parsed),
-            "ncr" => self.entities.ncr = as_bool(&parsed),
-            "omit-optional-tags" => self.layout.omit_optional_tags = as_bool(&parsed),
-            "output-html" => self.output.output_html = as_bool(&parsed),
+            "enclose-block-text" => self.enclose.enclose_block_text = parsed.as_bool(),
+            "enclose-text" => self.enclose.enclose_text = parsed.as_bool(),
+            "escape-scripts" => self.enclose.escape_scripts = parsed.as_bool(),
+            "fix-backslash" => self.fix.fix_backslash = parsed.as_bool(),
+            "fix-bad-comments" => self.fix_bad_comments = parsed.as_tri(),
+            _ => return self.set_more(option, &parsed),
+        }
+        Ok(())
+    }
+
+    /// The second half of `set`: the options from `fix-uri` on.
+    fn set_more(&mut self, option: &str, parsed: &Value) -> Result<(), String> {
+        match option {
+            "fix-uri" => self.fix.fix_uri = parsed.as_bool(),
+            "force-output" => self.run.force_output = parsed.as_bool(),
+            "join-classes" => self.merge.join_classes = parsed.as_bool(),
+            "join-styles" => self.merge.join_styles = parsed.as_bool(),
+            "keep-tabs" => self.layout.keep_tabs = parsed.as_bool(),
+            "literal-attributes" => self.attributes.literal_attributes = parsed.as_bool(),
+            "lower-literals" => self.attributes.lower_literals = parsed.as_bool(),
+            "merge-emphasis" => self.merge.merge_emphasis = parsed.as_bool(),
+            "add-meta-charset" => self.meta.add_meta_charset = parsed.as_bool(),
+            "show-meta-change" => self.meta.show_meta_change = parsed.as_bool(),
+            "ncr" => self.entities.ncr = parsed.as_bool(),
+            "omit-optional-tags" => self.layout.omit_optional_tags = parsed.as_bool(),
+            "output-html" => self.output.output_html = parsed.as_bool(),
             "output-xhtml" => {
-                self.output.output_xhtml = as_bool(&parsed);
+                self.output.output_xhtml = parsed.as_bool();
                 if self.output.output_xhtml {
                     self.output.output_xml = true;
                 }
             }
-            "output-xml" => self.output.output_xml = as_bool(&parsed),
-            "preserve-entities" => self.entities.preserve_entities = as_bool(&parsed),
-            "quiet" => self.report.quiet = as_bool(&parsed),
-            "quote-ampersand" => self.entities.quote_ampersand = as_bool(&parsed),
-            "replace-color" => self.run.replace_color = as_bool(&parsed),
-            "show-errors" => self.show_errors = as_int(&parsed),
-            "show-info" => self.report.show_info = as_bool(&parsed),
-            "show-warnings" => self.report.show_warnings = as_bool(&parsed),
-            "show-body-only" => self.show_body_only = as_tri(&parsed),
-            "skip-nested" => self.strictness.skip_nested = as_bool(&parsed),
-            "strict-tags-attributes" => self.strictness.strict_tags_attributes = as_bool(&parsed),
-            "fix-style-tags" => self.fix.fix_style_tags = as_bool(&parsed),
-            "tab-size" => self.tab_size = as_int(&parsed),
+            "output-xml" => self.output.output_xml = parsed.as_bool(),
+            "preserve-entities" => self.entities.preserve_entities = parsed.as_bool(),
+            "quiet" => self.report.quiet = parsed.as_bool(),
+            "quote-ampersand" => self.entities.quote_ampersand = parsed.as_bool(),
+            "replace-color" => self.run.replace_color = parsed.as_bool(),
+            "show-errors" => self.show_errors = parsed.as_int(),
+            "show-info" => self.report.show_info = parsed.as_bool(),
+            "show-warnings" => self.report.show_warnings = parsed.as_bool(),
+            "show-body-only" => self.show_body_only = parsed.as_tri(),
+            "skip-nested" => self.strictness.skip_nested = parsed.as_bool(),
+            "strict-tags-attributes" => self.strictness.strict_tags_attributes = parsed.as_bool(),
+            "fix-style-tags" => self.fix.fix_style_tags = parsed.as_bool(),
+            "tab-size" => self.tab_size = parsed.as_int(),
             "uppercase-attributes" => {
                 self.uppercase_attributes = match parsed {
                     Value::Pick(1) => UppercaseAttrs::Yes,
@@ -689,26 +721,26 @@ impl Options {
                 }
             }
             "warn-proprietary-attributes" => {
-                self.strictness.warn_proprietary_attributes = as_bool(&parsed);
+                self.strictness.warn_proprietary_attributes = parsed.as_bool();
             }
-            "assume-xml-procins" => self.meta.assume_xml_procins = as_bool(&parsed),
+            "assume-xml-procins" => self.meta.assume_xml_procins = parsed.as_bool(),
             // Options whose "yes" rewrites the document in ways itidy does
             // not follow.
             "clean" | "gdoc" | "bare" | "word-2000" | "logical-emphasis" | "input-xml" => {
-                if as_bool(&parsed) {
-                    return unsupported("yes");
+                if parsed.as_bool() {
+                    return unsupported(option, "yes");
                 }
                 if option == "clean" {
                     self.run.make_clean = false;
                 }
             }
             "accessibility-check" => {
-                if parsed != Value::Pick(0) {
-                    return unsupported("a level above 0");
+                if *parsed != Value::Pick(0) {
+                    return unsupported(option, "a level above 0");
                 }
             }
-            "output-encoding" | "char-encoding" | "input-encoding" if as_str(&parsed) != "utf8" => {
-                return unsupported("anything but utf8");
+            "output-encoding" | "char-encoding" | "input-encoding" if parsed.as_str() != "utf8" => {
+                return unsupported(option, "anything but utf8");
             }
             // Pretty-printing, file and encoding details without a bearing
             // on the checks: accepted, validated and ignored.

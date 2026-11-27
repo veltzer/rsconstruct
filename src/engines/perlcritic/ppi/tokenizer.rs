@@ -2565,6 +2565,11 @@ impl Parser {
             }
             ch = self.at(self.cursor);
         }
+        self.fill_second_section(token, ch)
+    }
+
+    /// The second section of a braced quote-like, which starts at `ch`.
+    fn fill_second_section(&mut self, token: Id, ch: Option<u8>) -> Option<bool> {
         match ch {
             Some(open) if is_section_open(open) => {
                 self.doc.elems[token].content.push(open);

@@ -2798,6 +2798,12 @@ impl Checker {
             ]);
             self.error("TRAILING_STATEMENTS", &msg);
         }
+        self.statement_checks_rest(p, l);
+    }
+
+    /// The second half of `statement_checks`: `case` and `default`, `else`
+    /// after a closing brace, variable tests and `define` continuations.
+    fn statement_checks_rest(&mut self, p: &P, l: &mut L) {
         // case and default should not have general statements after them
         l.line_pos = None;
         if let Some(c) = self.m(r"^.\s*(?:case\s*.*|default\s*):", &l.line) {

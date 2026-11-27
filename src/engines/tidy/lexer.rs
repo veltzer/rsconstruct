@@ -624,6 +624,14 @@ enum SurrogateStatus {
     Error,
 }
 
+/// What kind of entity `parse_entity` is reading.
+#[derive(PartialEq, Eq, Clone, Copy)]
+enum EntState {
+    Default,
+    NumDec,
+    NumHex,
+}
+
 impl Doc {
     // ---- buffer and node helpers ------------------------------------------
 
@@ -892,20 +900,13 @@ impl Doc {
         status
     }
 
-    /// `ParseEntity`: the `&` has just been added to the buffer.
-    fn parse_entity(&mut self, mode: TokenMode) {
-        #[derive(PartialEq, Eq, Clone, Copy)]
-        enum EntState {
-            Default,
-            NumDec,
-            NumHex,
-        }
-        let start = self.lexer.lexsize() - 1;
-        let startcol = self.stream.curcol - 1;
+    /// Read the name or number of an entity into the lexer. Returns the last
+    /// character read and whether it was the closing semicolon; None when the
+    /// `&#` is not to be read as a reference.
+    fn read_entity_name(&mut self) -> Option<(u32, bool)> {
         let mut state = EntState::Default;
         let mut char_read = 0;
         let mut semicolon = false;
-        let mut preserve_entities = self.opts.entities.preserve_entities;
         let mut c;
         loop {
             c = self.read_char();
@@ -920,7 +921,7 @@ impl Doc {
             if char_read == 1 && c == u32::from(b'#') {
                 if !self.opts.entities.ncr {
                     self.unget_char(u32::from(b'#'));
-                    return;
+                    return None;
                 }
                 self.add_char_to_lexer(c);
                 state = EntState::NumDec;
@@ -945,6 +946,17 @@ impl Doc {
             self.unget_char(c);
             break;
         }
+        Some((c, semicolon))
+    }
+
+    /// `ParseEntity`: the `&` has just been added to the buffer.
+    fn parse_entity(&mut self, mode: TokenMode) {
+        let start = self.lexer.lexsize() - 1;
+        let startcol = self.stream.curcol - 1;
+        let mut preserve_entities = self.opts.entities.preserve_entities;
+        let Some((c, mut semicolon)) = self.read_entity_name() else {
+            return;
+        };
 
         if self.lexer.from(start) == b"&apos"
             && !self.opts.output.output_xml

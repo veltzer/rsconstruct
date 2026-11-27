@@ -1093,8 +1093,13 @@ impl Parser {
                 "missing required argument(s) for mount flag: {missing:?}"
             ));
         }
+        Ok(Self::build_mount(mount_type, rest))
+    }
+
+    /// The mount of the given type, from its validated arguments.
+    fn build_mount(mount_type: MountType, rest: Vec<MountArg>) -> RunMount {
         // foldr over the args: the first occurrence wins (there are no duplicates anyway)
-        Ok(match mount_type {
+        match mount_type {
             MountType::Bind => {
                 let mut target = String::new();
                 let (mut source, mut from, mut read_only, mut relabel) = (None, None, None, None);
@@ -1187,7 +1192,7 @@ impl Parser {
                     RunMount::Ssh(o)
                 }
             }
-        })
+        }
     }
 
     fn key_value(&mut self, key: &str) -> PResult<String> {

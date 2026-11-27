@@ -275,6 +275,116 @@ pub enum FileInput {
     },
 }
 
+/// The globals of a set of files, as `get_implicit_globals` finds them.
+struct ImplicitGlobals {
+    /// Defined at the top level of some file.
+    defined: BTreeSet<Vec<u8>>,
+    /// Used in some file.
+    used: BTreeSet<Vec<u8>>,
+    /// Per file, the globals a module defines for itself.
+    local: Vec<BTreeSet<Vec<u8>>>,
+}
+
+/// `get_implicit_globals`: the globals the files define and use.
+fn get_implicit_globals(files: &[Option<FileState>]) -> ImplicitGlobals {
+    let mut globally_defined: BTreeSet<Vec<u8>> = BTreeSet::new();
+    let mut globally_used: BTreeSet<Vec<u8>> = BTreeSet::new();
+    let mut locally_defined: Vec<BTreeSet<Vec<u8>>> = Vec::new();
+    for file in files {
+        let mut defined = BTreeSet::new();
+        if let Some(file) = file {
+            for warning in &file.result.warnings {
+                if !warning.code.starts_with("11") {
+                    continue;
+                }
+                let name = warning.name.clone().unwrap_or_default();
+                if warning.code == "111" {
+                    let Some(opts) = file.normalized_options.get(&warning.line) else {
+                        continue;
+                    };
+                    if is_definition(opts, warning) {
+                        if opts.module {
+                            defined.insert(name);
+                        } else {
+                            globally_defined.insert(name);
+                        }
+                    }
+                } else {
+                    globally_used.insert(name);
+                }
+            }
+        }
+        locally_defined.push(defined);
+    }
+    ImplicitGlobals {
+        defined: globally_defined,
+        used: globally_used,
+        local: locally_defined,
+    }
+}
+
+/// `filter_global_related`: apply the implicit definitions to the warnings
+/// about globals, and keep the ones that pass the filter.
+fn filter_global_related(
+    files: &mut [Option<FileState>],
+    globals: &ImplicitGlobals,
+) -> Result<(), InvalidPattern> {
+    for (index, file) in files.iter_mut().enumerate() {
+        let Some(file) = file else { continue };
+        let warnings = file.result.warnings.clone();
+        for warning in warnings {
+            if !warning.code.starts_with('1') {
+                continue;
+            }
+            let Some(opts) = file.normalized_options.get(&warning.line).cloned() else {
+                continue;
+            };
+            let mut warning = warning;
+            let name = warning.name.clone().unwrap_or_default();
+            // apply_implicit_definitions
+            if warning.code.starts_with("11") {
+                if warning.code == "111" {
+                    if opts.module {
+                        if globals.local[index].contains(&name) {
+                            continue;
+                        }
+                        warning.global.module = true;
+                    } else if is_definition(&opts, &warning) {
+                        if globals.used.contains(&name) {
+                            continue;
+                        }
+                        warning.code = "131".into();
+                        warning.global.top = false;
+                    } else if globals.defined.contains(&name) {
+                        continue;
+                    }
+                } else if globals.defined.contains(&name) || globals.local[index].contains(&name) {
+                    continue;
+                }
+            }
+            if (warning.code == "111" || warning.code == "112")
+                && !warning.global.module
+                && field_status(&opts, &warning, None) == FieldStatus::ReadOnly
+            {
+                warning.code = format!("12{}", &warning.code[2..3]);
+            } else if (warning.code == "112" || warning.code == "113")
+                && field_status(&opts, &warning, Some(1)) != FieldStatus::Undefined
+            {
+                warning.code = format!("14{}", &warning.code[2..3]);
+            }
+            if (warning.code.contains("112") || warning.code.contains("113"))
+                && field_status(&opts, &warning, Some(1)) != FieldStatus::Undefined
+            {
+                warning.code = format!("14{}", &warning.code[2..3]);
+            }
+            if passes_filter(&opts, &mut warning)? {
+                file.filtered.push(warning);
+            }
+        }
+    }
+    Ok(())
+}
+
 /// `filter.filter`.
 pub fn filter(inputs: Vec<FileInput>, stds: &Stds) -> Result<Vec<FileReport>, InvalidPattern> {
     let mut normalizer = Normalizer::default();
@@ -317,91 +427,10 @@ pub fn filter(inputs: Vec<FileInput>, stds: &Stds) -> Result<Vec<FileReport>, In
     }
 
     // get_implicit_globals
-    let mut globally_defined: BTreeSet<Vec<u8>> = BTreeSet::new();
-    let mut globally_used: BTreeSet<Vec<u8>> = BTreeSet::new();
-    let mut locally_defined: Vec<BTreeSet<Vec<u8>>> = Vec::new();
-    for file in &files {
-        let mut defined = BTreeSet::new();
-        if let Some(file) = file {
-            for warning in &file.result.warnings {
-                if !warning.code.starts_with("11") {
-                    continue;
-                }
-                let name = warning.name.clone().unwrap_or_default();
-                if warning.code == "111" {
-                    let Some(opts) = file.normalized_options.get(&warning.line) else {
-                        continue;
-                    };
-                    if is_definition(opts, warning) {
-                        if opts.module {
-                            defined.insert(name);
-                        } else {
-                            globally_defined.insert(name);
-                        }
-                    }
-                } else {
-                    globally_used.insert(name);
-                }
-            }
-        }
-        locally_defined.push(defined);
-    }
+    let globals = get_implicit_globals(&files);
 
     // filter_global_related
-    for (index, file) in files.iter_mut().enumerate() {
-        let Some(file) = file else { continue };
-        let warnings = file.result.warnings.clone();
-        for warning in warnings {
-            if !warning.code.starts_with('1') {
-                continue;
-            }
-            let Some(opts) = file.normalized_options.get(&warning.line).cloned() else {
-                continue;
-            };
-            let mut warning = warning;
-            let name = warning.name.clone().unwrap_or_default();
-            // apply_implicit_definitions
-            if warning.code.starts_with("11") {
-                if warning.code == "111" {
-                    if opts.module {
-                        if locally_defined[index].contains(&name) {
-                            continue;
-                        }
-                        warning.global.module = true;
-                    } else if is_definition(&opts, &warning) {
-                        if globally_used.contains(&name) {
-                            continue;
-                        }
-                        warning.code = "131".into();
-                        warning.global.top = false;
-                    } else if globally_defined.contains(&name) {
-                        continue;
-                    }
-                } else if globally_defined.contains(&name) || locally_defined[index].contains(&name)
-                {
-                    continue;
-                }
-            }
-            if (warning.code == "111" || warning.code == "112")
-                && !warning.global.module
-                && field_status(&opts, &warning, None) == FieldStatus::ReadOnly
-            {
-                warning.code = format!("12{}", &warning.code[2..3]);
-            } else if (warning.code == "112" || warning.code == "113")
-                && field_status(&opts, &warning, Some(1)) != FieldStatus::Undefined
-            {
-                warning.code = format!("14{}", &warning.code[2..3]);
-            }
-            if (warning.code.contains("112") || warning.code.contains("113"))
-                && field_status(&opts, &warning, Some(1)) != FieldStatus::Undefined
-            {
-                warning.code = format!("14{}", &warning.code[2..3]);
-            }
-            if passes_filter(&opts, &mut warning)? {
-                file.filtered.push(warning);
-            }
-        }
-    }
+    filter_global_related(&mut files, &globals)?;
 
     let mut reports = Vec::new();
     for (file, fatal) in files.into_iter().zip(fatals) {

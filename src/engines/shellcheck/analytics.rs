@@ -381,6 +381,56 @@ fn index_of_sublists(sub: &[&str], list: &[String]) -> Vec<usize> {
     (0..list.len()).filter(|&n| matches(&list[n..])).collect()
 }
 
+/// `grep | wc -l`, where `grep -c` would do.
+fn check_grep_wc(cmds: &[Token], out: &mut Out) {
+    let (grep, wc) = (&cmds[0], &cmds[1]);
+    let flags_grep: Vec<String> = get_command(grep)
+        .map(|c| get_all_flags(c).into_iter().map(|(_, f)| f).collect())
+        .unwrap_or_default();
+    let flags_wc: Vec<String> = get_command(wc)
+        .map(|c| get_all_flags(c).into_iter().map(|(_, f)| f).collect())
+        .unwrap_or_default();
+    let grep_ok = flags_grep.iter().any(|f| {
+        [
+            "l",
+            "files-with-matches",
+            "L",
+            "files-without-matches",
+            "o",
+            "only-matching",
+            "r",
+            "R",
+            "recursive",
+            "A",
+            "after-context",
+            "B",
+            "before-context",
+        ]
+        .contains(&f.as_str())
+    });
+    let wc_ok = flags_wc.iter().any(|f| {
+        [
+            "m",
+            "chars",
+            "w",
+            "words",
+            "c",
+            "bytes",
+            "L",
+            "max-line-length",
+        ]
+        .contains(&f.as_str())
+    });
+    if !(grep_ok || wc_ok || flags_wc.is_empty()) {
+        style(
+            out,
+            grep.id,
+            2126,
+            "Consider using 'grep -c' instead of 'grep|wc -l'.",
+        );
+    }
+}
+
 pub fn check_pipe_pitfalls(_: &Parameters<'_>, t: &Token, out: &mut Out) {
     let TPipeline(_, commands) = &t.inner else {
         return;
@@ -438,52 +488,7 @@ pub fn check_pipe_pitfalls(_: &Parameters<'_>, t: &Token, out: &mut Out) {
         }
     });
     for_each(&["grep", "wc"], &mut |cmds| {
-        let (grep, wc) = (&cmds[0], &cmds[1]);
-        let flags_grep: Vec<String> = get_command(grep)
-            .map(|c| get_all_flags(c).into_iter().map(|(_, f)| f).collect())
-            .unwrap_or_default();
-        let flags_wc: Vec<String> = get_command(wc)
-            .map(|c| get_all_flags(c).into_iter().map(|(_, f)| f).collect())
-            .unwrap_or_default();
-        let grep_ok = flags_grep.iter().any(|f| {
-            [
-                "l",
-                "files-with-matches",
-                "L",
-                "files-without-matches",
-                "o",
-                "only-matching",
-                "r",
-                "R",
-                "recursive",
-                "A",
-                "after-context",
-                "B",
-                "before-context",
-            ]
-            .contains(&f.as_str())
-        });
-        let wc_ok = flags_wc.iter().any(|f| {
-            [
-                "m",
-                "chars",
-                "w",
-                "words",
-                "c",
-                "bytes",
-                "L",
-                "max-line-length",
-            ]
-            .contains(&f.as_str())
-        });
-        if !(grep_ok || wc_ok || flags_wc.is_empty()) {
-            style(
-                out,
-                grep.id,
-                2126,
-                "Consider using 'grep -c' instead of 'grep|wc -l'.",
-            );
-        }
+        check_grep_wc(cmds, out);
     });
     let first_id = |cmds: &[Token]| cmds.first().map(|x| get_command_token_or_this(x).id);
     let a = for_each(&["ls", "grep"], &mut |cmds| {

@@ -227,6 +227,18 @@ impl Parser {
             return Ok(c);
         }
 
+        self.statement_rest(parent, token, &content, is_lexsub)
+    }
+
+    /// The second half of `statement`: `sub`, `use`, conditions and labels.
+    fn statement_rest(
+        &mut self,
+        parent: Id,
+        token: Id,
+        content: &[u8],
+        is_lexsub: bool,
+    ) -> Result<Class, Error> {
+        let pclass = self.doc.class(parent);
         if is_lexsub || content == b"sub" {
             while let Some(n) = self.lex_get_token()? {
                 if !self.sig(n) {

@@ -513,6 +513,62 @@ impl P {
         Ok(digits.parse::<i64>().unwrap_or(i64::MAX))
     }
 
+    /// The value of an `extended-analysis` directive.
+    fn extended_analysis_directive(&mut self) -> R<Vec<Annotation>> {
+        let pos = self.pos;
+        let value: String = self
+            .directive_plain_or_quoted(|s| s.many1(Self::letter))?
+            .into_iter()
+            .collect();
+        Ok(match value.as_str() {
+            "true" => vec![Annotation::ExtendedAnalysis(true)],
+            "false" => vec![Annotation::ExtendedAnalysis(false)],
+            _ => {
+                self.parse_note_at(
+                    pos,
+                    ErrorC,
+                    1146,
+                    "Unknown extended-analysis value. Expected true/false.",
+                );
+                Vec::new()
+            }
+        })
+    }
+
+    /// The value of an `external-sources` directive.
+    fn external_sources_directive(&mut self, sandboxed: bool) -> R<Vec<Annotation>> {
+        let pos = self.pos;
+        let value: String = self
+            .directive_plain_or_quoted(|s| s.many1(Self::letter))?
+            .into_iter()
+            .collect();
+        Ok(match value.as_str() {
+            "true" => {
+                if sandboxed {
+                    self.parse_note_at(
+                        pos,
+                        ErrorC,
+                        1144,
+                        "external-sources can only be enabled in .shellcheckrc, not in individual files.",
+                    );
+                    Vec::new()
+                } else {
+                    vec![Annotation::ExternalSources(true)]
+                }
+            }
+            "false" => vec![Annotation::ExternalSources(false)],
+            _ => {
+                self.parse_note_at(
+                    pos,
+                    ErrorC,
+                    1145,
+                    "Unknown external-sources value. Expected true/false.",
+                );
+                Vec::new()
+            }
+        })
+    }
+
     fn read_key(&mut self, sandboxed: bool) -> R<Vec<Annotation>> {
         let key_pos = self.pos;
         let key: String = self
@@ -575,58 +631,8 @@ impl P {
                 }
                 vec![Annotation::ShellOverride(shell)]
             }
-            "extended-analysis" => {
-                let pos = self.pos;
-                let value: String = self
-                    .directive_plain_or_quoted(|s| s.many1(Self::letter))?
-                    .into_iter()
-                    .collect();
-                match value.as_str() {
-                    "true" => vec![Annotation::ExtendedAnalysis(true)],
-                    "false" => vec![Annotation::ExtendedAnalysis(false)],
-                    _ => {
-                        self.parse_note_at(
-                            pos,
-                            ErrorC,
-                            1146,
-                            "Unknown extended-analysis value. Expected true/false.",
-                        );
-                        Vec::new()
-                    }
-                }
-            }
-            "external-sources" => {
-                let pos = self.pos;
-                let value: String = self
-                    .directive_plain_or_quoted(|s| s.many1(Self::letter))?
-                    .into_iter()
-                    .collect();
-                match value.as_str() {
-                    "true" => {
-                        if sandboxed {
-                            self.parse_note_at(
-                                pos,
-                                ErrorC,
-                                1144,
-                                "external-sources can only be enabled in .shellcheckrc, not in individual files.",
-                            );
-                            Vec::new()
-                        } else {
-                            vec![Annotation::ExternalSources(true)]
-                        }
-                    }
-                    "false" => vec![Annotation::ExternalSources(false)],
-                    _ => {
-                        self.parse_note_at(
-                            pos,
-                            ErrorC,
-                            1145,
-                            "Unknown external-sources value. Expected true/false.",
-                        );
-                        Vec::new()
-                    }
-                }
-            }
+            "extended-analysis" => self.extended_analysis_directive()?,
+            "external-sources" => self.external_sources_directive(sandboxed)?,
             _ => {
                 self.parse_note_at(
                     key_pos,

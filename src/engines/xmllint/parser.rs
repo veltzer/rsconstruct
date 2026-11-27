@@ -343,25 +343,9 @@ impl<'a> Parser<'a> {
         }
     }
 
-    /// Builds the element from its start tag: namespace declarations,
-    /// duplicate attributes, prefix resolution, attribute values.
-    fn open_element(&mut self, pending: &Pending<'a>) -> Element {
-        let mut scope: Vec<(String, String)> = self.stack.last().map_or_else(
-            || vec![("xml".to_string(), XML_NS.to_string())],
-            |parent| parent.scope.clone(),
-        );
-
-        // Duplicate attributes, by the name as written.
-        for (i, attr) in pending.attributes.iter().enumerate() {
-            let dup = pending.attributes[..i]
-                .iter()
-                .any(|a| a.prefix == attr.prefix && a.local == attr.local);
-            if dup {
-                let message = format!("Attribute {} redefined", qualified(attr.prefix, attr.local));
-                self.error(pending.end_line, message);
-            }
-        }
-
+    /// Add the namespaces the start tag declares to `scope`, reporting the
+    /// declarations that are not allowed.
+    fn declare_namespaces(&mut self, pending: &Pending<'a>, scope: &mut Vec<(String, String)>) {
         for attr in &pending.attributes {
             let decl_prefix = if attr.prefix == "xmlns" {
                 attr.local
@@ -418,6 +402,28 @@ impl<'a> Parser<'a> {
             }
             scope.push((decl_prefix.to_string(), uri));
         }
+    }
+
+    /// Builds the element from its start tag: namespace declarations,
+    /// duplicate attributes, prefix resolution, attribute values.
+    fn open_element(&mut self, pending: &Pending<'a>) -> Element {
+        let mut scope: Vec<(String, String)> = self.stack.last().map_or_else(
+            || vec![("xml".to_string(), XML_NS.to_string())],
+            |parent| parent.scope.clone(),
+        );
+
+        // Duplicate attributes, by the name as written.
+        for (i, attr) in pending.attributes.iter().enumerate() {
+            let dup = pending.attributes[..i]
+                .iter()
+                .any(|a| a.prefix == attr.prefix && a.local == attr.local);
+            if dup {
+                let message = format!("Attribute {} redefined", qualified(attr.prefix, attr.local));
+                self.error(pending.end_line, message);
+            }
+        }
+
+        self.declare_namespaces(pending, &mut scope);
 
         let namespace = resolve_prefix(&scope, pending.prefix);
         if namespace.is_none() && !pending.prefix.is_empty() {

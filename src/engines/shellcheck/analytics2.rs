@@ -679,68 +679,74 @@ pub fn check_should_use_grep_q(_: &Parameters<'_>, t: &Token, out: &mut Out) {
     );
 }
 
+/// An array expansion as an operand of a test.
+fn check_operand_arrays(typ: ConditionType, token: &Token, out: &mut Out) {
+    if get_word_parts(token).iter().any(|x| is_array_expansion(x)) {
+        if typ == ConditionType::SingleBracket {
+            warn(
+                out,
+                token.id,
+                2198,
+                "Arrays don't work as operands in [ ]. Use a loop (or concatenate with * instead of @).",
+            );
+        } else {
+            err(
+                out,
+                token.id,
+                2199,
+                "Arrays implicitly concatenate in [[ ]]. Use a loop (or explicit * instead of @).",
+            );
+        }
+    }
+}
+
+/// A brace expansion as an operand of a test.
+fn check_operand_braces(typ: ConditionType, token: &Token, out: &mut Out) {
+    if get_word_parts(token).iter().any(|x| is_brace_expansion(x)) {
+        if typ == ConditionType::SingleBracket {
+            warn(
+                out,
+                token.id,
+                2200,
+                "Brace expansions don't work as operands in [ ]. Use a loop.",
+            );
+        } else {
+            err(
+                out,
+                token.id,
+                2201,
+                "Brace expansion doesn't happen in [[ ]]. Use a loop.",
+            );
+        }
+    }
+}
+
+/// A glob as an operand of a test.
+fn check_operand_globs(typ: ConditionType, token: &Token, out: &mut Out) {
+    if is_glob(token) {
+        if typ == ConditionType::SingleBracket {
+            warn(
+                out,
+                token.id,
+                2202,
+                "Globs don't work as operands in [ ]. Use a loop.",
+            );
+        } else {
+            err(
+                out,
+                token.id,
+                2203,
+                "Globs are ignored in [[ ]] except right of =/!=. Use a loop.",
+            );
+        }
+    }
+}
+
 pub fn check_test_argument_splitting(params: &Parameters<'_>, t: &Token, out: &mut Out) {
-    let check_arrays = |typ: ConditionType, token: &Token, out: &mut Out| {
-        if get_word_parts(token).iter().any(|x| is_array_expansion(x)) {
-            if typ == ConditionType::SingleBracket {
-                warn(
-                    out,
-                    token.id,
-                    2198,
-                    "Arrays don't work as operands in [ ]. Use a loop (or concatenate with * instead of @).",
-                );
-            } else {
-                err(
-                    out,
-                    token.id,
-                    2199,
-                    "Arrays implicitly concatenate in [[ ]]. Use a loop (or explicit * instead of @).",
-                );
-            }
-        }
-    };
-    let check_braces = |typ: ConditionType, token: &Token, out: &mut Out| {
-        if get_word_parts(token).iter().any(|x| is_brace_expansion(x)) {
-            if typ == ConditionType::SingleBracket {
-                warn(
-                    out,
-                    token.id,
-                    2200,
-                    "Brace expansions don't work as operands in [ ]. Use a loop.",
-                );
-            } else {
-                err(
-                    out,
-                    token.id,
-                    2201,
-                    "Brace expansion doesn't happen in [[ ]]. Use a loop.",
-                );
-            }
-        }
-    };
-    let check_globs = |typ: ConditionType, token: &Token, out: &mut Out| {
-        if is_glob(token) {
-            if typ == ConditionType::SingleBracket {
-                warn(
-                    out,
-                    token.id,
-                    2202,
-                    "Globs don't work as operands in [ ]. Use a loop.",
-                );
-            } else {
-                err(
-                    out,
-                    token.id,
-                    2203,
-                    "Globs are ignored in [[ ]] except right of =/!=. Use a loop.",
-                );
-            }
-        }
-    };
     let check_all = |typ: ConditionType, token: &Token, out: &mut Out| {
-        check_arrays(typ, token, out);
-        check_braces(typ, token, out);
-        check_globs(typ, token, out);
+        check_operand_arrays(typ, token, out);
+        check_operand_braces(typ, token, out);
+        check_operand_globs(typ, token, out);
     };
     match &t.inner {
         TcUnary(typ, op, token) if is_glob(token) => {
@@ -777,10 +783,10 @@ pub fn check_test_argument_splitting(params: &Parameters<'_>, t: &Token, out: &m
             }
         }
         TcNullary(typ, token) => {
-            check_braces(*typ, token, out);
-            check_globs(*typ, token, out);
+            check_operand_braces(*typ, token, out);
+            check_operand_globs(*typ, token, out);
             if *typ == ConditionType::DoubleBracket {
-                check_arrays(*typ, token, out);
+                check_operand_arrays(*typ, token, out);
             }
         }
         TcUnary(typ, _, token) => check_all(*typ, token, out),
@@ -797,15 +803,15 @@ pub fn check_test_argument_splitting(params: &Parameters<'_>, t: &Token, out: &m
                         "[ ] does not apply arithmetic evaluation. Evaluate with $((..)) for numbers, or use string comparator for strings.",
                     );
                 }
-                check_arrays(*typ, c, out);
-                check_braces(*typ, c, out);
+                check_operand_arrays(*typ, c, out);
+                check_operand_braces(*typ, c, out);
             }
         }
         TcBinary(typ, op, lhs, rhs) => {
             check_all(*typ, lhs, out);
             if ["=", "==", "!=", "=~"].contains(&op.as_str()) {
-                check_arrays(*typ, rhs, out);
-                check_braces(*typ, rhs, out);
+                check_operand_arrays(*typ, rhs, out);
+                check_operand_braces(*typ, rhs, out);
             } else {
                 check_all(*typ, rhs, out);
             }
@@ -1352,6 +1358,77 @@ fn get_op_id(t: &Token) -> Id {
     }
 }
 
+/// A file descriptor as a message names it.
+fn fd_name(n: i64) -> String {
+    match n {
+        0 => "stdin".to_string(),
+        1 => "stdout".to_string(),
+        2 => "stderr".to_string(),
+        _ => format!("FD {n}"),
+    }
+}
+
+/// The redirections of one pipeline stage that override its pipes or
+/// compete for a file descriptor.
+fn check_stage_redirections(
+    stage: &Token,
+    input: PipeType,
+    output: PipeType,
+    has_consumers: bool,
+    has_producers: bool,
+    out: &mut Out,
+) {
+    let TRedirecting(redirs, _) = &stage.inner else {
+        return;
+    };
+    let Some(fds): Option<Vec<Vec<i64>>> = redirs.iter().map(get_redirection_fds).collect() else {
+        return;
+    };
+    let mut fd_map: BTreeMap<i64, Vec<&Token>> = BTreeMap::new();
+    for (list, redir) in fds.iter().zip(redirs.iter()) {
+        for n in list {
+            fd_map.entry(*n).or_default().insert(0, redir);
+        }
+    }
+    if input != PipeType::NoPipe
+        && !has_consumers
+        && let Some(over) = fd_map.get(&0).and_then(|l| l.first())
+    {
+        err(
+            out,
+            get_op_id(over),
+            2259,
+            "This redirection overrides piped input. To use both, merge or pass filenames.",
+        );
+    }
+    if output == PipeType::Stdout
+        && !has_producers
+        && let Some(over) = fd_map.get(&1).and_then(|l| l.first())
+    {
+        err(
+            out,
+            get_op_id(over),
+            2260,
+            "This redirection overrides the output pipe. Use 'tee' to output to both.",
+        );
+    }
+    for (n, list) in &fd_map {
+        if list.len() >= 2 {
+            for c in list {
+                err(
+                    out,
+                    get_op_id(c),
+                    2261,
+                    &format!(
+                        "Multiple redirections compete for {}. Use cat, tee, or pass filenames instead.",
+                        fd_name(*n)
+                    ),
+                );
+            }
+        }
+    }
+}
+
 pub fn check_pipe_to_nowhere(_: &Parameters<'_>, t: &Token, out: &mut Out) {
     let may_consume = |t: &Token| match &t.inner {
         TProcSub(op, _) => op == "<",
@@ -1372,14 +1449,6 @@ pub fn check_pipe_to_nowhere(_: &Parameters<'_>, t: &Token, out: &mut Out) {
             has_interactive_flag(cmd)
         } else {
             false
-        }
-    };
-    let fd_name = |n: i64| -> String {
-        match n {
-            0 => "stdin".to_string(),
-            1 => "stdout".to_string(),
-            2 => "stderr".to_string(),
-            _ => format!("FD {n}"),
         }
     };
     let pipe_type = |t: &Token| match &t.inner {
@@ -1418,57 +1487,7 @@ pub fn check_pipe_to_nowhere(_: &Parameters<'_>, t: &Token, out: &mut Out) {
                         ),
                     );
                 }
-                let TRedirecting(redirs, _) = &stage.inner else {
-                    continue;
-                };
-                let Some(fds): Option<Vec<Vec<i64>>> =
-                    redirs.iter().map(get_redirection_fds).collect()
-                else {
-                    continue;
-                };
-                let mut fd_map: BTreeMap<i64, Vec<&Token>> = BTreeMap::new();
-                for (list, redir) in fds.iter().zip(redirs.iter()) {
-                    for n in list {
-                        fd_map.entry(*n).or_default().insert(0, redir);
-                    }
-                }
-                if *input != PipeType::NoPipe
-                    && !has_consumers
-                    && let Some(over) = fd_map.get(&0).and_then(|l| l.first())
-                {
-                    err(
-                        out,
-                        get_op_id(over),
-                        2259,
-                        "This redirection overrides piped input. To use both, merge or pass filenames.",
-                    );
-                }
-                if *output == PipeType::Stdout
-                    && !has_producers
-                    && let Some(over) = fd_map.get(&1).and_then(|l| l.first())
-                {
-                    err(
-                        out,
-                        get_op_id(over),
-                        2260,
-                        "This redirection overrides the output pipe. Use 'tee' to output to both.",
-                    );
-                }
-                for (n, list) in &fd_map {
-                    if list.len() >= 2 {
-                        for c in list {
-                            err(
-                                out,
-                                get_op_id(c),
-                                2261,
-                                &format!(
-                                    "Multiple redirections compete for {}. Use cat, tee, or pass filenames instead.",
-                                    fd_name(*n)
-                                ),
-                            );
-                        }
-                    }
-                }
+                check_stage_redirections(stage, *input, *output, has_consumers, has_producers, out);
             }
         }
         TRedirecting(redirects, cmd)

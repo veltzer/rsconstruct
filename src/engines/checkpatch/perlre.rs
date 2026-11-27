@@ -704,6 +704,74 @@ impl Parser<'_> {
         }
     }
 
+    /// A named group, after its `(?`: `(?<name>...)`, `(?'name'...)` or
+    /// `(?P<name>...)`.
+    fn parse_named_group(&mut self, flags: Flags) -> Result<Node, Error> {
+        if self.peek() == Some(b'P') {
+            self.i += 1;
+            if self.peek() != Some(b'<') {
+                return self.err("unsupported (?P");
+            }
+        }
+        let close = if self.peek() == Some(b'\'') {
+            b'\''
+        } else {
+            b'>'
+        };
+        self.i += 1;
+        let st = self.i;
+        while self.peek().is_some_and(|c| c != close) {
+            self.i += 1;
+        }
+        let name = String::from_utf8_lossy(&self.p[st..self.i]).into_owned();
+        self.i += 1;
+        self.ngroups += 1;
+        let n = self.ngroups;
+        self.names.push((name, n));
+        self.opened.push(n);
+        let mut f = flags;
+        let inner = self.parse_alt(&mut f)?;
+        self.close(Node::Group(Some(n), Box::new(inner)))
+    }
+
+    /// A conditional, after its `(?`: `(?(N)yes|no)`.
+    fn parse_conditional(&mut self, flags: Flags) -> Result<Node, Error> {
+        // `(?(N)yes|no)`.
+        self.i += 1;
+        let n = self.digits();
+        if !self.eat(b')') {
+            return self.err("unsupported condition");
+        }
+        let mut f = flags;
+        let yes = self.parse_concat(&mut f)?;
+        let no = if self.eat(b'|') {
+            self.parse_concat(&mut f)?
+        } else {
+            Node::Empty
+        };
+        self.close(Node::Cond(n, Box::new(yes), Box::new(no)))
+    }
+
+    /// A relative recursion, after its `(?`: `(?-N)` or `(?+N)`.
+    fn parse_relative_recursion(&mut self) -> Result<Node, Error> {
+        let sign = self.peek() == Some(b'-');
+        self.i += 1;
+        let n = self.digits();
+        if !self.eat(b')') {
+            return self.err("bad recursion");
+        }
+        let target = if sign {
+            self.relative_group(n, "Reference to nonexistent group")?
+        } else if n == 0 {
+            return self.err("Illegal pattern");
+        } else {
+            // The n-th group opened after this point; a count
+            // past the last group fails `check_references`.
+            self.ngroups.saturating_add(n)
+        };
+        Ok(Node::Recurse(self.reference(target)))
+    }
+
     fn parse_group(&mut self, flags: Flags) -> Result<Node, Error> {
         if self.eat(b'?') {
             match self.peek() {
@@ -756,47 +824,10 @@ impl Parser<'_> {
                     return self.close(Node::Atomic(Box::new(inner)));
                 }
                 Some(b'<' | b'\'' | b'P') => {
-                    if self.peek() == Some(b'P') {
-                        self.i += 1;
-                        if self.peek() != Some(b'<') {
-                            return self.err("unsupported (?P");
-                        }
-                    }
-                    let close = if self.peek() == Some(b'\'') {
-                        b'\''
-                    } else {
-                        b'>'
-                    };
-                    self.i += 1;
-                    let st = self.i;
-                    while self.peek().is_some_and(|c| c != close) {
-                        self.i += 1;
-                    }
-                    let name = String::from_utf8_lossy(&self.p[st..self.i]).into_owned();
-                    self.i += 1;
-                    self.ngroups += 1;
-                    let n = self.ngroups;
-                    self.names.push((name, n));
-                    self.opened.push(n);
-                    let mut f = flags;
-                    let inner = self.parse_alt(&mut f)?;
-                    return self.close(Node::Group(Some(n), Box::new(inner)));
+                    return self.parse_named_group(flags);
                 }
                 Some(b'(') => {
-                    // `(?(N)yes|no)`.
-                    self.i += 1;
-                    let n = self.digits();
-                    if !self.eat(b')') {
-                        return self.err("unsupported condition");
-                    }
-                    let mut f = flags;
-                    let yes = self.parse_concat(&mut f)?;
-                    let no = if self.eat(b'|') {
-                        self.parse_concat(&mut f)?
-                    } else {
-                        Node::Empty
-                    };
-                    return self.close(Node::Cond(n, Box::new(yes), Box::new(no)));
+                    return self.parse_conditional(flags);
                 }
                 Some(b'R' | b'0') => {
                     self.i += 1;
@@ -806,22 +837,7 @@ impl Parser<'_> {
                     return Ok(Node::Recurse(0));
                 }
                 Some(b'-' | b'+') if self.peek_at(1).is_some_and(|c| c.is_ascii_digit()) => {
-                    let sign = self.peek() == Some(b'-');
-                    self.i += 1;
-                    let n = self.digits();
-                    if !self.eat(b')') {
-                        return self.err("bad recursion");
-                    }
-                    let target = if sign {
-                        self.relative_group(n, "Reference to nonexistent group")?
-                    } else if n == 0 {
-                        return self.err("Illegal pattern");
-                    } else {
-                        // The n-th group opened after this point; a count
-                        // past the last group fails `check_references`.
-                        self.ngroups.saturating_add(n)
-                    };
-                    return Ok(Node::Recurse(self.reference(target)));
+                    return self.parse_relative_recursion();
                 }
                 Some(d) if d.is_ascii_digit() => {
                     let n = self.digits();

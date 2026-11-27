@@ -320,6 +320,17 @@ pub fn check_for_non_standard_constructs(
                 .to_string(),
         );
     }
+    check_explicit_constructors(sink, cl, linenum, nesting);
+}
+
+/// Constructors callable with one argument should be marked explicit.
+fn check_explicit_constructors(
+    sink: &mut Lint<'_>,
+    cl: &CleansedLines,
+    linenum: usize,
+    nesting: &NestingState,
+) {
+    let line = &cl.elided[linenum];
     let Some(classinfo) = nesting.innermost_class() else {
         return;
     };
@@ -1163,6 +1174,13 @@ pub fn check_braces(sink: &mut Lint<'_>, cl: &CleansedLines, linenum: usize) {
             ),
         );
     }
+    check_if_else_body(sink, cl, linenum);
+}
+
+/// The body of an `if` or `else` without braces: one statement, on its
+/// own line, with no ambiguous `else` after it.
+fn check_if_else_body(sink: &mut Lint<'_>, cl: &CleansedLines, linenum: usize) {
+    let line = &cl.elided[linenum];
     let Some(if_else_match) = search(r"\b(if\s*(|constexpr)\s*\(|else\b)", line) else {
         return;
     };

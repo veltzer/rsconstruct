@@ -257,6 +257,47 @@ impl Doc {
 
     // ---- meta charset -----------------------------------------------------------
 
+    /// Discard a `<meta>` that should not be there, with a warning. Returns
+    /// the node the scan of the head goes on with.
+    fn discard_unexpected_meta(&mut self, head: NodeId, node: NodeId) -> Option<NodeId> {
+        let prev = self.tree.prev(node);
+        self.report(Some(head), Some(node), Code::DiscardingUnexpected);
+        self.tree.discard_element(node);
+        match prev {
+            Some(p) => self.tree.next(p),
+            None => self.tree.content(head),
+        }
+    }
+
+    /// A `<meta charset>`, its attribute at index `ci`: the first one is set
+    /// to `enc` and moved to the start of the head, any other is discarded.
+    /// Returns the node the scan of the head goes on with.
+    fn meta_charset(
+        &mut self,
+        head: NodeId,
+        node: NodeId,
+        ci: usize,
+        enc: &str,
+        charset_found: &mut bool,
+    ) -> Option<NodeId> {
+        let value = self.tree.node(node).attributes[ci].value.clone();
+        if *charset_found || value.is_none() {
+            return self.discard_unexpected_meta(head, node);
+        }
+        *charset_found = true;
+        if !value.as_deref().unwrap_or("").eq_ignore_ascii_case(enc) {
+            let av = self.tree.node(node).attributes[ci].clone();
+            self.report_attr(Some(node), Some(&av), Code::AttributeValueReplaced);
+            self.tree.node_mut(node).attributes[ci].value = Some(enc.to_string());
+        }
+        let second = self.tree.content(head).and_then(|c| self.tree.next(c));
+        if Some(node) != second {
+            self.tree.remove_node(node);
+            self.tree.insert_node_at_start(head, node);
+        }
+        self.tree.next(node)
+    }
+
     /// `TY_(TidyMetaCharset)` for a UTF-8 output encoding.
     fn tidy_meta_charset(&mut self) {
         let Some(head) = self.find_head() else {
@@ -282,29 +323,7 @@ impl Doc {
                 continue;
             }
             if let (Some(ci), None) = (charset_attr, http_equiv_attr) {
-                let value = self.tree.node(node).attributes[ci].value.clone();
-                if charset_found || value.is_none() {
-                    let prev = self.tree.prev(node);
-                    self.report(Some(head), Some(node), Code::DiscardingUnexpected);
-                    self.tree.discard_element(node);
-                    current = match prev {
-                        Some(p) => self.tree.next(p),
-                        None => self.tree.content(head),
-                    };
-                    continue;
-                }
-                charset_found = true;
-                if !value.as_deref().unwrap_or("").eq_ignore_ascii_case(enc) {
-                    let av = self.tree.node(node).attributes[ci].clone();
-                    self.report_attr(Some(node), Some(&av), Code::AttributeValueReplaced);
-                    self.tree.node_mut(node).attributes[ci].value = Some(enc.to_string());
-                }
-                let second = self.tree.content(head).and_then(|c| self.tree.next(c));
-                if Some(node) != second {
-                    self.tree.remove_node(node);
-                    self.tree.insert_node_at_start(head, node);
-                }
-                current = self.tree.next(node);
+                current = self.meta_charset(head, node, ci, enc, &mut charset_found);
                 continue;
             }
             if let (None, Some(hi)) = (charset_attr, http_equiv_attr) {
@@ -314,13 +333,7 @@ impl Doc {
                 };
                 let http_value = self.tree.node(node).attributes[hi].value.clone();
                 let Some(http_value) = http_value else {
-                    let prev = self.tree.prev(node);
-                    self.report(Some(head), Some(node), Code::DiscardingUnexpected);
-                    self.tree.discard_element(node);
-                    current = match prev {
-                        Some(p) => self.tree.next(p),
-                        None => self.tree.content(head),
-                    };
+                    current = self.discard_unexpected_meta(head, node);
                     continue;
                 };
                 if !http_value.eq_ignore_ascii_case("content-type") {
@@ -333,24 +346,12 @@ impl Doc {
                 };
                 if content_value.eq_ignore_ascii_case(&charset_string) {
                     if charset_found {
-                        let prev = self.tree.prev(node);
-                        self.report(Some(head), Some(node), Code::DiscardingUnexpected);
-                        self.tree.discard_element(node);
-                        current = match prev {
-                            Some(p) => self.tree.next(p),
-                            None => self.tree.content(head),
-                        };
+                        current = self.discard_unexpected_meta(head, node);
                         continue;
                     }
                     charset_found = true;
                 } else if charset_found {
-                    let prev = self.tree.prev(node);
-                    self.report(Some(head), Some(node), Code::DiscardingUnexpected);
-                    self.tree.discard_element(node);
-                    current = match prev {
-                        Some(p) => self.tree.next(p),
-                        None => self.tree.content(head),
-                    };
+                    current = self.discard_unexpected_meta(head, node);
                     continue;
                 } else {
                     if self.opts.meta.show_meta_change {
@@ -365,13 +366,7 @@ impl Doc {
                 continue;
             }
             // Both charset and http-equiv: discard with a warning.
-            let prev = self.tree.prev(node);
-            self.report(Some(head), Some(node), Code::DiscardingUnexpected);
-            self.tree.discard_element(node);
-            current = match prev {
-                Some(p) => self.tree.next(p),
-                None => self.tree.content(head),
-            };
+            current = self.discard_unexpected_meta(head, node);
         }
         if self.opts.meta.add_meta_charset && !charset_found {
             let meta = self.inferred_tag(TagId::Meta);

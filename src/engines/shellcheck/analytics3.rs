@@ -739,110 +739,116 @@ pub fn check_alias_used_in_same_parsing_unit(params: &Parameters<'_>, root: &Tok
     out
 }
 
+/// The array a word expands whole, as in `"${array[@]}"`.
+fn looped_array_name(t: &Token) -> Option<String> {
+    let parts = get_word_parts(t);
+    let [
+        Token {
+            inner: TDollarBraced(_, l),
+            ..
+        },
+    ] = parts.as_slice()
+    else {
+        return None;
+    };
+    let s = concat_oversimplify(l);
+    if get_braced_modifier(&s) == "[@]" && !s.starts_with('!') {
+        Some(get_braced_reference(&s))
+    } else {
+        None
+    }
+}
+
+/// When `t` uses the variable `name` as the index of an array: where, and
+/// the array's name.
+fn array_used_as_index(params: &Parameters<'_>, name: &str, t: &Token) -> Option<(Id, String)> {
+    let parents = &params.parent_map;
+    match &t.inner {
+        TDollarBraced(_, list) => {
+            if get_braced_reference(&concat_oversimplify(list)) != name {
+                return None;
+            }
+            let list_t = *parents.get(&t.id)?;
+            if !matches!(list_t.inner, TNormalWord(_)) {
+                return None;
+            }
+            let parent = *parents.get(&list_t.id)?;
+            let TDollarBraced(_, parent_list) = &parent.inner else {
+                return None;
+            };
+            let parts = get_word_parts(parent_list);
+            let [
+                Token {
+                    inner: TLiteral(_), ..
+                },
+                index,
+                Token {
+                    inner: TLiteral(_), ..
+                },
+                ..,
+            ] = parts.as_slice()
+            else {
+                return None;
+            };
+            let s = concat_oversimplify(list_t);
+            let modifier = get_braced_modifier(&s);
+            if index.id != t.id || !modifier.starts_with("[${VAR}]") {
+                return None;
+            }
+            Some((t.id, get_braced_reference(&s)))
+        }
+        TNormalWord(_) => {
+            let parent = *parents.get(&t.id)?;
+            if !matches!(parent.inner, TDollarBraced(..)) {
+                return None;
+            }
+            let s = concat_oversimplify(t);
+            let modifier = get_braced_modifier(&s);
+            if !modifier.starts_with(&format!("[{name}]")) {
+                return None;
+            }
+            Some((parent.id, get_braced_reference(&s)))
+        }
+        TaVariable(r, indices) if indices.is_empty() => {
+            if r != name {
+                return None;
+            }
+            let seq = *parents.get(&t.id)?;
+            let TaSequence(elems) = &seq.inner else {
+                return None;
+            };
+            let [element] = elems.as_slice() else {
+                return None;
+            };
+            if element.id != t.id {
+                return None;
+            }
+            let parent = *parents.get(&seq.id)?;
+            let TaVariable(array_name, pidx) = &parent.inner else {
+                return None;
+            };
+            let [pelement] = pidx.as_slice() else {
+                return None;
+            };
+            if pelement.id != seq.id {
+                return None;
+            }
+            Some((parent.id, array_name.clone()))
+        }
+        _ => None,
+    }
+}
+
 pub fn check_array_value_used_as_index(params: &Parameters<'_>, _: &Token) -> Out {
     type Loops = BTreeMap<String, (Id, Vec<(Id, String)>)>;
 
     let parents = &params.parent_map;
-    let get_array_name = |t: &Token| -> Option<String> {
-        let parts = get_word_parts(t);
-        let [
-            Token {
-                inner: TDollarBraced(_, l),
-                ..
-            },
-        ] = parts.as_slice()
-        else {
-            return None;
-        };
-        let s = concat_oversimplify(l);
-        if get_braced_modifier(&s) == "[@]" && !s.starts_with('!') {
-            Some(get_braced_reference(&s))
-        } else {
-            None
-        }
-    };
-    let get_array_if_used_as_index = |name: &str, t: &Token| -> Option<(Id, String)> {
-        match &t.inner {
-            TDollarBraced(_, list) => {
-                if get_braced_reference(&concat_oversimplify(list)) != name {
-                    return None;
-                }
-                let list_t = *parents.get(&t.id)?;
-                if !matches!(list_t.inner, TNormalWord(_)) {
-                    return None;
-                }
-                let parent = *parents.get(&list_t.id)?;
-                let TDollarBraced(_, parent_list) = &parent.inner else {
-                    return None;
-                };
-                let parts = get_word_parts(parent_list);
-                let [
-                    Token {
-                        inner: TLiteral(_), ..
-                    },
-                    index,
-                    Token {
-                        inner: TLiteral(_), ..
-                    },
-                    ..,
-                ] = parts.as_slice()
-                else {
-                    return None;
-                };
-                let s = concat_oversimplify(list_t);
-                let modifier = get_braced_modifier(&s);
-                if index.id != t.id || !modifier.starts_with("[${VAR}]") {
-                    return None;
-                }
-                Some((t.id, get_braced_reference(&s)))
-            }
-            TNormalWord(_) => {
-                let parent = *parents.get(&t.id)?;
-                if !matches!(parent.inner, TDollarBraced(..)) {
-                    return None;
-                }
-                let s = concat_oversimplify(t);
-                let modifier = get_braced_modifier(&s);
-                if !modifier.starts_with(&format!("[{name}]")) {
-                    return None;
-                }
-                Some((parent.id, get_braced_reference(&s)))
-            }
-            TaVariable(r, indices) if indices.is_empty() => {
-                if r != name {
-                    return None;
-                }
-                let seq = *parents.get(&t.id)?;
-                let TaSequence(elems) = &seq.inner else {
-                    return None;
-                };
-                let [element] = elems.as_slice() else {
-                    return None;
-                };
-                if element.id != t.id {
-                    return None;
-                }
-                let parent = *parents.get(&seq.id)?;
-                let TaVariable(array_name, pidx) = &parent.inner else {
-                    return None;
-                };
-                let [pelement] = pidx.as_slice() else {
-                    return None;
-                };
-                if pelement.id != seq.id {
-                    return None;
-                }
-                Some((parent.id, array_name.clone()))
-            }
-            _ => None,
-        }
-    };
     let mut state: Loops = BTreeMap::new();
     do_variable_flow_analysis(
         &mut |m: &mut Loops, _base, t, name| {
             (|| {
                 let (loop_id, arrays) = m.get(name)?;
-                let (array_ref, array_name) = get_array_if_used_as_index(name, t)?;
+                let (array_ref, array_name) = array_used_as_index(params, name, t)?;
                 let (loop_word, _) = arrays.iter().find(|(_, n)| *n == array_name)?;
                 let this = params.id_map.get(&t.id)?;
                 if !get_path(parents, this).iter().any(|x| x.id == *loop_id) {
@@ -870,7 +876,7 @@ pub fn check_array_value_used_as_index(params: &Parameters<'_>, _: &Token) -> Ou
             {
                 let arrays: Vec<(Id, String)> = words
                     .iter()
-                    .filter_map(|x| get_array_name(x).map(|n| (x.id, n)))
+                    .filter_map(|x| looped_array_name(x).map(|n| (x.id, n)))
                     .collect();
                 m.insert(name.to_string(), (base.id, arrays));
             } else {

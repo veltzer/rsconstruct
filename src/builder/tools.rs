@@ -1125,7 +1125,6 @@ fn install_machine(
     all: bool,
     flags: &InstallFlags,
 ) -> Result<()> {
-    let _root = std::path::Path::new(".");
     require_known_tool(name)?;
     // In a project, each tool is requested at its rsconstruct.lock version
     // (a `.deb` at its locked asset). `--all` is the config-independent

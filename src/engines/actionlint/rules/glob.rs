@@ -84,6 +84,74 @@ impl GlobValidator {
         ));
     }
 
+    /// A character match, after its `[`. `c` follows the last character read.
+    /// False when the pattern ends inside it.
+    fn validate_char_class(&mut self, c: &mut Option<char>) -> bool {
+        if self.peek() == Some(']') {
+            *c = self.next();
+            self.unexpected(
+                Some(']'),
+                "content of character match []",
+                "character match must not be empty",
+            );
+        } else {
+            let mut chars = 0;
+            loop {
+                *c = self.next();
+                match *c {
+                    Some(']') => break,
+                    None => {
+                        self.unexpected(None, "end of character match []", "missing ]");
+                        return false;
+                    }
+                    Some(s) => {
+                        if self.peek() != Some('-') {
+                            chars += 1;
+                            continue;
+                        }
+                        chars += 2;
+                        self.next(); // the '-'
+                        match self.peek() {
+                            Some(']') => {
+                                *c = self.next();
+                                self.unexpected(
+                                    *c,
+                                    "character range in []",
+                                    "end of range is missing",
+                                );
+                                break;
+                            }
+                            None => {}
+                            Some(_) => {
+                                *c = self.next();
+                                if let Some(e) = *c
+                                    && s > e
+                                {
+                                    let why = format!(
+                                        "start of range {} ({}) is larger than end of range {} ({})",
+                                        go_quote_rune(s),
+                                        s as u32,
+                                        go_quote_rune(e),
+                                        e as u32
+                                    );
+                                    self.unexpected(*c, "character range in []", &why);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            if chars == 1 {
+                self.unexpected(
+                    *c,
+                    "character match []",
+                    "character match with single character is useless. simply use x instead of [x]",
+                );
+            }
+        }
+        true
+    }
+
     fn validate_next(&mut self) -> bool {
         let mut c = self.next();
         let mut prec = true;
@@ -134,67 +202,8 @@ impl GlobValidator {
             }
             Some('*') => prec = false,
             Some('[') => {
-                if self.peek() == Some(']') {
-                    c = self.next();
-                    self.unexpected(
-                        Some(']'),
-                        "content of character match []",
-                        "character match must not be empty",
-                    );
-                } else {
-                    let mut chars = 0;
-                    loop {
-                        c = self.next();
-                        match c {
-                            Some(']') => break,
-                            None => {
-                                self.unexpected(None, "end of character match []", "missing ]");
-                                return false;
-                            }
-                            Some(s) => {
-                                if self.peek() != Some('-') {
-                                    chars += 1;
-                                    continue;
-                                }
-                                chars += 2;
-                                self.next(); // the '-'
-                                match self.peek() {
-                                    Some(']') => {
-                                        c = self.next();
-                                        self.unexpected(
-                                            c,
-                                            "character range in []",
-                                            "end of range is missing",
-                                        );
-                                        break;
-                                    }
-                                    None => {}
-                                    Some(_) => {
-                                        c = self.next();
-                                        if let Some(e) = c
-                                            && s > e
-                                        {
-                                            let why = format!(
-                                                "start of range {} ({}) is larger than end of range {} ({})",
-                                                go_quote_rune(s),
-                                                s as u32,
-                                                go_quote_rune(e),
-                                                e as u32
-                                            );
-                                            self.unexpected(c, "character range in []", &why);
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    if chars == 1 {
-                        self.unexpected(
-                            c,
-                            "character match []",
-                            "character match with single character is useless. simply use x instead of [x]",
-                        );
-                    }
+                if !self.validate_char_class(&mut c) {
+                    return false;
                 }
             }
             Some('\r') => {

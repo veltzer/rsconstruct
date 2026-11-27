@@ -1034,16 +1034,42 @@ fn check_deprecated_fgrep(_: &Parameters<'_>, t: &Token, out: &mut Out) {
     );
 }
 
-fn check_while_getopts_case(params: &Parameters<'_>, t: &Token, out: &mut Out) {
-    fn find_case(t: &Token) -> Option<&Token> {
-        match &t.inner {
-            TAnnotation(_, x) => find_case(x),
-            TPipeline(_, l) if l.len() == 1 => find_case(&l[0]),
-            TRedirecting(_, x) if matches!(x.inner, TCaseExpression(..)) => Some(x),
-            _ => None,
-        }
+/// The `case` statement in a command, when it is one.
+fn find_case(t: &Token) -> Option<&Token> {
+    match &t.inner {
+        TAnnotation(_, x) => find_case(x),
+        TPipeline(_, l) if l.len() == 1 => find_case(&l[0]),
+        TRedirecting(_, x) if matches!(x.inner, TCaseExpression(..)) => Some(x),
+        _ => None,
     }
+}
 
+/// The option a `case` glob stands for: `[x]`, `*` or `?`.
+fn getopts_glob_option(t: &Token) -> Option<String> {
+    match &t.inner {
+        TGlob(s) => {
+            let cs: Vec<char> = s.chars().collect();
+            match cs.as_slice() {
+                ['[', c, ']'] => Some(c.to_string()),
+                ['*'] => Some("*".to_string()),
+                ['?'] => Some("?".to_string()),
+                _ => None,
+            }
+        }
+        _ => None,
+    }
+}
+
+/// The option a `case` pattern handles, None when it cannot be told.
+fn getopts_case_option(t: &Token) -> Option<String> {
+    match (get_literal_string(t), getopts_glob_option(t)) {
+        (Some(a), Some(b)) => Some(format!("{a}{b}")),
+        (Some(a), None) => Some(a),
+        (None, b) => b,
+    }
+}
+
+fn check_while_getopts_case(params: &Parameters<'_>, t: &Token, out: &mut Out) {
     let TSimpleCommand(_, words) = &t.inner else {
         return;
     };
@@ -1106,35 +1132,23 @@ fn check_while_getopts_case(params: &Parameters<'_>, t: &Token, out: &mut Out) {
         .filter(|&c| c != ':')
         .map(|c| c.to_string())
         .collect();
-    let from_glob = |t: &Token| -> Option<String> {
-        match &t.inner {
-            TGlob(s) => {
-                let cs: Vec<char> = s.chars().collect();
-                match cs.as_slice() {
-                    ['[', c, ']'] => Some(c.to_string()),
-                    ['*'] => Some("*".to_string()),
-                    ['?'] => Some("?".to_string()),
-                    _ => None,
-                }
-            }
-            _ => None,
-        }
-    };
-    let literal = |t: &Token| -> Option<String> {
-        match (get_literal_string(t), from_glob(t)) {
-            (Some(a), Some(b)) => Some(format!("{a}{b}")),
-            (Some(a), None) => Some(a),
-            (None, b) => b,
-        }
-    };
     let mut handled_map: BTreeMap<Option<String>, &Token> = BTreeMap::new();
     for (_, globs, _) in list {
         for g in globs {
-            handled_map.insert(literal(g), g);
+            handled_map.insert(getopts_case_option(g), g);
         }
     }
+    report_getopts_cases(&opts, &handled_map, case.id, out);
+}
+
+/// Compare the options `getopts` asks for with the ones the `case` handles.
+fn report_getopts_cases(
+    opts: &[String],
+    handled_map: &BTreeMap<Option<String>, &Token>,
+    case_id: Id,
+    out: &mut Out,
+) {
     let requested: BTreeSet<Option<String>> = opts.iter().map(|x| Some(x.clone())).collect();
-    let case_id = case.id;
     if !handled_map.contains_key(&None) {
         for s in requested
             .iter()
@@ -1162,7 +1176,7 @@ fn check_while_getopts_case(params: &Parameters<'_>, t: &Token, out: &mut Out) {
             );
         }
     }
-    for (k, expr) in &handled_map {
+    for (k, expr) in handled_map {
         if requested.contains(k) {
             continue;
         }

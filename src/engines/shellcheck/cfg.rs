@@ -1480,6 +1480,47 @@ impl Builder {
         self.new_node_range(ctx, CfNode::ApplyEffects(effects))
     }
 
+    /// The properties the options of a declaring command set.
+    fn declare_added_props(opts: &[String]) -> PropSet {
+        let has = |f: &str| opts.iter().any(|x| x == f);
+        let associative = has("A");
+        let array = has("a") || associative;
+        let integer = has("i");
+        let export = has("x");
+        let mut added_props = PropSet::default();
+        if array {
+            added_props.insert(CfVariableProp::Array);
+        }
+        if integer {
+            added_props.insert(CfVariableProp::Integer);
+        }
+        if export {
+            added_props.insert(CfVariableProp::Export);
+        }
+        if associative {
+            added_props.insert(CfVariableProp::Associative);
+        }
+        added_props
+    }
+
+    /// The properties the `+x` style options of a declaring command unset.
+    fn declare_removed_props(args: &[&Token]) -> PropSet {
+        let unset_options: String = args
+            .iter()
+            .filter_map(|t| get_literal_string(t))
+            .filter(|s| s.starts_with('+'))
+            .map(|s| s[1..].to_string())
+            .collect();
+        let mut removed_props = PropSet::default();
+        if unset_options.contains('i') {
+            removed_props.insert(CfVariableProp::Integer);
+        }
+        if unset_options.contains('e') {
+            removed_props.insert(CfVariableProp::Export);
+        }
+        removed_props
+    }
+
     fn handle_declare(&mut self, ctx: &CfContext, args_with_cmd: &[&Token]) -> Range {
         let cmd = args_with_cmd[0];
         let args = &args_with_cmd[1..];
@@ -1489,12 +1530,7 @@ impl Builder {
             .into_iter()
             .map(|(f, _)| f)
             .collect();
-        let has = |f: &str| opts.iter().any(|x| x == f);
-        let associative = has("A");
-        let array = has("a") || associative;
-        let integer = has("i");
-        let global = has("g");
-        let export = has("x");
+        let global = opts.iter().any(|x| x == "g");
         let writer = |name: String, v: CfValue| -> CfEffect {
             if global {
                 CfEffect::WriteGlobal(name, v)
@@ -1511,32 +1547,8 @@ impl Builder {
         } else {
             None
         };
-        let mut added_props = PropSet::default();
-        if array {
-            added_props.insert(CfVariableProp::Array);
-        }
-        if integer {
-            added_props.insert(CfVariableProp::Integer);
-        }
-        if export {
-            added_props.insert(CfVariableProp::Export);
-        }
-        if associative {
-            added_props.insert(CfVariableProp::Associative);
-        }
-        let unset_options: String = args
-            .iter()
-            .filter_map(|t| get_literal_string(t))
-            .filter(|s| s.starts_with('+'))
-            .map(|s| s[1..].to_string())
-            .collect();
-        let mut removed_props = PropSet::default();
-        if unset_options.contains('i') {
-            removed_props.insert(CfVariableProp::Integer);
-        }
-        if unset_options.contains('e') {
-            removed_props.insert(CfVariableProp::Export);
-        }
+        let added_props = Self::declare_added_props(&opts);
+        let removed_props = Self::declare_removed_props(args);
         let mut evaluated: Vec<&Token> = Vec::new();
         let mut assignments: Vec<IdTagged> = Vec::new();
         let mut added: Vec<IdTagged> = Vec::new();
@@ -1608,7 +1620,21 @@ impl Builder {
                 ));
             }
         }
-        let before = self.sequentially_refs(ctx, &evaluated);
+        self.link_declare(ctx, cmd, &evaluated, assignments, added, removed)
+    }
+
+    /// The graph of a declaring command: what it evaluates, then its
+    /// assignments, the properties it sets and unsets, and its exit code.
+    fn link_declare(
+        &mut self,
+        ctx: &CfContext,
+        cmd: &Token,
+        evaluated: &[&Token],
+        assignments: Vec<IdTagged>,
+        added: Vec<IdTagged>,
+        removed: Vec<IdTagged>,
+    ) -> Range {
+        let before = self.sequentially_refs(ctx, evaluated);
         let assignments_r = self.new_node_range(ctx, CfNode::ApplyEffects(assignments));
         let added_r = if added.is_empty() {
             self.none(ctx)

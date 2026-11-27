@@ -541,6 +541,42 @@ const fn b(t: &Token) -> Cow<'_, Token> {
     Cow::Borrowed(t)
 }
 
+/// The variables a bats test sets for its body.
+fn bats_variables(t: &Token) -> Vec<AssignmentData<'_>> {
+    vec![
+        (
+            b(t),
+            b(t),
+            "lines".to_string(),
+            DataType::DataArray(DataSource::External),
+        ),
+        (
+            b(t),
+            b(t),
+            "status".to_string(),
+            DataType::DataString(DataSource::Integer),
+        ),
+        (
+            b(t),
+            b(t),
+            "output".to_string(),
+            DataType::DataString(DataSource::External),
+        ),
+        (
+            b(t),
+            b(t),
+            "stderr".to_string(),
+            DataType::DataString(DataSource::External),
+        ),
+        (
+            b(t),
+            b(t),
+            "stderr_lines".to_string(),
+            DataType::DataArray(DataSource::External),
+        ),
+    ]
+}
+
 /// `getModifiedVariables`.
 pub fn get_modified_variables(t: &Token) -> Vec<AssignmentData<'_>> {
     match &t.inner {
@@ -579,38 +615,7 @@ pub fn get_modified_variables(t: &Token) -> Vec<AssignmentData<'_>> {
             }
             _ => Vec::new(),
         },
-        TBatsTest(..) => vec![
-            (
-                b(t),
-                b(t),
-                "lines".to_string(),
-                DataType::DataArray(DataSource::External),
-            ),
-            (
-                b(t),
-                b(t),
-                "status".to_string(),
-                DataType::DataString(DataSource::Integer),
-            ),
-            (
-                b(t),
-                b(t),
-                "output".to_string(),
-                DataType::DataString(DataSource::External),
-            ),
-            (
-                b(t),
-                b(t),
-                "stderr".to_string(),
-                DataType::DataString(DataSource::External),
-            ),
-            (
-                b(t),
-                b(t),
-                "stderr_lines".to_string(),
-                DataType::DataArray(DataSource::External),
-            ),
-        ],
+        TBatsTest(..) => bats_variables(t),
         TcUnary(_, op, token) if op == "-v" => get_variable_for_test_dash_v(token)
             .map_or_else(Vec::new, |s| {
                 vec![(b(t), b(token), s, DataType::DataString(DataSource::Checked))]
