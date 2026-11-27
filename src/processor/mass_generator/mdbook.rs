@@ -84,6 +84,74 @@ pub struct MdbookProcessor {
     runs: Mutex<BTreeMap<PathBuf, Arc<OnceTool>>>,
 }
 
+/// The files mdbook writes whatever the chapters are, as paths relative to
+/// the output directory: the theme's static files, plus the print page, the
+/// search index and the fonts when `[output.html]` leaves them on.
+fn static_outputs(html: Option<&toml::Value>, book_toml: &Path) -> Result<BTreeSet<String>> {
+    if html
+        .and_then(|h| h.get("hash-files"))
+        .and_then(toml::Value::as_bool)
+        == Some(true)
+    {
+        anyhow::bail!(
+            "{}: [output.html].hash-files = true is not supported by the mdbook mass generator; omit it so mdbook writes deterministic filenames",
+            book_toml.display()
+        );
+    }
+    let print_enabled = html
+        .and_then(|h| h.get("print"))
+        .and_then(|p| p.get("enable"))
+        .and_then(toml::Value::as_bool)
+        .unwrap_or(true);
+    let search_enabled = html
+        .and_then(|h| h.get("search"))
+        .and_then(|s| s.get("enable"))
+        .and_then(toml::Value::as_bool)
+        .unwrap_or(true);
+    let copy_fonts = html
+        .and_then(|h| h.get("copy-fonts"))
+        .and_then(toml::Value::as_bool)
+        .unwrap_or(true);
+
+    let mut relative: BTreeSet<String> =
+        CORE_STATIC_FILES.iter().map(|s| (*s).to_string()).collect();
+    if print_enabled {
+        relative.insert("print.html".to_string());
+    }
+    if search_enabled {
+        for f in SEARCH_STATIC_FILES {
+            relative.insert((*f).to_string());
+        }
+    }
+    if copy_fonts {
+        for f in FONT_STATIC_FILES {
+            relative.insert((*f).to_string());
+        }
+    }
+    Ok(relative)
+}
+
+/// What the chapters pull in with `{{#include}}` and its relatives
+/// from outside `src/` (example code kept beside the book, say) is
+/// part of the pages too: unlisted, an edit to such a file left the
+/// book cached with the old text. An included file may include
+/// further ones, so each new one is scanned in turn.
+fn add_included_files(chapters: Vec<PathBuf>, sources: &mut Vec<PathBuf>) -> Result<()> {
+    let mut to_scan = chapters;
+    while let Some(file) = to_scan.pop() {
+        let content = fs::read_to_string(&file)
+            .with_context(|| format!("Failed to read {}", file.display()))?;
+        for included in included_files(&file, &content) {
+            // A file that is not there is mdbook's error to report.
+            if included.is_file() && !sources.contains(&included) {
+                sources.push(included.clone());
+                to_scan.push(included);
+            }
+        }
+    }
+    Ok(())
+}
+
 impl MdbookProcessor {
     pub const fn new(config: MdbookConfig) -> Self {
         Self {
@@ -118,46 +186,7 @@ impl MdbookProcessor {
         let output_dir = resolve_anchor_path(anchor_dir, &self.config.standard.output_dir);
 
         let html = doc.get("output").and_then(|o| o.get("html"));
-        if html
-            .and_then(|h| h.get("hash-files"))
-            .and_then(toml::Value::as_bool)
-            == Some(true)
-        {
-            anyhow::bail!(
-                "{}: [output.html].hash-files = true is not supported by the mdbook mass generator; omit it so mdbook writes deterministic filenames",
-                book_toml.display()
-            );
-        }
-        let print_enabled = html
-            .and_then(|h| h.get("print"))
-            .and_then(|p| p.get("enable"))
-            .and_then(toml::Value::as_bool)
-            .unwrap_or(true);
-        let search_enabled = html
-            .and_then(|h| h.get("search"))
-            .and_then(|s| s.get("enable"))
-            .and_then(toml::Value::as_bool)
-            .unwrap_or(true);
-        let copy_fonts = html
-            .and_then(|h| h.get("copy-fonts"))
-            .and_then(toml::Value::as_bool)
-            .unwrap_or(true);
-
-        let mut relative: BTreeSet<String> =
-            CORE_STATIC_FILES.iter().map(|s| (*s).to_string()).collect();
-        if print_enabled {
-            relative.insert("print.html".to_string());
-        }
-        if search_enabled {
-            for f in SEARCH_STATIC_FILES {
-                relative.insert((*f).to_string());
-            }
-        }
-        if copy_fonts {
-            for f in FONT_STATIC_FILES {
-                relative.insert((*f).to_string());
-            }
-        }
+        let mut relative = static_outputs(html, book_toml)?;
 
         let mut sources = vec![book_toml.to_path_buf()];
         for key in ["additional-css", "additional-js"] {
@@ -196,23 +225,7 @@ impl MdbookProcessor {
                 sources.push(file);
             }
         }
-        // What the chapters pull in with `{{#include}}` and its relatives
-        // from outside `src/` (example code kept beside the book, say) is
-        // part of the pages too: unlisted, an edit to such a file left the
-        // book cached with the old text. An included file may include
-        // further ones, so each new one is scanned in turn.
-        let mut to_scan = chapters;
-        while let Some(file) = to_scan.pop() {
-            let content = fs::read_to_string(&file)
-                .with_context(|| format!("Failed to read {}", file.display()))?;
-            for included in included_files(&file, &content) {
-                // A file that is not there is mdbook's error to report.
-                if included.is_file() && !sources.contains(&included) {
-                    sources.push(included.clone());
-                    to_scan.push(included);
-                }
-            }
-        }
+        add_included_files(chapters, &mut sources)?;
 
         // A custom theme: every file in it (templates, css, js, fonts) can
         // change every page, so each is a source of every output. The

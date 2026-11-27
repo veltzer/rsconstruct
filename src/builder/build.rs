@@ -972,6 +972,40 @@ impl Builder {
         )
     }
 
+    /// The status summary as one JSON object on stdout: a row for each
+    /// processor and the totals.
+    fn print_status_json(per_processor: &BTreeMap<&str, [usize; 4]>, counts: [usize; 4]) {
+        let processors_json: Vec<serde_json::Value> = per_processor
+            .iter()
+            .map(|(name, pc)| {
+                serde_json::json!({
+                    "name": name,
+                    "up_to_date": pc[0],
+                    "restorable": pc[1],
+                    "stale": pc[2],
+                    "new": pc[3],
+                    "total": pc[0] + pc[1] + pc[2] + pc[3],
+                    "builtin": crate::registries::processor::is_builtin(name),
+                    "rust": crate::registries::processor::is_rust(name),
+                })
+            })
+            .collect();
+        let json = serde_json::json!({
+            "processor": processors_json,
+            "totals": {
+                "up_to_date": counts[0],
+                "restorable": counts[1],
+                "stale": counts[2],
+                "new": counts[3],
+                "total": counts[0] + counts[1] + counts[2] + counts[3],
+            },
+        });
+        println!(
+            "{}",
+            serde_json::to_string_pretty(&json).expect(crate::errors::JSON_SERIALIZE)
+        );
+    }
+
     /// Print the status of each product, with per-processor and total summary.
     /// When `verbose` is false, only the per-processor and total summary lines are printed.
     fn print_product_status(
@@ -1027,35 +1061,7 @@ impl Builder {
         }
 
         if crate::json_output::is_json_mode() {
-            let processors_json: Vec<serde_json::Value> = per_processor
-                .iter()
-                .map(|(name, pc)| {
-                    serde_json::json!({
-                        "name": name,
-                        "up_to_date": pc[0],
-                        "restorable": pc[1],
-                        "stale": pc[2],
-                        "new": pc[3],
-                        "total": pc[0] + pc[1] + pc[2] + pc[3],
-                        "builtin": crate::registries::processor::is_builtin(name),
-                        "rust": crate::registries::processor::is_rust(name),
-                    })
-                })
-                .collect();
-            let json = serde_json::json!({
-                "processor": processors_json,
-                "totals": {
-                    "up_to_date": counts[0],
-                    "restorable": counts[1],
-                    "stale": counts[2],
-                    "new": counts[3],
-                    "total": counts[0] + counts[1] + counts[2] + counts[3],
-                },
-            });
-            println!(
-                "{}",
-                serde_json::to_string_pretty(&json).expect(crate::errors::JSON_SERIALIZE)
-            );
+            Self::print_status_json(&per_processor, counts);
             return;
         }
 

@@ -61,116 +61,73 @@ struct LanguageInfo {
     comment: &'static CommentStyle,
 }
 
+/// Every language sloc knows: the extensions (with their dot) or exact file
+/// names that select it, its display name, and how it writes comments.
+static LANGUAGES: &[(&[&str], &str, &CommentStyle)] = &[
+    (&[".rs"], "Rust", &COMMENT_C_STYLE),
+    (&[".c", ".h"], "C", &COMMENT_C_STYLE),
+    (
+        &[".cc", ".cpp", ".cxx", ".hh", ".hpp", ".hxx"],
+        "C++",
+        &COMMENT_C_STYLE,
+    ),
+    (&[".cs"], "C#", &COMMENT_C_STYLE),
+    (&[".java"], "Java", &COMMENT_C_STYLE),
+    (&[".js", ".mjs", ".cjs"], "JavaScript", &COMMENT_C_STYLE),
+    (&[".ts", ".mts", ".cts"], "TypeScript", &COMMENT_C_STYLE),
+    (&[".tsx", ".jsx"], "TSX/JSX", &COMMENT_C_STYLE),
+    (&[".go"], "Go", &COMMENT_C_STYLE),
+    (&[".swift"], "Swift", &COMMENT_C_STYLE),
+    (&[".kt", ".kts"], "Kotlin", &COMMENT_C_STYLE),
+    (&[".scala"], "Scala", &COMMENT_C_STYLE),
+    (&[".zig"], "Zig", &COMMENT_C_STYLE),
+    (&[".d"], "D", &COMMENT_C_STYLE),
+    (&[".css", ".scss", ".less"], "CSS", &COMMENT_C_STYLE),
+    (&[".proto"], "Protobuf", &COMMENT_C_STYLE),
+    (&[".py", ".pyi"], "Python", &COMMENT_HASH),
+    (&[".rb"], "Ruby", &COMMENT_HASH),
+    (&[".sh", ".bash", ".zsh"], "Shell", &COMMENT_HASH),
+    (&[".pl", ".pm"], "Perl", &COMMENT_HASH),
+    (&[".r", ".R"], "R", &COMMENT_HASH),
+    (&[".nim"], "Nim", &COMMENT_HASH),
+    (&[".jl"], "Julia", &COMMENT_HASH),
+    (&[".toml"], "TOML", &COMMENT_HASH),
+    (&[".yaml", ".yml"], "YAML", &COMMENT_HASH),
+    (&[".php"], "PHP", &COMMENT_C_STYLE),
+    (&[".lua"], "Lua", &COMMENT_DASH),
+    (&[".sql"], "SQL", &COMMENT_DASH),
+    (&[".hs"], "Haskell", &COMMENT_DASH),
+    (&[".ex", ".exs"], "Elixir", &COMMENT_HASH),
+    (&[".erl", ".hrl"], "Erlang", &COMMENT_PERCENT),
+    (&[".tex", ".sty"], "LaTeX", &COMMENT_PERCENT),
+    (&[".el", ".lisp", ".cl", ".scm"], "Lisp", &COMMENT_SEMICOLON),
+    (&[".html", ".htm"], "HTML", &COMMENT_HTML),
+    (&[".xml", ".xsl", ".xsd", ".svg"], "XML", &COMMENT_HTML),
+    (&[".vue"], "Vue", &COMMENT_HTML),
+    (&[".md", ".markdown"], "Markdown", &COMMENT_NONE),
+    (&[".json"], "JSON", &COMMENT_NONE),
+    (&[".tera"], "Tera", &COMMENT_C_STYLE),
+    (&[".mako", ".mak"], "Mako", &COMMENT_HASH),
+    (&[".cmake"], "CMake", &COMMENT_HASH),
+    (&[".gradle"], "Gradle", &COMMENT_C_STYLE),
+    // Matched by exact file name: these have no extension.
+    (&["Makefile"], "Makefile", &COMMENT_HASH),
+    (&["Dockerfile"], "Dockerfile", &COMMENT_HASH),
+    (&["CMakeLists.txt"], "CMake", &COMMENT_HASH),
+    (
+        &["Vagrantfile", "Rakefile", "Gemfile"],
+        "Ruby",
+        &COMMENT_HASH,
+    ),
+];
+
 fn language_map() -> HashMap<&'static str, LanguageInfo> {
     let mut m = HashMap::new();
-
-    let c_style = &COMMENT_C_STYLE;
-    let hash = &COMMENT_HASH;
-    let html = &COMMENT_HTML;
-    let dash = &COMMENT_DASH;
-    let percent = &COMMENT_PERCENT;
-    let semicolon = &COMMENT_SEMICOLON;
-    let none = &COMMENT_NONE;
-
-    let entries: &[(&[&str], &str, &CommentStyle)] = &[
-        (&[".rs"], "Rust", c_style),
-        (&[".c", ".h"], "C", c_style),
-        (
-            &[".cc", ".cpp", ".cxx", ".hh", ".hpp", ".hxx"],
-            "C++",
-            c_style,
-        ),
-        (&[".cs"], "C#", c_style),
-        (&[".java"], "Java", c_style),
-        (&[".js", ".mjs", ".cjs"], "JavaScript", c_style),
-        (&[".ts", ".mts", ".cts"], "TypeScript", c_style),
-        (&[".tsx", ".jsx"], "TSX/JSX", c_style),
-        (&[".go"], "Go", c_style),
-        (&[".swift"], "Swift", c_style),
-        (&[".kt", ".kts"], "Kotlin", c_style),
-        (&[".scala"], "Scala", c_style),
-        (&[".zig"], "Zig", c_style),
-        (&[".d"], "D", c_style),
-        (&[".css", ".scss", ".less"], "CSS", c_style),
-        (&[".proto"], "Protobuf", c_style),
-        (&[".py", ".pyi"], "Python", hash),
-        (&[".rb"], "Ruby", hash),
-        (&[".sh", ".bash", ".zsh"], "Shell", hash),
-        (&[".pl", ".pm"], "Perl", hash),
-        (&[".r", ".R"], "R", hash),
-        (&[".nim"], "Nim", hash),
-        (&[".jl"], "Julia", hash),
-        (&[".toml"], "TOML", hash),
-        (&[".yaml", ".yml"], "YAML", hash),
-        (&[".php"], "PHP", c_style),
-        (&[".lua"], "Lua", dash),
-        (&[".sql"], "SQL", dash),
-        (&[".hs"], "Haskell", dash),
-        (&[".ex", ".exs"], "Elixir", hash),
-        (&[".erl", ".hrl"], "Erlang", percent),
-        (&[".tex", ".sty"], "LaTeX", percent),
-        (&[".el", ".lisp", ".cl", ".scm"], "Lisp", semicolon),
-        (&[".html", ".htm"], "HTML", html),
-        (&[".xml", ".xsl", ".xsd", ".svg"], "XML", html),
-        (&[".vue"], "Vue", html),
-        (&[".md", ".markdown"], "Markdown", none),
-        (&[".json"], "JSON", none),
-        (&[".tera"], "Tera", c_style),
-        (&[".mako", ".mak"], "Mako", hash),
-        (&[".cmake"], "CMake", hash),
-        (&[".gradle"], "Gradle", c_style),
-    ];
-
-    for (exts, name, comment) in entries {
-        for ext in *exts {
-            m.insert(*ext, LanguageInfo { name, comment });
+    for (keys, name, comment) in LANGUAGES {
+        for key in *keys {
+            m.insert(*key, LanguageInfo { name, comment });
         }
     }
-
-    // Special filename mappings (no extension dot prefix — matched by exact filename)
-    m.insert(
-        "Makefile",
-        LanguageInfo {
-            name: "Makefile",
-            comment: hash,
-        },
-    );
-    m.insert(
-        "Dockerfile",
-        LanguageInfo {
-            name: "Dockerfile",
-            comment: hash,
-        },
-    );
-    m.insert(
-        "CMakeLists.txt",
-        LanguageInfo {
-            name: "CMake",
-            comment: hash,
-        },
-    );
-    m.insert(
-        "Vagrantfile",
-        LanguageInfo {
-            name: "Ruby",
-            comment: hash,
-        },
-    );
-    m.insert(
-        "Rakefile",
-        LanguageInfo {
-            name: "Ruby",
-            comment: hash,
-        },
-    );
-    m.insert(
-        "Gemfile",
-        LanguageInfo {
-            name: "Ruby",
-            comment: hash,
-        },
-    );
-
     m
 }
 
@@ -251,6 +208,30 @@ struct LanguageStats {
     code: usize,
 }
 
+/// The basic COCOMO estimate (organic mode) for `total_code` lines, when asked for.
+fn cocomo_estimate(cocomo: bool, total_code: usize, salary: u64) -> Option<SlocCocomoEstimate> {
+    if cocomo {
+        let ksloc = crate::numeric::usize_to_f64(total_code) / 1000.0;
+        let effort = 2.4 * ksloc.powf(1.05);
+        let schedule = 2.5 * effort.powf(0.38);
+        let people = if schedule > 0.0 {
+            effort / schedule
+        } else {
+            0.0
+        };
+        let cost = effort * (crate::numeric::u64_to_f64(salary) / 12.0);
+        Some(SlocCocomoEstimate {
+            effort_person_months: effort,
+            schedule_months: schedule,
+            people,
+            cost,
+            salary,
+        })
+    } else {
+        None
+    }
+}
+
 pub fn run_sloc(file_index: &FileIndex, cocomo: bool, salary: u64) -> Result<()> {
     let lang_map = language_map();
     let mut stats: HashMap<&str, LanguageStats> = HashMap::new();
@@ -300,26 +281,7 @@ pub fn run_sloc(file_index: &FileIndex, cocomo: bool, salary: u64) -> Result<()>
     let total_code: usize = sorted.iter().map(|(_, s)| s.code).sum();
 
     // COCOMO
-    let cocomo_estimate = if cocomo {
-        let ksloc = crate::numeric::usize_to_f64(total_code) / 1000.0;
-        let effort = 2.4 * ksloc.powf(1.05);
-        let schedule = 2.5 * effort.powf(0.38);
-        let people = if schedule > 0.0 {
-            effort / schedule
-        } else {
-            0.0
-        };
-        let cost = effort * (crate::numeric::u64_to_f64(salary) / 12.0);
-        Some(SlocCocomoEstimate {
-            effort_person_months: effort,
-            schedule_months: schedule,
-            people,
-            cost,
-            salary,
-        })
-    } else {
-        None
-    };
+    let cocomo_estimate = cocomo_estimate(cocomo, total_code, salary);
 
     if json_output::is_json_mode() {
         let output = SlocOutput {

@@ -78,6 +78,11 @@ pub struct ZolaProcessor {
     tool_run: OnceTool,
 }
 
+/// Mark `path` as an output zola renders from the site's sources.
+fn mark_rendered(plan: &mut PlanMap, path: String) {
+    plan.entry(path).or_default().rendered = true;
+}
+
 impl ZolaProcessor {
     pub const fn new(config: ZolaConfig) -> Self {
         Self {
@@ -1032,107 +1037,23 @@ impl Site {
         self.refuse_image_processing()?;
         let rendered_sources: Vec<PathBuf> = self.rendered_sources()?.into_iter().collect();
         let mut plan: PlanMap = BTreeMap::new();
-        let rendered = |plan: &mut PlanMap, path: String| {
-            plan.entry(path).or_default().rendered = true;
-        };
 
-        rendered(&mut plan, "404.html".to_string());
+        mark_rendered(&mut plan, "404.html".to_string());
         if self.config.files.generate_sitemap {
-            rendered(&mut plan, "sitemap.xml".to_string());
+            mark_rendered(&mut plan, "sitemap.xml".to_string());
         }
         if self.config.files.generate_robots_txt {
-            rendered(&mut plan, "robots.txt".to_string());
+            mark_rendered(&mut plan, "robots.txt".to_string());
         }
 
-        // Aliases of every page and section, rendered or not.
-        let aliases = self
-            .pages
-            .iter()
-            .flat_map(|p| &p.meta.aliases)
-            .chain(self.sections.iter().flat_map(|s| &s.meta.aliases));
-        for alias in aliases {
-            let mut path = alias.trim_start_matches('/').to_string();
-            if !has_extension(&path, "html") {
-                if !path.is_empty() && !path.ends_with('/') {
-                    path.push('/');
-                }
-                path.push_str("index.html");
-            }
-            rendered(&mut plan, path);
-        }
+        self.plan_aliases(&mut plan);
 
         let languages = self.config.all_languages();
-        let mut rendered_pages: BTreeSet<usize> = BTreeSet::new();
-        for section in &self.sections {
-            rendered_pages.extend(section.pages.iter().copied());
-            rendered_pages.extend(section.hidden_pages.iter().copied());
-            if section.meta.generate_feeds {
-                for feed in &languages[&section.lang].feed_filenames {
-                    rendered(
-                        &mut plan,
-                        format!("{}{feed}", section.path_without_slash(&self.config)),
-                    );
-                }
-            }
-            let base = section.base(&self.config);
-            if let Some(dir) = section.file.as_ref().and_then(|f| f.parent()) {
-                for asset in &section.assets {
-                    plan.entry(join_path(&base, &relative_slash_path(dir, asset)))
-                        .or_default()
-                        .files
-                        .insert(asset.clone());
-                }
-            }
-            if !section.meta.status.render {
-                continue;
-            }
-            match section.meta.paginate_by {
-                Some(per_page) if per_page > 0 => {
-                    for path in pager_paths(
-                        &base,
-                        &section.meta.paginate_path,
-                        section.pages.len(),
-                        per_page,
-                    ) {
-                        rendered(&mut plan, path);
-                    }
-                }
-                _ => rendered(&mut plan, join_path(&base, "index.html")),
-            }
-        }
-        for (index, page) in self.pages.iter().enumerate() {
-            if page.meta.render && !page.in_a_section {
-                rendered_pages.insert(index);
-            }
-        }
-        for &index in &rendered_pages {
-            let page = &self.pages[index];
-            rendered(&mut plan, format!("{}index.html", page.out_dir));
-            for asset in &page.assets {
-                plan.entry(format!(
-                    "{}{}",
-                    page.out_dir,
-                    relative_slash_path(&page.asset_root, asset)
-                ))
-                .or_default()
-                .files
-                .insert(asset.clone());
-            }
-        }
+        let rendered_pages = self.plan_sections(&languages, &mut plan);
+        self.plan_pages(rendered_pages, &mut plan);
 
         self.plan_taxonomies(&languages, &mut plan)?;
-
-        for (lang, options) in &languages {
-            if options.generate_feeds {
-                for feed in &options.feed_filenames {
-                    let path = self
-                        .config
-                        .lang_prefix(lang)
-                        .map_or_else(|| feed.clone(), |prefix| format!("{prefix}/{feed}"));
-                    rendered(&mut plan, path);
-                }
-            }
-        }
+        self.plan_feeds(&languages, &mut plan);
 
         self.plan_search_index(&languages, &mut plan)?;
         self.plan_highlight_css(&mut plan);
@@ -1158,6 +1079,112 @@ impl Site {
                 (path, files)
             })
             .collect())
+    }
+
+    /// The aliases of every page and section, rendered or not.
+    fn plan_aliases(&self, plan: &mut PlanMap) {
+        let aliases = self
+            .pages
+            .iter()
+            .flat_map(|p| &p.meta.aliases)
+            .chain(self.sections.iter().flat_map(|s| &s.meta.aliases));
+        for alias in aliases {
+            let mut path = alias.trim_start_matches('/').to_string();
+            if !has_extension(&path, "html") {
+                if !path.is_empty() && !path.ends_with('/') {
+                    path.push('/');
+                }
+                path.push_str("index.html");
+            }
+            mark_rendered(plan, path);
+        }
+    }
+
+    /// Every section: its feeds, its assets and its index or pager pages.
+    /// Returns the pages the sections render.
+    fn plan_sections(
+        &self,
+        languages: &BTreeMap<String, LanguageOptions>,
+        plan: &mut PlanMap,
+    ) -> BTreeSet<usize> {
+        let mut rendered_pages: BTreeSet<usize> = BTreeSet::new();
+        for section in &self.sections {
+            rendered_pages.extend(section.pages.iter().copied());
+            rendered_pages.extend(section.hidden_pages.iter().copied());
+            if section.meta.generate_feeds {
+                for feed in &languages[&section.lang].feed_filenames {
+                    mark_rendered(
+                        plan,
+                        format!("{}{feed}", section.path_without_slash(&self.config)),
+                    );
+                }
+            }
+            let base = section.base(&self.config);
+            if let Some(dir) = section.file.as_ref().and_then(|f| f.parent()) {
+                for asset in &section.assets {
+                    plan.entry(join_path(&base, &relative_slash_path(dir, asset)))
+                        .or_default()
+                        .files
+                        .insert(asset.clone());
+                }
+            }
+            if !section.meta.status.render {
+                continue;
+            }
+            match section.meta.paginate_by {
+                Some(per_page) if per_page > 0 => {
+                    for path in pager_paths(
+                        &base,
+                        &section.meta.paginate_path,
+                        section.pages.len(),
+                        per_page,
+                    ) {
+                        mark_rendered(plan, path);
+                    }
+                }
+                _ => mark_rendered(plan, join_path(&base, "index.html")),
+            }
+        }
+        rendered_pages
+    }
+
+    /// The rendered pages and their assets: those of the sections plus the
+    /// pages that render outside any section.
+    fn plan_pages(&self, mut rendered_pages: BTreeSet<usize>, plan: &mut PlanMap) {
+        for (index, page) in self.pages.iter().enumerate() {
+            if page.meta.render && !page.in_a_section {
+                rendered_pages.insert(index);
+            }
+        }
+        for &index in &rendered_pages {
+            let page = &self.pages[index];
+            mark_rendered(plan, format!("{}index.html", page.out_dir));
+            for asset in &page.assets {
+                plan.entry(format!(
+                    "{}{}",
+                    page.out_dir,
+                    relative_slash_path(&page.asset_root, asset)
+                ))
+                .or_default()
+                .files
+                .insert(asset.clone());
+            }
+        }
+    }
+
+    /// The site-wide feed of every language that generates one.
+    fn plan_feeds(&self, languages: &BTreeMap<String, LanguageOptions>, plan: &mut PlanMap) {
+        for (lang, options) in languages {
+            if options.generate_feeds {
+                for feed in &options.feed_filenames {
+                    let path = self
+                        .config
+                        .lang_prefix(lang)
+                        .map_or_else(|| feed.clone(), |prefix| format!("{prefix}/{feed}"));
+                    mark_rendered(plan, path);
+                }
+            }
+        }
     }
 
     fn plan_taxonomies(

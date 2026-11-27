@@ -488,6 +488,40 @@ impl Executor<'_> {
         }
     }
 
+    /// The per-processor product totals the progress display counts against.
+    fn progress_counters(graph: &BuildGraph, order: &[usize]) -> ProgressCounters {
+        let mut total_per_processor: HashMap<String, usize> = HashMap::new();
+        for &product_id in order {
+            let product = graph
+                .get_product(product_id)
+                .expect(errors::INVALID_PRODUCT_ID);
+            *total_per_processor
+                .entry(product.processor.clone())
+                .or_insert(0) += 1;
+        }
+
+        ProgressCounters {
+            total_per_processor: Arc::new(total_per_processor),
+            current_per_processor: Arc::new(Mutex::new(HashMap::new())),
+        }
+    }
+
+    /// The state the worker threads share for one run, all of it empty.
+    fn shared_state(global_total: usize) -> SharedState {
+        SharedState {
+            stats: Arc::new(Mutex::new(HashMap::new())),
+            errors: Arc::new(Mutex::new(Vec::new())),
+            failed_products: Arc::new(Mutex::new(HashSet::new())),
+            blocked: Arc::new(AtomicUsize::new(0)),
+            failed_messages: Arc::new(Mutex::new(Vec::new())),
+            failed_processors: Arc::new(Mutex::new(HashSet::new())),
+            changed: Arc::new(Mutex::new(Vec::new())),
+            attempted: Arc::new(Mutex::new(HashSet::new())),
+            global_current: Arc::new(AtomicUsize::new(0)),
+            global_total,
+        }
+    }
+
     /// Execute products in parallel as their dependencies allow.
     ///
     /// A coordinator (this thread) tracks which products are ready —
@@ -519,19 +553,7 @@ impl Executor<'_> {
             .collect();
 
         // Count total products per processor for progress display
-        let mut total_per_processor: HashMap<String, usize> = HashMap::new();
-        for &product_id in order {
-            let product = graph
-                .get_product(product_id)
-                .expect(errors::INVALID_PRODUCT_ID);
-            *total_per_processor
-                .entry(product.processor.clone())
-                .or_insert(0) += 1;
-        }
-        let counters = ProgressCounters {
-            total_per_processor: Arc::new(total_per_processor),
-            current_per_processor: Arc::new(Mutex::new(HashMap::new())),
-        };
+        let counters = Self::progress_counters(graph, order);
         let global_total = order.len();
 
         // Use the caller-provided classification for progress bar sizing.
@@ -543,18 +565,7 @@ impl Executor<'_> {
             self.verbose || json_output::is_json_mode() || crate::runtime_flags::quiet(),
         );
 
-        let shared = SharedState {
-            stats: Arc::new(Mutex::new(HashMap::new())),
-            errors: Arc::new(Mutex::new(Vec::new())),
-            failed_products: Arc::new(Mutex::new(HashSet::new())),
-            blocked: Arc::new(AtomicUsize::new(0)),
-            failed_messages: Arc::new(Mutex::new(Vec::new())),
-            failed_processors: Arc::new(Mutex::new(HashSet::new())),
-            changed: Arc::new(Mutex::new(Vec::new())),
-            attempted: Arc::new(Mutex::new(HashSet::new())),
-            global_current: Arc::new(AtomicUsize::new(0)),
-            global_total,
-        };
+        let shared = Self::shared_state(global_total);
 
         // max_jobs caps, enforced by the queue when it hands out units.
         let caps: HashMap<String, usize> = self

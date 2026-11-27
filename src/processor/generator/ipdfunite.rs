@@ -87,47 +87,21 @@ impl IpdfuniteProcessor {
     }
 }
 
-/// Merge multiple PDF files into a single output using lopdf.
-/// Follows the lopdf merge example: renumber objects, collect pages and objects,
-/// then assemble a new document with a unified catalog and pages tree.
-fn merge_pdfs(inputs: &[PathBuf], output: &Path) -> Result<()> {
-    use lopdf::{Document, Object, ObjectId};
-
-    let mut documents: Vec<Document> = Vec::with_capacity(inputs.len());
-    for input in inputs {
-        let doc = Document::load(input)
-            .with_context(|| format!("Failed to load PDF: {}", input.display()))?;
-        documents.push(doc);
-    }
-
-    let mut max_id = 1;
-    let mut documents_pages: BTreeMap<ObjectId, Object> = BTreeMap::new();
-    let mut documents_objects: BTreeMap<ObjectId, Object> = BTreeMap::new();
-    let mut document = Document::with_version("1.5");
-
-    for mut doc in documents {
-        doc.renumber_objects_with(max_id);
-        max_id = doc.max_id + 1;
-
-        for object_id in doc.get_pages().into_values() {
-            let obj = doc
-                .get_object(object_id)
-                .with_context(|| {
-                    format!(
-                        "PDF object {object_id:?} referenced by Pages tree not found in document"
-                    )
-                })?
-                .to_owned();
-            documents_pages.insert(object_id, obj);
-        }
-        documents_objects.extend(doc.objects);
-    }
-
+/// Find the `Catalog` and the merged `Pages` tree among the collected
+/// objects, and copy every other object, pages aside, into `document`.
+fn take_catalog_and_pages(
+    documents_objects: &BTreeMap<lopdf::ObjectId, lopdf::Object>,
+    document: &mut lopdf::Document,
+) -> Result<(
+    (lopdf::ObjectId, lopdf::Object),
+    (lopdf::ObjectId, lopdf::Object),
+)> {
+    use lopdf::{Object, ObjectId};
     // Find "Catalog" and "Pages" objects from the collected objects
     let mut catalog_object: Option<(ObjectId, Object)> = None;
     let mut pages_object: Option<(ObjectId, Object)> = None;
 
-    for (object_id, object) in &documents_objects {
+    for (object_id, object) in documents_objects {
         let type_name = object
             .as_dict()
             .ok()
@@ -164,6 +138,46 @@ fn merge_pdfs(inputs: &[PathBuf], output: &Path) -> Result<()> {
 
     let catalog_object = catalog_object.context("No PDF Catalog found in input documents")?;
     let pages_object = pages_object.context("No PDF Pages tree found in input documents")?;
+    Ok((catalog_object, pages_object))
+}
+
+/// Merge multiple PDF files into a single output using lopdf.
+/// Follows the lopdf merge example: renumber objects, collect pages and objects,
+/// then assemble a new document with a unified catalog and pages tree.
+fn merge_pdfs(inputs: &[PathBuf], output: &Path) -> Result<()> {
+    use lopdf::{Document, Object, ObjectId};
+
+    let mut documents: Vec<Document> = Vec::with_capacity(inputs.len());
+    for input in inputs {
+        let doc = Document::load(input)
+            .with_context(|| format!("Failed to load PDF: {}", input.display()))?;
+        documents.push(doc);
+    }
+
+    let mut max_id = 1;
+    let mut documents_pages: BTreeMap<ObjectId, Object> = BTreeMap::new();
+    let mut documents_objects: BTreeMap<ObjectId, Object> = BTreeMap::new();
+    let mut document = Document::with_version("1.5");
+
+    for mut doc in documents {
+        doc.renumber_objects_with(max_id);
+        max_id = doc.max_id + 1;
+
+        for object_id in doc.get_pages().into_values() {
+            let obj = doc
+                .get_object(object_id)
+                .with_context(|| {
+                    format!(
+                        "PDF object {object_id:?} referenced by Pages tree not found in document"
+                    )
+                })?
+                .to_owned();
+            documents_pages.insert(object_id, obj);
+        }
+        documents_objects.extend(doc.objects);
+    }
+
+    let (catalog_object, pages_object) = take_catalog_and_pages(&documents_objects, &mut document)?;
 
     // Set page parents and insert into document
     for (object_id, object) in &documents_pages {

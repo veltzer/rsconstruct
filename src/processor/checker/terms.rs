@@ -900,6 +900,43 @@ pub fn fix_all(config: &TermsConfig, remove_non_terms: bool, warn_symlinks: bool
     Ok(())
 }
 
+/// Copy the term files that exist in `dest` but not in `src` back to `src`.
+/// Returns how many were copied.
+fn copy_new_terms_to_source(src: &Path, dest: &Path) -> Result<usize> {
+    let mut copied_count = 0;
+    for entry in crate::errors::ctx(
+        fs::read_dir(dest),
+        &format!("Failed to read destination directory {}", dest.display()),
+    )? {
+        let entry = crate::errors::ctx(
+            entry,
+            &format!(
+                "Failed to read entry in destination directory {}",
+                dest.display()
+            ),
+        )?;
+        let path = entry.path();
+        if path.extension().is_none_or(|e| e != "txt") {
+            continue;
+        }
+        let filename = entry.file_name();
+        let src_path = src.join(&filename);
+        if !src_path.exists() {
+            crate::errors::ctx(
+                fs::copy(&path, &src_path),
+                &format!(
+                    "Failed to copy {} to {}",
+                    path.display(),
+                    src_path.display()
+                ),
+            )?;
+            copied_count += 1;
+            println!("  Copied to source: {}", filename.to_string_lossy());
+        }
+    }
+    Ok(copied_count)
+}
+
 /// Merge terms from another project's terms directory into the current one.
 /// For each .txt file in `source_dir`:
 ///   - If a file with the same name exists in `dir_terms_unambiguous`, merge (union) and sort the terms.
@@ -992,36 +1029,7 @@ pub fn merge_terms(config: &TermsConfig, source_dir: &str) -> Result<()> {
     }
 
     // Copy files that exist in destination but not in source back to source
-    for entry in crate::errors::ctx(
-        fs::read_dir(dest),
-        &format!("Failed to read destination directory {}", dest.display()),
-    )? {
-        let entry = crate::errors::ctx(
-            entry,
-            &format!(
-                "Failed to read entry in destination directory {}",
-                dest.display()
-            ),
-        )?;
-        let path = entry.path();
-        if path.extension().is_none_or(|e| e != "txt") {
-            continue;
-        }
-        let filename = entry.file_name();
-        let src_path = src.join(&filename);
-        if !src_path.exists() {
-            crate::errors::ctx(
-                fs::copy(&path, &src_path),
-                &format!(
-                    "Failed to copy {} to {}",
-                    path.display(),
-                    src_path.display()
-                ),
-            )?;
-            copied_count += 1;
-            println!("  Copied to source: {}", filename.to_string_lossy());
-        }
-    }
+    copied_count += copy_new_terms_to_source(src, dest)?;
 
     println!("Done. Merged {merged_count} file(s), copied {copied_count} new file(s).");
 

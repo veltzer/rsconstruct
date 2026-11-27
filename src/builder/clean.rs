@@ -308,44 +308,15 @@ impl Builder {
         Ok(())
     }
 
-    /// Remove files not tracked by git and not known as `RSConstruct` build outputs.
-    /// Lists them when `force` is false, deletes them when it is true. The
-    /// CLI deletes unless `--dry-run` is given.
-    pub fn clean_unknown(
-        &self,
-        ctx: &crate::build_context::BuildContext,
-        force: bool,
-        verbose: bool,
+    /// The files in the project tree that git does not track and no product
+    /// declares as an output.
+    fn walk_unknown_files(
         respect_gitignore: bool,
-    ) -> Result<()> {
+        git_tracked: &std::collections::BTreeSet<PathBuf>,
+        rsconstruct_outputs: &HashSet<PathBuf>,
+        rsconstruct_output_dirs: &[PathBuf],
+    ) -> Result<Vec<PathBuf>> {
         use ignore::WalkBuilder;
-
-        if !std::path::Path::new(".git").exists() {
-            bail!("Not a git repository. clean unknown requires a git repository.");
-        }
-
-        // Build graph to discover RSConstruct outputs
-        let processors = self.create_processors()?;
-        let graph = self.build_graph_for_clean_with_processors(ctx, &processors)?;
-
-        // Collect RSConstruct-known output files
-        let mut rsconstruct_outputs: HashSet<PathBuf> = HashSet::new();
-        let mut rsconstruct_output_dirs: Vec<PathBuf> = Vec::new();
-        for product in graph.products() {
-            for output in &product.outputs {
-                rsconstruct_outputs.insert(output.clone());
-            }
-            for dir in &product.output_dirs {
-                rsconstruct_output_dirs.push(dir.as_ref().clone());
-            }
-        }
-
-        // Get git-tracked files. `git_tracked` reads `ls-files -z`: the
-        // line-oriented form quotes and octal-escapes any name with a
-        // non-ASCII or special character, which then matches no walked path
-        // and gets a tracked file deleted as "unknown".
-        let git_tracked = crate::orphans::git_tracked(ctx)?;
-
         // Walk the project tree, respecting .gitignore so that intentionally
         // ignored files (IDE configs, virtualenvs, *.pyc, etc.) are not flagged
         // as unknown. RSConstruct outputs in gitignored directories (e.g. out/)
@@ -419,6 +390,51 @@ impl Builder {
 
             unknown_files.push(path);
         }
+        Ok(unknown_files)
+    }
+
+    /// Remove files not tracked by git and not known as `RSConstruct` build outputs.
+    /// Lists them when `force` is false, deletes them when it is true. The
+    /// CLI deletes unless `--dry-run` is given.
+    pub fn clean_unknown(
+        &self,
+        ctx: &crate::build_context::BuildContext,
+        force: bool,
+        verbose: bool,
+        respect_gitignore: bool,
+    ) -> Result<()> {
+        if !std::path::Path::new(".git").exists() {
+            bail!("Not a git repository. clean unknown requires a git repository.");
+        }
+
+        // Build graph to discover RSConstruct outputs
+        let processors = self.create_processors()?;
+        let graph = self.build_graph_for_clean_with_processors(ctx, &processors)?;
+
+        // Collect RSConstruct-known output files
+        let mut rsconstruct_outputs: HashSet<PathBuf> = HashSet::new();
+        let mut rsconstruct_output_dirs: Vec<PathBuf> = Vec::new();
+        for product in graph.products() {
+            for output in &product.outputs {
+                rsconstruct_outputs.insert(output.clone());
+            }
+            for dir in &product.output_dirs {
+                rsconstruct_output_dirs.push(dir.as_ref().clone());
+            }
+        }
+
+        // Get git-tracked files. `git_tracked` reads `ls-files -z`: the
+        // line-oriented form quotes and octal-escapes any name with a
+        // non-ASCII or special character, which then matches no walked path
+        // and gets a tracked file deleted as "unknown".
+        let git_tracked = crate::orphans::git_tracked(ctx)?;
+
+        let mut unknown_files = Self::walk_unknown_files(
+            respect_gitignore,
+            &git_tracked,
+            &rsconstruct_outputs,
+            &rsconstruct_output_dirs,
+        )?;
 
         unknown_files.sort();
 

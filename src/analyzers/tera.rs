@@ -261,6 +261,71 @@ fn add_dep(paths: &mut Vec<PathBuf>, seen: &mut HashSet<PathBuf>, path: PathBuf)
     }
 }
 
+/// The files a template reads through the loader functions and `version_str`.
+fn add_loader_deps(
+    content: &str,
+    file_index: &FileIndex,
+    paths: &mut Vec<PathBuf>,
+    seen: &mut HashSet<PathBuf>,
+) {
+    for body in calls(content, LOADER_FUNCTIONS) {
+        if let Some(path_str) = string_arg(body, "path")
+            && let Some(candidate) = resolve_project_path(path_str, file_index)
+        {
+            add_dep(paths, seen, candidate);
+        }
+    }
+    // version_str() / version_str(path="...") — reads a `tup` from the file
+    // at `path`, defaulting to config/version.py when called without one. A
+    // `path` that is not a literal cannot be tracked.
+    for body in calls(content, &["version_str"]) {
+        let path_str = match arg(body, "path") {
+            None => VERSION_STR_DEFAULT_PATH,
+            Some(raw) => match string_literal(raw) {
+                Some(literal) => literal,
+                None => continue,
+            },
+        };
+        if let Some(candidate) = resolve_project_path(path_str, file_index) {
+            add_dep(paths, seen, candidate);
+        }
+    }
+}
+
+/// The `glob` and `git_count_files` calls of a template: the set of paths
+/// each one resolves to goes into the cache hash.
+fn hash_path_sets(
+    ctx: &crate::build_context::BuildContext,
+    content: &str,
+    hash_pieces: &mut Vec<String>,
+) -> Result<()> {
+    // 2) glob(pattern="...") — contribute only the resolved path set to the
+    // cache hash. The matched files are NOT added as inputs: the template
+    // consumes the list of *names*, not their content, so editing one of
+    // those files must not invalidate this product. Adding/removing/renaming
+    // a matching file changes the path-set fingerprint and rebuilds.
+    for body in calls(content, &["glob"]) {
+        let Some(pattern) = string_arg(body, "pattern") else {
+            continue;
+        };
+        let matched = expand_glob(pattern)?;
+        hash_pieces.push(format!("glob:{pattern}"));
+        hash_pieces.push(format!("glob_resolved:{}", matched.join("\n")));
+    }
+
+    // 3) git_count_files(pattern="...") — same path-set-only semantics as
+    // glob. Only the count/identity of tracked files matters, not content.
+    for body in calls(content, &["git_count_files"]) {
+        let Some(pattern) = string_arg(body, "pattern") else {
+            continue;
+        };
+        let matched = git_ls_files(ctx, pattern);
+        hash_pieces.push(format!("git_count:{pattern}"));
+        hash_pieces.push(format!("git_count_resolved:{}", matched.join("\n")));
+    }
+    Ok(())
+}
+
 /// Scan `source` for dependencies and recurse into any `{% include %}`,
 /// `{% import %}`, or `{% extends %}` referenced templates so that
 /// `glob/git_count_files/shell_output` calls in *any* transitively-included
@@ -331,53 +396,9 @@ fn scan_template_recursive(
             scanned,
         )?;
     }
-    for body in calls(&content, LOADER_FUNCTIONS) {
-        if let Some(path_str) = string_arg(body, "path")
-            && let Some(candidate) = resolve_project_path(path_str, file_index)
-        {
-            add_dep(paths, seen, candidate);
-        }
-    }
-    // version_str() / version_str(path="...") — reads a `tup` from the file
-    // at `path`, defaulting to config/version.py when called without one. A
-    // `path` that is not a literal cannot be tracked.
-    for body in calls(&content, &["version_str"]) {
-        let path_str = match arg(body, "path") {
-            None => VERSION_STR_DEFAULT_PATH,
-            Some(raw) => match string_literal(raw) {
-                Some(literal) => literal,
-                None => continue,
-            },
-        };
-        if let Some(candidate) = resolve_project_path(path_str, file_index) {
-            add_dep(paths, seen, candidate);
-        }
-    }
+    add_loader_deps(&content, file_index, paths, seen);
 
-    // 2) glob(pattern="...") — contribute only the resolved path set to the
-    // cache hash. The matched files are NOT added as inputs: the template
-    // consumes the list of *names*, not their content, so editing one of
-    // those files must not invalidate this product. Adding/removing/renaming
-    // a matching file changes the path-set fingerprint and rebuilds.
-    for body in calls(&content, &["glob"]) {
-        let Some(pattern) = string_arg(body, "pattern") else {
-            continue;
-        };
-        let matched = expand_glob(pattern)?;
-        hash_pieces.push(format!("glob:{pattern}"));
-        hash_pieces.push(format!("glob_resolved:{}", matched.join("\n")));
-    }
-
-    // 3) git_count_files(pattern="...") — same path-set-only semantics as
-    // glob. Only the count/identity of tracked files matters, not content.
-    for body in calls(&content, &["git_count_files"]) {
-        let Some(pattern) = string_arg(body, "pattern") else {
-            continue;
-        };
-        let matched = git_ls_files(ctx, pattern);
-        hash_pieces.push(format!("git_count:{pattern}"));
-        hash_pieces.push(format!("git_count_resolved:{}", matched.join("\n")));
-    }
+    hash_path_sets(ctx, &content, hash_pieces)?;
 
     // 3b) grep_count(pattern="<regex>", glob="<file_glob>") — content-tracked.
     // Both the regex and the resolved file set go into the hash, AND the

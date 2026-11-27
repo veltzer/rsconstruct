@@ -272,6 +272,44 @@ fn planned_cargo_artifacts(
     Ok(out)
 }
 
+/// The files the library target produces, one for each of its crate types.
+fn push_lib_artifacts(lib_table: Option<&toml::Table>, pkg_name: &str, out: &mut Vec<String>) {
+    let raw_name = lib_table
+        .and_then(|t| t.get("name"))
+        .and_then(toml::Value::as_str)
+        .unwrap_or(pkg_name);
+    let lib_name = raw_name.replace('-', "_");
+    let proc_macro = lib_table
+        .and_then(|t| t.get("proc-macro").or_else(|| t.get("proc_macro")))
+        .and_then(toml::Value::as_bool)
+        .unwrap_or(false);
+    let crate_types: Vec<&str> = lib_table
+        .and_then(|t| t.get("crate-type").or_else(|| t.get("crate_type")))
+        .and_then(toml::Value::as_array)
+        .map_or_else(
+            || {
+                if proc_macro {
+                    vec!["proc-macro"]
+                } else {
+                    vec!["rlib"]
+                }
+            },
+            |arr| arr.iter().filter_map(toml::Value::as_str).collect(),
+        );
+    for ct in crate_types {
+        match ct {
+            "lib" | "rlib" => out.push(format!("lib{lib_name}.rlib")),
+            "staticlib" => out.push(format!("lib{lib_name}.a")),
+            "dylib" | "cdylib" | "proc-macro" => out.push(format!(
+                "{}{lib_name}{}",
+                std::env::consts::DLL_PREFIX,
+                std::env::consts::DLL_SUFFIX
+            )),
+            _ => {}
+        }
+    }
+}
+
 /// The artifacts of the `[package]` in `doc` (none for a virtual manifest).
 fn collect_package_artifacts(
     cargo_toml: &Path,
@@ -299,40 +337,7 @@ fn collect_package_artifacts(
             || (autolib
                 && crate::processor::resolve_anchor_path(crate_dir, "src/lib.rs").is_file());
         if has_lib {
-            let raw_name = lib_table
-                .and_then(|t| t.get("name"))
-                .and_then(toml::Value::as_str)
-                .unwrap_or(pkg_name);
-            let lib_name = raw_name.replace('-', "_");
-            let proc_macro = lib_table
-                .and_then(|t| t.get("proc-macro").or_else(|| t.get("proc_macro")))
-                .and_then(toml::Value::as_bool)
-                .unwrap_or(false);
-            let crate_types: Vec<&str> = lib_table
-                .and_then(|t| t.get("crate-type").or_else(|| t.get("crate_type")))
-                .and_then(toml::Value::as_array)
-                .map_or_else(
-                    || {
-                        if proc_macro {
-                            vec!["proc-macro"]
-                        } else {
-                            vec!["rlib"]
-                        }
-                    },
-                    |arr| arr.iter().filter_map(toml::Value::as_str).collect(),
-                );
-            for ct in crate_types {
-                match ct {
-                    "lib" | "rlib" => out.push(format!("lib{lib_name}.rlib")),
-                    "staticlib" => out.push(format!("lib{lib_name}.a")),
-                    "dylib" | "cdylib" | "proc-macro" => out.push(format!(
-                        "{}{lib_name}{}",
-                        std::env::consts::DLL_PREFIX,
-                        std::env::consts::DLL_SUFFIX
-                    )),
-                    _ => {}
-                }
-            }
+            push_lib_artifacts(lib_table, pkg_name, out);
         }
 
         let mut bin_names = Vec::new();

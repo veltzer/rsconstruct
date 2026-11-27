@@ -160,6 +160,64 @@ pub fn log_command(cmd: &Command) {
     }
 }
 
+/// In debug builds, check that the program about to run is one the running
+/// processor declared as a tool.
+fn debug_assert_tool_declared(cmd: &Command) {
+    DECLARED_TOOLS.with(|dt| {
+        if let Some(ref tools) = *dt.borrow() {
+            let program = cmd.get_program().to_string_lossy();
+            let basename = program.rsplit('/').next().unwrap_or(&program);
+            debug_assert!(
+                tools.iter().any(|t| {
+                    let t_basename = t.rsplit('/').next().unwrap_or(t);
+                    t_basename == basename
+                }),
+                "Processor executed undeclared tool '{basename}'. Declared: {tools:?}",
+            );
+        }
+    });
+}
+
+/// Wire the child's standard streams: output inherited or captured, stdin
+/// piped only when there is data to feed it. The child dies with its handle.
+fn set_stdio(cmd: &mut tokio::process::Command, inherit_stdio: bool, pipe_stdin: bool) {
+    if inherit_stdio {
+        cmd.stdout(std::process::Stdio::inherit());
+        cmd.stderr(std::process::Stdio::inherit());
+    } else {
+        cmd.stdout(std::process::Stdio::piped());
+        cmd.stderr(std::process::Stdio::piped());
+    }
+    if pipe_stdin {
+        cmd.stdin(std::process::Stdio::piped());
+    }
+    cmd.kill_on_drop(true);
+}
+
+/// The error text for a command that could not be spawned. An argument list
+/// too long for the OS (E2BIG) gets its own explanation.
+fn spawn_failure(program: &std::ffi::OsStr, args: &[std::ffi::OsString]) -> String {
+    let prog = program.to_string_lossy();
+    let total_len: usize = prog.len() + args.iter().map(|a| a.len() + 1).sum::<usize>();
+    let arg_count = args.len();
+    if total_len > 100_000 {
+        format!(
+            "Failed to spawn '{prog}' with {arg_count} arguments (total command length ~{total_len} bytes). \
+             This usually means the argument list is too long for the OS (E2BIG). \
+             Consider reducing the number of files or excluding directories."
+        )
+    } else {
+        format!(
+            "Failed to spawn: {} {}",
+            prog,
+            args.iter()
+                .map(|a| a.to_string_lossy())
+                .collect::<Vec<_>>()
+                .join(" ")
+        )
+    }
+}
+
 /// Shared inner function for running commands interruptibly using tokio.
 ///
 /// - `inherit_stdio`: if true, inherit stdout/stderr (for --show-output mode);
@@ -178,19 +236,7 @@ fn run_command_inner(
 ) -> Result<Output> {
     log_command(cmd);
 
-    DECLARED_TOOLS.with(|dt| {
-        if let Some(ref tools) = *dt.borrow() {
-            let program = cmd.get_program().to_string_lossy();
-            let basename = program.rsplit('/').next().unwrap_or(&program);
-            debug_assert!(
-                tools.iter().any(|t| {
-                    let t_basename = t.rsplit('/').next().unwrap_or(t);
-                    t_basename == basename
-                }),
-                "Processor executed undeclared tool '{basename}'. Declared: {tools:?}",
-            );
-        }
-    });
+    debug_assert_tool_declared(cmd);
 
     if ctx.is_interrupted() {
         return Err(crate::exit_code::interrupted());
@@ -223,35 +269,11 @@ fn run_command_inner(
         for (key, val) in &envs {
             tokio_cmd.env(key, val);
         }
+        set_stdio(&mut tokio_cmd, inherit_stdio, stdin_data.is_some());
 
-        if inherit_stdio {
-            tokio_cmd.stdout(std::process::Stdio::inherit());
-            tokio_cmd.stderr(std::process::Stdio::inherit());
-        } else {
-            tokio_cmd.stdout(std::process::Stdio::piped());
-            tokio_cmd.stderr(std::process::Stdio::piped());
-        }
-        if stdin_data.is_some() {
-            tokio_cmd.stdin(std::process::Stdio::piped());
-        }
-        tokio_cmd.kill_on_drop(true);
-
-        let mut child = tokio_cmd.spawn()
-            .with_context(|| {
-                let prog = program.to_string_lossy();
-                let total_len: usize = prog.len() + args.iter().map(|a| a.len() + 1).sum::<usize>();
-                let arg_count = args.len();
-                if total_len > 100_000 {
-                    format!(
-                        "Failed to spawn '{prog}' with {arg_count} arguments (total command length ~{total_len} bytes). \
-                         This usually means the argument list is too long for the OS (E2BIG). \
-                         Consider reducing the number of files or excluding directories."
-                    )
-                } else {
-                    format!("Failed to spawn: {} {}", prog,
-                        args.iter().map(|a| a.to_string_lossy()).collect::<Vec<_>>().join(" "))
-                }
-            })?;
+        let mut child = tokio_cmd
+            .spawn()
+            .with_context(|| spawn_failure(&program, &args))?;
 
         let mut interrupt_rx = ctx.interrupt_receiver();
 

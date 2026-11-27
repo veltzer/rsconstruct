@@ -183,22 +183,13 @@ pub(super) fn expected_field_type(processor: &str, field: &str) -> Option<FieldT
         .map(|s| s.ty)
 }
 
-/// Validate fields in a single processor config table.
-pub(super) fn validate_single_processor(
+/// The checks on how a processor's jobs run: `max_jobs` and the two batch settings.
+fn check_job_settings(
     type_name: &str,
     section_label: &str,
-    section: &[&str],
     table: &toml::map::Map<String, toml::Value>,
-    errors: &mut Vec<ConfigIssue>,
+    report: &mut impl FnMut(&str, String),
 ) {
-    let own_fields: Vec<&'static str> = match ProcessorConfig::known_fields_for(type_name) {
-        Some(fields) => fields,
-        None => return, // not a registered processor; reported by the raw check
-    };
-    // Every mistake found here is about one field of the section.
-    let mut report =
-        |field: &str, message: String| errors.push(ConfigIssue::field(section, field, message));
-
     // A zero-permit semaphore can never grant a permit: max_jobs = 0 would
     // deadlock the build waiting forever, so reject it at load time.
     if table.get("max_jobs").and_then(toml::Value::as_integer) == Some(0) {
@@ -231,6 +222,25 @@ pub(super) fn validate_single_processor(
             ),
         );
     }
+}
+
+/// Validate fields in a single processor config table.
+pub(super) fn validate_single_processor(
+    type_name: &str,
+    section_label: &str,
+    section: &[&str],
+    table: &toml::map::Map<String, toml::Value>,
+    errors: &mut Vec<ConfigIssue>,
+) {
+    let own_fields: Vec<&'static str> = match ProcessorConfig::known_fields_for(type_name) {
+        Some(fields) => fields,
+        None => return, // not a registered processor; reported by the raw check
+    };
+    // Every mistake found here is about one field of the section.
+    let mut report =
+        |field: &str, message: String| errors.push(ConfigIssue::field(section, field, message));
+
+    check_job_settings(type_name, section_label, table, &mut report);
 
     for (key, field_value) in table {
         if !own_fields.contains(&key.as_str())
