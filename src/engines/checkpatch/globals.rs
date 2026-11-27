@@ -55,7 +55,21 @@ impl Vars {
             type_list_file: Vec::new(),
             modifier_list_file: Vec::new(),
         };
-        v.qr(
+        // In this order: a pattern is built from the ones before it.
+        v.define_attributes();
+        v.define_values_and_operators();
+        v.define_logging_and_tags();
+        v.define_api_lists();
+        v.build_types();
+        v.define_expressions();
+        v.define_per_line();
+
+        v
+    }
+
+    /// Identifiers, storage classes and the attribute families.
+    fn define_attributes(&mut self) {
+        self.qr(
             "Ident",
             r"
 			[A-Za-z_][A-Za-z\d_]*
@@ -63,8 +77,8 @@ impl Vars {
 		",
             "x",
         );
-        v.qr("Storage", r"extern|static|asmlinkage", "");
-        v.qr(
+        self.qr("Storage", r"extern|static|asmlinkage", "");
+        self.qr(
             "Sparse",
             r"
 			__user|
@@ -81,24 +95,24 @@ impl Vars {
 		",
             "x",
         );
-        v.qr("InitAttributePrefix", r"__(?:mem|cpu|dev|net_|)", "");
-        v.qr(
+        self.qr("InitAttributePrefix", r"__(?:mem|cpu|dev|net_|)", "");
+        self.qr(
             "InitAttributeData",
             r"$InitAttributePrefix(?:initdata\b)",
             "",
         );
-        v.qr(
+        self.qr(
             "InitAttributeConst",
             r"$InitAttributePrefix(?:initconst\b)",
             "",
         );
-        v.qr("InitAttributeInit", r"$InitAttributePrefix(?:init\b)", "");
-        v.qr(
+        self.qr("InitAttributeInit", r"$InitAttributePrefix(?:init\b)", "");
+        self.qr(
             "InitAttribute",
             r"$InitAttributeData|$InitAttributeConst|$InitAttributeInit",
             "",
         );
-        v.qr(
+        self.qr(
             "Attribute",
             r"
 			const|
@@ -131,32 +145,36 @@ impl Vars {
 		  ",
             "x",
         );
-        v.qr(
+        self.qr(
             "Inline",
             r"inline|__always_inline|noinline|__inline|__inline__",
             "",
         );
-        v.qr("Member", r"->$Ident|\.$Ident|\[[^]]*\]", "");
-        v.qr("Lval", r"$Ident(?:$Member)*", "");
-        v.qr("Int_type", r"(?i)llu|ull|ll|lu|ul|l|u", "");
-        v.qr("Binary", r"(?i)0b[01]+$Int_type?", "");
-        v.qr("Hex", r"(?i)0x[0-9a-f]+$Int_type?", "");
-        v.qr("Int", r"[0-9]+$Int_type?", "");
-        v.qr("Octal", r"0[0-7]+$Int_type?", "");
-        v.qr("String", r#"(?:\b[Lu])?"[X\t]*""#, "");
-        v.qr("Float_hex", r"(?i)0x[0-9a-f]+p-?[0-9]+[fl]?", "");
-        v.qr(
+    }
+
+    /// Lvalues, constants, operators and the patterns built on them.
+    fn define_values_and_operators(&mut self) {
+        self.qr("Member", r"->$Ident|\.$Ident|\[[^]]*\]", "");
+        self.qr("Lval", r"$Ident(?:$Member)*", "");
+        self.qr("Int_type", r"(?i)llu|ull|ll|lu|ul|l|u", "");
+        self.qr("Binary", r"(?i)0b[01]+$Int_type?", "");
+        self.qr("Hex", r"(?i)0x[0-9a-f]+$Int_type?", "");
+        self.qr("Int", r"[0-9]+$Int_type?", "");
+        self.qr("Octal", r"0[0-7]+$Int_type?", "");
+        self.qr("String", r#"(?:\b[Lu])?"[X\t]*""#, "");
+        self.qr("Float_hex", r"(?i)0x[0-9a-f]+p-?[0-9]+[fl]?", "");
+        self.qr(
             "Float_dec",
             r"(?i)(?:[0-9]+\.[0-9]*|[0-9]*\.[0-9]+)(?:e-?[0-9]+)?[fl]?",
             "",
         );
-        v.qr("Float_int", r"(?i)[0-9]+e-?[0-9]+[fl]?", "");
-        v.qr("Float", r"$Float_hex|$Float_dec|$Float_int", "");
-        v.qr("Constant", r"$Float|$Binary|$Octal|$Hex|$Int", "");
-        v.qr("Assignment", r"\*\=|/=|%=|\+=|-=|<<=|>>=|&=|\^=|\|=|=", "");
-        v.qr("Compare", r"<=|>=|==|!=|<|(?<!-)>", "");
-        v.qr("Arithmetic", r"\+|-|\*|\/|%", "");
-        v.qr(
+        self.qr("Float_int", r"(?i)[0-9]+e-?[0-9]+[fl]?", "");
+        self.qr("Float", r"$Float_hex|$Float_dec|$Float_int", "");
+        self.qr("Constant", r"$Float|$Binary|$Octal|$Hex|$Int", "");
+        self.qr("Assignment", r"\*\=|/=|%=|\+=|-=|<<=|>>=|&=|\^=|\|=|=", "");
+        self.qr("Compare", r"<=|>=|==|!=|<|(?<!-)>", "");
+        self.qr("Arithmetic", r"\+|-|\*|\/|%", "");
+        self.qr(
             "Operators",
             r"
 			<=|>=|==|!=|
@@ -165,12 +183,12 @@ impl Vars {
 		  ",
             "x",
         );
-        v.qr(
+        self.qr(
             "c90_Keywords",
             r"do|for|while|if|else|return|goto|continue|switch|default|case|break",
             "x",
         );
-        v.qr(
+        self.qr(
             "NON_ASCII_UTF8",
             r"
 	[\xC2-\xDF][\x80-\xBF]               # non-overlong 2-byte
@@ -183,7 +201,7 @@ impl Vars {
 ",
             "x",
         );
-        v.qr(
+        self.qr(
             "UTF8",
             r"
 	[\x09\x0A\x0D\x20-\x7E]              # ASCII
@@ -191,12 +209,12 @@ impl Vars {
 ",
             "x",
         );
-        v.qr(
+        self.qr(
             "typeC99Typedefs",
             r"(?:__)?(?:[us]_?)?int_?(?:8|16|32|64)_t",
             "",
         );
-        v.qr(
+        self.qr(
             "typeOtherOSTypedefs",
             r"(?x:
 	u_(?:char|short|int|long) |          # bsd
@@ -204,7 +222,7 @@ impl Vars {
 )",
             "",
         );
-        v.qr(
+        self.qr(
             "typeKernelTypedefs",
             r"(?x:
 	(?:__)?(?:u|s|be|le)(?:8|16|32|64)|
@@ -212,14 +230,18 @@ impl Vars {
 )",
             "",
         );
-        v.qr(
+        self.qr(
             "typeStdioTypedefs",
             r"(?x:
 	FILE
 )",
             "",
         );
-        v.qr(
+    }
+
+    /// The logging functions and the tags of a commit message.
+    fn define_logging_and_tags(&mut self) {
+        self.qr(
             "typeTypedefs",
             r"(?x:
 	$typeC99Typedefs\b|
@@ -229,12 +251,12 @@ impl Vars {
 )",
             "",
         );
-        v.qr(
+        self.qr(
             "zero_initializer",
             r"(?:(?:0[xX])?0+$Int_type?|NULL|false)\b",
             "",
         );
-        v.qr("logFunctions", r"(?x:
+        self.qr("logFunctions", r"(?x:
 	printk(?:_ratelimited|_once|_deferred_once|_deferred|)|
 	(?:[a-z0-9]+_){1,2}(?:printk|emerg|alert|crit|err|warning|warn|notice|info|debug|dbg|vdbg|devel|cont|WARN)(?:_ratelimited|_once|)|
 	TP_printk|
@@ -243,7 +265,7 @@ impl Vars {
 	MODULE_[A-Z_]+|
 	seq_vprintf|seq_printf|seq_puts
 )", "");
-        v.qr(
+        self.qr(
             "allocFunctions",
             r"(?x:
 	(?:(?:devm_)?
@@ -256,7 +278,7 @@ impl Vars {
 )",
             "",
         );
-        v.qr(
+        self.qr(
             "signature_tags",
             r"(?xi:
 	Signed-off-by:|
@@ -272,9 +294,9 @@ impl Vars {
 )",
             "",
         );
-        v.set("link_tags_search", b"(?:Link:|Closes:)".to_vec());
-        v.set("link_tags_print", b"'Link:' or 'Closes:'".to_vec());
-        v.qr(
+        self.set("link_tags_search", b"(?:Link:|Closes:)".to_vec());
+        self.set("link_tags_print", b"'Link:' or 'Closes:'".to_vec());
+        self.qr(
             "tracing_logging_tags",
             r"(?xi:
 	[=-]*> |
@@ -301,8 +323,13 @@ impl Vars {
 )",
             "",
         );
-        v.qr("dev_id_types", r"\b[a-z]\w*_device_id\b", "");
-        v.qr(
+    }
+
+    /// Device id tables, the deprecated and mode-permission functions, and
+    /// the other lists matched by name.
+    fn define_api_lists(&mut self) {
+        self.qr("dev_id_types", r"\b[a-z]\w*_device_id\b", "");
+        self.qr(
             "obsolete_archives",
             r"(?xi:
 	\Qfreedesktop.org/archives/dri-devel\E |
@@ -316,7 +343,7 @@ impl Vars {
 )",
             "",
         );
-        v.qr(
+        self.qr(
             "C90_int_types",
             r"(?x:
 	long\s+long\s+int\s+(?:un)?signed|
@@ -341,16 +368,16 @@ impl Vars {
             "",
         );
         let mode_perm_funcs: Vec<&str> = MODE_PERMISSION_FUNCS.iter().map(|(f, _)| *f).collect();
-        v.set(
+        self.set(
             "mode_perms_search",
             format!("(?:{})", mode_perm_funcs.join("|")).into_bytes(),
         );
         let deprecated: Vec<&str> = DEPRECATED_APIS.iter().map(|(f, _)| *f).collect();
-        v.set(
+        self.set(
             "deprecated_apis_search",
             format!("(?:{})", deprecated.join("|")).into_bytes(),
         );
-        v.qr(
+        self.qr(
             "mode_perms_world_writable",
             r"
 	S_IWUGO		|
@@ -365,12 +392,12 @@ impl Vars {
             .iter()
             .map(|(s, _)| *s)
             .collect();
-        v.set("mode_perms_string_search", strings.join("|").into_bytes());
-        v.string(
+        self.set("mode_perms_string_search", strings.join("|").into_bytes());
+        self.string(
             "single_mode_perms_string_search",
             r"(?:${mode_perms_string_search})",
         );
-        v.qr(
+        self.qr(
             "multi_mode_perms_string_search",
             r"
 	${single_mode_perms_string_search}
@@ -378,7 +405,7 @@ impl Vars {
 ",
             "x",
         );
-        v.qr(
+        self.qr(
             "allowed_asm_includes",
             r"(?x:
 	irq|
@@ -388,20 +415,24 @@ impl Vars {
 )",
             "",
         );
-        v.build_types();
-        v.qr("Typecast", r"\s*(\(\s*$NonptrType\s*\)){0,1}\s*", "");
-        v.qr("balanced_parens", r"(\((?:[^\(\)]++|(?-1))*\))", "");
-        v.qr(
+    }
+
+    /// Casts, balanced parentheses, function arguments and the patterns that
+    /// need the types.
+    fn define_expressions(&mut self) {
+        self.qr("Typecast", r"\s*(\(\s*$NonptrType\s*\)){0,1}\s*", "");
+        self.qr("balanced_parens", r"(\((?:[^\(\)]++|(?-1))*\))", "");
+        self.qr(
             "LvalOrFunc",
             r"((?:[\&\*]\s*)?$Lval)\s*($balanced_parens{0,1})\s*",
             "",
         );
-        v.qr(
+        self.qr(
             "FuncArg",
             r"$Typecast{0,1}($LvalOrFunc|$Constant|$String)",
             "",
         );
-        v.qr(
+        self.qr(
             "declaration_macros",
             r"(?x:
 	(?:$Storage\s+)?(?:[A-Z_][A-Z0-9]*_){0,2}(?:DEFINE|DECLARE)(?:_[A-Z0-9]+){1,6}\s*\(|
@@ -413,10 +444,10 @@ impl Vars {
 )",
             "",
         );
-        v.set("word_pattern", WORD_PATTERN.as_bytes().to_vec());
-        v.set("CONFIG_", b"CONFIG_".to_vec());
+        self.set("word_pattern", WORD_PATTERN.as_bytes().to_vec());
+        self.set("CONFIG_", b"CONFIG_".to_vec());
         // `process` builds these per line; their text never changes.
-        v.qr(
+        self.qr(
             "barriers",
             r"
 			mb|
@@ -425,7 +456,7 @@ impl Vars {
 		",
             "x",
         );
-        v.qr(
+        self.qr(
             "barrier_stems",
             r"
 			mb__before_atomic|
@@ -437,7 +468,7 @@ impl Vars {
 		",
             "x",
         );
-        v.qr(
+        self.qr(
             "all_barriers",
             r"
 			(?:$barriers)|
@@ -446,13 +477,18 @@ impl Vars {
 		",
             "x",
         );
-        v.qr("underscore_smp_barriers", r"__smp_(?:$barrier_stems)", "x");
-        v.qr(
+    }
+
+    /// The patterns `process` would build for every line; their text never
+    /// changes.
+    fn define_per_line(&mut self) {
+        self.qr("underscore_smp_barriers", r"__smp_(?:$barrier_stems)", "x");
+        self.qr(
             "asm_volatile",
             r"\b(__asm__|asm)\s+(__volatile__|volatile)\b",
             "",
         );
-        v.qr(
+        self.qr(
             "ops",
             r"
 				<<=|>>=|<=|>=|==|!=|
@@ -463,7 +499,7 @@ impl Vars {
 			",
             "x",
         );
-        v.qr(
+        self.qr(
             "valid_licenses",
             r"
 						GPL|
@@ -476,7 +512,7 @@ impl Vars {
 					",
             "x",
         );
-        v.qr(
+        self.qr(
             "rcu_trace_funcs",
             r"(?x:
 			rcu_read_lock_tasks_trace |
@@ -492,7 +528,7 @@ impl Vars {
 		)",
             "",
         );
-        v.qr(
+        self.qr(
             "rcu_trace_paths",
             r"(?x:
 			kernel/bpf/ |
@@ -503,7 +539,6 @@ impl Vars {
 		)",
             "",
         );
-        v
     }
 
     /// `build_types`: the type patterns, from the built-in lists and what

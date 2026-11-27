@@ -103,21 +103,6 @@ todo = "warn"
 undocumented_unsafe_blocks = "warn"
 unimplemented = "warn"
 unwrap_used = "warn"
-# The pedantic/nursery allow list. Every entry below is a decision, not a
-# backlog item: each was measured, the alternative was written out, and the
-# alternative lost. Lints that were merely noisy have already been removed
-# and their hits fixed — see doc/strictness-pass.md for the history.
-#
-# The bar for adding to this list is: clippy's preferred form is not
-# clearly better here, AND the lint fires broadly enough that a per-site
-# `#[allow]` with a reason would be worse than one crate-level entry.
-# Anything narrower than that belongs at the call site, where several
-# already live (search for `#[allow(clippy::` under src/).
-
-# Fires on the CLI dispatch match in main.rs and the per-command handlers.
-# These are flat dispatch tables; splitting them produces indirection
-# without reducing the amount to read.
-too_many_lines = "allow"
 
 [profile.dev]
 debug = "line-tables-only"

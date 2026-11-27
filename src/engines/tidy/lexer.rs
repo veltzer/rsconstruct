@@ -632,6 +632,27 @@ enum EntState {
     NumHex,
 }
 
+/// What `GetTokenFromStream` carries from one character to the next.
+struct LexRun {
+    /// How white space and markup are read; a `pre` start tag and the
+    /// first text of an element change it.
+    mode: TokenMode,
+    /// The doubled hyphens seen inside the comment being read.
+    badcomment: u32,
+    /// The pseudo-attributes of the XML declaration being read.
+    attributes: Vec<AttVal>,
+    /// Whether doubled hyphens in comments are replaced.
+    fix_comments: bool,
+}
+
+/// What one character of `GetTokenFromStream` leads to.
+enum Lexed {
+    /// Nothing yet: read on.
+    More,
+    /// The call's result.
+    Token(Option<NodeId>),
+}
+
 /// What follows a `<` inside the text of a script or style element.
 enum CdataTag {
     /// Nothing that matters: the text goes on.
@@ -1366,11 +1387,13 @@ impl Doc {
     }
 
     /// `GetTokenFromStream`.
-    fn get_token_from_stream(&mut self, mut mode: TokenMode) -> Option<NodeId> {
-        let fix_comments = self.fix_comments();
-        let mut badcomment = 0u32;
-        let mut isempty: bool;
-        let mut attributes: Vec<AttVal> = Vec::new();
+    fn get_token_from_stream(&mut self, mode: TokenMode) -> Option<NodeId> {
+        let mut run = LexRun {
+            mode,
+            badcomment: 0,
+            attributes: Vec::new(),
+            fix_comments: self.fix_comments(),
+        };
 
         self.lexer.token = None;
         self.set_lexer_locus();
@@ -1379,9 +1402,8 @@ impl Doc {
         self.lexer.txtstart = size;
         self.lexer.txtend = size;
 
-        let mut c;
-        'main: loop {
-            c = self.read_char();
+        loop {
+            let mut c = self.read_char();
             if c == END_OF_STREAM {
                 break;
             }
@@ -1390,640 +1412,40 @@ impl Doc {
                 self.lexer.spacing.waswhite = true;
                 self.lexer.spacing.insertspace = false;
             }
-            if c == 160 && mode == TokenMode::Preformatted {
+            if c == 160 && run.mode == TokenMode::Preformatted {
                 c = u32::from(b' ');
             }
             self.add_char_to_lexer(c);
 
-            match self.lexer.state {
-                LexState::Content => {
-                    if is_white(c)
-                        && mode == TokenMode::IgnoreWhitespace
-                        && self.lexer.lexsize() == self.lexer.txtstart + 1
-                    {
-                        let s = self.lexer.lexsize() - 1;
-                        self.lexer.truncate(s);
-                        self.lexer.spacing.waswhite = false;
-                        self.set_lexer_locus();
-                        continue;
-                    }
-                    if c == u32::from(b'<') {
-                        self.lexer.state = LexState::Gt;
-                        continue;
-                    }
-                    if is_white(c) {
-                        if self.lexer.spacing.waswhite {
-                            if mode != TokenMode::Preformatted && mode != TokenMode::IgnoreMarkup {
-                                let s = self.lexer.lexsize() - 1;
-                                self.lexer.truncate(s);
-                                self.set_lexer_locus();
-                            }
-                        } else {
-                            self.lexer.spacing.waswhite = true;
-                            if mode != TokenMode::Preformatted
-                                && mode != TokenMode::IgnoreMarkup
-                                && c != u32::from(b' ')
-                            {
-                                self.change_char(b' ');
-                            }
-                        }
-                        continue;
-                    } else if c == u32::from(b'&') && mode != TokenMode::IgnoreMarkup {
-                        self.parse_entity(mode);
-                    }
-                    if mode == TokenMode::IgnoreWhitespace {
-                        mode = TokenMode::MixedContent;
-                    }
-                    self.lexer.spacing.waswhite = false;
-                }
-                LexState::Gt => {
-                    if c == u32::from(b'/') {
-                        c = self.read_char();
-                        if c == END_OF_STREAM {
-                            self.unget_char(c);
-                            continue;
-                        }
-                        self.add_char_to_lexer(c);
-                        if is_letter(c) {
-                            let s = self.lexer.lexsize() - 3;
-                            self.lexer.truncate(s);
-                            self.lexer.txtend = s;
-                            self.unget_char(c);
-                            self.lexer.state = LexState::EndTag;
-                            self.stream.curcol -= 2;
-                            if self.lexer.txtend > self.lexer.txtstart {
-                                if mode == TokenMode::IgnoreWhitespace
-                                    && self.lexer.last_byte() == Some(b' ')
-                                {
-                                    let s = self.lexer.lexsize() - 1;
-                                    self.lexer.truncate(s);
-                                    self.lexer.txtend = s;
-                                }
-                                let t = self.text_token();
-                                self.lexer.token = Some(t);
-                                return Some(t);
-                            }
-                            continue;
-                        }
-                        self.lexer.spacing.waswhite = false;
-                        self.lexer.state = LexState::Content;
-                        continue;
-                    }
-                    if mode == TokenMode::IgnoreMarkup {
-                        self.lexer.spacing.waswhite = false;
-                        self.lexer.state = LexState::Content;
-                        continue;
-                    }
-                    if c == u32::from(b'!') {
-                        c = self.read_char();
-                        if c == u32::from(b'-') {
-                            c = self.read_char();
-                            if c == u32::from(b'-') {
-                                self.lexer.state = LexState::Comment;
-                                let s = self.lexer.lexsize() - 2;
-                                self.lexer.truncate(s);
-                                self.lexer.txtend = s;
-                                if let Some(t) = self.pending_text() {
-                                    return Some(t);
-                                }
-                                self.lexer.txtstart = self.lexer.lexsize();
-                                continue;
-                            }
-                        } else if c == u32::from(b'd') || c == u32::from(b'D') {
-                            self.lexer.state = LexState::Doctype;
-                            let s = self.lexer.lexsize() - 2;
-                            self.lexer.truncate(s);
-                            self.lexer.txtend = s;
-                            mode = TokenMode::IgnoreWhitespace;
-                            // skip until white space or '>'
-                            loop {
-                                c = self.read_char();
-                                if c == END_OF_STREAM || c == u32::from(b'>') {
-                                    self.unget_char(c);
-                                    break;
-                                }
-                                if !is_white(c) {
-                                    continue;
-                                }
-                                loop {
-                                    c = self.read_char();
-                                    if c == END_OF_STREAM || c == u32::from(b'>') {
-                                        self.unget_char(c);
-                                        break;
-                                    }
-                                    if is_white(c) {
-                                        continue;
-                                    }
-                                    self.unget_char(c);
-                                    break;
-                                }
-                                break;
-                            }
-                            if let Some(t) = self.pending_text() {
-                                return Some(t);
-                            }
-                            self.lexer.txtstart = self.lexer.lexsize();
-                            continue;
-                        } else if c == u32::from(b'[') {
-                            let s = self.lexer.lexsize() - 2;
-                            self.lexer.truncate(s);
-                            self.lexer.state = LexState::Section;
-                            self.lexer.txtend = s;
-                            if let Some(t) = self.pending_text() {
-                                return Some(t);
-                            }
-                            self.lexer.txtstart = self.lexer.lexsize();
-                            continue;
-                        }
-                        self.report(None, None, Code::MalformedCommentDropping);
-                        loop {
-                            c = self.read_char();
-                            if c == u32::from(b'>') {
-                                break;
-                            }
-                            if c == END_OF_STREAM {
-                                self.unget_char(c);
-                                break;
-                            }
-                        }
-                        let s = self.lexer.lexsize() - 2;
-                        self.lexer.truncate(s);
-                        self.lexer.state = LexState::Content;
-                        continue;
-                    }
-                    if c == u32::from(b'?') {
-                        let s = self.lexer.lexsize() - 2;
-                        self.lexer.truncate(s);
-                        self.lexer.state = LexState::ProcInstr;
-                        self.lexer.txtend = s;
-                        if let Some(t) = self.pending_text() {
-                            return Some(t);
-                        }
-                        self.lexer.txtstart = self.lexer.lexsize();
-                        continue;
-                    }
-                    if c == u32::from(b'%') {
-                        let s = self.lexer.lexsize() - 2;
-                        self.lexer.truncate(s);
-                        self.lexer.state = LexState::Asp;
-                        self.lexer.txtend = s;
-                        if let Some(t) = self.pending_text() {
-                            return Some(t);
-                        }
-                        self.lexer.txtstart = self.lexer.lexsize();
-                        continue;
-                    }
-                    if c == u32::from(b'#') {
-                        let s = self.lexer.lexsize() - 2;
-                        self.lexer.truncate(s);
-                        self.lexer.state = LexState::Jste;
-                        self.lexer.txtend = s;
-                        if let Some(t) = self.pending_text() {
-                            return Some(t);
-                        }
-                        self.lexer.txtstart = self.lexer.lexsize();
-                        continue;
-                    }
-                    if is_letter(c) {
-                        self.unget_char(c);
-                        self.unget_char(u32::from(b'<'));
-                        let s = self.lexer.lexsize() - 2;
-                        self.lexer.truncate(s);
-                        self.lexer.txtend = s;
-                        self.lexer.state = LexState::StartTag;
-                        if let Some(t) = self.pending_text() {
-                            return Some(t);
-                        }
-                        continue;
-                    }
-                    self.unget_char(c);
-                    let s = self.lexer.lexsize() - 1;
-                    self.lexer.truncate(s);
-                    self.lexer.state = LexState::Content;
-                    self.lexer.spacing.waswhite = false;
-                }
-                LexState::EndTag => {
-                    self.lexer.txtstart = self.lexer.lexsize() - 1;
-                    self.stream.curcol += 2;
-                    c = self.parse_tag_name();
-                    let token = self.tag_token(NodeType::EndTag);
-                    self.lexer.token = Some(token);
-                    let s = self.lexer.txtstart;
-                    self.lexer.truncate(s);
-                    self.lexer.txtend = s;
-                    while c != u32::from(b'>') && c != END_OF_STREAM {
-                        c = self.read_char();
-                    }
-                    if c == END_OF_STREAM {
-                        continue;
-                    }
-                    self.lexer.state = LexState::Content;
-                    self.lexer.spacing.waswhite = false;
-                    return Some(token);
-                }
-                LexState::StartTag => {
-                    c = self.read_char();
-                    self.change_char(crate::numeric::low_byte(c));
-                    self.lexer.txtstart = self.lexer.lexsize() - 1;
-                    c = self.parse_tag_name();
-                    isempty = false;
-                    attributes.clear();
-                    let token = self.tag_token(NodeType::StartTag);
-                    self.lexer.token = Some(token);
-                    if c != u32::from(b'>') {
-                        if c == u32::from(b'/') {
-                            self.unget_char(c);
-                        }
-                        attributes = self.parse_attrs(&mut isempty);
-                    }
-                    if isempty {
-                        self.tree.node_mut(token).ntype = NodeType::StartEndTag;
-                    }
-                    self.tree.node_mut(token).attributes = std::mem::take(&mut attributes);
-                    let s = self.lexer.txtstart;
-                    self.lexer.truncate(s);
-                    self.lexer.txtend = s;
-
-                    if self.node_is(token, TagId::Pre) {
-                        mode = TokenMode::Preformatted;
-                    }
-                    if (mode != TokenMode::Preformatted && self.expects_content(token))
-                        || self.node_is(token, TagId::BR)
-                        || self.node_is(token, TagId::HR)
-                    {
-                        // A newline right after the tag is swallowed in
-                        // IgnoreWhitespace mode (and a form feed always);
-                        // anything else is put back.
-                        c = self.read_char();
-                        let swallow = if c == u32::from(b'\n') {
-                            mode == TokenMode::IgnoreWhitespace
-                        } else {
-                            c == 0x0c
-                        };
-                        if !swallow {
-                            self.unget_char(c);
-                        }
-                        self.lexer.spacing.waswhite = true;
-                    } else {
-                        self.lexer.spacing.waswhite = false;
-                    }
-
-                    self.lexer.state = LexState::Content;
-                    if let Some(tag) = self.tree.node(token).tag {
-                        let versions = self.tags[tag].versions;
-                        self.constrain_version(versions);
-                        self.repair_duplicate_attributes(token);
-                    } else if mode != TokenMode::OtherNamespace {
-                        let looks_custom = (self.lexer.doctype & VERS_HTML5) != 0
-                            && self
-                                .tree
-                                .node(token)
-                                .element
-                                .as_deref()
-                                .is_some_and(Self::element_is_autonomous_custom_format);
-                        if looks_custom {
-                            self.report(None, Some(token), Code::UnknownElementLooksCustom);
-                        } else {
-                            self.report(None, Some(token), Code::UnknownElement);
-                        }
-                    }
-                    return Some(token);
-                }
-                LexState::Comment => {
-                    if c != u32::from(b'-') {
-                        continue;
-                    }
-                    c = self.read_char();
-                    if c != u32::from(b'-')
-                        && fix_comments
-                        && self.lexer.lexsize() - self.lexer.txtstart == 1
-                    {
-                        self.change_char(b'=');
-                    }
-                    self.add_char_to_lexer(c);
-                    if c != u32::from(b'-') {
-                        continue;
-                    }
-                    loop {
-                        // end_comment:
-                        c = self.read_char();
-                        if c == u32::from(b'>') {
-                            if badcomment > 0 {
-                                if (self.html_version() & tables::HT50) != 0 {
-                                    if fix_comments {
-                                        self.report(None, None, Code::MalformedComment);
-                                    }
-                                } else if fix_comments {
-                                    self.report(None, None, Code::MalformedComment);
-                                } else {
-                                    self.report(None, None, Code::MalformedCommentWarn);
-                                }
-                            }
-                            let s = self.lexer.lexsize() - 2;
-                            self.lexer.truncate(s);
-                            self.lexer.txtend = s;
-                            self.lexer.state = LexState::Content;
-                            self.lexer.spacing.waswhite = false;
-                            let token = self.new_token(NodeType::Comment);
-                            self.lexer.token = Some(token);
-                            c = self.read_char();
-                            if c == u32::from(b'\n') {
-                                self.tree.node_mut(token).linebreak = true;
-                            } else {
-                                self.unget_char(c);
-                            }
-                            return Some(token);
-                        }
-                        if badcomment == 0 {
-                            self.set_lexer_locus();
-                            self.lexer.columns = (self.lexer.columns - 3).max(0);
-                        }
-                        badcomment += 1;
-                        if fix_comments {
-                            let len = self.lexer.lexsize();
-                            self.lexer.lexbuf[len - 2] = b'=';
-                        }
-                        if c == u32::from(b'-') {
-                            self.add_char_to_lexer(c);
-                            continue;
-                        }
-                        if fix_comments {
-                            self.change_char(b'=');
-                        }
-                        self.add_char_to_lexer(c);
-                        continue 'main;
-                    }
-                }
-                LexState::Doctype => {
-                    self.unget_char(c);
-                    let s = self.lexer.lexsize() - 1;
-                    self.lexer.truncate(s);
-                    let token = self.parse_doctype_decl();
-                    self.lexer.token = token;
-                    self.lexer.txtend = self.lexer.lexsize();
-                    self.lexer.state = LexState::Content;
-                    self.lexer.spacing.waswhite = false;
-                    if self.lexer.doctype == tables::VERS_UNKNOWN
-                        && let Some(t) = token
-                    {
-                        self.lexer.doctype = self.find_given_version(t);
-                        if self.lexer.doctype != VERS_HTML5 {
-                            self.adjust_tags();
-                        }
-                    }
-                    return token;
-                }
-                LexState::ProcInstr => {
-                    if self.lexer.lexsize() - self.lexer.txtstart == 3
-                        && self.lexer.from(self.lexer.txtstart) == b"php"
-                    {
-                        self.lexer.state = LexState::Php;
-                        continue;
-                    }
-                    if self.lexer.lexsize() - self.lexer.txtstart == 4
-                        && &self.lexer.lexbuf[self.lexer.txtstart..self.lexer.txtstart + 3]
-                            == b"xml"
-                        && is_white(u32::from(self.lexer.lexbuf[self.lexer.txtstart + 3]))
-                    {
-                        self.lexer.state = LexState::XmlDecl;
-                        attributes.clear();
-                        continue;
-                    }
-                    if self.opts.meta.assume_xml_procins || self.lexer.document.isvoyager {
-                        if c != u32::from(b'?') {
-                            continue;
-                        }
-                        c = self.read_char();
-                        if c == END_OF_STREAM {
-                            self.report(None, None, Code::UnexpectedEndOfFile);
-                            self.unget_char(c);
-                            continue;
-                        }
-                        self.add_char_to_lexer(c);
-                    }
-                    if c != u32::from(b'>') {
-                        continue;
-                    }
-                    let s = self.lexer.lexsize() - 1;
-                    self.lexer.truncate(s);
-                    let token;
-                    if self.lexer.lexsize() > 0 {
-                        let txtstart = self.lexer.txtstart;
-                        let mut i = 0;
-                        while i < self.lexer.lexsize() - txtstart
-                            && !is_white(u32::from(self.lexer.lexbuf[i + txtstart]))
-                        {
-                            i += 1;
-                        }
-                        let closed = self.lexer.last_byte() == Some(b'?');
-                        if closed {
-                            let s = self.lexer.lexsize() - 1;
-                            self.lexer.truncate(s);
-                        }
-                        self.lexer.txtstart += i;
-                        self.lexer.txtend = self.lexer.lexsize();
-                        token = self.new_token(NodeType::ProcIns);
-                        let name = String::from_utf8_lossy(
-                            &self.lexer.lexbuf[self.lexer.txtstart - i..self.lexer.txtstart],
-                        )
-                        .into_owned();
-                        let n = self.tree.node_mut(token);
-                        n.closed = closed;
-                        n.element = if i > 0 { Some(name) } else { None };
-                    } else {
-                        self.lexer.txtend = self.lexer.lexsize();
-                        token = self.new_token(NodeType::ProcIns);
-                    }
-                    self.lexer.token = Some(token);
-                    self.lexer.state = LexState::Content;
-                    self.lexer.spacing.waswhite = false;
-                    return Some(token);
-                }
-                LexState::Asp => {
-                    if c != u32::from(b'%') {
-                        continue;
-                    }
-                    c = self.read_char();
-                    if c != u32::from(b'>') {
-                        self.unget_char(c);
-                        continue;
-                    }
-                    let s = self.lexer.lexsize() - 1;
-                    self.lexer.truncate(s);
-                    self.lexer.txtend = s;
-                    self.lexer.state = LexState::Content;
-                    self.lexer.spacing.waswhite = false;
-                    let token = self.new_token(NodeType::Asp);
-                    self.lexer.token = Some(token);
-                    return Some(token);
-                }
-                LexState::Jste => {
-                    if c != u32::from(b'#') {
-                        continue;
-                    }
-                    c = self.read_char();
-                    if c != u32::from(b'>') {
-                        self.unget_char(c);
-                        continue;
-                    }
-                    let s = self.lexer.lexsize() - 1;
-                    self.lexer.truncate(s);
-                    self.lexer.txtend = s;
-                    self.lexer.state = LexState::Content;
-                    self.lexer.spacing.waswhite = false;
-                    let token = self.new_token(NodeType::Jste);
-                    self.lexer.token = Some(token);
-                    return Some(token);
-                }
-                LexState::Php => {
-                    if c != u32::from(b'?') {
-                        continue;
-                    }
-                    c = self.read_char();
-                    if c != u32::from(b'>') {
-                        self.unget_char(c);
-                        continue;
-                    }
-                    let s = self.lexer.lexsize() - 1;
-                    self.lexer.truncate(s);
-                    self.lexer.txtend = s;
-                    self.lexer.state = LexState::Content;
-                    self.lexer.spacing.waswhite = false;
-                    let token = self.new_token(NodeType::Php);
-                    self.lexer.token = Some(token);
-                    return Some(token);
-                }
-                LexState::XmlDecl => {
-                    if is_white(c) && c != u32::from(b'?') {
-                        continue;
-                    }
-                    if c != u32::from(b'?') {
-                        isempty = false;
-                        self.unget_char(c);
-                        let (name, asp, php) = self.parse_attribute(&mut isempty);
-                        let Some(name) = name else {
-                            if let Some(asp) = asp {
-                                let mut av = AttVal::new();
-                                av.asp = Some(asp);
-                                attributes.push(av);
-                            }
-                            if let Some(php) = php {
-                                let mut av = AttVal::new();
-                                av.php = Some(php);
-                                attributes.push(av);
-                            }
-                            let s = self.lexer.lexsize() - 1;
-                            self.lexer.truncate(s);
-                            self.lexer.txtend = self.lexer.txtstart;
-                            self.lexer.state = LexState::Content;
-                            self.lexer.spacing.waswhite = false;
-                            let token = self.new_token(NodeType::XmlDecl);
-                            self.tree.node_mut(token).attributes = std::mem::take(&mut attributes);
-                            self.lexer.token = Some(token);
-                            return Some(token);
-                        };
-                        let mut pdelim = 0;
-                        let value = self.parse_value(&name, true, &mut isempty, &mut pdelim);
-                        let mut av = AttVal::new();
-                        av.dict = tables::tables().attr_index(&name);
-                        av.attribute = Some(name);
-                        av.value = value;
-                        av.delim = pdelim;
-                        attributes.push(av);
-                    }
-                    c = self.read_char();
-                    if c != u32::from(b'>') {
-                        self.unget_char(c);
-                        continue;
-                    }
-                    let s = self.lexer.lexsize() - 1;
-                    self.lexer.truncate(s);
-                    self.lexer.txtend = self.lexer.txtstart;
-                    self.lexer.state = LexState::Content;
-                    self.lexer.spacing.waswhite = false;
-                    let token = self.new_token(NodeType::XmlDecl);
-                    self.tree.node_mut(token).attributes = std::mem::take(&mut attributes);
-                    self.lexer.token = Some(token);
-                    return Some(token);
-                }
-                LexState::Section => {
-                    if c == u32::from(b'[')
-                        && self.lexer.lexsize() == self.lexer.txtstart + 6
-                        && self.lexer.from(self.lexer.txtstart) == b"CDATA["
-                    {
-                        self.lexer.state = LexState::Cdata;
-                        let s = self.lexer.lexsize() - 6;
-                        self.lexer.truncate(s);
-                        continue;
-                    }
-                    if c == u32::from(b'>') {
-                        self.unget_char(c);
-                    } else if c != u32::from(b']') {
-                        continue;
-                    }
-                    c = self.read_char();
-                    let lexdump = 1;
-                    if c != u32::from(b'>') {
-                        if c == u32::from(b'-') {
-                            c = self.read_char();
-                            if c == u32::from(b'-') {
-                                c = self.read_char();
-                                if c != u32::from(b'>') {
-                                    self.unget_char(c);
-                                    self.unget_char(u32::from(b'-'));
-                                    self.unget_char(u32::from(b'-'));
-                                    continue;
-                                }
-                            } else {
-                                self.unget_char(c);
-                                self.unget_char(u32::from(b'-'));
-                                continue;
-                            }
-                        } else {
-                            self.unget_char(c);
-                            continue;
-                        }
-                    }
-                    let s = self.lexer.lexsize() - lexdump;
-                    self.lexer.truncate(s);
-                    self.lexer.txtend = s;
-                    self.lexer.state = LexState::Content;
-                    self.lexer.spacing.waswhite = false;
-                    let token = self.new_token(NodeType::Section);
-                    self.lexer.token = Some(token);
-                    return Some(token);
-                }
-                LexState::Cdata => {
-                    if c != u32::from(b']') {
-                        continue;
-                    }
-                    c = self.read_char();
-                    if c != u32::from(b']') {
-                        self.unget_char(c);
-                        continue;
-                    }
-                    c = self.read_char();
-                    if c != u32::from(b'>') {
-                        self.unget_char(c);
-                        self.unget_char(u32::from(b']'));
-                        continue;
-                    }
-                    let s = self.lexer.lexsize() - 1;
-                    self.lexer.truncate(s);
-                    self.lexer.txtend = s;
-                    self.lexer.state = LexState::Content;
-                    self.lexer.spacing.waswhite = false;
-                    let token = self.new_token(NodeType::Cdata);
-                    self.lexer.token = Some(token);
-                    return Some(token);
-                }
+            let lexed = match self.lexer.state {
+                LexState::Content => self.lex_content(c, &mut run),
+                LexState::Gt => self.lex_gt(c, &mut run),
+                LexState::EndTag => self.lex_end_tag(),
+                LexState::StartTag => self.lex_start_tag(&mut run),
+                LexState::Comment => self.lex_comment(c, &mut run),
+                LexState::Doctype => self.lex_doctype(c),
+                LexState::ProcInstr => self.lex_proc_instr(c, &mut run),
+                LexState::Asp => self.lex_asp(c),
+                LexState::Jste => self.lex_jste(c),
+                LexState::Php => self.lex_php(c),
+                LexState::XmlDecl => self.lex_xml_decl(c, &mut run),
+                LexState::Section => self.lex_section(c),
+                LexState::Cdata => self.lex_cdata(c),
+            };
+            if let Lexed::Token(token) = lexed {
+                return token;
             }
         }
+        self.token_at_end_of_stream()
+    }
 
+    /// `GetTokenFromStream`, at the end of the input: the text or the
+    /// comment that was being read, if any.
+    fn token_at_end_of_stream(&mut self) -> Option<NodeId> {
         if self.lexer.state == LexState::Content {
             self.lexer.txtend = self.lexer.lexsize();
             if self.lexer.txtend > self.lexer.txtstart {
-                self.unget_char(c);
+                self.unget_char(END_OF_STREAM);
                 if self.lexer.last_byte() == Some(b' ') {
                     let s = self.lexer.lexsize() - 1;
                     self.lexer.truncate(s);
@@ -2034,9 +1456,7 @@ impl Doc {
                 return Some(t);
             }
         } else if self.lexer.state == LexState::Comment {
-            if c == END_OF_STREAM {
-                self.report(None, None, Code::MalformedCommentEos);
-            }
+            self.report(None, None, Code::MalformedCommentEos);
             self.lexer.txtend = self.lexer.lexsize();
             self.lexer.state = LexState::Content;
             self.lexer.spacing.waswhite = false;
@@ -2045,6 +1465,660 @@ impl Doc {
             return Some(token);
         }
         None
+    }
+
+    /// `GetTokenFromStream`, text between tags.
+    fn lex_content(&mut self, c: u32, run: &mut LexRun) -> Lexed {
+        if is_white(c)
+            && run.mode == TokenMode::IgnoreWhitespace
+            && self.lexer.lexsize() == self.lexer.txtstart + 1
+        {
+            let s = self.lexer.lexsize() - 1;
+            self.lexer.truncate(s);
+            self.lexer.spacing.waswhite = false;
+            self.set_lexer_locus();
+            return Lexed::More;
+        }
+        if c == u32::from(b'<') {
+            self.lexer.state = LexState::Gt;
+            return Lexed::More;
+        }
+        if is_white(c) {
+            if self.lexer.spacing.waswhite {
+                if run.mode != TokenMode::Preformatted && run.mode != TokenMode::IgnoreMarkup {
+                    let s = self.lexer.lexsize() - 1;
+                    self.lexer.truncate(s);
+                    self.set_lexer_locus();
+                }
+            } else {
+                self.lexer.spacing.waswhite = true;
+                if run.mode != TokenMode::Preformatted
+                    && run.mode != TokenMode::IgnoreMarkup
+                    && c != u32::from(b' ')
+                {
+                    self.change_char(b' ');
+                }
+            }
+            return Lexed::More;
+        } else if c == u32::from(b'&') && run.mode != TokenMode::IgnoreMarkup {
+            self.parse_entity(run.mode);
+        }
+        if run.mode == TokenMode::IgnoreWhitespace {
+            run.mode = TokenMode::MixedContent;
+        }
+        self.lexer.spacing.waswhite = false;
+        Lexed::More
+    }
+
+    /// `GetTokenFromStream`, the character after a `<`.
+    fn lex_gt(&mut self, mut c: u32, run: &mut LexRun) -> Lexed {
+        if c == u32::from(b'/') {
+            c = self.read_char();
+            if c == END_OF_STREAM {
+                self.unget_char(c);
+                return Lexed::More;
+            }
+            self.add_char_to_lexer(c);
+            if is_letter(c) {
+                let s = self.lexer.lexsize() - 3;
+                self.lexer.truncate(s);
+                self.lexer.txtend = s;
+                self.unget_char(c);
+                self.lexer.state = LexState::EndTag;
+                self.stream.curcol -= 2;
+                if self.lexer.txtend > self.lexer.txtstart {
+                    if run.mode == TokenMode::IgnoreWhitespace
+                        && self.lexer.last_byte() == Some(b' ')
+                    {
+                        let s = self.lexer.lexsize() - 1;
+                        self.lexer.truncate(s);
+                        self.lexer.txtend = s;
+                    }
+                    let t = self.text_token();
+                    self.lexer.token = Some(t);
+                    return Lexed::Token(Some(t));
+                }
+                return Lexed::More;
+            }
+            self.lexer.spacing.waswhite = false;
+            self.lexer.state = LexState::Content;
+            return Lexed::More;
+        }
+        if run.mode == TokenMode::IgnoreMarkup {
+            self.lexer.spacing.waswhite = false;
+            self.lexer.state = LexState::Content;
+            return Lexed::More;
+        }
+        if c == u32::from(b'!') {
+            return self.lex_declaration(run);
+        }
+        if c == u32::from(b'?') {
+            let s = self.lexer.lexsize() - 2;
+            self.lexer.truncate(s);
+            self.lexer.state = LexState::ProcInstr;
+            self.lexer.txtend = s;
+            if let Some(t) = self.pending_text() {
+                return Lexed::Token(Some(t));
+            }
+            self.lexer.txtstart = self.lexer.lexsize();
+            return Lexed::More;
+        }
+        if c == u32::from(b'%') {
+            let s = self.lexer.lexsize() - 2;
+            self.lexer.truncate(s);
+            self.lexer.state = LexState::Asp;
+            self.lexer.txtend = s;
+            if let Some(t) = self.pending_text() {
+                return Lexed::Token(Some(t));
+            }
+            self.lexer.txtstart = self.lexer.lexsize();
+            return Lexed::More;
+        }
+        if c == u32::from(b'#') {
+            let s = self.lexer.lexsize() - 2;
+            self.lexer.truncate(s);
+            self.lexer.state = LexState::Jste;
+            self.lexer.txtend = s;
+            if let Some(t) = self.pending_text() {
+                return Lexed::Token(Some(t));
+            }
+            self.lexer.txtstart = self.lexer.lexsize();
+            return Lexed::More;
+        }
+        if is_letter(c) {
+            self.unget_char(c);
+            self.unget_char(u32::from(b'<'));
+            let s = self.lexer.lexsize() - 2;
+            self.lexer.truncate(s);
+            self.lexer.txtend = s;
+            self.lexer.state = LexState::StartTag;
+            if let Some(t) = self.pending_text() {
+                return Lexed::Token(Some(t));
+            }
+            return Lexed::More;
+        }
+        self.unget_char(c);
+        let s = self.lexer.lexsize() - 1;
+        self.lexer.truncate(s);
+        self.lexer.state = LexState::Content;
+        self.lexer.spacing.waswhite = false;
+        Lexed::More
+    }
+
+    /// `GetTokenFromStream`, after `<!`: a comment, a doctype, a section
+    /// or something malformed.
+    fn lex_declaration(&mut self, run: &mut LexRun) -> Lexed {
+        let mut c = self.read_char();
+        if c == u32::from(b'-') {
+            c = self.read_char();
+            if c == u32::from(b'-') {
+                self.lexer.state = LexState::Comment;
+                let s = self.lexer.lexsize() - 2;
+                self.lexer.truncate(s);
+                self.lexer.txtend = s;
+                if let Some(t) = self.pending_text() {
+                    return Lexed::Token(Some(t));
+                }
+                self.lexer.txtstart = self.lexer.lexsize();
+                return Lexed::More;
+            }
+        } else if c == u32::from(b'd') || c == u32::from(b'D') {
+            self.lexer.state = LexState::Doctype;
+            let s = self.lexer.lexsize() - 2;
+            self.lexer.truncate(s);
+            self.lexer.txtend = s;
+            run.mode = TokenMode::IgnoreWhitespace;
+            // skip until white space or '>'
+            loop {
+                c = self.read_char();
+                if c == END_OF_STREAM || c == u32::from(b'>') {
+                    self.unget_char(c);
+                    break;
+                }
+                if !is_white(c) {
+                    continue;
+                }
+                loop {
+                    c = self.read_char();
+                    if c == END_OF_STREAM || c == u32::from(b'>') {
+                        self.unget_char(c);
+                        break;
+                    }
+                    if is_white(c) {
+                        continue;
+                    }
+                    self.unget_char(c);
+                    break;
+                }
+                break;
+            }
+            if let Some(t) = self.pending_text() {
+                return Lexed::Token(Some(t));
+            }
+            self.lexer.txtstart = self.lexer.lexsize();
+            return Lexed::More;
+        } else if c == u32::from(b'[') {
+            let s = self.lexer.lexsize() - 2;
+            self.lexer.truncate(s);
+            self.lexer.state = LexState::Section;
+            self.lexer.txtend = s;
+            if let Some(t) = self.pending_text() {
+                return Lexed::Token(Some(t));
+            }
+            self.lexer.txtstart = self.lexer.lexsize();
+            return Lexed::More;
+        }
+        self.report(None, None, Code::MalformedCommentDropping);
+        loop {
+            c = self.read_char();
+            if c == u32::from(b'>') {
+                break;
+            }
+            if c == END_OF_STREAM {
+                self.unget_char(c);
+                break;
+            }
+        }
+        let s = self.lexer.lexsize() - 2;
+        self.lexer.truncate(s);
+        self.lexer.state = LexState::Content;
+        Lexed::More
+    }
+
+    /// `GetTokenFromStream`, an end tag, after `</`.
+    fn lex_end_tag(&mut self) -> Lexed {
+        self.lexer.txtstart = self.lexer.lexsize() - 1;
+        self.stream.curcol += 2;
+        let mut c = self.parse_tag_name();
+        let token = self.tag_token(NodeType::EndTag);
+        self.lexer.token = Some(token);
+        let s = self.lexer.txtstart;
+        self.lexer.truncate(s);
+        self.lexer.txtend = s;
+        while c != u32::from(b'>') && c != END_OF_STREAM {
+            c = self.read_char();
+        }
+        if c == END_OF_STREAM {
+            return Lexed::More;
+        }
+        self.lexer.state = LexState::Content;
+        self.lexer.spacing.waswhite = false;
+        Lexed::Token(Some(token))
+    }
+
+    /// `GetTokenFromStream`, a start tag and its attributes.
+    fn lex_start_tag(&mut self, run: &mut LexRun) -> Lexed {
+        let mut c = self.read_char();
+        self.change_char(crate::numeric::low_byte(c));
+        self.lexer.txtstart = self.lexer.lexsize() - 1;
+        c = self.parse_tag_name();
+        let mut isempty = false;
+        run.attributes.clear();
+        let token = self.tag_token(NodeType::StartTag);
+        self.lexer.token = Some(token);
+        if c != u32::from(b'>') {
+            if c == u32::from(b'/') {
+                self.unget_char(c);
+            }
+            run.attributes = self.parse_attrs(&mut isempty);
+        }
+        if isempty {
+            self.tree.node_mut(token).ntype = NodeType::StartEndTag;
+        }
+        self.tree.node_mut(token).attributes = std::mem::take(&mut run.attributes);
+        let s = self.lexer.txtstart;
+        self.lexer.truncate(s);
+        self.lexer.txtend = s;
+
+        if self.node_is(token, TagId::Pre) {
+            run.mode = TokenMode::Preformatted;
+        }
+        if (run.mode != TokenMode::Preformatted && self.expects_content(token))
+            || self.node_is(token, TagId::BR)
+            || self.node_is(token, TagId::HR)
+        {
+            // A newline right after the tag is swallowed in
+            // IgnoreWhitespace run.mode (and a form feed always);
+            // anything else is put back.
+            c = self.read_char();
+            let swallow = if c == u32::from(b'\n') {
+                run.mode == TokenMode::IgnoreWhitespace
+            } else {
+                c == 0x0c
+            };
+            if !swallow {
+                self.unget_char(c);
+            }
+            self.lexer.spacing.waswhite = true;
+        } else {
+            self.lexer.spacing.waswhite = false;
+        }
+
+        self.lexer.state = LexState::Content;
+        if let Some(tag) = self.tree.node(token).tag {
+            let versions = self.tags[tag].versions;
+            self.constrain_version(versions);
+            self.repair_duplicate_attributes(token);
+        } else if run.mode != TokenMode::OtherNamespace {
+            let looks_custom = (self.lexer.doctype & VERS_HTML5) != 0
+                && self
+                    .tree
+                    .node(token)
+                    .element
+                    .as_deref()
+                    .is_some_and(Self::element_is_autonomous_custom_format);
+            if looks_custom {
+                self.report(None, Some(token), Code::UnknownElementLooksCustom);
+            } else {
+                self.report(None, Some(token), Code::UnknownElement);
+            }
+        }
+        Lexed::Token(Some(token))
+    }
+
+    /// `GetTokenFromStream`, inside a comment.
+    fn lex_comment(&mut self, mut c: u32, run: &mut LexRun) -> Lexed {
+        if c != u32::from(b'-') {
+            return Lexed::More;
+        }
+        c = self.read_char();
+        if c != u32::from(b'-')
+            && run.fix_comments
+            && self.lexer.lexsize() - self.lexer.txtstart == 1
+        {
+            self.change_char(b'=');
+        }
+        self.add_char_to_lexer(c);
+        if c != u32::from(b'-') {
+            return Lexed::More;
+        }
+        loop {
+            // end_comment:
+            c = self.read_char();
+            if c == u32::from(b'>') {
+                if run.badcomment > 0 {
+                    if (self.html_version() & tables::HT50) != 0 {
+                        if run.fix_comments {
+                            self.report(None, None, Code::MalformedComment);
+                        }
+                    } else if run.fix_comments {
+                        self.report(None, None, Code::MalformedComment);
+                    } else {
+                        self.report(None, None, Code::MalformedCommentWarn);
+                    }
+                }
+                let s = self.lexer.lexsize() - 2;
+                self.lexer.truncate(s);
+                self.lexer.txtend = s;
+                self.lexer.state = LexState::Content;
+                self.lexer.spacing.waswhite = false;
+                let token = self.new_token(NodeType::Comment);
+                self.lexer.token = Some(token);
+                c = self.read_char();
+                if c == u32::from(b'\n') {
+                    self.tree.node_mut(token).linebreak = true;
+                } else {
+                    self.unget_char(c);
+                }
+                return Lexed::Token(Some(token));
+            }
+            if run.badcomment == 0 {
+                self.set_lexer_locus();
+                self.lexer.columns = (self.lexer.columns - 3).max(0);
+            }
+            run.badcomment += 1;
+            if run.fix_comments {
+                let len = self.lexer.lexsize();
+                self.lexer.lexbuf[len - 2] = b'=';
+            }
+            if c == u32::from(b'-') {
+                self.add_char_to_lexer(c);
+                continue;
+            }
+            if run.fix_comments {
+                self.change_char(b'=');
+            }
+            self.add_char_to_lexer(c);
+            return Lexed::More;
+        }
+    }
+
+    /// `GetTokenFromStream`, a doctype declaration.
+    fn lex_doctype(&mut self, c: u32) -> Lexed {
+        self.unget_char(c);
+        let s = self.lexer.lexsize() - 1;
+        self.lexer.truncate(s);
+        let token = self.parse_doctype_decl();
+        self.lexer.token = token;
+        self.lexer.txtend = self.lexer.lexsize();
+        self.lexer.state = LexState::Content;
+        self.lexer.spacing.waswhite = false;
+        if self.lexer.doctype == tables::VERS_UNKNOWN
+            && let Some(t) = token
+        {
+            self.lexer.doctype = self.find_given_version(t);
+            if self.lexer.doctype != VERS_HTML5 {
+                self.adjust_tags();
+            }
+        }
+        Lexed::Token(token)
+    }
+
+    /// `GetTokenFromStream`, inside a processing instruction.
+    fn lex_proc_instr(&mut self, mut c: u32, run: &mut LexRun) -> Lexed {
+        if self.lexer.lexsize() - self.lexer.txtstart == 3
+            && self.lexer.from(self.lexer.txtstart) == b"php"
+        {
+            self.lexer.state = LexState::Php;
+            return Lexed::More;
+        }
+        if self.lexer.lexsize() - self.lexer.txtstart == 4
+            && &self.lexer.lexbuf[self.lexer.txtstart..self.lexer.txtstart + 3] == b"xml"
+            && is_white(u32::from(self.lexer.lexbuf[self.lexer.txtstart + 3]))
+        {
+            self.lexer.state = LexState::XmlDecl;
+            run.attributes.clear();
+            return Lexed::More;
+        }
+        if self.opts.meta.assume_xml_procins || self.lexer.document.isvoyager {
+            if c != u32::from(b'?') {
+                return Lexed::More;
+            }
+            c = self.read_char();
+            if c == END_OF_STREAM {
+                self.report(None, None, Code::UnexpectedEndOfFile);
+                self.unget_char(c);
+                return Lexed::More;
+            }
+            self.add_char_to_lexer(c);
+        }
+        if c != u32::from(b'>') {
+            return Lexed::More;
+        }
+        let s = self.lexer.lexsize() - 1;
+        self.lexer.truncate(s);
+        let token;
+        if self.lexer.lexsize() > 0 {
+            let txtstart = self.lexer.txtstart;
+            let mut i = 0;
+            while i < self.lexer.lexsize() - txtstart
+                && !is_white(u32::from(self.lexer.lexbuf[i + txtstart]))
+            {
+                i += 1;
+            }
+            let closed = self.lexer.last_byte() == Some(b'?');
+            if closed {
+                let s = self.lexer.lexsize() - 1;
+                self.lexer.truncate(s);
+            }
+            self.lexer.txtstart += i;
+            self.lexer.txtend = self.lexer.lexsize();
+            token = self.new_token(NodeType::ProcIns);
+            let name = String::from_utf8_lossy(
+                &self.lexer.lexbuf[self.lexer.txtstart - i..self.lexer.txtstart],
+            )
+            .into_owned();
+            let n = self.tree.node_mut(token);
+            n.closed = closed;
+            n.element = if i > 0 { Some(name) } else { None };
+        } else {
+            self.lexer.txtend = self.lexer.lexsize();
+            token = self.new_token(NodeType::ProcIns);
+        }
+        self.lexer.token = Some(token);
+        self.lexer.state = LexState::Content;
+        self.lexer.spacing.waswhite = false;
+        Lexed::Token(Some(token))
+    }
+
+    /// `GetTokenFromStream`, inside `<% ... %>`.
+    fn lex_asp(&mut self, mut c: u32) -> Lexed {
+        if c != u32::from(b'%') {
+            return Lexed::More;
+        }
+        c = self.read_char();
+        if c != u32::from(b'>') {
+            self.unget_char(c);
+            return Lexed::More;
+        }
+        let s = self.lexer.lexsize() - 1;
+        self.lexer.truncate(s);
+        self.lexer.txtend = s;
+        self.lexer.state = LexState::Content;
+        self.lexer.spacing.waswhite = false;
+        let token = self.new_token(NodeType::Asp);
+        self.lexer.token = Some(token);
+        Lexed::Token(Some(token))
+    }
+
+    /// `GetTokenFromStream`, inside `<# ... #>`.
+    fn lex_jste(&mut self, mut c: u32) -> Lexed {
+        if c != u32::from(b'#') {
+            return Lexed::More;
+        }
+        c = self.read_char();
+        if c != u32::from(b'>') {
+            self.unget_char(c);
+            return Lexed::More;
+        }
+        let s = self.lexer.lexsize() - 1;
+        self.lexer.truncate(s);
+        self.lexer.txtend = s;
+        self.lexer.state = LexState::Content;
+        self.lexer.spacing.waswhite = false;
+        let token = self.new_token(NodeType::Jste);
+        self.lexer.token = Some(token);
+        Lexed::Token(Some(token))
+    }
+
+    /// `GetTokenFromStream`, inside `<?php ... ?>`.
+    fn lex_php(&mut self, mut c: u32) -> Lexed {
+        if c != u32::from(b'?') {
+            return Lexed::More;
+        }
+        c = self.read_char();
+        if c != u32::from(b'>') {
+            self.unget_char(c);
+            return Lexed::More;
+        }
+        let s = self.lexer.lexsize() - 1;
+        self.lexer.truncate(s);
+        self.lexer.txtend = s;
+        self.lexer.state = LexState::Content;
+        self.lexer.spacing.waswhite = false;
+        let token = self.new_token(NodeType::Php);
+        self.lexer.token = Some(token);
+        Lexed::Token(Some(token))
+    }
+
+    /// `GetTokenFromStream`, the pseudo-attributes of an XML declaration.
+    fn lex_xml_decl(&mut self, mut c: u32, run: &mut LexRun) -> Lexed {
+        if is_white(c) && c != u32::from(b'?') {
+            return Lexed::More;
+        }
+        if c != u32::from(b'?') {
+            let mut isempty = false;
+            self.unget_char(c);
+            let (name, asp, php) = self.parse_attribute(&mut isempty);
+            let Some(name) = name else {
+                if let Some(asp) = asp {
+                    let mut av = AttVal::new();
+                    av.asp = Some(asp);
+                    run.attributes.push(av);
+                }
+                if let Some(php) = php {
+                    let mut av = AttVal::new();
+                    av.php = Some(php);
+                    run.attributes.push(av);
+                }
+                let s = self.lexer.lexsize() - 1;
+                self.lexer.truncate(s);
+                self.lexer.txtend = self.lexer.txtstart;
+                self.lexer.state = LexState::Content;
+                self.lexer.spacing.waswhite = false;
+                let token = self.new_token(NodeType::XmlDecl);
+                self.tree.node_mut(token).attributes = std::mem::take(&mut run.attributes);
+                self.lexer.token = Some(token);
+                return Lexed::Token(Some(token));
+            };
+            let mut pdelim = 0;
+            let value = self.parse_value(&name, true, &mut isempty, &mut pdelim);
+            let mut av = AttVal::new();
+            av.dict = tables::tables().attr_index(&name);
+            av.attribute = Some(name);
+            av.value = value;
+            av.delim = pdelim;
+            run.attributes.push(av);
+        }
+        c = self.read_char();
+        if c != u32::from(b'>') {
+            self.unget_char(c);
+            return Lexed::More;
+        }
+        let s = self.lexer.lexsize() - 1;
+        self.lexer.truncate(s);
+        self.lexer.txtend = self.lexer.txtstart;
+        self.lexer.state = LexState::Content;
+        self.lexer.spacing.waswhite = false;
+        let token = self.new_token(NodeType::XmlDecl);
+        self.tree.node_mut(token).attributes = std::mem::take(&mut run.attributes);
+        self.lexer.token = Some(token);
+        Lexed::Token(Some(token))
+    }
+
+    /// `GetTokenFromStream`, inside a `<![...]` section.
+    fn lex_section(&mut self, mut c: u32) -> Lexed {
+        if c == u32::from(b'[')
+            && self.lexer.lexsize() == self.lexer.txtstart + 6
+            && self.lexer.from(self.lexer.txtstart) == b"CDATA["
+        {
+            self.lexer.state = LexState::Cdata;
+            let s = self.lexer.lexsize() - 6;
+            self.lexer.truncate(s);
+            return Lexed::More;
+        }
+        if c == u32::from(b'>') {
+            self.unget_char(c);
+        } else if c != u32::from(b']') {
+            return Lexed::More;
+        }
+        c = self.read_char();
+        let lexdump = 1;
+        if c != u32::from(b'>') {
+            if c == u32::from(b'-') {
+                c = self.read_char();
+                if c == u32::from(b'-') {
+                    c = self.read_char();
+                    if c != u32::from(b'>') {
+                        self.unget_char(c);
+                        self.unget_char(u32::from(b'-'));
+                        self.unget_char(u32::from(b'-'));
+                        return Lexed::More;
+                    }
+                } else {
+                    self.unget_char(c);
+                    self.unget_char(u32::from(b'-'));
+                    return Lexed::More;
+                }
+            } else {
+                self.unget_char(c);
+                return Lexed::More;
+            }
+        }
+        let s = self.lexer.lexsize() - lexdump;
+        self.lexer.truncate(s);
+        self.lexer.txtend = s;
+        self.lexer.state = LexState::Content;
+        self.lexer.spacing.waswhite = false;
+        let token = self.new_token(NodeType::Section);
+        self.lexer.token = Some(token);
+        Lexed::Token(Some(token))
+    }
+
+    /// `GetTokenFromStream`, inside a CDATA section.
+    fn lex_cdata(&mut self, mut c: u32) -> Lexed {
+        if c != u32::from(b']') {
+            return Lexed::More;
+        }
+        c = self.read_char();
+        if c != u32::from(b']') {
+            self.unget_char(c);
+            return Lexed::More;
+        }
+        c = self.read_char();
+        if c != u32::from(b'>') {
+            self.unget_char(c);
+            self.unget_char(u32::from(b']'));
+            return Lexed::More;
+        }
+        let s = self.lexer.lexsize() - 1;
+        self.lexer.truncate(s);
+        self.lexer.txtend = s;
+        self.lexer.state = LexState::Content;
+        self.lexer.spacing.waswhite = false;
+        let token = self.new_token(NodeType::Cdata);
+        self.lexer.token = Some(token);
+        Lexed::Token(Some(token))
     }
 
     // ---- attributes ---------------------------------------------------------

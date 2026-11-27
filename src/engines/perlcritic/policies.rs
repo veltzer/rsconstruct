@@ -249,355 +249,445 @@ pub fn violates(
     critic: &CriticDoc,
     elem: Id,
 ) -> Result<Vec<Found>, Fatal> {
-    let doc = &critic.doc;
-    let text = || doc.content(elem);
     Ok(match policy {
-        Policy::ProhibitSleepViaSelect => {
-            if text() != b"select" || !is_function_call(doc, elem) {
-                return Ok(Vec::new());
-            }
-            let arguments = parse_arg_list(doc, elem);
-            if arguments.len() != 4 {
-                return Ok(Vec::new());
-            }
-            for argument in &arguments[..3] {
-                if !first_is(doc, argument, b"undef")? {
-                    return Ok(Vec::new());
-                }
-            }
-            if first_is(doc, &arguments[3], b"undef")? {
-                return Ok(Vec::new());
-            }
-            found("\"select\" used to emulate \"sleep\"", elem)
-        }
-        Policy::ProhibitStringyEval => {
-            if text() != b"eval" || !is_function_call(doc, elem) {
-                return Ok(Vec::new());
-            }
-            let Some(argument) = first_arg(doc, elem) else {
-                return Ok(Vec::new());
-            };
-            if doc.isa(argument, Class::StructureBlock) {
-                return Ok(Vec::new());
-            }
-            if settings.allow_includes && string_eval_is_an_include(doc, argument)? {
-                return Ok(Vec::new());
-            }
-            found("Expression form of \"eval\"", elem)
-        }
-        Policy::RequireGlobFunction => {
-            if text().iter().any(|&c| c == b'*' || c == b'?') {
-                found("Glob written as <...>", elem)
-            } else {
-                Vec::new()
-            }
-        }
-        Policy::ProhibitOneArgBless => {
-            if text() != b"bless" || !is_function_call(doc, elem) {
-                return Ok(Vec::new());
-            }
-            if parse_arg_list(doc, elem).len() == 1 {
-                found("One-argument \"bless\" used", elem)
-            } else {
-                Vec::new()
-            }
-        }
+        Policy::ProhibitSleepViaSelect => prohibit_sleep_via_select(critic, elem)?,
+        Policy::ProhibitStringyEval => prohibit_stringy_eval(settings, critic, elem)?,
+        Policy::RequireGlobFunction => require_glob_function(critic, elem),
+        Policy::ProhibitOneArgBless => prohibit_one_arg_bless(critic, elem),
         Policy::ProhibitMutatingListFunctions => {
-            if !settings.list_funcs.contains(&text()) || !is_function_call(doc, elem) {
-                return Ok(Vec::new());
-            }
-            let Some(first) = first_arg(doc, elem) else {
-                return Ok(Vec::new());
-            };
-            if !doc.isa(first, Class::StructureBlock) || !has_topic_side_effect(doc, first)? {
-                return Ok(Vec::new());
-            }
-            found("Don't modify $_ in list functions", elem)
+            prohibit_mutating_list_functions(settings, critic, elem)?
         }
-        Policy::ProhibitBarewordDirHandles => {
-            if text() != b"opendir" || !is_function_call(doc, elem) {
-                return Ok(Vec::new());
-            }
-            let args = parse_arg_list(doc, elem);
-            let Some(first) = args.first().filter(|a| a.defined()) else {
-                return Ok(Vec::new());
-            };
-            let Some(mut token) = first.first()?.cloned() else {
-                return Ok(Vec::new());
-            };
-            if token.isa(doc, Class::Word) && token.content(doc) == b"local" {
-                let Some(next) = first.second()?.cloned() else {
-                    return Ok(Vec::new());
-                };
-                token = next;
-            }
-            if token.isa(doc, Class::Cast) && token.content(doc) == b"\\" {
-                let Some(next) = first.second()?.cloned() else {
-                    return Ok(Vec::new());
-                };
-                token = next;
-            }
-            let content = token.content(doc);
-            if token.isa(doc, Class::Symbol) {
-                if content.first() == Some(&b'*') {
-                    return Ok(found("Bareword dir handle opened", elem));
-                }
-            } else if token.isa(doc, Class::Word) && content != b"my" && content != b"our" {
-                return Ok(found("Bareword dir handle opened", elem));
-            }
-            Vec::new()
-        }
-        Policy::ProhibitBarewordFileHandles => {
-            if !matches!(text().as_slice(), b"open" | b"sysopen") || !is_function_call(doc, elem) {
-                return Ok(Vec::new());
-            }
-            let args = parse_arg_list(doc, elem);
-            let first_token = match args.first() {
-                None | Some(Arg::Nodes(None)) => return Ok(Vec::new()),
-                Some(Arg::Elem(e)) => {
-                    if doc.class(*e) != Class::StatementScheduled {
-                        return Ok(Vec::new());
-                    }
-                    doc.schild(*e, 0).map(super::utils::Node::Elem)
-                }
-                Some(arg @ Arg::Nodes(Some(_))) => arg.first()?.cloned(),
-            };
-            let Some(first_token) = first_token else {
-                return Ok(Vec::new());
-            };
-            if first_token.isa(doc, Class::Word) {
-                let content = first_token.content(doc);
-                if content != b"my"
-                    && !matches!(content.as_slice(), b"STDIN" | b"STDOUT" | b"STDERR")
-                {
-                    return Ok(found("Bareword file handle opened", elem));
-                }
-            }
-            Vec::new()
-        }
-        Policy::ProhibitInteractiveTest => {
-            if text() == b"-t" {
-                found("Use IO::Interactive::is_interactive() instead of -t", elem)
-            } else {
-                Vec::new()
-            }
-        }
-        Policy::ProhibitTwoArgOpen => {
-            if text() != b"open" || !is_function_call(doc, elem) {
-                return Ok(Vec::new());
-            }
-            let version = critic.highest_explicit_perl_version()?;
-            if version.is_some_and(|v| v < Version::decimal(5, 6)) {
-                return Ok(Vec::new());
-            }
-            let args = parse_arg_list(doc, elem);
-            if args.len() > 2 {
-                return Ok(Vec::new());
-            }
-            if args.len() == 2 {
-                let Some(second) = args[1].first()? else {
-                    return Err("Can't call method \"isa\" on an undefined value".to_string());
-                };
-                if second.isa(doc, Class::Quote)
-                    && matches!(second.string(doc).as_slice(), b"-|" | b"|-")
-                {
-                    return Ok(Vec::new());
-                }
-            }
-            found("Two-argument \"open\" used", elem)
-        }
-        Policy::RequireEncodingWithUtf8Layer => {
-            let args = match text().as_slice() {
-                b"binmode" | b"open" => parse_arg_list(doc, elem),
-                _ => return Ok(Vec::new()),
-            };
-            let encoding = if text() == b"binmode" {
-                args.get(1).and_then(|a| argument_string(doc, a))
-            } else {
-                if args.len() < 3 {
-                    return Ok(Vec::new());
-                }
-                argument_string(doc, &args[1]).map(|s| strip_open_mode(&s))
-            };
-            let Some(encoding) = encoding.filter(|e| !e.is_empty() && e != b"0") else {
-                return Ok(Vec::new());
-            };
-            if mentions_utf8_layer(&encoding) {
-                found("I/O layer \":utf8\" used", elem)
-            } else {
-                Vec::new()
-            }
-        }
-        Policy::ProhibitEvilModules => {
-            let module = doc.include_module(elem);
-            if module.is_empty() || module == b"0" {
-                return Ok(Vec::new());
-            }
-            let description = settings.evil_modules.get(&module).map_or_else(
-                || {
-                    settings
-                        .evil_module_regexes
-                        .iter()
-                        .find(|(re, _)| re.is_match(&module))
-                        .map(|(_, d)| d.clone())
-                },
-                |d| Some(d.clone()),
-            );
-            description.map_or_else(Vec::new, |d| {
-                let d = if d.is_empty() || d == b"0" {
-                    let mut s = b"Prohibited module \"".to_vec();
-                    s.extend(&module);
-                    s.extend(b"\" used");
-                    s
-                } else {
-                    d
-                };
-                found(d, elem)
-            })
-        }
-        Policy::RequireBarewordIncludes => {
-            let Some(child) = doc.schild(elem, 1) else {
-                return Ok(Vec::new());
-            };
-            if !doc.isa(child, Class::Quote) {
-                return Ok(Vec::new());
-            }
-            let mut description = b"\"".to_vec();
-            description.extend(doc.include_type(elem).unwrap_or_default());
-            description.extend(b"\" statement with library name as string");
-            found(description, elem)
-        }
+        Policy::ProhibitBarewordDirHandles => prohibit_bareword_dir_handles(critic, elem)?,
+        Policy::ProhibitBarewordFileHandles => prohibit_bareword_file_handles(critic, elem)?,
+        Policy::ProhibitInteractiveTest => prohibit_interactive_test(critic, elem),
+        Policy::ProhibitTwoArgOpen => prohibit_two_arg_open(critic, elem)?,
+        Policy::RequireEncodingWithUtf8Layer => require_encoding_with_utf8_layer(critic, elem),
+        Policy::ProhibitEvilModules => prohibit_evil_modules(settings, critic, elem),
+        Policy::RequireBarewordIncludes => require_bareword_includes(critic, elem),
         Policy::RequireFilenameMatchesPackage => filename_matches_package(critic),
         Policy::ProhibitExplicitReturnUndef | Policy::ProhibitReturnSort => {
-            if text() != b"return" || is_hash_key(doc, elem) {
-                return Ok(Vec::new());
-            }
-            let Some(sib) = doc.snext_sibling(elem) else {
-                return Ok(Vec::new());
-            };
-            let (word, description): (&[u8], &str) = if policy == Policy::ProhibitReturnSort {
-                (b"sort", "\"return\" statement followed by \"sort\"")
-            } else {
-                (b"undef", "\"return\" statement with explicit \"undef\"")
-            };
-            if doc.isa(sib, Class::Word) && doc.text(sib) == word {
-                found(description, elem)
-            } else {
-                Vec::new()
-            }
+            prohibited_return(policy, critic, elem)
         }
-        Policy::ProhibitNestedSubs => {
-            if doc.isa(elem, Class::StatementScheduled)
-                || doc.declaration_type(elem, false).is_some()
-            {
+        Policy::ProhibitNestedSubs => prohibit_nested_subs(critic, elem),
+        Policy::ProhibitSubroutinePrototypes => prohibit_subroutine_prototypes(critic, elem),
+        Policy::ProhibitNoStrict => prohibit_no_strict(settings, critic, elem),
+        Policy::RequireUseStrict => require_use_strict(settings, critic),
+        Policy::ProhibitLeadingZeros => prohibit_leading_zeros(settings, critic, elem),
+        Policy::ProhibitConditionalDeclarations => prohibit_conditional_declarations(critic, elem),
+        Policy::RequireLexicalLoopIterators => require_lexical_loop_iterators(critic, elem)?,
+    })
+}
+
+/// `ProhibitSleepViaSelect`.
+fn prohibit_sleep_via_select(critic: &CriticDoc, elem: Id) -> Result<Vec<Found>, Fatal> {
+    let doc = &critic.doc;
+    let text = || doc.content(elem);
+    if text() != b"select" || !is_function_call(doc, elem) {
+        return Ok(Vec::new());
+    }
+    let arguments = parse_arg_list(doc, elem);
+    if arguments.len() != 4 {
+        return Ok(Vec::new());
+    }
+    for argument in &arguments[..3] {
+        if !first_is(doc, argument, b"undef")? {
+            return Ok(Vec::new());
+        }
+    }
+    if first_is(doc, &arguments[3], b"undef")? {
+        return Ok(Vec::new());
+    }
+    Ok(found("\"select\" used to emulate \"sleep\"", elem))
+}
+
+/// `ProhibitStringyEval`.
+fn prohibit_stringy_eval(
+    settings: &Settings,
+    critic: &CriticDoc,
+    elem: Id,
+) -> Result<Vec<Found>, Fatal> {
+    let doc = &critic.doc;
+    let text = || doc.content(elem);
+    if text() != b"eval" || !is_function_call(doc, elem) {
+        return Ok(Vec::new());
+    }
+    let Some(argument) = first_arg(doc, elem) else {
+        return Ok(Vec::new());
+    };
+    if doc.isa(argument, Class::StructureBlock) {
+        return Ok(Vec::new());
+    }
+    if settings.allow_includes && string_eval_is_an_include(doc, argument)? {
+        return Ok(Vec::new());
+    }
+    Ok(found("Expression form of \"eval\"", elem))
+}
+
+/// `RequireGlobFunction`.
+fn require_glob_function(critic: &CriticDoc, elem: Id) -> Vec<Found> {
+    let doc = &critic.doc;
+    let text = || doc.content(elem);
+    if text().iter().any(|&c| c == b'*' || c == b'?') {
+        found("Glob written as <...>", elem)
+    } else {
+        Vec::new()
+    }
+}
+
+/// `ProhibitOneArgBless`.
+fn prohibit_one_arg_bless(critic: &CriticDoc, elem: Id) -> Vec<Found> {
+    let doc = &critic.doc;
+    let text = || doc.content(elem);
+    if text() != b"bless" || !is_function_call(doc, elem) {
+        return Vec::new();
+    }
+    if parse_arg_list(doc, elem).len() == 1 {
+        found("One-argument \"bless\" used", elem)
+    } else {
+        Vec::new()
+    }
+}
+
+/// `ProhibitMutatingListFunctions`.
+fn prohibit_mutating_list_functions(
+    settings: &Settings,
+    critic: &CriticDoc,
+    elem: Id,
+) -> Result<Vec<Found>, Fatal> {
+    let doc = &critic.doc;
+    let text = || doc.content(elem);
+    if !settings.list_funcs.contains(&text()) || !is_function_call(doc, elem) {
+        return Ok(Vec::new());
+    }
+    let Some(first) = first_arg(doc, elem) else {
+        return Ok(Vec::new());
+    };
+    if !doc.isa(first, Class::StructureBlock) || !has_topic_side_effect(doc, first)? {
+        return Ok(Vec::new());
+    }
+    Ok(found("Don't modify $_ in list functions", elem))
+}
+
+/// `ProhibitBarewordDirHandles`.
+fn prohibit_bareword_dir_handles(critic: &CriticDoc, elem: Id) -> Result<Vec<Found>, Fatal> {
+    let doc = &critic.doc;
+    let text = || doc.content(elem);
+    if text() != b"opendir" || !is_function_call(doc, elem) {
+        return Ok(Vec::new());
+    }
+    let args = parse_arg_list(doc, elem);
+    let Some(first) = args.first().filter(|a| a.defined()) else {
+        return Ok(Vec::new());
+    };
+    let Some(mut token) = first.first()?.cloned() else {
+        return Ok(Vec::new());
+    };
+    if token.isa(doc, Class::Word) && token.content(doc) == b"local" {
+        let Some(next) = first.second()?.cloned() else {
+            return Ok(Vec::new());
+        };
+        token = next;
+    }
+    if token.isa(doc, Class::Cast) && token.content(doc) == b"\\" {
+        let Some(next) = first.second()?.cloned() else {
+            return Ok(Vec::new());
+        };
+        token = next;
+    }
+    let content = token.content(doc);
+    if token.isa(doc, Class::Symbol) {
+        if content.first() == Some(&b'*') {
+            return Ok(found("Bareword dir handle opened", elem));
+        }
+    } else if token.isa(doc, Class::Word) && content != b"my" && content != b"our" {
+        return Ok(found("Bareword dir handle opened", elem));
+    }
+    Ok(Vec::new())
+}
+
+/// `ProhibitBarewordFileHandles`.
+fn prohibit_bareword_file_handles(critic: &CriticDoc, elem: Id) -> Result<Vec<Found>, Fatal> {
+    let doc = &critic.doc;
+    let text = || doc.content(elem);
+    if !matches!(text().as_slice(), b"open" | b"sysopen") || !is_function_call(doc, elem) {
+        return Ok(Vec::new());
+    }
+    let args = parse_arg_list(doc, elem);
+    let first_token = match args.first() {
+        None | Some(Arg::Nodes(None)) => return Ok(Vec::new()),
+        Some(Arg::Elem(e)) => {
+            if doc.class(*e) != Class::StatementScheduled {
                 return Ok(Vec::new());
             }
-            let mut outer = doc.parent(elem);
-            while let Some(o) = outer {
-                if doc.isa(o, Class::StatementSub) && !doc.isa(o, Class::StatementScheduled) {
-                    return Ok(found("Nested named subroutine", elem));
-                }
-                outer = doc.parent(o);
-            }
-            Vec::new()
+            doc.schild(*e, 0).map(super::utils::Node::Elem)
         }
-        Policy::ProhibitSubroutinePrototypes => {
-            let prototype = doc
-                .children(elem)
+        Some(arg @ Arg::Nodes(Some(_))) => arg.first()?.cloned(),
+    };
+    let Some(first_token) = first_token else {
+        return Ok(Vec::new());
+    };
+    if first_token.isa(doc, Class::Word) {
+        let content = first_token.content(doc);
+        if content != b"my" && !matches!(content.as_slice(), b"STDIN" | b"STDOUT" | b"STDERR") {
+            return Ok(found("Bareword file handle opened", elem));
+        }
+    }
+    Ok(Vec::new())
+}
+
+/// `ProhibitInteractiveTest`.
+fn prohibit_interactive_test(critic: &CriticDoc, elem: Id) -> Vec<Found> {
+    let doc = &critic.doc;
+    let text = || doc.content(elem);
+    if text() == b"-t" {
+        found("Use IO::Interactive::is_interactive() instead of -t", elem)
+    } else {
+        Vec::new()
+    }
+}
+
+/// `ProhibitTwoArgOpen`.
+fn prohibit_two_arg_open(critic: &CriticDoc, elem: Id) -> Result<Vec<Found>, Fatal> {
+    let doc = &critic.doc;
+    let text = || doc.content(elem);
+    if text() != b"open" || !is_function_call(doc, elem) {
+        return Ok(Vec::new());
+    }
+    let version = critic.highest_explicit_perl_version()?;
+    if version.is_some_and(|v| v < Version::decimal(5, 6)) {
+        return Ok(Vec::new());
+    }
+    let args = parse_arg_list(doc, elem);
+    if args.len() > 2 {
+        return Ok(Vec::new());
+    }
+    if args.len() == 2 {
+        let Some(second) = args[1].first()? else {
+            return Err("Can't call method \"isa\" on an undefined value".to_string());
+        };
+        if second.isa(doc, Class::Quote) && matches!(second.string(doc).as_slice(), b"-|" | b"|-") {
+            return Ok(Vec::new());
+        }
+    }
+    Ok(found("Two-argument \"open\" used", elem))
+}
+
+/// `RequireEncodingWithUtf8Layer`.
+fn require_encoding_with_utf8_layer(critic: &CriticDoc, elem: Id) -> Vec<Found> {
+    let doc = &critic.doc;
+    let text = || doc.content(elem);
+    let args = match text().as_slice() {
+        b"binmode" | b"open" => parse_arg_list(doc, elem),
+        _ => return Vec::new(),
+    };
+    let encoding = if text() == b"binmode" {
+        args.get(1).and_then(|a| argument_string(doc, a))
+    } else {
+        if args.len() < 3 {
+            return Vec::new();
+        }
+        argument_string(doc, &args[1]).map(|s| strip_open_mode(&s))
+    };
+    let Some(encoding) = encoding.filter(|e| !e.is_empty() && e != b"0") else {
+        return Vec::new();
+    };
+    if mentions_utf8_layer(&encoding) {
+        found("I/O layer \":utf8\" used", elem)
+    } else {
+        Vec::new()
+    }
+}
+
+/// `ProhibitEvilModules`.
+fn prohibit_evil_modules(settings: &Settings, critic: &CriticDoc, elem: Id) -> Vec<Found> {
+    let doc = &critic.doc;
+    let module = doc.include_module(elem);
+    if module.is_empty() || module == b"0" {
+        return Vec::new();
+    }
+    let description = settings.evil_modules.get(&module).map_or_else(
+        || {
+            settings
+                .evil_module_regexes
+                .iter()
+                .find(|(re, _)| re.is_match(&module))
+                .map(|(_, d)| d.clone())
+        },
+        |d| Some(d.clone()),
+    );
+    description.map_or_else(Vec::new, |d| {
+        let d = if d.is_empty() || d == b"0" {
+            let mut s = b"Prohibited module \"".to_vec();
+            s.extend(&module);
+            s.extend(b"\" used");
+            s
+        } else {
+            d
+        };
+        found(d, elem)
+    })
+}
+
+/// `RequireBarewordIncludes`.
+fn require_bareword_includes(critic: &CriticDoc, elem: Id) -> Vec<Found> {
+    let doc = &critic.doc;
+    let Some(child) = doc.schild(elem, 1) else {
+        return Vec::new();
+    };
+    if !doc.isa(child, Class::Quote) {
+        return Vec::new();
+    }
+    let mut description = b"\"".to_vec();
+    description.extend(doc.include_type(elem).unwrap_or_default());
+    description.extend(b"\" statement with library name as string");
+    found(description, elem)
+}
+
+/// `ProhibitExplicitReturnUndef and ProhibitReturnSort`.
+fn prohibited_return(policy: Policy, critic: &CriticDoc, elem: Id) -> Vec<Found> {
+    let doc = &critic.doc;
+    let text = || doc.content(elem);
+    if text() != b"return" || is_hash_key(doc, elem) {
+        return Vec::new();
+    }
+    let Some(sib) = doc.snext_sibling(elem) else {
+        return Vec::new();
+    };
+    let (word, description): (&[u8], &str) = if policy == Policy::ProhibitReturnSort {
+        (b"sort", "\"return\" statement followed by \"sort\"")
+    } else {
+        (b"undef", "\"return\" statement with explicit \"undef\"")
+    };
+    if doc.isa(sib, Class::Word) && doc.text(sib) == word {
+        found(description, elem)
+    } else {
+        Vec::new()
+    }
+}
+
+/// `ProhibitNestedSubs`.
+fn prohibit_nested_subs(critic: &CriticDoc, elem: Id) -> Vec<Found> {
+    let doc = &critic.doc;
+    if doc.isa(elem, Class::StatementScheduled) || doc.declaration_type(elem, false).is_some() {
+        return Vec::new();
+    }
+    let mut outer = doc.parent(elem);
+    while let Some(o) = outer {
+        if doc.isa(o, Class::StatementSub) && !doc.isa(o, Class::StatementScheduled) {
+            return found("Nested named subroutine", elem);
+        }
+        outer = doc.parent(o);
+    }
+    Vec::new()
+}
+
+/// `ProhibitSubroutinePrototypes`.
+fn prohibit_subroutine_prototypes(critic: &CriticDoc, elem: Id) -> Vec<Found> {
+    let doc = &critic.doc;
+    let prototype = doc
+        .children(elem)
+        .iter()
+        .copied()
+        .find(|&c| doc.isa(c, Class::Prototype))
+        .map(|p| {
+            let content = doc.text(p);
+            let content = content.strip_prefix(b"(").unwrap_or(content);
+            let content = content.strip_suffix(b")").unwrap_or(content);
+            content
                 .iter()
                 .copied()
-                .find(|&c| doc.isa(c, Class::Prototype))
-                .map(|p| {
-                    let content = doc.text(p);
-                    let content = content.strip_prefix(b"(").unwrap_or(content);
-                    let content = content.strip_suffix(b")").unwrap_or(content);
-                    content
-                        .iter()
-                        .copied()
-                        .filter(|&c| !super::ppi::is_space(c))
-                        .collect::<Vec<u8>>()
-                });
-            match prototype {
-                Some(p) if !p.is_empty() && p != b"0" => found("Subroutine prototypes used", elem),
-                _ => Vec::new(),
-            }
+                .filter(|&c| !super::ppi::is_space(c))
+                .collect::<Vec<u8>>()
+        });
+    match prototype {
+        Some(p) if !p.is_empty() && p != b"0" => found("Subroutine prototypes used", elem),
+        _ => Vec::new(),
+    }
+}
+
+/// `ProhibitNoStrict`.
+fn prohibit_no_strict(settings: &Settings, critic: &CriticDoc, elem: Id) -> Vec<Found> {
+    let doc = &critic.doc;
+    if doc.include_type(elem).as_deref() != Some(b"no") || doc.include_pragma(elem) != b"strict" {
+        return Vec::new();
+    }
+    let Some(statement) = doc.statement(elem) else {
+        return Vec::new();
+    };
+    let content = doc.content(statement);
+    let words: Vec<Vec<u8>> = content
+        .split(|c| !c.is_ascii_lowercase())
+        .filter(|w| !w.is_empty() && !matches!(*w, b"qw" | b"no" | b"strict"))
+        .map(<[u8]>::to_vec)
+        .collect();
+    if !words.is_empty() && words.iter().all(|w| settings.no_strict_allow.contains(w)) {
+        return Vec::new();
+    }
+    found("Stricture disabled", elem)
+}
+
+/// `ProhibitLeadingZeros`.
+fn prohibit_leading_zeros(settings: &Settings, critic: &CriticDoc, elem: Id) -> Vec<Found> {
+    let doc = &critic.doc;
+    let text = || doc.content(elem);
+    let content = text();
+    if !has_leading_zero(&content) {
+        return Vec::new();
+    }
+    let mut description = b"Integer with leading zeros: \"".to_vec();
+    description.extend(&content);
+    description.push(b'"');
+    if settings.leading_zeros_strict {
+        return found(description, elem);
+    }
+    if is_permission_argument(doc, elem) {
+        return Vec::new();
+    }
+    found(description, elem)
+}
+
+/// `ProhibitConditionalDeclarations`.
+fn prohibit_conditional_declarations(critic: &CriticDoc, elem: Id) -> Vec<Found> {
+    let doc = &critic.doc;
+    if doc.declaration_type(elem, true).as_deref() == Some(b"local") {
+        return Vec::new();
+    }
+    let conditional = doc.find_first(elem, |d, e| {
+        if !matches!(
+            d.content(e).as_slice(),
+            b"if" | b"while" | b"foreach" | b"for" | b"until" | b"unless"
+        ) {
+            return None;
         }
-        Policy::ProhibitNoStrict => {
-            if doc.include_type(elem).as_deref() != Some(b"no")
-                || doc.include_pragma(elem) != b"strict"
-            {
-                return Ok(Vec::new());
-            }
-            let Some(statement) = doc.statement(elem) else {
-                return Ok(Vec::new());
-            };
-            let content = doc.content(statement);
-            let words: Vec<Vec<u8>> = content
-                .split(|c| !c.is_ascii_lowercase())
-                .filter(|w| !w.is_empty() && !matches!(*w, b"qw" | b"no" | b"strict"))
-                .map(<[u8]>::to_vec)
-                .collect();
-            if !words.is_empty() && words.iter().all(|w| settings.no_strict_allow.contains(w)) {
-                return Ok(Vec::new());
-            }
-            found("Stricture disabled", elem)
+        if !d.isa(e, Class::Word) || is_hash_key(d, e) || is_method_call(d, e) {
+            return None;
         }
-        Policy::RequireUseStrict => require_use_strict(settings, critic),
-        Policy::ProhibitLeadingZeros => {
-            let content = text();
-            if !has_leading_zero(&content) {
-                return Ok(Vec::new());
-            }
-            let mut description = b"Integer with leading zeros: \"".to_vec();
-            description.extend(&content);
-            description.push(b'"');
-            if settings.leading_zeros_strict {
-                return Ok(found(description, elem));
-            }
-            if is_permission_argument(doc, elem) {
-                return Ok(Vec::new());
-            }
-            found(description, elem)
-        }
-        Policy::ProhibitConditionalDeclarations => {
-            if doc.declaration_type(elem, true).as_deref() == Some(b"local") {
-                return Ok(Vec::new());
-            }
-            let conditional = doc.find_first(elem, |d, e| {
-                if !matches!(
-                    d.content(e).as_slice(),
-                    b"if" | b"while" | b"foreach" | b"for" | b"until" | b"unless"
-                ) {
-                    return None;
-                }
-                if !d.isa(e, Class::Word) || is_hash_key(d, e) || is_method_call(d, e) {
-                    return None;
-                }
-                Some(true)
-            });
-            if conditional.is_some() {
-                found("Variable declared in conditional statement", elem)
-            } else {
-                Vec::new()
-            }
-        }
-        Policy::RequireLexicalLoopIterators => {
-            if doc.compound_type(elem)? != Some("foreach") {
-                return Ok(Vec::new());
-            }
-            let Some(first) = doc.schild(elem, 0) else {
-                return Ok(Vec::new());
-            };
-            let start = isize::from(doc.class(first) == Class::Label);
-            let Some(scope) = doc.schild(elem, start + 1) else {
-                return Ok(Vec::new());
-            };
-            if doc.isa(scope, Class::StructureList) || doc.is(scope, "my") {
-                return Ok(Vec::new());
-            }
-            found("Loop iterator is not lexical", elem)
-        }
-    })
+        Some(true)
+    });
+    if conditional.is_some() {
+        found("Variable declared in conditional statement", elem)
+    } else {
+        Vec::new()
+    }
+}
+
+/// `RequireLexicalLoopIterators`.
+fn require_lexical_loop_iterators(critic: &CriticDoc, elem: Id) -> Result<Vec<Found>, Fatal> {
+    let doc = &critic.doc;
+    if doc.compound_type(elem)? != Some("foreach") {
+        return Ok(Vec::new());
+    }
+    let Some(first) = doc.schild(elem, 0) else {
+        return Ok(Vec::new());
+    };
+    let start = isize::from(doc.class(first) == Class::Label);
+    let Some(scope) = doc.schild(elem, start + 1) else {
+        return Ok(Vec::new());
+    };
+    if doc.isa(scope, Class::StructureList) || doc.is(scope, "my") {
+        return Ok(Vec::new());
+    }
+    Ok(found("Loop iterator is not lexical", elem))
 }
 
 /// `$arg->[0] eq $word` (Perl dies for an argument that is not a list).

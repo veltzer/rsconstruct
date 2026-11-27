@@ -28,6 +28,18 @@ struct Frames {
     noframes: Option<NodeId>,
 }
 
+/// What a token loop does after one of its steps.
+enum Flow {
+    /// Read the next token.
+    Continue,
+    /// Leave the loop.
+    Break,
+    /// Leave the parser function.
+    Return,
+    /// Go on with this node.
+    Proceed(NodeId),
+}
+
 /// What `ParseBody` does with an element that is neither block nor inline.
 enum Misplaced {
     /// It is dropped or was moved elsewhere: read on.
@@ -553,6 +565,280 @@ impl Doc {
 
     // ---- ParseBlock -----------------------------------------------------------
 
+    /// Close what an `object` element left open on the inline stack, and
+    /// give the stack its base back.
+    fn end_object(&mut self, istackbase: usize) {
+        while self.lexer.istack.len() > self.lexer.istackbase {
+            self.pop_inline(None);
+        }
+        self.lexer.istackbase = istackbase;
+    }
+
+    /// `TY_(ParseBlock)`, an end tag that is not the element's own.
+    fn block_end_tag(&mut self, element: NodeId, node: NodeId) -> Flow {
+        if self.ntype(node) == NodeType::EndTag {
+            if !self.has_tag(node) {
+                self.report(Some(element), Some(node), Code::DiscardingUnexpected);
+                return Flow::Continue;
+            } else if self.node_is(node, TagId::BR) {
+                self.tree.node_mut(node).ntype = NodeType::StartTag;
+            } else if self.node_is(node, TagId::P) {
+                let n = self.tree.node_mut(node);
+                n.ntype = NodeType::StartEndTag;
+                n.implicit = true;
+            } else if self
+                .tree
+                .node(node)
+                .tag
+                .is_some_and(|t| self.tree.descendant_of(element, t))
+            {
+                self.unget_token();
+                return Flow::Break;
+            } else if self.lexer.blocks.exiled
+                && (self.node_has_cm(node, CM_TABLE) || self.node_is(node, TagId::Table))
+            {
+                self.unget_token();
+                self.trim_spaces(element);
+                return Flow::Return;
+            }
+        }
+        Flow::Proceed(node)
+    }
+
+    /// `TY_(ParseBlock)`, text in the element.
+    fn block_text(
+        &mut self,
+        element: NodeId,
+        node: NodeId,
+        emodel: u32,
+        mode: &mut TokenMode,
+        checkstack: &mut bool,
+    ) {
+        if *checkstack {
+            *checkstack = false;
+            if (emodel & CM_MIXED) == 0 && self.inline_dup(Some(node)) > 0 {
+                return;
+            }
+        }
+        self.tree.insert_node_at_end(element, node);
+        *mode = TokenMode::MixedContent;
+        if matches!(
+            self.tag_id(element),
+            TagId::Body | TagId::Map | TagId::Blockquote | TagId::Form | TagId::Noscript
+        ) {
+            self.constrain_version(!VERS_HTML40_STRICT);
+        }
+    }
+
+    /// `TY_(ParseBlock)`: `param` belongs in elements that take
+    /// parameters and `area` in `map`; elsewhere they are dropped.
+    fn block_param_or_area(&mut self, element: NodeId, node: NodeId) {
+        let allowed = if self.node_is(node, TagId::Param) {
+            self.node_has_cm(element, CM_PARAM)
+        } else {
+            self.node_is(element, TagId::Map)
+        };
+        if allowed && self.is_element(node) {
+            self.tree.insert_node_at_end(element, node);
+        } else {
+            self.report(Some(element), Some(node), Code::DiscardingUnexpected);
+        }
+    }
+
+    /// `TY_(ParseBlock)`, a tag that is not inline: it is dropped, goes
+    /// into the element (inside an inferred list where it needs one), or
+    /// ends the element.
+    fn block_non_inline(&mut self, element: NodeId, mut node: NodeId, istackbase: usize) -> Flow {
+        if !self.is_element(node) {
+            if self.node_is(node, TagId::Form) {
+                self.bad_form();
+            }
+            self.report(Some(element), Some(node), Code::DiscardingUnexpected);
+            return Flow::Continue;
+        }
+
+        if self.node_is(element, TagId::LI)
+            && matches!(
+                self.tag_id(node),
+                TagId::Frame | TagId::Frameset | TagId::Optgroup | TagId::Option
+            )
+        {
+            self.report(Some(element), Some(node), Code::DiscardingUnexpected);
+            return Flow::Continue;
+        }
+
+        if self.node_is(element, TagId::TD) || self.node_is(element, TagId::TH) {
+            if self.node_has_cm(node, CM_HEAD) {
+                self.move_to_head(element, node);
+                return Flow::Continue;
+            }
+            if self.node_has_cm(node, CM_LIST) {
+                self.unget_token();
+                node = self.inferred_tag(TagId::UL);
+                self.add_class_no_indent(node);
+                self.lexer.blocks.exclude_blocks = true;
+            } else if self.node_has_cm(node, CM_DEFLIST) {
+                self.unget_token();
+                node = self.inferred_tag(TagId::DL);
+                self.lexer.blocks.exclude_blocks = true;
+            }
+            if !self.node_has_cm(node, CM_BLOCK) {
+                self.unget_token();
+                self.trim_spaces(element);
+                return Flow::Return;
+            }
+        } else if self.node_has_cm(node, CM_BLOCK) {
+            if self.lexer.blocks.exclude_blocks {
+                if !self.node_has_cm(element, CM_OPT) {
+                    self.report(Some(element), Some(node), Code::MissingEndtagBefore);
+                }
+                self.unget_token();
+                if self.node_has_cm(element, CM_OBJECT) {
+                    self.lexer.istackbase = istackbase;
+                }
+                self.trim_spaces(element);
+                return Flow::Return;
+            }
+        } else {
+            return self.block_implied_end(element, node, istackbase);
+        }
+        Flow::Proceed(node)
+    }
+
+    /// `TY_(ParseBlock)`, a tag that an element with no block content
+    /// cannot hold: the element ends here, unless the tag is moved,
+    /// dropped or given an inferred parent.
+    fn block_implied_end(&mut self, element: NodeId, mut node: NodeId, istackbase: usize) -> Flow {
+        if self.node_has_cm(node, CM_HEAD) {
+            self.move_to_head(element, node);
+            return Flow::Continue;
+        }
+
+        if self.node_is(element, TagId::Form)
+            && let Some(parent) = self.tree.parent(element)
+            && self.node_is(parent, TagId::TD)
+            && self.tree.node(parent).implicit
+        {
+            if self.node_is(node, TagId::TD) {
+                self.report(Some(element), Some(node), Code::DiscardingUnexpected);
+                return Flow::Continue;
+            }
+            if self.node_is(node, TagId::TH) {
+                self.report(Some(element), Some(node), Code::DiscardingUnexpected);
+                let th = Self::tag_index(TagId::TH);
+                let p = self.tree.node_mut(parent);
+                p.element = Some("th".to_string());
+                p.tag = Some(th);
+                return Flow::Continue;
+            }
+        }
+
+        if !self.node_has_cm(element, CM_OPT) && !self.tree.node(element).implicit {
+            self.report(Some(element), Some(node), Code::MissingEndtagBefore);
+        }
+        if !self.opts.layout.omit_optional_tags && self.node_has_cm(element, CM_OPT) {
+            self.report(Some(element), Some(node), Code::MissingEndtagOptional);
+        }
+
+        self.unget_token();
+
+        if self.node_has_cm(node, CM_LIST) {
+            if let Some(parent) = self.tree.parent(element)
+                && self.node_parser(parent) == Some(ParserKind::ParseList)
+            {
+                self.trim_spaces(element);
+                return Flow::Return;
+            }
+            node = self.inferred_tag(TagId::UL);
+            self.add_class_no_indent(node);
+        } else if self.node_has_cm(node, CM_DEFLIST) {
+            if self
+                .tree
+                .parent(element)
+                .is_some_and(|p| self.node_is(p, TagId::DL))
+            {
+                self.trim_spaces(element);
+                return Flow::Return;
+            }
+            node = self.inferred_tag(TagId::DL);
+        } else if self.node_has_cm(node, CM_TABLE) || self.node_has_cm(node, CM_ROW) {
+            if self.lexer.blocks.exiled {
+                return Flow::Return;
+            }
+            node = self.inferred_tag(TagId::Table);
+        } else if self.node_has_cm(element, CM_OBJECT) {
+            self.end_object(istackbase);
+            self.trim_spaces(element);
+            return Flow::Return;
+        } else {
+            self.trim_spaces(element);
+            return Flow::Return;
+        }
+        Flow::Proceed(node)
+    }
+
+    /// `TY_(ParseBlock)`: an `a` ends any `a` that is open.
+    fn block_anchor(&mut self, element: NodeId, node: NodeId, mode: TokenMode) -> Flow {
+        // an <a> ends any open <a>
+        if self.node_is(node, TagId::A)
+            && !self.tree.node(node).implicit
+            && (self.node_is(element, TagId::A) || self.descendant_of(element, TagId::A))
+        {
+            if self.ntype(node) != NodeType::EndTag
+                && self.tree.node(node).attributes.is_empty()
+                && self.opts.markup.coerce_endtags
+            {
+                self.tree.node_mut(node).ntype = NodeType::EndTag;
+                self.report(Some(element), Some(node), Code::CoerceToEndtag);
+                self.unget_token();
+                return Flow::Continue;
+            }
+            if self.node_is(element, TagId::A) {
+                self.report(Some(element), Some(node), Code::MissingEndtagBefore);
+                self.unget_token();
+            } else {
+                self.report(Some(element), Some(node), Code::DiscardingUnexpected);
+            }
+            if !mode.is_preformatted_bit() {
+                self.trim_spaces(element);
+            }
+            return Flow::Return;
+        }
+        Flow::Proceed(node)
+    }
+
+    /// `TY_(ParseBlock)`, an element the block can hold: it is added and
+    /// parsed.
+    fn block_element(
+        &mut self,
+        element: NodeId,
+        node: NodeId,
+        emodel: u32,
+        mode: &mut TokenMode,
+        checkstack: &mut bool,
+    ) {
+        if self.node_has_cm(node, CM_INLINE) {
+            if *checkstack && !self.tree.node(node).implicit {
+                *checkstack = false;
+                if (emodel & CM_MIXED) == 0 && self.inline_dup(Some(node)) > 0 {
+                    return;
+                }
+            }
+            *mode = TokenMode::MixedContent;
+        } else {
+            *checkstack = true;
+            *mode = TokenMode::IgnoreWhitespace;
+        }
+        if self.node_is(node, TagId::BR) {
+            self.trim_spaces(element);
+        }
+        self.tree.insert_node_at_end(element, node);
+        if self.tree.node(node).implicit {
+            self.report(Some(element), Some(node), Code::InsertingTag);
+        }
+        self.parse_tag(node, TokenMode::IgnoreWhitespace);
+    }
+
     /// `TY_(ParseBlock)`.
     fn parse_block(&mut self, element: NodeId, mut mode: TokenMode) {
         let emodel = self.node_model(element);
@@ -589,10 +875,7 @@ impl Doc {
                     || self.tree.node(element).was == self.tree.node(node).tag)
             {
                 if (emodel & CM_OBJECT) != 0 {
-                    while self.lexer.istack.len() > self.lexer.istackbase {
-                        self.pop_inline(None);
-                    }
-                    self.lexer.istackbase = istackbase;
+                    self.end_object(istackbase);
                 }
                 self.tree.node_mut(element).closed = true;
                 self.trim_spaces(element);
@@ -609,49 +892,16 @@ impl Doc {
                 continue;
             }
 
-            if self.ntype(node) == NodeType::EndTag {
-                if !self.has_tag(node) {
-                    self.report(Some(element), Some(node), Code::DiscardingUnexpected);
-                    continue;
-                } else if self.node_is(node, TagId::BR) {
-                    self.tree.node_mut(node).ntype = NodeType::StartTag;
-                } else if self.node_is(node, TagId::P) {
-                    let n = self.tree.node_mut(node);
-                    n.ntype = NodeType::StartEndTag;
-                    n.implicit = true;
-                } else if self
-                    .tree
-                    .node(node)
-                    .tag
-                    .is_some_and(|t| self.tree.descendant_of(element, t))
-                {
-                    self.unget_token();
-                    break;
-                } else if self.lexer.blocks.exiled
-                    && (self.node_has_cm(node, CM_TABLE) || self.node_is(node, TagId::Table))
-                {
-                    self.unget_token();
-                    self.trim_spaces(element);
-                    return;
-                }
+            match self.block_end_tag(element, node) {
+                Flow::Continue => continue,
+                Flow::Break => break,
+                Flow::Return => return,
+                Flow::Proceed(next) => node = next,
             }
 
             // mixed content model permits text
             if self.is_text(node) {
-                if checkstack {
-                    checkstack = false;
-                    if (emodel & CM_MIXED) == 0 && self.inline_dup(Some(node)) > 0 {
-                        continue;
-                    }
-                }
-                self.tree.insert_node_at_end(element, node);
-                mode = TokenMode::MixedContent;
-                if matches!(
-                    self.tag_id(element),
-                    TagId::Body | TagId::Map | TagId::Blockquote | TagId::Form | TagId::Noscript
-                ) {
-                    self.constrain_version(!VERS_HTML40_STRICT);
-                }
+                self.block_text(element, node, emodel, &mut mode, &mut checkstack);
                 continue;
             }
 
@@ -659,21 +909,8 @@ impl Doc {
                 continue;
             }
 
-            if self.node_is(node, TagId::Param) {
-                if self.node_has_cm(element, CM_PARAM) && self.is_element(node) {
-                    self.tree.insert_node_at_end(element, node);
-                    continue;
-                }
-                self.report(Some(element), Some(node), Code::DiscardingUnexpected);
-                continue;
-            }
-
-            if self.node_is(node, TagId::Area) {
-                if self.node_is(element, TagId::Map) && self.is_element(node) {
-                    self.tree.insert_node_at_end(element, node);
-                    continue;
-                }
-                self.report(Some(element), Some(node), Code::DiscardingUnexpected);
+            if self.node_is(node, TagId::Param) || self.node_is(node, TagId::Area) {
+                self.block_param_or_area(element, node);
                 continue;
             }
 
@@ -683,176 +920,23 @@ impl Doc {
             }
 
             if !self.node_has_cm(node, CM_INLINE) {
-                if !self.is_element(node) {
-                    if self.node_is(node, TagId::Form) {
-                        self.bad_form();
-                    }
-                    self.report(Some(element), Some(node), Code::DiscardingUnexpected);
-                    continue;
-                }
-
-                if self.node_is(element, TagId::LI)
-                    && matches!(
-                        self.tag_id(node),
-                        TagId::Frame | TagId::Frameset | TagId::Optgroup | TagId::Option
-                    )
-                {
-                    self.report(Some(element), Some(node), Code::DiscardingUnexpected);
-                    continue;
-                }
-
-                if self.node_is(element, TagId::TD) || self.node_is(element, TagId::TH) {
-                    if self.node_has_cm(node, CM_HEAD) {
-                        self.move_to_head(element, node);
-                        continue;
-                    }
-                    if self.node_has_cm(node, CM_LIST) {
-                        self.unget_token();
-                        node = self.inferred_tag(TagId::UL);
-                        self.add_class_no_indent(node);
-                        self.lexer.blocks.exclude_blocks = true;
-                    } else if self.node_has_cm(node, CM_DEFLIST) {
-                        self.unget_token();
-                        node = self.inferred_tag(TagId::DL);
-                        self.lexer.blocks.exclude_blocks = true;
-                    }
-                    if !self.node_has_cm(node, CM_BLOCK) {
-                        self.unget_token();
-                        self.trim_spaces(element);
-                        return;
-                    }
-                } else if self.node_has_cm(node, CM_BLOCK) {
-                    if self.lexer.blocks.exclude_blocks {
-                        if !self.node_has_cm(element, CM_OPT) {
-                            self.report(Some(element), Some(node), Code::MissingEndtagBefore);
-                        }
-                        self.unget_token();
-                        if self.node_has_cm(element, CM_OBJECT) {
-                            self.lexer.istackbase = istackbase;
-                        }
-                        self.trim_spaces(element);
-                        return;
-                    }
-                } else {
-                    if self.node_has_cm(node, CM_HEAD) {
-                        self.move_to_head(element, node);
-                        continue;
-                    }
-
-                    if self.node_is(element, TagId::Form)
-                        && let Some(parent) = self.tree.parent(element)
-                        && self.node_is(parent, TagId::TD)
-                        && self.tree.node(parent).implicit
-                    {
-                        if self.node_is(node, TagId::TD) {
-                            self.report(Some(element), Some(node), Code::DiscardingUnexpected);
-                            continue;
-                        }
-                        if self.node_is(node, TagId::TH) {
-                            self.report(Some(element), Some(node), Code::DiscardingUnexpected);
-                            let th = Self::tag_index(TagId::TH);
-                            let p = self.tree.node_mut(parent);
-                            p.element = Some("th".to_string());
-                            p.tag = Some(th);
-                            continue;
-                        }
-                    }
-
-                    if !self.node_has_cm(element, CM_OPT) && !self.tree.node(element).implicit {
-                        self.report(Some(element), Some(node), Code::MissingEndtagBefore);
-                    }
-                    if !self.opts.layout.omit_optional_tags && self.node_has_cm(element, CM_OPT) {
-                        self.report(Some(element), Some(node), Code::MissingEndtagOptional);
-                    }
-
-                    self.unget_token();
-
-                    if self.node_has_cm(node, CM_LIST) {
-                        if let Some(parent) = self.tree.parent(element)
-                            && self.node_parser(parent) == Some(ParserKind::ParseList)
-                        {
-                            self.trim_spaces(element);
-                            return;
-                        }
-                        node = self.inferred_tag(TagId::UL);
-                        self.add_class_no_indent(node);
-                    } else if self.node_has_cm(node, CM_DEFLIST) {
-                        if self
-                            .tree
-                            .parent(element)
-                            .is_some_and(|p| self.node_is(p, TagId::DL))
-                        {
-                            self.trim_spaces(element);
-                            return;
-                        }
-                        node = self.inferred_tag(TagId::DL);
-                    } else if self.node_has_cm(node, CM_TABLE) || self.node_has_cm(node, CM_ROW) {
-                        if self.lexer.blocks.exiled {
-                            return;
-                        }
-                        node = self.inferred_tag(TagId::Table);
-                    } else if self.node_has_cm(element, CM_OBJECT) {
-                        while self.lexer.istack.len() > self.lexer.istackbase {
-                            self.pop_inline(None);
-                        }
-                        self.lexer.istackbase = istackbase;
-                        self.trim_spaces(element);
-                        return;
-                    } else {
-                        self.trim_spaces(element);
-                        return;
-                    }
+                match self.block_non_inline(element, node, istackbase) {
+                    Flow::Continue => continue,
+                    Flow::Break => break,
+                    Flow::Return => return,
+                    Flow::Proceed(next) => node = next,
                 }
             }
 
-            // an <a> ends any open <a>
-            if self.node_is(node, TagId::A)
-                && !self.tree.node(node).implicit
-                && (self.node_is(element, TagId::A) || self.descendant_of(element, TagId::A))
-            {
-                if self.ntype(node) != NodeType::EndTag
-                    && self.tree.node(node).attributes.is_empty()
-                    && self.opts.markup.coerce_endtags
-                {
-                    self.tree.node_mut(node).ntype = NodeType::EndTag;
-                    self.report(Some(element), Some(node), Code::CoerceToEndtag);
-                    self.unget_token();
-                    continue;
-                }
-                if self.node_is(element, TagId::A) {
-                    self.report(Some(element), Some(node), Code::MissingEndtagBefore);
-                    self.unget_token();
-                } else {
-                    self.report(Some(element), Some(node), Code::DiscardingUnexpected);
-                }
-                if !mode.is_preformatted_bit() {
-                    self.trim_spaces(element);
-                }
-                return;
+            match self.block_anchor(element, node, mode) {
+                Flow::Continue => continue,
+                Flow::Return => return,
+                Flow::Break | Flow::Proceed(_) => {}
             }
 
             // parse known element
             if self.is_element(node) {
-                if self.node_has_cm(node, CM_INLINE) {
-                    if checkstack && !self.tree.node(node).implicit {
-                        checkstack = false;
-                        if (emodel & CM_MIXED) == 0 && self.inline_dup(Some(node)) > 0 {
-                            continue;
-                        }
-                    }
-                    mode = TokenMode::MixedContent;
-                } else {
-                    checkstack = true;
-                    mode = TokenMode::IgnoreWhitespace;
-                }
-                if self.node_is(node, TagId::BR) {
-                    self.trim_spaces(element);
-                }
-                self.tree.insert_node_at_end(element, node);
-                if self.tree.node(node).implicit {
-                    self.report(Some(element), Some(node), Code::InsertingTag);
-                }
-                self.parse_tag(node, TokenMode::IgnoreWhitespace);
+                self.block_element(element, node, emodel, &mut mode, &mut checkstack);
                 continue;
             }
 
@@ -867,10 +951,7 @@ impl Doc {
             self.report(Some(element), node_opt, Code::MissingEndtagFor);
         }
         if (emodel & CM_OBJECT) != 0 {
-            while self.lexer.istack.len() > self.lexer.istackbase {
-                self.pop_inline(None);
-            }
-            self.lexer.istackbase = istackbase;
+            self.end_object(istackbase);
         }
         self.trim_spaces(element);
     }
@@ -964,6 +1045,405 @@ impl Doc {
 
     // ---- ParseInline ------------------------------------------------------------
 
+    /// `TY_(ParseInline)`, the end tag of the element itself.
+    fn close_inline(&mut self, element: NodeId, node: NodeId, mode: TokenMode) {
+        if self.node_has_cm(element, CM_INLINE) {
+            self.pop_inline(Some(node));
+        }
+        if !mode.is_preformatted_bit() {
+            self.trim_spaces(element);
+        }
+        if self.node_is(element, TagId::Font)
+            && let Some(child) = self.tree.content(element)
+            && Some(child) == self.tree.last(element)
+            && self.node_is(child, TagId::A)
+        {
+            let (eparent, enext, eprev) = {
+                let e = self.tree.node(element);
+                (e.parent, e.next, e.prev)
+            };
+            let (ccontent, clast) = {
+                let c = self.tree.node(child);
+                (c.content, c.last)
+            };
+            {
+                let c = self.tree.node_mut(child);
+                c.parent = eparent;
+                c.next = enext;
+                c.prev = eprev;
+                c.content = Some(element);
+            }
+            {
+                let e = self.tree.node_mut(element);
+                e.next = None;
+                e.prev = None;
+                e.parent = Some(child);
+                e.content = ccontent;
+                e.last = clast;
+            }
+            self.tree.fix_node_links(child);
+            self.tree.fix_node_links(element);
+        }
+        self.tree.node_mut(element).closed = true;
+        self.trim_spaces(element);
+    }
+
+    /// `TY_(ParseInline)`, a start tag of the same kind as the element or
+    /// a nested `q`.
+    fn inline_nested(&mut self, element: NodeId, node: NodeId) -> Flow {
+        // <u>...<u> maps the second <u> to </u> if the first is explicit
+        if self.ntype(node) == NodeType::StartTag
+            && self.same_tag(node, element)
+            && self.is_pushed(node)
+            && !self.tree.node(node).implicit
+            && !self.tree.node(element).implicit
+            && self.node_has_cm(node, CM_INLINE)
+            && !matches!(
+                self.tag_id(node),
+                TagId::A
+                    | TagId::Font
+                    | TagId::Big
+                    | TagId::Small
+                    | TagId::Sub
+                    | TagId::Sup
+                    | TagId::Q
+                    | TagId::Span
+            )
+            && self.opts.markup.coerce_endtags
+        {
+            let last = self.tree.last(element);
+            if self.tree.content(element).is_some()
+                && self.tree.node(node).attributes.is_empty()
+                && last.is_some_and(|l| self.is_text(l))
+                && !last.is_some_and(|l| self.text_node_ends_with_space(l))
+            {
+                self.report(Some(element), Some(node), Code::CoerceToEndtag);
+                self.tree.node_mut(node).ntype = NodeType::EndTag;
+                self.unget_token();
+                return Flow::Continue;
+            }
+            if self.tree.node(node).attributes.is_empty()
+                || self.tree.node(element).attributes.is_empty()
+            {
+                self.report(Some(element), Some(node), Code::NestedEmphasis);
+            }
+        } else if self.is_pushed(node)
+            && self.ntype(node) == NodeType::StartTag
+            && self.node_is(node, TagId::Q)
+            && self.html_version() != tables::HT50
+        {
+            self.report(Some(element), Some(node), Code::NestedQuotation);
+        }
+        Flow::Proceed(node)
+    }
+
+    /// `TY_(ParseInline)`, text in the element.
+    fn inline_text(&mut self, element: NodeId, node: NodeId, mode: TokenMode) {
+        if self.tree.content(element).is_none() && !mode.is_preformatted_bit() {
+            self.trim_spaces(element);
+        }
+        let nd = self.tree.node(node);
+        if nd.start < nd.end {
+            self.tree.insert_node_at_end(element, node);
+        }
+    }
+
+    /// `TY_(ParseInline)`: `html`, the `p` that becomes a `br` or stays
+    /// in an `address`, and the tags that are not known.
+    fn inline_structure_tag(&mut self, element: NodeId, node: NodeId, mode: TokenMode) -> Flow {
+        if self.node_is(node, TagId::Html) {
+            if self.is_element(node) {
+                self.report(Some(element), Some(node), Code::DiscardingUnexpected);
+                return Flow::Continue;
+            }
+            self.unget_token();
+            if !mode.is_preformatted_bit() {
+                self.trim_spaces(element);
+            }
+            return Flow::Return;
+        }
+
+        // within <dt> or <pre> map <p> to <br>
+        if self.node_is(node, TagId::P)
+            && self.ntype(node) == NodeType::StartTag
+            && (mode.is_preformatted_bit()
+                || self.node_is(element, TagId::DT)
+                || self.descendant_of(element, TagId::DT))
+        {
+            let br = Self::tag_index(TagId::BR);
+            let n = self.tree.node_mut(node);
+            n.tag = Some(br);
+            n.element = Some("br".to_string());
+            self.trim_spaces(element);
+            self.tree.insert_node_at_end(element, node);
+            return Flow::Continue;
+        }
+
+        // <p> allowed within <address> in HTML 4.01 Transitional
+        if self.node_is(node, TagId::P)
+            && self.ntype(node) == NodeType::StartTag
+            && self.node_is(element, TagId::Address)
+        {
+            self.constrain_version(!VERS_HTML40_STRICT);
+            self.tree.insert_node_at_end(element, node);
+            self.lexer.parent = Some(node);
+            let parser = self.node_parser(node).expect("p has a parser");
+            self.run_parser(parser, node, mode);
+            return Flow::Continue;
+        }
+
+        if !self.has_tag(node) || self.node_is(node, TagId::Param) {
+            self.report(Some(element), Some(node), Code::DiscardingUnexpected);
+            return Flow::Continue;
+        }
+        Flow::Proceed(node)
+    }
+
+    /// `TY_(ParseInline)`, an end tag that is not the element's own.
+    fn inline_end_tag(&mut self, element: NodeId, node: NodeId, mode: TokenMode) -> Flow {
+        if self.node_is(node, TagId::BR) && self.ntype(node) == NodeType::EndTag {
+            self.tree.node_mut(node).ntype = NodeType::StartTag;
+        }
+
+        if self.ntype(node) == NodeType::EndTag {
+            if self.node_is(node, TagId::BR) {
+                self.tree.node_mut(node).ntype = NodeType::StartTag;
+            } else if self.node_is(node, TagId::P) {
+                if !self.descendant_of(element, TagId::P) {
+                    self.coerce_node(node, TagId::BR, false, false);
+                    self.trim_spaces(element);
+                    self.tree.insert_node_at_end(element, node);
+                    let br = self.inferred_tag(TagId::BR);
+                    self.tree.insert_node_at_end(element, br);
+                    return Flow::Continue;
+                }
+            } else if self.node_has_cm(node, CM_INLINE)
+                && !self.node_is(node, TagId::A)
+                && !self.node_has_cm(node, CM_OBJECT)
+                && self.node_has_cm(element, CM_INLINE)
+            {
+                if !self.node_is(element, TagId::A)
+                    && !self.same_tag(node, element)
+                    && self.is_pushed(node)
+                    && self.is_pushed(element)
+                    && self.switch_inline(element, node)
+                {
+                    self.report(Some(element), Some(node), Code::NonMatchingEndtag);
+                    self.unget_token();
+                    self.inline_dup1(None, Some(element));
+                    if !mode.is_preformatted_bit() {
+                        self.trim_spaces(element);
+                    }
+                    return Flow::Return;
+                }
+                self.pop_inline(Some(element));
+                if !self.node_is(element, TagId::A) {
+                    if self.node_is(node, TagId::A) && !self.same_tag(node, element) {
+                        self.report(Some(element), Some(node), Code::MissingEndtagBefore);
+                        self.unget_token();
+                    } else {
+                        self.report(Some(element), Some(node), Code::NonMatchingEndtag);
+                    }
+                    if !mode.is_preformatted_bit() {
+                        self.trim_spaces(element);
+                    }
+                    return Flow::Return;
+                }
+                self.report(Some(element), Some(node), Code::DiscardingUnexpected);
+                return Flow::Continue;
+            } else if self.lexer.blocks.exiled
+                && (self.node_has_cm(node, CM_TABLE) || self.node_is(node, TagId::Table))
+            {
+                self.unget_token();
+                self.trim_spaces(element);
+                return Flow::Return;
+            }
+        }
+        Flow::Proceed(node)
+    }
+
+    /// `TY_(ParseInline)`: a heading ends an open heading, and an `a` any
+    /// open `a`.
+    fn inline_closing_tag(&mut self, element: NodeId, node: NodeId, mode: TokenMode) -> Flow {
+        // allow any header tag to end current header
+        if self.node_has_cm(node, CM_HEADING) && self.node_has_cm(element, CM_HEADING) {
+            if self.same_tag(node, element) {
+                self.report(Some(element), Some(node), Code::NonMatchingEndtag);
+            } else {
+                self.report(Some(element), Some(node), Code::MissingEndtagBefore);
+                self.unget_token();
+            }
+            if !mode.is_preformatted_bit() {
+                self.trim_spaces(element);
+            }
+            return Flow::Return;
+        }
+
+        // an <a> ends any open <a>
+        if self.node_is(node, TagId::A)
+            && !self.tree.node(node).implicit
+            && (self.node_is(element, TagId::A) || self.descendant_of(element, TagId::A))
+        {
+            if self.ntype(node) != NodeType::EndTag
+                && self.tree.node(node).attributes.is_empty()
+                && self.opts.markup.coerce_endtags
+            {
+                self.tree.node_mut(node).ntype = NodeType::EndTag;
+                self.report(Some(element), Some(node), Code::CoerceToEndtag);
+                self.unget_token();
+                return Flow::Continue;
+            }
+            self.unget_token();
+            self.report(Some(element), Some(node), Code::MissingEndtagBefore);
+            if !mode.is_preformatted_bit() {
+                self.trim_spaces(element);
+            }
+            return Flow::Return;
+        }
+        Flow::Proceed(node)
+    }
+
+    /// `TY_(ParseInline)`: `center`, `div` and `hr` in a heading, and `hr`
+    /// in a `dt`, are moved out of the element, which goes on in a copy
+    /// after them. True when the tag was dealt with.
+    fn inline_misplaced_block(
+        &mut self,
+        element: &mut NodeId,
+        node: NodeId,
+        mode: TokenMode,
+    ) -> bool {
+        if self.node_has_cm(*element, CM_HEADING) {
+            if self.node_is(node, TagId::Center) || self.node_is(node, TagId::Div) {
+                if !self.is_element(node) {
+                    self.report(Some(*element), Some(node), Code::DiscardingUnexpected);
+                    return true;
+                }
+                self.report(Some(*element), Some(node), Code::TagNotAllowedIn);
+                if self.tree.content(*element).is_none() {
+                    self.tree.insert_node_as_parent(*element, node);
+                    return true;
+                }
+                self.tree.insert_node_after_element(*element, node);
+                if !mode.is_preformatted_bit() {
+                    self.trim_spaces(*element);
+                }
+                *element = self.clone_node(Some(*element));
+                self.tree.insert_node_at_end(node, *element);
+                return true;
+            }
+            if self.node_is(node, TagId::HR) {
+                if !self.is_element(node) {
+                    self.report(Some(*element), Some(node), Code::DiscardingUnexpected);
+                    return true;
+                }
+                self.report(Some(*element), Some(node), Code::TagNotAllowedIn);
+                if self.tree.content(*element).is_none() {
+                    self.tree.insert_node_before_element(*element, node);
+                    return true;
+                }
+                self.tree.insert_node_after_element(*element, node);
+                if !mode.is_preformatted_bit() {
+                    self.trim_spaces(*element);
+                }
+                *element = self.clone_node(Some(*element));
+                self.tree.insert_node_after_element(node, *element);
+                return true;
+            }
+        }
+
+        if self.node_is(*element, TagId::DT) && self.node_is(node, TagId::HR) {
+            if !self.is_element(node) {
+                self.report(Some(*element), Some(node), Code::DiscardingUnexpected);
+                return true;
+            }
+            self.report(Some(*element), Some(node), Code::TagNotAllowedIn);
+            let dd = self.inferred_tag(TagId::DD);
+            if self.tree.content(*element).is_none() {
+                self.tree.insert_node_before_element(*element, dd);
+                self.tree.insert_node_at_end(dd, node);
+                return true;
+            }
+            self.tree.insert_node_after_element(*element, dd);
+            self.tree.insert_node_at_end(dd, node);
+            if !mode.is_preformatted_bit() {
+                self.trim_spaces(*element);
+            }
+            *element = self.clone_node(Some(*element));
+            self.tree.insert_node_after_element(dd, *element);
+            return true;
+        }
+        false
+    }
+
+    /// `TY_(ParseInline)`, the end tag of an ancestor: true when it ends
+    /// this element too.
+    fn inline_ancestor_end(&mut self, element: NodeId, node: NodeId, mode: TokenMode) -> bool {
+        // end tag for an ancestor element: infer the end of this one
+        if self.ntype(node) == NodeType::EndTag {
+            let mut parent = self.tree.parent(element);
+            let mut matched = false;
+            while let Some(p) = parent {
+                if self.tags_equal(node, p) {
+                    matched = true;
+                    break;
+                }
+                parent = self.tree.parent(p);
+            }
+            if matched {
+                if !self.node_has_cm(element, CM_OPT) && !self.tree.node(element).implicit {
+                    self.report(Some(element), Some(node), Code::MissingEndtagBefore);
+                }
+                if self.is_pushed_last(Some(element), node) {
+                    self.pop_inline(Some(element));
+                }
+                self.unget_token();
+                if !mode.is_preformatted_bit() {
+                    self.trim_spaces(element);
+                }
+                return true;
+            }
+        }
+        false
+    }
+
+    /// `TY_(ParseInline)`: a block level tag ends the element.
+    fn inline_block_tag(&mut self, element: NodeId, node: NodeId, mode: TokenMode) -> Flow {
+        // block level tags end this element
+        let stays_inline = self.node_has_cm(node, CM_INLINE)
+            || self.node_has_cm(element, CM_MIXED)
+            || (self.node_is(element, TagId::Span) && self.node_is(node, TagId::Meta));
+        if !stays_inline {
+            if !self.is_element(node) {
+                self.report(Some(element), Some(node), Code::DiscardingUnexpected);
+                return Flow::Continue;
+            }
+            if self.node_is(element, TagId::Datalist) {
+                self.constrain_version(!VERS_HTML5);
+            } else if !self.node_has_cm(element, CM_OPT) {
+                self.report(Some(element), Some(node), Code::MissingEndtagBefore);
+            }
+            if self.node_has_cm(node, CM_HEAD) && !self.node_has_cm(node, CM_BLOCK) {
+                self.move_to_head(element, node);
+                return Flow::Continue;
+            }
+            if self.node_is(element, TagId::A) {
+                if self.has_tag(node) && !self.node_has_cm(node, CM_HEADING) {
+                    self.pop_inline(Some(element));
+                } else if self.tree.content(element).is_none() {
+                    self.tree.discard_element(element);
+                    self.unget_token();
+                    return Flow::Return;
+                }
+            }
+            self.unget_token();
+            if !mode.is_preformatted_bit() {
+                self.trim_spaces(element);
+            }
+            return Flow::Return;
+        }
+        Flow::Proceed(node)
+    }
+
     /// `TY_(ParseInline)`.
     fn parse_inline(&mut self, mut element: NodeId, mut mode: TokenMode) {
         let emodel = self.node_model(element);
@@ -993,101 +1473,18 @@ impl Doc {
             };
             // end tag for current element
             if self.tags_equal(node, element) && self.ntype(node) == NodeType::EndTag {
-                if self.node_has_cm(element, CM_INLINE) {
-                    self.pop_inline(Some(node));
-                }
-                if !mode.is_preformatted_bit() {
-                    self.trim_spaces(element);
-                }
-                if self.node_is(element, TagId::Font)
-                    && let Some(child) = self.tree.content(element)
-                    && Some(child) == self.tree.last(element)
-                    && self.node_is(child, TagId::A)
-                {
-                    let (eparent, enext, eprev) = {
-                        let e = self.tree.node(element);
-                        (e.parent, e.next, e.prev)
-                    };
-                    let (ccontent, clast) = {
-                        let c = self.tree.node(child);
-                        (c.content, c.last)
-                    };
-                    {
-                        let c = self.tree.node_mut(child);
-                        c.parent = eparent;
-                        c.next = enext;
-                        c.prev = eprev;
-                        c.content = Some(element);
-                    }
-                    {
-                        let e = self.tree.node_mut(element);
-                        e.next = None;
-                        e.prev = None;
-                        e.parent = Some(child);
-                        e.content = ccontent;
-                        e.last = clast;
-                    }
-                    self.tree.fix_node_links(child);
-                    self.tree.fix_node_links(element);
-                }
-                self.tree.node_mut(element).closed = true;
-                self.trim_spaces(element);
+                self.close_inline(element, node, mode);
                 return;
             }
 
-            // <u>...<u> maps the second <u> to </u> if the first is explicit
-            if self.ntype(node) == NodeType::StartTag
-                && self.same_tag(node, element)
-                && self.is_pushed(node)
-                && !self.tree.node(node).implicit
-                && !self.tree.node(element).implicit
-                && self.node_has_cm(node, CM_INLINE)
-                && !matches!(
-                    self.tag_id(node),
-                    TagId::A
-                        | TagId::Font
-                        | TagId::Big
-                        | TagId::Small
-                        | TagId::Sub
-                        | TagId::Sup
-                        | TagId::Q
-                        | TagId::Span
-                )
-                && self.opts.markup.coerce_endtags
-            {
-                let last = self.tree.last(element);
-                if self.tree.content(element).is_some()
-                    && self.tree.node(node).attributes.is_empty()
-                    && last.is_some_and(|l| self.is_text(l))
-                    && !last.is_some_and(|l| self.text_node_ends_with_space(l))
-                {
-                    self.report(Some(element), Some(node), Code::CoerceToEndtag);
-                    self.tree.node_mut(node).ntype = NodeType::EndTag;
-                    self.unget_token();
-                    continue;
-                }
-                if self.tree.node(node).attributes.is_empty()
-                    || self.tree.node(element).attributes.is_empty()
-                {
-                    self.report(Some(element), Some(node), Code::NestedEmphasis);
-                }
-            } else if self.is_pushed(node)
-                && self.ntype(node) == NodeType::StartTag
-                && self.node_is(node, TagId::Q)
-                && self.html_version() != tables::HT50
-            {
-                self.report(Some(element), Some(node), Code::NestedQuotation);
+            match self.inline_nested(element, node) {
+                Flow::Continue => continue,
+                Flow::Return => return,
+                Flow::Break | Flow::Proceed(_) => {}
             }
 
             if self.is_text(node) {
-                if self.tree.content(element).is_none() && !mode.is_preformatted_bit() {
-                    self.trim_spaces(element);
-                }
-                let nd = self.tree.node(node);
-                if nd.start >= nd.end {
-                    continue;
-                }
-                self.tree.insert_node_at_end(element, node);
+                self.inline_text(element, node, mode);
                 continue;
             }
 
@@ -1095,266 +1492,36 @@ impl Doc {
                 continue;
             }
 
-            if self.node_is(node, TagId::Html) {
-                if self.is_element(node) {
-                    self.report(Some(element), Some(node), Code::DiscardingUnexpected);
-                    continue;
-                }
-                self.unget_token();
-                if !mode.is_preformatted_bit() {
-                    self.trim_spaces(element);
-                }
-                return;
+            match self.inline_structure_tag(element, node, mode) {
+                Flow::Continue => continue,
+                Flow::Return => return,
+                Flow::Break | Flow::Proceed(_) => {}
             }
 
-            // within <dt> or <pre> map <p> to <br>
-            if self.node_is(node, TagId::P)
-                && self.ntype(node) == NodeType::StartTag
-                && (mode.is_preformatted_bit()
-                    || self.node_is(element, TagId::DT)
-                    || self.descendant_of(element, TagId::DT))
-            {
-                let br = Self::tag_index(TagId::BR);
-                let n = self.tree.node_mut(node);
-                n.tag = Some(br);
-                n.element = Some("br".to_string());
-                self.trim_spaces(element);
-                self.tree.insert_node_at_end(element, node);
+            match self.inline_end_tag(element, node, mode) {
+                Flow::Continue => continue,
+                Flow::Return => return,
+                Flow::Break | Flow::Proceed(_) => {}
+            }
+
+            match self.inline_closing_tag(element, node, mode) {
+                Flow::Continue => continue,
+                Flow::Return => return,
+                Flow::Break | Flow::Proceed(_) => {}
+            }
+
+            if self.inline_misplaced_block(&mut element, node, mode) {
                 continue;
             }
 
-            // <p> allowed within <address> in HTML 4.01 Transitional
-            if self.node_is(node, TagId::P)
-                && self.ntype(node) == NodeType::StartTag
-                && self.node_is(element, TagId::Address)
-            {
-                self.constrain_version(!VERS_HTML40_STRICT);
-                self.tree.insert_node_at_end(element, node);
-                self.lexer.parent = Some(node);
-                let parser = self.node_parser(node).expect("p has a parser");
-                self.run_parser(parser, node, mode);
-                continue;
-            }
-
-            if !self.has_tag(node) || self.node_is(node, TagId::Param) {
-                self.report(Some(element), Some(node), Code::DiscardingUnexpected);
-                continue;
-            }
-
-            if self.node_is(node, TagId::BR) && self.ntype(node) == NodeType::EndTag {
-                self.tree.node_mut(node).ntype = NodeType::StartTag;
-            }
-
-            if self.ntype(node) == NodeType::EndTag {
-                if self.node_is(node, TagId::BR) {
-                    self.tree.node_mut(node).ntype = NodeType::StartTag;
-                } else if self.node_is(node, TagId::P) {
-                    if !self.descendant_of(element, TagId::P) {
-                        self.coerce_node(node, TagId::BR, false, false);
-                        self.trim_spaces(element);
-                        self.tree.insert_node_at_end(element, node);
-                        let br = self.inferred_tag(TagId::BR);
-                        self.tree.insert_node_at_end(element, br);
-                        continue;
-                    }
-                } else if self.node_has_cm(node, CM_INLINE)
-                    && !self.node_is(node, TagId::A)
-                    && !self.node_has_cm(node, CM_OBJECT)
-                    && self.node_has_cm(element, CM_INLINE)
-                {
-                    if !self.node_is(element, TagId::A)
-                        && !self.same_tag(node, element)
-                        && self.is_pushed(node)
-                        && self.is_pushed(element)
-                        && self.switch_inline(element, node)
-                    {
-                        self.report(Some(element), Some(node), Code::NonMatchingEndtag);
-                        self.unget_token();
-                        self.inline_dup1(None, Some(element));
-                        if !mode.is_preformatted_bit() {
-                            self.trim_spaces(element);
-                        }
-                        return;
-                    }
-                    self.pop_inline(Some(element));
-                    if !self.node_is(element, TagId::A) {
-                        if self.node_is(node, TagId::A) && !self.same_tag(node, element) {
-                            self.report(Some(element), Some(node), Code::MissingEndtagBefore);
-                            self.unget_token();
-                        } else {
-                            self.report(Some(element), Some(node), Code::NonMatchingEndtag);
-                        }
-                        if !mode.is_preformatted_bit() {
-                            self.trim_spaces(element);
-                        }
-                        return;
-                    }
-                    self.report(Some(element), Some(node), Code::DiscardingUnexpected);
-                    continue;
-                } else if self.lexer.blocks.exiled
-                    && (self.node_has_cm(node, CM_TABLE) || self.node_is(node, TagId::Table))
-                {
-                    self.unget_token();
-                    self.trim_spaces(element);
-                    return;
-                }
-            }
-
-            // allow any header tag to end current header
-            if self.node_has_cm(node, CM_HEADING) && self.node_has_cm(element, CM_HEADING) {
-                if self.same_tag(node, element) {
-                    self.report(Some(element), Some(node), Code::NonMatchingEndtag);
-                } else {
-                    self.report(Some(element), Some(node), Code::MissingEndtagBefore);
-                    self.unget_token();
-                }
-                if !mode.is_preformatted_bit() {
-                    self.trim_spaces(element);
-                }
+            if self.inline_ancestor_end(element, node, mode) {
                 return;
             }
 
-            // an <a> ends any open <a>
-            if self.node_is(node, TagId::A)
-                && !self.tree.node(node).implicit
-                && (self.node_is(element, TagId::A) || self.descendant_of(element, TagId::A))
-            {
-                if self.ntype(node) != NodeType::EndTag
-                    && self.tree.node(node).attributes.is_empty()
-                    && self.opts.markup.coerce_endtags
-                {
-                    self.tree.node_mut(node).ntype = NodeType::EndTag;
-                    self.report(Some(element), Some(node), Code::CoerceToEndtag);
-                    self.unget_token();
-                    continue;
-                }
-                self.unget_token();
-                self.report(Some(element), Some(node), Code::MissingEndtagBefore);
-                if !mode.is_preformatted_bit() {
-                    self.trim_spaces(element);
-                }
-                return;
-            }
-
-            if self.node_has_cm(element, CM_HEADING) {
-                if self.node_is(node, TagId::Center) || self.node_is(node, TagId::Div) {
-                    if !self.is_element(node) {
-                        self.report(Some(element), Some(node), Code::DiscardingUnexpected);
-                        continue;
-                    }
-                    self.report(Some(element), Some(node), Code::TagNotAllowedIn);
-                    if self.tree.content(element).is_none() {
-                        self.tree.insert_node_as_parent(element, node);
-                        continue;
-                    }
-                    self.tree.insert_node_after_element(element, node);
-                    if !mode.is_preformatted_bit() {
-                        self.trim_spaces(element);
-                    }
-                    element = self.clone_node(Some(element));
-                    self.tree.insert_node_at_end(node, element);
-                    continue;
-                }
-                if self.node_is(node, TagId::HR) {
-                    if !self.is_element(node) {
-                        self.report(Some(element), Some(node), Code::DiscardingUnexpected);
-                        continue;
-                    }
-                    self.report(Some(element), Some(node), Code::TagNotAllowedIn);
-                    if self.tree.content(element).is_none() {
-                        self.tree.insert_node_before_element(element, node);
-                        continue;
-                    }
-                    self.tree.insert_node_after_element(element, node);
-                    if !mode.is_preformatted_bit() {
-                        self.trim_spaces(element);
-                    }
-                    element = self.clone_node(Some(element));
-                    self.tree.insert_node_after_element(node, element);
-                    continue;
-                }
-            }
-
-            if self.node_is(element, TagId::DT) && self.node_is(node, TagId::HR) {
-                if !self.is_element(node) {
-                    self.report(Some(element), Some(node), Code::DiscardingUnexpected);
-                    continue;
-                }
-                self.report(Some(element), Some(node), Code::TagNotAllowedIn);
-                let dd = self.inferred_tag(TagId::DD);
-                if self.tree.content(element).is_none() {
-                    self.tree.insert_node_before_element(element, dd);
-                    self.tree.insert_node_at_end(dd, node);
-                    continue;
-                }
-                self.tree.insert_node_after_element(element, dd);
-                self.tree.insert_node_at_end(dd, node);
-                if !mode.is_preformatted_bit() {
-                    self.trim_spaces(element);
-                }
-                element = self.clone_node(Some(element));
-                self.tree.insert_node_after_element(dd, element);
-                continue;
-            }
-
-            // end tag for an ancestor element: infer the end of this one
-            if self.ntype(node) == NodeType::EndTag {
-                let mut parent = self.tree.parent(element);
-                let mut matched = false;
-                while let Some(p) = parent {
-                    if self.tags_equal(node, p) {
-                        matched = true;
-                        break;
-                    }
-                    parent = self.tree.parent(p);
-                }
-                if matched {
-                    if !self.node_has_cm(element, CM_OPT) && !self.tree.node(element).implicit {
-                        self.report(Some(element), Some(node), Code::MissingEndtagBefore);
-                    }
-                    if self.is_pushed_last(Some(element), node) {
-                        self.pop_inline(Some(element));
-                    }
-                    self.unget_token();
-                    if !mode.is_preformatted_bit() {
-                        self.trim_spaces(element);
-                    }
-                    return;
-                }
-            }
-
-            // block level tags end this element
-            let stays_inline = self.node_has_cm(node, CM_INLINE)
-                || self.node_has_cm(element, CM_MIXED)
-                || (self.node_is(element, TagId::Span) && self.node_is(node, TagId::Meta));
-            if !stays_inline {
-                if !self.is_element(node) {
-                    self.report(Some(element), Some(node), Code::DiscardingUnexpected);
-                    continue;
-                }
-                if self.node_is(element, TagId::Datalist) {
-                    self.constrain_version(!VERS_HTML5);
-                } else if !self.node_has_cm(element, CM_OPT) {
-                    self.report(Some(element), Some(node), Code::MissingEndtagBefore);
-                }
-                if self.node_has_cm(node, CM_HEAD) && !self.node_has_cm(node, CM_BLOCK) {
-                    self.move_to_head(element, node);
-                    continue;
-                }
-                if self.node_is(element, TagId::A) {
-                    if self.has_tag(node) && !self.node_has_cm(node, CM_HEADING) {
-                        self.pop_inline(Some(element));
-                    } else if self.tree.content(element).is_none() {
-                        self.tree.discard_element(element);
-                        self.unget_token();
-                        return;
-                    }
-                }
-                self.unget_token();
-                if !mode.is_preformatted_bit() {
-                    self.trim_spaces(element);
-                }
-                return;
+            match self.inline_block_tag(element, node, mode) {
+                Flow::Continue => continue,
+                Flow::Return => return,
+                Flow::Break | Flow::Proceed(_) => {}
             }
 
             // parse inline element

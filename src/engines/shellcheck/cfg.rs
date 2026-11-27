@@ -915,6 +915,14 @@ impl Builder {
                 self.link_ranges(&[subscript, read, write])
             }
             TaUnary(_, arg) => self.build(ctx, arg),
+            _ => self.build_condition_or_list(ctx, t),
+        }
+    }
+
+    /// `build_inner`, for conditions, lists of words and the simple compounds.
+    fn build_condition_or_list(&mut self, ctx: &CfContext, t: &Token) -> Range {
+        let id = t.id;
+        match &t.inner {
             TcAnd(ConditionType::SingleBracket, _, lhs, rhs)
             | TcOr(ConditionType::SingleBracket, _, lhs, rhs) => {
                 self.sequentially_refs(ctx, &[lhs, rhs])
@@ -987,6 +995,14 @@ impl Builder {
             }
             TCaseExpression(w, list) if list.is_empty() => self.build(ctx, w),
             TCaseExpression(w, list) => self.build_case(ctx, w, list),
+            _ => self.build_expansion(ctx, t),
+        }
+    }
+
+    /// `build_inner`, for `[ ]`, coprocesses, words and expansions.
+    fn build_expansion(&mut self, ctx: &CfContext, t: &Token) -> Range {
+        let id = t.id;
+        match &t.inner {
             TCondition(_, op) => {
                 let cond = self.build(ctx, op);
                 let status = self.new_node_range(ctx, CfNode::SetExitCode(id));
@@ -1056,6 +1072,15 @@ impl Builder {
             TDollarExpansion(body) => self.subshell(ctx, id, "$(..) expansion", &mut |s, c| {
                 s.sequentially(c, body)
             }),
+            _ => self.build_loop_or_function(ctx, t),
+        }
+    }
+
+    /// `build_inner`, for redirections to a named descriptor, `for` loops and
+    /// functions.
+    fn build_loop_or_function(&mut self, ctx: &CfContext, t: &Token) -> Range {
+        let id = t.id;
+        match &t.inner {
             TFdRedirect(name, op) if name.starts_with('{') => {
                 let var: String = name[1..].chars().take_while(|&c| c != '}').collect();
                 let expression = self.build(ctx, op);
@@ -1108,6 +1133,15 @@ impl Builder {
                 let exe = self.new_node_range(ctx, CfNode::SetExitCode(id));
                 self.link_range(definition, exe)
             }
+            _ => self.build_branch_or_pipeline(ctx, t),
+        }
+    }
+
+    /// `build_inner`, for `if`, array elements, file redirections, pipelines
+    /// and process substitutions.
+    fn build_branch_or_pipeline(&mut self, ctx: &CfContext, t: &Token) -> Range {
+        let id = t.id;
+        match &t.inner {
             TIfExpression(ifs, elses) => {
                 let start = self.none(ctx);
                 let mut branches: Vec<Range> = Vec::new();
@@ -1172,6 +1206,15 @@ impl Builder {
                 self.link_range_as(CfEdge::FalseFlow, body, end);
                 self.link_range(start, end)
             }
+            _ => self.build_command(ctx, t),
+        }
+    }
+
+    /// `build_inner`, for commands, subshells, `while` loops and the tokens
+    /// that do nothing.
+    fn build_command(&mut self, ctx: &CfContext, t: &Token) -> Range {
+        let id = t.id;
+        match &t.inner {
             TRedirecting(redirs, cmd) => {
                 let redir = self.sequentially(ctx, redirs);
                 let body = self.build(ctx, cmd);

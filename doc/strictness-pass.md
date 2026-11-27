@@ -6,6 +6,12 @@ Implemented, then tightened again in a second pass (2026-08-01, below).
 `clippy::pedantic` and `clippy::nursery` are `warn` at the crate root; all
 clippy checks pass. The crate-level allow list is down from 36 to 12.
 
+Since 2026-11-27 the list is empty: the `[lints]` table in `Cargo.toml` is
+the one every rs\* crate carries, with no `allow` line. The last entry,
+`too_many_lines`, went when the 119 functions over clippy's 100 lines were
+split: 32 in rsconstruct's own code, 87 in the ported linter engines under
+`src/engines`. The tables below record the earlier passes as they stood.
+
 ## Second pass (2026-08-01)
 
 The 36 allows from the first pass were suppressing **560 real hits**. The
